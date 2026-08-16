@@ -10608,7 +10608,7 @@ sound.SoundId="rbxassetid://"..PLAYER_ESP_KILL_SOUND_ID
 sound.Volume=math.clamp(tonumber(VisualsState.kill_sound_volume) or 50,0,100)/100
 sound.PlaybackSpeed=1
 sound.Looped=false
-sound.Archivable=false
+sound.Archivable=true
 sound.Parent=parent
 PlayerESPUtilityRuntime.killSoundInstances[sound]=true
 return sound
@@ -10617,9 +10617,11 @@ end
 local function directPlayerESPKillPlay(sound)
 if not sound or not sound.Parent then return false end
 pcall(function() sound.TimePosition=0 end)
-pcall(function() sound:Play() end)
+local played=false
+local okPlay=pcall(function() sound:Play() end)
+if okPlay then played=true end
 pcall(function() PlayerESPSoundService:PlayLocalSound(sound) end)
-return sound.IsPlaying == true
+return played or sound.IsPlaying == true
 end
 
 local function playerESPKillHosts()
@@ -10631,9 +10633,9 @@ seen[host]=true
 hosts[#hosts+1]=host
 end
 end
-add(LocalPlayer:FindFirstChildOfClass("PlayerGui"))
-add(workspace.CurrentCamera)
 add(PlayerESPSoundService)
+add(workspace.CurrentCamera)
+add(LocalPlayer:FindFirstChildOfClass("PlayerGui"))
 return hosts
 end
 
@@ -10668,59 +10670,69 @@ if #hosts==0 then return false end
 local primary=makePlayerESPKillSound(hosts[1],"Primary")
 if not primary then return false end
 PlayerESPUtilityRuntime.killSound=primary
-directPlayerESPKillPlay(primary)
+
+local function attempt(sound)
+if not sound or not sound.Parent then return false end
+sound.Volume=math.clamp(tonumber(VisualsState.kill_sound_volume) or 50,0,100)/100
+return directPlayerESPKillPlay(sound)
+end
+
+attempt(primary)
 
 local loadedConnection
 loadedConnection=primary.Loaded:Connect(function()
-if loadedConnection then
-pcall(function() loadedConnection:Disconnect() end)
-loadedConnection=nil
-end
-if primary.Parent and not primary.IsPlaying then
-directPlayerESPKillPlay(primary)
-end
+if loadedConnection then pcall(function() loadedConnection:Disconnect() end); loadedConnection=nil end
+attempt(primary)
 end)
 registerPlayerESPKillConnection(loadedConnection)
 
 task.spawn(function()
-if not primary.Parent then return end
 pcall(function() PlayerESPContentProvider:PreloadAsync({primary}) end)
-if primary.Parent and not primary.IsPlaying then
-directPlayerESPKillPlay(primary)
-end
+attempt(primary)
 end)
 
-task.delay(0.20,function()
+task.delay(0.30,function()
 if primary.Parent and primary.IsPlaying then return end
-local host=hosts[2] or hosts[1]
-local fallback=makePlayerESPKillSound(host,"Fallback")
+local fallback=makePlayerESPKillSound(hosts[2] or hosts[1],"Legacy")
 if not fallback then return end
-directPlayerESPKillPlay(fallback)
+fallback.SoundId="https://www.roblox.com/asset/?id="..PLAYER_ESP_KILL_SOUND_ID
+attempt(fallback)
 task.spawn(function()
 pcall(function() PlayerESPContentProvider:PreloadAsync({fallback}) end)
-if fallback.Parent and not fallback.IsPlaying then directPlayerESPKillPlay(fallback) end
+attempt(fallback)
 end)
-PlayerESPDebris:AddItem(fallback,20)
+PlayerESPDebris:AddItem(fallback,25)
 end)
 
-task.delay(0.75,function()
+task.delay(0.80,function()
 local anyPlaying=false
 for sound in pairs(PlayerESPUtilityRuntime.killSoundInstances) do
 if sound and sound.Parent and sound.IsPlaying then anyPlaying=true break end
 end
 if anyPlaying then return end
-
-local host=hosts[3] or hosts[1]
-local lastResort=makePlayerESPKillSound(host,"RemovePlay")
-if not lastResort then return end
-pcall(function()
-lastResort.PlayOnRemove=true
-lastResort:Destroy()
+local retry=makePlayerESPKillSound(hosts[3] or hosts[1],"Retry")
+if not retry then return end
+attempt(retry)
+task.delay(0.25,function()
+if retry.Parent and not retry.IsPlaying then attempt(retry) end
 end)
-PlayerESPUtilityRuntime.killSoundInstances[lastResort]=nil
+PlayerESPDebris:AddItem(retry,25)
 end)
 
-PlayerESPDebris:AddItem(primary,20)
+task.delay(1.20,function()
+local anyPlaying=false
+for sound in pairs(PlayerESPUtilityRuntime.killSoundInstances) do
+if sound and sound.Parent and sound.IsPlaying then anyPlaying=true break end
+end
+if anyPlaying then return end
+local removeSound=makePlayerESPKillSound(PlayerESPSoundService,"Remove")
+if not removeSound then return end
+removeSound.PlayOnRemove=true
+pcall(function() removeSound:Destroy() end)
+PlayerESPUtilityRuntime.killSoundInstances[removeSound]=nil
+end)
+
+PlayerESPDebris:AddItem(primary,25)
 return true
 end
 
@@ -12220,49 +12232,87 @@ local BEARD_CATALOG_ASSET_ID = "12691728158"
 local PURPLE_HORNS_CATALOG_ASSET_ID = "1744060292"
 local KORBLOX_CATALOG_ASSET_ID = "139607718"
 local AvatarCatalogCache = {}
+local AvatarInsertService = game:GetService("InsertService")
 
 local function findCatalogAccessory(root)
     if not root then return nil end
     if root:IsA("Accessory") then return root end
-    local ok, accessory = pcall(function()
-        return root:FindFirstChildWhichIsA("Accessory", true)
-    end)
-    if ok then return accessory end
+    for _, object in ipairs(root:GetDescendants()) do
+        if object:IsA("Accessory") then return object end
+    end
     return nil
 end
 
-local function loadCatalogAccessoryTemplate(assetId)
-    assetId = tostring(assetId or ""):match("%d+")
-    if not assetId then return nil end
-    local cached = AvatarCatalogCache[assetId]
-    if cached then
-        local ok, clone = pcall(function() return cached:Clone() end)
-        if ok then return clone end
-    end
-
-    local ok, objects = pcall(function()
-        return game:GetObjects("rbxassetid://" .. assetId)
-    end)
-    if not ok or type(objects) ~= "table" then return nil end
-
-    local template = nil
-    for _, rootObject in ipairs(objects) do
-        local accessory = findCatalogAccessory(rootObject)
-        if accessory and not template then
-            local clonedOk, cloned = pcall(function() return accessory:Clone() end)
-            if clonedOk then template = cloned end
+local function accessoryFromDescription(assetId, accessoryKind)
+    local description = Instance.new("HumanoidDescription")
+    local okSet = pcall(function()
+        if accessoryKind == "Face" then
+            description.FaceAccessory = tostring(assetId)
+        else
+            description.HatAccessory = tostring(assetId)
         end
-    end
-    for _, rootObject in ipairs(objects) do
-        pcall(function() rootObject:Destroy() end)
+    end)
+    if not okSet then pcall(function() description:Destroy() end); return nil end
+
+    local okModel, model = pcall(function()
+        return Players:CreateHumanoidModelFromDescription(description, Enum.HumanoidRigType.R15)
+    end)
+    pcall(function() description:Destroy() end)
+    if not okModel or not model then return nil end
+
+    local accessory = findCatalogAccessory(model)
+    local clone = nil
+    if accessory then pcall(function() clone = accessory:Clone() end) end
+    pcall(function() model:Destroy() end)
+    return clone
+end
+
+local function accessoryFromAssetLoader(assetId)
+    local roots = nil
+    local ok = pcall(function() roots = game:GetObjects("rbxassetid://" .. tostring(assetId)) end)
+    if ok and type(roots) == "table" then
+        for _, root in ipairs(roots) do
+            local accessory = findCatalogAccessory(root)
+            if accessory then
+                local clone=nil
+                pcall(function() clone=accessory:Clone() end)
+                for _, cleanup in ipairs(roots) do pcall(function() cleanup:Destroy() end) end
+                if clone then return clone end
+            end
+        end
+        for _, cleanup in ipairs(roots) do pcall(function() cleanup:Destroy() end) end
     end
 
-    if template then
-        AvatarCatalogCache[assetId] = template
-        local okClone, clone = pcall(function() return template:Clone() end)
-        if okClone then return clone end
+    local model = nil
+    local okInsert = pcall(function() model = AvatarInsertService:LoadAsset(tonumber(assetId)) end)
+    if okInsert and model then
+        local accessory = findCatalogAccessory(model)
+        local clone=nil
+        if accessory then pcall(function() clone=accessory:Clone() end) end
+        pcall(function() model:Destroy() end)
+        return clone
     end
     return nil
+end
+
+local function loadCatalogAccessoryTemplate(assetId, accessoryKind)
+    assetId = tostring(assetId or ""):match("%d+")
+    if not assetId then return nil end
+    local cacheKey=assetId..":"..tostring(accessoryKind or "Hat")
+    local cached = AvatarCatalogCache[cacheKey]
+    if cached then
+        local clone=nil
+        pcall(function() clone=cached:Clone() end)
+        if clone then return clone end
+    end
+
+    local template=accessoryFromDescription(assetId,accessoryKind) or accessoryFromAssetLoader(assetId)
+    if not template then return nil end
+    template.Parent=nil
+    AvatarCatalogCache[cacheKey]=template
+    local clone=nil
+    pcall(function() clone=template:Clone() end)
+    return clone
 end
 
 local function colorAndScaleCatalogAccessory(accessory, color, scale)
@@ -12277,63 +12327,72 @@ local function colorAndScaleCatalogAccessory(accessory, color, scale)
             object.Massless = true
             object.CastShadow = false
             pcall(function() object.Color = color end)
-            if object:IsA("MeshPart") then
-                pcall(function() object.Size = object.Size * scale end)
-            end
+            if object:IsA("MeshPart") then pcall(function() object.Size = object.Size * scale end) end
         elseif object:IsA("SpecialMesh") then
             pcall(function() object.Scale = object.Scale * scale end)
+        elseif object:IsA("Attachment") then
+            pcall(function() object.Position = object.Position * scale end)
         end
     end
 end
 
-local function attachCatalogAccessory(character, assetId, generatedName, color, scale, offset, rotation)
+local function attachCatalogAccessory(character, assetId, accessoryKind, generatedName, color, scale, offset, rotation)
     if not character then return false end
     local head = character:FindFirstChild("Head")
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if not head or not humanoid then return false end
+    if not head then return false end
 
-    local accessory = loadCatalogAccessoryTemplate(assetId)
+    local accessory = loadCatalogAccessoryTemplate(assetId, accessoryKind)
     if not accessory then return false end
     accessory.Name = "DevKageAvatar_" .. generatedName
     colorAndScaleCatalogAccessory(accessory, color, scale)
-
-    local added = pcall(function()
-        humanoid:AddAccessory(accessory)
-    end)
-    if not added or accessory.Parent ~= character then
-        accessory.Parent = character
-    end
+    accessory.Parent = character
 
     local handle = accessory:FindFirstChild("Handle")
     if not handle or not handle:IsA("BasePart") then
-        return accessory.Parent == character
+        pcall(function() accessory:Destroy() end)
+        return false
     end
 
-    handle.CanCollide = false
-    handle.CanTouch = false
-    handle.CanQuery = false
-    handle.Massless = true
+    handle.CanCollide=false
+    handle.CanTouch=false
+    handle.CanQuery=false
+    handle.Massless=true
 
-    local weld = handle:FindFirstChild("AccessoryWeld")
-        or handle:FindFirstChildWhichIsA("Weld")
-        or handle:FindFirstChildWhichIsA("WeldConstraint")
-
-    local transform = (offset or CFrame.new()) * (rotation or CFrame.new())
-    if weld and weld:IsA("Weld") then
-        pcall(function() weld.C0 = weld.C0 * transform end)
-    elseif weld and weld:IsA("Motor6D") then
-        pcall(function() weld.C0 = weld.C0 * transform end)
+    local handleAttachment=nil
+    for _, child in ipairs(handle:GetChildren()) do
+        if child:IsA("Attachment") then handleAttachment=child; break end
+    end
+    local headAttachment=handleAttachment and head:FindFirstChild(handleAttachment.Name) or nil
+    local baseRelative=CFrame.new()
+    if handleAttachment and headAttachment and headAttachment:IsA("Attachment") then
+        baseRelative=headAttachment.CFrame * handleAttachment.CFrame:Inverse()
     else
-        for _, child in ipairs(handle:GetChildren()) do
-            if child:IsA("Weld") and child.Part0 == head then
-                pcall(function() child.C0 = child.C0 * transform end)
-                weld = child
-                break
+        local added=pcall(function() character:FindFirstChildOfClass("Humanoid"):AddAccessory(accessory) end)
+        if added then
+            local existing=handle:FindFirstChild("AccessoryWeld") or handle:FindFirstChildWhichIsA("Weld")
+            if existing and existing:IsA("Weld") then
+                baseRelative=existing.C0 * existing.C1:Inverse()
             end
         end
     end
 
-    return accessory.Parent == character
+    for _, joint in ipairs(handle:GetChildren()) do
+        if joint:IsA("Weld") or joint:IsA("WeldConstraint") or joint:IsA("Motor6D") then
+            pcall(function() joint:Destroy() end)
+        end
+    end
+
+    local transform=(offset or CFrame.new()) * (rotation or CFrame.new())
+    local finalRelative=baseRelative * transform
+    handle.CFrame=head.CFrame * finalRelative
+    local weld=Instance.new("Weld")
+    weld.Name="DevKageAccessoryWeld"
+    weld.Part0=head
+    weld.Part1=handle
+    weld.C0=finalRelative
+    weld.C1=CFrame.new()
+    weld.Parent=handle
+    return true
 end
 
 local function specificAccessoryRotation(prefix)
@@ -12360,6 +12419,7 @@ local function applyAccessorySet(character)
         attachCatalogAccessory(
             character,
             BEARD_CATALOG_ASSET_ID,
+            "Face",
             "OldManBeard",
             beardColor,
             beardScale,
@@ -12380,6 +12440,7 @@ local function applyAccessorySet(character)
         attachCatalogAccessory(
             character,
             PURPLE_HORNS_CATALOG_ASSET_ID,
+            "Hat",
             "PurpleHorns",
             hornColor,
             hornScale,
@@ -12415,41 +12476,50 @@ local function applyHeadless(character)
 end
 
 local function catalogKorbloxMeshes()
-    if AvatarCatalogCache.__KorbloxMeshes ~= nil then
-        return AvatarCatalogCache.__KorbloxMeshes
-    end
+    if AvatarCatalogCache.__KorbloxMeshes ~= nil then return AvatarCatalogCache.__KorbloxMeshes end
+    local result={}
 
-    local result = {}
-    local ok, objects = pcall(function()
-        return game:GetObjects("rbxassetid://" .. KORBLOX_CATALOG_ASSET_ID)
-    end)
-    if ok and type(objects) == "table" then
-        for _, rootObject in ipairs(objects) do
-            local candidates = {rootObject}
-            for _, descendant in ipairs(rootObject:GetDescendants()) do
-                candidates[#candidates + 1] = descendant
-            end
-            for _, object in ipairs(candidates) do
-                if object:IsA("MeshPart") then
-                    local name = object.Name:lower()
-                    local entry = {MeshId=object.MeshId, TextureID=object.TextureID}
-                    if name:find("upper",1,true) then result.upper = entry
-                    elseif name:find("foot",1,true) then result.foot = entry
-                    elseif name:find("lower",1,true) or name:find("right leg",1,true) or name=="rightleg" then result.lower = entry
-                    elseif not result.lower then result.lower = entry end
-                elseif object:IsA("CharacterMesh") then
-                    local entry = {
-                        MeshId = "rbxassetid://" .. tostring(object.MeshId),
-                        TextureID = "rbxassetid://" .. tostring(object.BaseTextureId)
-                    }
-                    if not result.lower then result.lower = entry end
+    local description=Instance.new("HumanoidDescription")
+    local okDescription=pcall(function() description.RightLeg=tonumber(KORBLOX_CATALOG_ASSET_ID) end)
+    if okDescription then
+        local okModel,model=pcall(function()
+            return Players:CreateHumanoidModelFromDescription(description,Enum.HumanoidRigType.R15)
+        end)
+        if okModel and model then
+            local map={RightUpperLeg="upper",RightLowerLeg="lower",RightFoot="foot"}
+            for partName,key in pairs(map) do
+                local part=model:FindFirstChild(partName)
+                if part and part:IsA("MeshPart") then
+                    result[key]={MeshId=part.MeshId,TextureID=part.TextureID}
                 end
             end
+            pcall(function() model:Destroy() end)
         end
-        for _, rootObject in ipairs(objects) do pcall(function() rootObject:Destroy() end) end
+    end
+    pcall(function() description:Destroy() end)
+
+    if next(result)==nil then
+        local ok,objects=pcall(function() return game:GetObjects("rbxassetid://"..KORBLOX_CATALOG_ASSET_ID) end)
+        if ok and type(objects)=="table" then
+            for _,rootObject in ipairs(objects) do
+                local candidates={rootObject}
+                for _,descendant in ipairs(rootObject:GetDescendants()) do candidates[#candidates+1]=descendant end
+                for _,object in ipairs(candidates) do
+                    if object:IsA("MeshPart") then
+                        local name=object.Name:lower()
+                        local entry={MeshId=object.MeshId,TextureID=object.TextureID}
+                        if name:find("upper",1,true) then result.upper=entry
+                        elseif name:find("foot",1,true) then result.foot=entry
+                        elseif name:find("lower",1,true) or name:find("right leg",1,true) or name=="rightleg" then result.lower=entry
+                        elseif not result.lower then result.lower=entry end
+                    end
+                end
+            end
+            for _,rootObject in ipairs(objects) do pcall(function() rootObject:Destroy() end) end
+        end
     end
 
-    AvatarCatalogCache.__KorbloxMeshes = result
+    AvatarCatalogCache.__KorbloxMeshes=result
     return result
 end
 
@@ -12714,47 +12784,52 @@ local animationSection = mouseLockPage:CreateSection({Name="Crosshair Animation"
 local advancedSection = mouseLockPage:CreateSection({Name="Crosshair Glow",Side="Right",Size=300})
 
 local settings = {}
+local cursorStateMap = {
+    devkage_cursor_enabled="Enabled",
+    devkage_cursor_position_mode="PositionMode",
+    devkage_cursor_color="Color",
+    devkage_cursor_rainbow="Rainbow",
+    devkage_cursor_rainbow_speed="RainbowSpeed",
+    devkage_cursor_line_width="LineWidth",
+    devkage_cursor_line_length="LineLength",
+    devkage_cursor_center_radius="CenterRadius",
+    devkage_cursor_arm_count="ArmCount",
+    devkage_cursor_angle_offset="AngleOffset",
+    devkage_cursor_spin="Spin",
+    devkage_cursor_spin_style="SpinStyle",
+    devkage_cursor_spin_direction="SpinDirection",
+    devkage_cursor_spin_speed="SpinSpeed",
+    devkage_cursor_spin_range="SpinRange",
+    devkage_cursor_squash_x="SquashX",
+    devkage_cursor_squash_y="SquashY",
+    devkage_cursor_smooth_spin="SmoothSpin",
+    devkage_cursor_line_glow="LineGlow",
+    devkage_cursor_glow_thickness="GlowThickness",
+    devkage_cursor_glow_extra_length="GlowExtraLength",
+    devkage_cursor_glow_transparency="GlowTransparency",
+    devkage_cursor_text_enabled="TextEnabled",
+    devkage_cursor_main_text="MainText",
+    devkage_cursor_second_text="SecondText",
+    devkage_cursor_text_outline="TextOutline",
+    devkage_cursor_main_text_size="MainTextSize",
+    devkage_cursor_second_text_size="SecondTextSize",
+    devkage_cursor_pulse_speed="PulseSpeed",
+}
+
+local function refreshCursorSettings()
+    for visualKey, runtimeKey in pairs(cursorStateMap) do
+        local value = VisualsState[visualKey]
+        if value ~= nil then settings[runtimeKey] = value end
+    end
+end
 
 local function syncCursorSetting(key, value)
     VisualsState[key] = value
-    local map = {
-        devkage_cursor_enabled="Enabled",
-        devkage_cursor_position_mode="PositionMode",
-        devkage_cursor_color="Color",
-        devkage_cursor_rainbow="Rainbow",
-        devkage_cursor_rainbow_speed="RainbowSpeed",
-        devkage_cursor_line_width="LineWidth",
-        devkage_cursor_line_length="LineLength",
-        devkage_cursor_center_radius="CenterRadius",
-        devkage_cursor_arm_count="ArmCount",
-        devkage_cursor_angle_offset="AngleOffset",
-        devkage_cursor_spin="Spin",
-        devkage_cursor_spin_style="SpinStyle",
-        devkage_cursor_spin_direction="SpinDirection",
-        devkage_cursor_spin_speed="SpinSpeed",
-        devkage_cursor_spin_range="SpinRange",
-        devkage_cursor_squash_x="SquashX",
-        devkage_cursor_squash_y="SquashY",
-        devkage_cursor_smooth_spin="SmoothSpin",
-        devkage_cursor_line_glow="LineGlow",
-        devkage_cursor_glow_thickness="GlowThickness",
-        devkage_cursor_glow_extra_length="GlowExtraLength",
-        devkage_cursor_glow_transparency="GlowTransparency",
-        devkage_cursor_text_enabled="TextEnabled",
-        devkage_cursor_main_text="MainText",
-        devkage_cursor_second_text="SecondText",
-        devkage_cursor_text_outline="TextOutline",
-        devkage_cursor_main_text_size="MainTextSize",
-        devkage_cursor_second_text_size="SecondTextSize",
-        devkage_cursor_pulse_speed="PulseSpeed",
-    }
-    local runtimeKey = map[key]
+    local runtimeKey = cursorStateMap[key]
     if runtimeKey then settings[runtimeKey] = value end
 end
 
-for key, value in pairs(VisualsState) do
-    if tostring(key):find("^devkage_cursor_") then syncCursorSetting(key, value) end
-end
+refreshCursorSettings()
 
 do
     local cursorHttpService = game:GetService("HttpService")
@@ -12777,13 +12852,24 @@ do
     }
 
     local function getCursorHost()
-        local host = nil
+        local core = game:GetService("CoreGui")
+        if core then return core end
         if type(gethui) == "function" then
             local ok, value = pcall(gethui)
-            if ok and value then host = value end
+            if ok and value then return value end
         end
-        if not host then host = game:GetService("CoreGui") end
-        return host
+        return nil
+    end
+
+    local function ensureCursorParent(gui)
+        if not gui then return false end
+        local host = getCursorHost()
+        if not host then return false end
+        if gui.Parent ~= host then
+            local ok = pcall(function() gui.Parent = host end)
+            if not ok then return false end
+        end
+        return gui.Parent == host
     end
 
     local cursorGui = Instance.new("ScreenGui")
@@ -12792,10 +12878,10 @@ do
     if type(cursorProtectGui) == "function" then pcall(cursorProtectGui, cursorGui) end
     cursorGui.IgnoreGuiInset = true
     cursorGui.ResetOnSpawn = false
-    cursorGui.DisplayOrder = 1000000
+    cursorGui.DisplayOrder = 2147483647
     cursorGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
     pcall(function() cursorGui.OnTopOfCoreBlur = true end)
-    cursorGui.Parent = getCursorHost()
+    ensureCursorParent(cursorGui)
 
     local root = Instance.new("Frame")
     root.Name = "CursorRoot"
@@ -12858,6 +12944,41 @@ do
     runtime.MainText = mainText
     runtime.SecondText = secondText
 
+    local cursorTemplate = cursorGui:Clone()
+    cursorTemplate.Parent = nil
+    runtime.Template = cursorTemplate
+
+    local function repairCursorGui()
+        if ensureCursorParent(cursorGui) then return true end
+        local replacement = nil
+        local okClone = pcall(function() replacement = cursorTemplate:Clone() end)
+        if not okClone or not replacement then return false end
+        replacement.Name = "DevKage_CursorOverlay_" .. cursorInstanceId
+        if type(cursorProtectGui) == "function" then pcall(cursorProtectGui, replacement) end
+        if not ensureCursorParent(replacement) then pcall(function() replacement:Destroy() end); return false end
+
+        local replacementRoot = replacement:FindFirstChild("CursorRoot")
+        if not replacementRoot then pcall(function() replacement:Destroy() end); return false end
+
+        cursorGui = replacement
+        root = replacementRoot
+        runtime.Gui = replacement
+        runtime.Root = replacementRoot
+        runtime.Lines = {}
+        runtime.Glows = {}
+        runtime.InnerGlows = {}
+        for i = 1, 12 do
+            runtime.Glows[i] = replacementRoot:FindFirstChild("GlowOuter"..i)
+            runtime.InnerGlows[i] = replacementRoot:FindFirstChild("GlowInner"..i)
+            runtime.Lines[i] = replacementRoot:FindFirstChild("Line"..i)
+        end
+        mainText = replacementRoot:FindFirstChild("MainText")
+        secondText = replacementRoot:FindFirstChild("SecondText")
+        runtime.MainText = mainText
+        runtime.SecondText = secondText
+        return mainText ~= nil and secondText ~= nil
+    end
+
     local function viewportCenter()
         local camera = workspace.CurrentCamera
         local size = camera and camera.ViewportSize or Vector2.new(1920,1080)
@@ -12899,10 +13020,8 @@ do
 
     local function updateCursor(dt)
         if runtime.Destroyed then return end
-        if not cursorGui.Parent then
-            pcall(function() cursorGui.Parent = getCursorHost() end)
-            if not cursorGui.Parent then return end
-        end
+        refreshCursorSettings()
+        if not repairCursorGui() then return end
 
         local enabled = settings.Enabled ~= false
         cursorGui.Enabled = enabled
@@ -13047,17 +13166,17 @@ do
         self.Destroyed = true
         if self.Connection then pcall(function() self.Connection:Disconnect() end) end
         if self.Supervisor then pcall(function() self.Supervisor:Disconnect() end) end
-        if self.Gui and self.Gui.Parent then pcall(function() self.Gui:Destroy() end) end
+        if self.Gui then pcall(function() self.Gui:Destroy() end) end
+        if self.Template then pcall(function() self.Template:Destroy() end) end
     end
 
     runtime.Connection = RunService.RenderStepped:Connect(updateCursor)
     runtime.Supervisor = RunService.Heartbeat:Connect(function()
         if runtime.Destroyed then return end
-        if not cursorGui.Parent then
-            pcall(function() cursorGui.Parent = getCursorHost() end)
-        end
-        if cursorGui.Parent then
+        refreshCursorSettings()
+        if repairCursorGui() then
             cursorGui.Enabled = settings.Enabled ~= false
+            cursorGui.DisplayOrder = 2147483647
         end
     end)
     if type(MaskShard) == "table" and type(MaskShard.Connections) == "table" then
