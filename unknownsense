@@ -5337,7 +5337,7 @@ devkage_cursor_text           = true,
 skybox_enabled           = false,
 skybox_preset            = "Default",
 kill_sound_enabled       = false,
-kill_sound_id            = "",
+kill_sound_id            = "103966419660214",
 kill_sound_volume        = 50,
 }
 
@@ -10430,11 +10430,8 @@ local now=tick()
 if now-(tonumber(PlayerESPUtilityRuntime.killGlobalLastAt) or 0)<0.2 then return false end
 PlayerESPUtilityRuntime.killGlobalLastAt=now
 end
-local id=tostring(VisualsState.kill_sound_id or ""):match("%d+")
-if not id then
-library:Notify({Message="Enter a kill sound ID first.",Duration=2})
-return false
-end
+local id=tostring(VisualsState.kill_sound_id or ""):match("%d+") or "103966419660214"
+VisualsState.kill_sound_id=id
 if PlayerESPUtilityRuntime.killSound then
 pcall(function() PlayerESPUtilityRuntime.killSound:Stop(); PlayerESPUtilityRuntime.killSound:Destroy() end)
 PlayerESPUtilityRuntime.killSound=nil
@@ -10448,22 +10445,24 @@ sound.Parent=PlayerESPSoundService
 PlayerESPUtilityRuntime.killSound=sound
 
 task.spawn(function()
-pcall(function() PlayerESPContentProvider:PreloadAsync({sound}) end)
 if not sound.Parent then return end
-local ok,err=pcall(function()
-sound.TimePosition=0
-if PlayerESPSoundService.PlayLocalSound then
-PlayerESPSoundService:PlayLocalSound(sound)
-else
-sound:Play()
-end
+pcall(function()
+    sound.TimePosition=0
+    sound:Play()
 end)
-if not ok then
-pcall(function() sound:Play() end)
-if not sound.IsPlaying then
-library:Notify({Message="Kill sound could not play: "..tostring(err),Duration=3})
-end
-end
+
+task.spawn(function()
+    pcall(function() PlayerESPContentProvider:PreloadAsync({sound}) end)
+end)
+
+task.delay(0.35,function()
+    if sound.Parent and not sound.IsPlaying then
+        pcall(function()
+            sound.TimePosition=0
+            sound:Play()
+        end)
+    end
+end)
 end)
 
 PlayerESPDebris:AddItem(sound,30)
@@ -10667,21 +10666,12 @@ playPlayerESPKillSound(false)
 end
 end)
 end
-local playerGui=LocalPlayer:FindFirstChild("PlayerGui")
-local function attachMainGui(gui)
-if not gui or gui.Name~="MainGui" then return end
-for _,object in ipairs(gui:GetDescendants()) do inspect(object) end
-utility:CreateConnection(gui.DescendantAdded,function(object) task.defer(inspect,object) end)
-end
+local playerGui=LocalPlayer:FindFirstChild("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui",8)
 if playerGui then
-local mainGui=playerGui:FindFirstChild("MainGui")
-if mainGui then
-attachMainGui(mainGui)
-else
-utility:CreateConnection(playerGui.ChildAdded,function(child)
-if child.Name=="MainGui" then attachMainGui(child) end
+for _,object in ipairs(playerGui:GetDescendants()) do inspect(object) end
+utility:CreateConnection(playerGui.DescendantAdded,function(object)
+    task.defer(inspect,object)
 end)
-end
 end
 end
 
@@ -10714,8 +10704,9 @@ startLocalKillFeedWatcher()
 for _,plr in ipairs(Players:GetPlayers()) do watchPlayerESPKillPlayer(plr) end
 end
 end})
-VisualControls.kill_sound_id=playeresp:CreateInput({Name="Kill Sound ID",Placeholder="123456789",Default=tostring(VisualsState.kill_sound_id or ""):match("%d+") or "",Numeric=true,DigitsOnly=true,MaxLength=20,Flag="visuals.kill_sound_id",Callback=function(v)
-VisualsState.kill_sound_id=tostring(v or ""):gsub("%D","")
+VisualControls.kill_sound_id=playeresp:CreateInput({Name="Kill Sound ID",Placeholder="103966419660214",Default=tostring(VisualsState.kill_sound_id or ""):match("%d+") or "103966419660214",Numeric=true,DigitsOnly=true,MaxLength=20,Flag="visuals.kill_sound_id",Callback=function(v)
+local cleaned=tostring(v or ""):gsub("%D","")
+VisualsState.kill_sound_id=(cleaned~="" and cleaned) or "103966419660214"
 end})
 VisualControls.kill_sound_volume=playeresp:CreateSlider({Name="Kill Sound Volume",State=VisualsState.kill_sound_volume,Min=0,Max=100,Decimals=0,Suffix="%",Flag="visuals.kill_sound_volume",Callback=function(v)
 VisualsState.kill_sound_volume=math.clamp(tonumber(v) or 50,0,100)
@@ -12265,6 +12256,245 @@ for key, value in pairs(VisualsState) do
     if tostring(key):find("^devkage_cursor_") then syncCursorSetting(key, value) end
 end
 
+do
+    local env = (type(getgenv) == "function" and getgenv()) or _G
+    local oldRuntime = env.__DevKageCursorRuntime
+    if type(oldRuntime) == "table" and type(oldRuntime.Destroy) == "function" then
+        pcall(function() oldRuntime:Destroy() end)
+    end
+
+    local runtime = {
+        Gui = nil,
+        Root = nil,
+        Lines = {},
+        Glows = {},
+        MainText = nil,
+        SecondText = nil,
+        Connection = nil,
+        Rotation = 0,
+        StartedAt = os.clock(),
+        Destroyed = false,
+    }
+
+    local cursorGui = Instance.new("ScreenGui")
+    cursorGui.Name = "DevKage_CursorOverlay"
+    cursorGui.IgnoreGuiInset = true
+    cursorGui.ResetOnSpawn = false
+    cursorGui.DisplayOrder = 1000000
+    cursorGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+    cursorGui.Parent = game:GetService("CoreGui")
+
+    local root = Instance.new("Frame")
+    root.Name = "CursorRoot"
+    root.BackgroundTransparency = 1
+    root.BorderSizePixel = 0
+    root.Size = UDim2.fromOffset(1,1)
+    root.Position = UDim2.fromOffset(0,0)
+    root.ZIndex = 100
+    root.Parent = cursorGui
+
+    local function makeArm(zIndex)
+        local frame = Instance.new("Frame")
+        frame.Name = "Arm"
+        frame.AnchorPoint = Vector2.new(0.5,0.5)
+        frame.BackgroundColor3 = Color3.new(1,1,1)
+        frame.BorderSizePixel = 0
+        frame.ZIndex = zIndex
+        frame.Parent = root
+        return frame
+    end
+
+    for i = 1, 12 do
+        local glow = makeArm(100)
+        glow.Name = "Glow"..i
+        local line = makeArm(101)
+        line.Name = "Line"..i
+        runtime.Glows[i] = glow
+        runtime.Lines[i] = line
+    end
+
+    local mainText = Instance.new("TextLabel")
+    mainText.Name = "MainText"
+    mainText.AnchorPoint = Vector2.new(0.5,0)
+    mainText.BackgroundTransparency = 1
+    mainText.BorderSizePixel = 0
+    mainText.Font = Enum.Font.Code
+    mainText.Text = "devkage"
+    mainText.TextColor3 = Color3.new(1,1,1)
+    mainText.TextSize = 20
+    mainText.TextStrokeColor3 = Color3.new(0,0,0)
+    mainText.TextStrokeTransparency = 0
+    mainText.TextXAlignment = Enum.TextXAlignment.Center
+    mainText.TextYAlignment = Enum.TextYAlignment.Center
+    mainText.ZIndex = 103
+    mainText.Parent = root
+
+    local secondText = Instance.new("TextLabel")
+    secondText.Name = "SecondText"
+    secondText.AnchorPoint = Vector2.new(0.5,0)
+    secondText.BackgroundTransparency = 1
+    secondText.BorderSizePixel = 0
+    secondText.Font = Enum.Font.Code
+    secondText.Text = ""
+    secondText.TextColor3 = Color3.new(1,1,1)
+    secondText.TextSize = 15
+    secondText.TextStrokeColor3 = Color3.new(0,0,0)
+    secondText.TextStrokeTransparency = 0
+    secondText.TextXAlignment = Enum.TextXAlignment.Center
+    secondText.TextYAlignment = Enum.TextYAlignment.Center
+    secondText.ZIndex = 103
+    secondText.Parent = root
+
+    runtime.Gui = cursorGui
+    runtime.Root = root
+    runtime.MainText = mainText
+    runtime.SecondText = secondText
+
+    local function cursorCenter()
+        if tostring(settings.PositionMode or "Mouse") == "Center" then
+            local camera = workspace.CurrentCamera
+            local size = camera and camera.ViewportSize or Vector2.new(1920,1080)
+            return Vector2.new(size.X * 0.5, size.Y * 0.5)
+        end
+        local pos = uis:GetMouseLocation()
+        return Vector2.new(pos.X,pos.Y)
+    end
+
+    local function wantedRotation(now, spinSpeed, spinRange, direction, style)
+        if settings.Spin ~= true then
+            return tonumber(settings.AngleOffset) or 0
+        end
+        local elapsed = math.max(0, now - runtime.StartedAt)
+        local dir = tostring(direction or "Clockwise") == "Counter Clockwise" and -1 or 1
+        local speed = math.max(tonumber(spinSpeed) or 0,0)
+        local range = math.clamp(tonumber(spinRange) or 360,1,360)
+        local base = tonumber(settings.AngleOffset) or 0
+        style = tostring(style or "Static")
+
+        if style == "Ping Pong" then
+            local radians = elapsed * math.rad(math.max(speed,1))
+            return base + (math.sin(radians) * (range * 0.5) * dir)
+        elseif style == "Stepped" then
+            local stepSize = math.max(1, range / math.max(math.floor(tonumber(settings.ArmCount) or 4),1))
+            local raw = elapsed * speed * dir
+            return base + math.floor(raw / stepSize) * stepSize
+        end
+
+        return base + ((elapsed * speed * dir) % 360)
+    end
+
+    local function updateCursor(dt)
+        if runtime.Destroyed or not cursorGui.Parent then return end
+
+        local enabled = settings.Enabled ~= false
+        cursorGui.Enabled = enabled
+        if not enabled then return end
+
+        local center = cursorCenter()
+        root.Position = UDim2.fromOffset(center.X,center.Y)
+
+        local now = os.clock()
+        local armCount = math.clamp(math.floor(tonumber(settings.ArmCount) or 4),1,12)
+        local lineWidth = math.max(1,math.floor((tonumber(settings.LineWidth) or 3) + 0.5))
+        local lineLength = math.max(1,tonumber(settings.LineLength) or 25)
+        local radius = math.max(0,tonumber(settings.CenterRadius) or 12.5)
+        local squashX = math.max(0.05,tonumber(settings.SquashX) or 1)
+        local squashY = math.max(0.05,tonumber(settings.SquashY) or 1)
+        local targetRotation = wantedRotation(now, settings.SpinSpeed, settings.SpinRange, settings.SpinDirection, settings.SpinStyle)
+
+        if settings.SmoothSpin == true then
+            local response = 1 - math.exp(-math.max(dt,0) * 16)
+            runtime.Rotation = runtime.Rotation + (targetRotation - runtime.Rotation) * response
+        else
+            runtime.Rotation = targetRotation
+        end
+
+        local color = settings.Color
+        if typeof(color) ~= "Color3" then color = Color3.new(1,1,1) end
+        if settings.Rainbow == true then
+            local rainbowSpeed = math.max(tonumber(settings.RainbowSpeed) or 7.2,0)
+            color = Color3.fromHSV((now * rainbowSpeed * 0.1) % 1,0.82,1)
+        end
+
+        local glowEnabled = settings.LineGlow == true
+        local glowThickness = math.max(lineWidth,tonumber(settings.GlowThickness) or 30)
+        local glowExtra = math.max(0,tonumber(settings.GlowExtraLength) or 15)
+        local glowTransparency = math.clamp(tonumber(settings.GlowTransparency) or 0.43,0,1)
+        local pulseSpeed = math.max(tonumber(settings.PulseSpeed) or 2.5,0)
+        local pulse = 1
+        if glowEnabled and pulseSpeed > 0 then
+            pulse = 0.82 + 0.18 * ((math.sin(now * pulseSpeed * math.pi * 2) + 1) * 0.5)
+        end
+
+        for i = 1, 12 do
+            local line = runtime.Lines[i]
+            local glow = runtime.Glows[i]
+            local active = i <= armCount
+            line.Visible = active
+            glow.Visible = active and glowEnabled
+
+            if active then
+                local angle = runtime.Rotation + ((i-1) * (360 / armCount))
+                local rad = math.rad(angle)
+                local dirX = math.cos(rad)
+                local dirY = math.sin(rad)
+                local midpoint = radius + (lineLength * 0.5)
+                local offsetX = dirX * midpoint * squashX
+                local offsetY = dirY * midpoint * squashY
+
+                line.Position = UDim2.fromOffset(offsetX,offsetY)
+                line.Size = UDim2.fromOffset(lineLength,lineWidth)
+                line.Rotation = angle
+                line.BackgroundColor3 = color
+                line.BackgroundTransparency = 0
+
+                glow.Position = UDim2.fromOffset(offsetX,offsetY)
+                glow.Size = UDim2.fromOffset(lineLength + glowExtra,glowThickness)
+                glow.Rotation = angle
+                glow.BackgroundColor3 = color
+                glow.BackgroundTransparency = 1 - ((1 - glowTransparency) * pulse)
+            end
+        end
+
+        local textEnabled = settings.TextEnabled ~= false
+        local mainValue = tostring(settings.MainText or "devkage")
+        local secondValue = tostring(settings.SecondText or "None")
+        local outline = settings.TextOutline ~= false
+        local textY = radius + lineLength + math.max(7,lineWidth * 2)
+
+        mainText.Visible = textEnabled and mainValue ~= "None" and mainValue ~= ""
+        mainText.Text = mainValue
+        mainText.TextColor3 = color
+        mainText.TextSize = math.clamp(math.floor(tonumber(settings.MainTextSize) or 20),8,40)
+        mainText.TextStrokeTransparency = outline and 0 or 1
+        mainText.Size = UDim2.fromOffset(220,mainText.TextSize + 5)
+        mainText.Position = UDim2.fromOffset(0,textY)
+
+        secondText.Visible = textEnabled and secondValue ~= "None" and secondValue ~= ""
+        secondText.Text = secondValue
+        secondText.TextColor3 = color
+        secondText.TextSize = math.clamp(math.floor(tonumber(settings.SecondTextSize) or 15),8,40)
+        secondText.TextStrokeTransparency = outline and 0 or 1
+        secondText.Size = UDim2.fromOffset(220,secondText.TextSize + 5)
+        secondText.Position = UDim2.fromOffset(0,textY + mainText.TextSize + 2)
+    end
+
+    function runtime:Destroy()
+        if self.Destroyed then return end
+        self.Destroyed = true
+        if self.Connection then pcall(function() self.Connection:Disconnect() end) end
+        if self.Gui and self.Gui.Parent then pcall(function() self.Gui:Destroy() end) end
+        if env.__DevKageCursorRuntime == self then env.__DevKageCursorRuntime = nil end
+    end
+
+    runtime.Connection = RunService.RenderStepped:Connect(updateCursor)
+    env.__DevKageCursorRuntime = runtime
+
+    table.insert(library.CleanupCallbacks,function()
+        runtime:Destroy()
+    end)
+end
+
 local function addToggle(section,key,name)
     local control=section:CreateToggle({Name=name,State=VisualsState[key],Flag="visuals."..key,Callback=function(v) syncCursorSetting(key,v) end})
     UI.VisualControls[key]=control
@@ -12321,6 +12551,7 @@ end)();
 
 (function()
 local settingPage = window:CreatePage({ Icon = "rbxassetid://8547256547", Glyph = "L", Size = UDim2.new(0, 36, 0, 36) })
+UI.LuaPage = settingPage
 local luaSection = settingPage:CreateSection({ Name = "Lua Editor", Side = "Left", Size = 520 })
 local luaControls = settingPage:CreateSection({ Name = "Lua Controls", Side = "Right", Size = 300 })
 
@@ -12730,11 +12961,18 @@ UI.Lua.setStatus("Config applied")
 return true
 end
 
-local configMain = configPage:CreateSection({ Name = "Configs & Menu", Side = "Left", Size = 500 })
-local playerSection = configPage:CreateSection({ Name = "Players", Side = "Right", Size = 320 })
+local configMain = configPage:CreateSection({ Name = "Configs", Side = "Left", Size = 500 })
+local playerSection = configPage:CreateSection({ Name = "Players", Side = "Right", Size = 500 })
 local configActions = configPage:CreateSection({ Name = "Config Auto-Load", Side = "Right", Size = 210 })
 local scriptSettingsSection = configPage:CreateSection({ Name = "Script Settings", Side = "Right", Size = 150 })
 local blacklistSection = configPage:CreateSection({ Name = "Player Blacklist", Side = "Left", Size = 250 })
+do
+local blacklistRoot = blacklistSection.Holder and blacklistSection.Holder.Parent and blacklistSection.Holder.Parent.Parent
+if blacklistRoot then
+blacklistRoot.Visible = false
+blacklistRoot.Size = UDim2.new(1,0,0,0)
+end
+end
 
 local scriptAutoLoadToggle
 local scriptSilentLoadToggle
@@ -12820,7 +13058,6 @@ local previous=PlayerBlacklist[selectedBlacklistId]
 PlayerBlacklist[selectedBlacklistId]=nil
 local saved,err=savePlayerBlacklist()
 if saved then
-if player then pcall(function() StarterGui:SetCore("PromptUnblockPlayer",player) end) end
 selectedBlacklistId=nil
 else
 PlayerBlacklist[tostring(selectedBlacklistId)]=previous
@@ -12828,8 +13065,79 @@ end
 rebuildBlacklistList(); rebuildServerPlayerList()
 library:Notify({Message=saved and "Blacklist entry removed" or ("Blacklist save failed: "..tostring(err)),Duration=4})
 end})
-blacklistSection:CreateLabel({Text="Uses Roblox block prompts and keeps a local match list."})
+blacklistSection:CreateLabel({Text="Local blacklist storage."})
 rebuildBlacklistList()
+
+local function createConfigNameField()
+local holder = Instance.new("Frame")
+holder.Name = "ConfigNameField"
+holder.BackgroundTransparency = 1
+holder.BorderSizePixel = 0
+holder.Size = UDim2.new(1,0,0,31)
+holder.ZIndex = 10
+holder.Parent = configMain.Holder
+
+local outer = Instance.new("Frame")
+outer.BackgroundColor3 = Color3.fromRGB(10,10,10)
+outer.BorderColor3 = Color3.fromRGB(0,0,0)
+outer.BorderSizePixel = 1
+outer.Position = UDim2.new(0,10,0,4)
+outer.Size = UDim2.new(1,-20,0,23)
+outer.ZIndex = 11
+outer.Parent = holder
+
+local inner = Instance.new("Frame")
+inner.BackgroundColor3 = Color3.fromRGB(24,24,24)
+inner.BorderColor3 = Color3.fromRGB(48,48,48)
+inner.BorderSizePixel = 1
+inner.Position = UDim2.new(0,1,0,1)
+inner.Size = UDim2.new(1,-2,1,-2)
+inner.ZIndex = 12
+inner.Parent = outer
+
+local box = Instance.new("TextBox")
+box.BackgroundTransparency = 1
+box.BorderSizePixel = 0
+box.ClearTextOnFocus = false
+box.Font = Enum.Font.Code
+box.PlaceholderColor3 = Color3.fromRGB(150,150,150)
+box.PlaceholderText = "Default"
+box.Text = ""
+box.TextColor3 = Color3.fromRGB(220,220,220)
+box.TextSize = 10
+box.TextXAlignment = Enum.TextXAlignment.Left
+box.Position = UDim2.new(0,7,0,0)
+box.Size = UDim2.new(1,-27,1,0)
+box.ZIndex = 13
+box.Parent = inner
+
+local marker = Instance.new("TextLabel")
+marker.BackgroundTransparency = 1
+marker.BorderSizePixel = 0
+marker.Font = Enum.Font.Code
+marker.Text = "□"
+marker.TextColor3 = Color3.fromRGB(145,145,145)
+marker.TextSize = 11
+marker.TextXAlignment = Enum.TextXAlignment.Center
+marker.Position = UDim2.new(1,-20,0,0)
+marker.Size = UDim2.fromOffset(18,21)
+marker.ZIndex = 13
+marker.Parent = inner
+
+local api = {Box=box,Value=""}
+function api:Set(value)
+self.Value = tostring(value or "")
+if self.Box.Text ~= self.Value then self.Box.Text = self.Value end
+end
+function api:Get()
+self.Value = tostring(self.Box.Text or "")
+return self.Value
+end
+box:GetPropertyChangedSignal("Text"):Connect(function() api.Value=tostring(box.Text or "") end)
+return api
+end
+
+configNameBox = createConfigNameField()
 
 local listFrame = Instance.new("ScrollingFrame")
 listFrame.BackgroundColor3 = Color3.fromRGB(12,12,12)
@@ -12838,7 +13146,7 @@ listFrame.BorderSizePixel = 1
 listFrame.ScrollBarThickness = 4
 listFrame.CanvasSize = UDim2.new(0,0,0,0)
 listFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-listFrame.Size = UDim2.new(1,-20,0,260)
+listFrame.Size = UDim2.new(1,-20,0,180)
 listFrame.Position = UDim2.new(0,10,0,10)
 listFrame.ZIndex = 10
 listFrame.Parent = configMain.Holder
@@ -12907,7 +13215,7 @@ playerListFrame.ScrollBarThickness = 4
 playerListFrame.ScrollBarImageColor3 = Color3.fromRGB(70,70,70)
 playerListFrame.CanvasSize = UDim2.new(0,0,0,0)
 playerListFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-playerListFrame.Size = UDim2.new(1,-20,0,180)
+playerListFrame.Size = UDim2.new(1,-20,0,280)
 playerListFrame.Position = UDim2.new(0,10,0,10)
 playerListFrame.ZIndex = 10
 playerListFrame.Parent = playerSection.Holder
@@ -13001,7 +13309,7 @@ for index, plr in ipairs(playersNow) do
     userLabel.TextSize = 8
     userLabel.TextColor3 = Color3.fromRGB(120,120,120)
     userLabel.TextXAlignment = Enum.TextXAlignment.Left
-    userLabel.Text = "@" .. tostring(plr.Name) .. (isPlayerBlacklisted(plr) and "  [BLACKLISTED]" or "")
+    userLabel.Text = "@" .. tostring(plr.Name)
     userLabel.ZIndex = 12
     userLabel.Parent = row
 
@@ -13020,90 +13328,85 @@ for index, plr in ipairs(playersNow) do
 
     row.MouseButton1Click:Connect(function()
         selectedServerPlayer = plr
-        playerSelectionLabel.Text = "Selected: " .. tostring(plr.Name)
+        playerSelectionLabel.Text = "  " .. tostring(plr.Name)
         rebuildServerPlayerList()
     end)
 end
 end
 
+local playerSelectionCaption = Instance.new("TextLabel")
+playerSelectionCaption.BackgroundTransparency = 1
+playerSelectionCaption.Size = UDim2.new(1,-20,0,16)
+playerSelectionCaption.Font = Enum.Font.Code
+playerSelectionCaption.TextSize = 9
+playerSelectionCaption.TextColor3 = Color3.fromRGB(150,150,150)
+playerSelectionCaption.TextXAlignment = Enum.TextXAlignment.Left
+playerSelectionCaption.Text = "Selected user"
+playerSelectionCaption.ZIndex = 10
+playerSelectionCaption.Parent = playerSection.Holder
+
 playerSelectionLabel = Instance.new("TextLabel")
-playerSelectionLabel.BackgroundTransparency = 1
-playerSelectionLabel.Position = UDim2.new(0,10,0,205)
-playerSelectionLabel.Size = UDim2.new(1,-20,0,16)
+playerSelectionLabel.BackgroundColor3 = Color3.fromRGB(19,19,19)
+playerSelectionLabel.BackgroundTransparency = 0
+playerSelectionLabel.BorderColor3 = Color3.fromRGB(4,4,4)
+playerSelectionLabel.BorderSizePixel = 1
+playerSelectionLabel.Size = UDim2.new(1,-20,0,24)
 playerSelectionLabel.Font = Enum.Font.Code
 playerSelectionLabel.TextSize = 9
-playerSelectionLabel.TextColor3 = Color3.fromRGB(135,135,135)
+playerSelectionLabel.TextColor3 = Color3.fromRGB(195,195,195)
 playerSelectionLabel.TextXAlignment = Enum.TextXAlignment.Left
-playerSelectionLabel.Text = "Selected: none"
+playerSelectionLabel.Text = "  None"
 playerSelectionLabel.ZIndex = 10
 playerSelectionLabel.Parent = playerSection.Holder
 
 local selectPlayerButton = Instance.new("TextButton")
 selectPlayerButton.AutoButtonColor = false
-selectPlayerButton.BackgroundColor3 = Color3.fromRGB(30,30,30)
+selectPlayerButton.BackgroundColor3 = Color3.fromRGB(31,31,31)
 selectPlayerButton.BorderColor3 = Color3.fromRGB(8,8,8)
 selectPlayerButton.Size = UDim2.new(1,-20,0,24)
 selectPlayerButton.Position = UDim2.new(0,10,0,226)
 selectPlayerButton.Font = Enum.Font.Code
 selectPlayerButton.TextSize = 9
 selectPlayerButton.TextColor3 = Color3.fromRGB(205,205,205)
-selectPlayerButton.Text = "Blacklist"
+selectPlayerButton.Text = "Block"
 selectPlayerButton.ZIndex = 10
 selectPlayerButton.Parent = playerSection.Holder
 
 local clearPlayerButton = Instance.new("TextButton")
 clearPlayerButton.AutoButtonColor = false
-clearPlayerButton.BackgroundColor3 = Color3.fromRGB(30,30,30)
+clearPlayerButton.BackgroundColor3 = Color3.fromRGB(31,31,31)
 clearPlayerButton.BorderColor3 = Color3.fromRGB(8,8,8)
 clearPlayerButton.Size = UDim2.new(1,-20,0,24)
 clearPlayerButton.Position = UDim2.new(0.5,2,0,226)
 clearPlayerButton.Font = Enum.Font.Code
 clearPlayerButton.TextSize = 9
 clearPlayerButton.TextColor3 = Color3.fromRGB(205,205,205)
-clearPlayerButton.Text = "Unblacklist"
+clearPlayerButton.Text = "Unblock"
 clearPlayerButton.ZIndex = 10
 clearPlayerButton.Parent = playerSection.Holder
 
 selectPlayerButton.MouseButton1Click:Connect(function()
 if selectedServerPlayer then
-local saved,err=setPlayerBlacklisted(selectedServerPlayer,true)
-local promptOpened=saved and pcall(function() StarterGui:SetCore("PromptBlockPlayer",selectedServerPlayer) end)
-local message
-if saved then
-message=promptOpened and (selectedServerPlayer.Name.." saved; confirm the Roblox block prompt") or (selectedServerPlayer.Name.." saved locally; Roblox block prompt unavailable")
-else
-message="Blacklist save failed: "..tostring(err)
-end
-library:Notify({Message=message,Duration=5})
+local saved=setPlayerBlacklisted(selectedServerPlayer,true)
+if saved then playerSelectionLabel.Text="  "..tostring(selectedServerPlayer.Name) end
 end
 end)
 
 clearPlayerButton.MouseButton1Click:Connect(function()
 if selectedServerPlayer then
-local saved,err=setPlayerBlacklisted(selectedServerPlayer,false)
-local promptOpened=saved and pcall(function() StarterGui:SetCore("PromptUnblockPlayer",selectedServerPlayer) end)
-local message
-if saved then
-message=promptOpened and (selectedServerPlayer.Name.." removed; confirm the Roblox unblock prompt") or (selectedServerPlayer.Name.." removed locally; Roblox unblock prompt unavailable")
-else
-message="Blacklist save failed: "..tostring(err)
-end
-library:Notify({Message=message,Duration=5})
+local saved=setPlayerBlacklisted(selectedServerPlayer,false)
+if saved then playerSelectionLabel.Text="  "..tostring(selectedServerPlayer.Name) end
 end
 end)
 
 utility:CreateConnection(Players.PlayerAdded, function(plr)
-if isPlayerBlacklisted(plr) then
-library:Notify({Message="Blacklisted player detected: "..plr.Name..". Confirm the Roblox block prompt.",Duration=6})
-pcall(function() StarterGui:SetCore("PromptBlockPlayer",plr) end)
-end
 task.defer(rebuildServerPlayerList)
 end)
 
 utility:CreateConnection(Players.PlayerRemoving, function(plr)
 if selectedServerPlayer == plr then
 selectedServerPlayer = nil
-playerSelectionLabel.Text = "Selected: none"
+playerSelectionLabel.Text = "  None"
 end
 task.defer(rebuildServerPlayerList)
 end)
@@ -13111,16 +13414,69 @@ end)
 rebuildServerPlayerList()
 for _,plr in ipairs(Players:GetPlayers()) do
 if plr~=LocalPlayer and isPlayerBlacklisted(plr) then
-library:Notify({Message="Blacklisted player already in this server: "..plr.Name,Duration=6})
-pcall(function() StarterGui:SetCore("PromptBlockPlayer",plr) end)
 end
 end
 
-configNameBox = configMain:CreateInput({
-Name = "Config name",
-Placeholder = "Default",
-Default = ""
-})
+if not configNameBox then
+configNameBox = createConfigNameField()
+end
+
+local function photoConfigButton(properties)
+properties = properties or {}
+local holder = Instance.new("Frame")
+holder.Name = "ConfigAction_"..tostring(properties.Name or "Button")
+holder.BackgroundTransparency = 1
+holder.BorderSizePixel = 0
+holder.Size = UDim2.new(1,0,0,25)
+holder.ZIndex = 10
+holder.Parent = configMain.Holder
+
+local outer = Instance.new("Frame")
+outer.BackgroundColor3 = Color3.fromRGB(9,9,9)
+outer.BorderColor3 = Color3.fromRGB(0,0,0)
+outer.BorderSizePixel = 1
+outer.Position = UDim2.new(0,10,0,2)
+outer.Size = UDim2.new(1,-20,0,22)
+outer.ZIndex = 11
+outer.Parent = holder
+
+local inner = Instance.new("Frame")
+inner.BackgroundColor3 = Color3.fromRGB(31,31,31)
+inner.BorderColor3 = Color3.fromRGB(47,47,47)
+inner.BorderSizePixel = 1
+inner.Position = UDim2.new(0,1,0,1)
+inner.Size = UDim2.new(1,-2,1,-2)
+inner.ZIndex = 12
+inner.Parent = outer
+
+local label = Instance.new("TextLabel")
+label.BackgroundTransparency = 1
+label.BorderSizePixel = 0
+label.Font = Enum.Font.Code
+label.Text = tostring(properties.Name or "Button")
+label.TextColor3 = Color3.fromRGB(210,210,210)
+label.TextSize = 10
+label.TextXAlignment = Enum.TextXAlignment.Center
+label.Size = UDim2.fromScale(1,1)
+label.ZIndex = 13
+label.Parent = inner
+
+local button = Instance.new("TextButton")
+button.BackgroundTransparency = 1
+button.BorderSizePixel = 0
+button.AutoButtonColor = false
+button.Text = ""
+button.Size = UDim2.fromScale(1,1)
+button.ZIndex = 14
+button.Parent = outer
+
+utility:CreateConnection(button.MouseEnter,function() inner.BackgroundColor3=Color3.fromRGB(40,40,40) end)
+utility:CreateConnection(button.MouseLeave,function() inner.BackgroundColor3=Color3.fromRGB(31,31,31) end)
+utility:CreateConnection(button.MouseButton1Click,function()
+utility:SafeCallback(properties.Callback or function() end)
+end)
+return button
+end
 
 local function saveNamedConfig(name)
 name = tostring(name or ""):gsub("[^%w_%-]", "")
@@ -13135,7 +13491,7 @@ rebuildConfigList()
 return true
 end
 
-configMain:CreateButton({
+photoConfigButton({
 Name = "Load config",
 Callback = function()
 local target=configSelected or tostring(configNameBox:Get() or ""):gsub("[^%w_%-]","")
@@ -13146,7 +13502,7 @@ else library:Notify({Message="Load failed: "..tostring(dataOrError),Duration=4})
 end
 })
 
-configMain:CreateButton({
+photoConfigButton({
 Name = "Save config",
 Callback = function()
 local saved,err=saveNamedConfig(configNameBox:Get())
@@ -13154,7 +13510,7 @@ library:Notify({Message=saved and ("Saved config: "..tostring(configSelected)) o
 end
 })
 
-configMain:CreateButton({
+photoConfigButton({
 Name = "Reset config",
 Callback = function()
 applyLoadedConfig({schemaVersion=CONFIG_SCHEMA_VERSION,profile=table.clone(defaultConfig),visuals=DEFAULT_VISUAL_STATE,antiAim=DEFAULT_ANTI_AIM_STATE,lighting=DEFAULT_LIGHTING_STATE,ua_equipped={},ua_favorites={}})
@@ -13162,7 +13518,7 @@ library:Notify({Message="Reset to defaults",Duration=3})
 end
 })
 
-configMain:CreateButton({
+photoConfigButton({
 Name = "Import from clipboard",
 Callback = function()
 if type(getclipboard) == "function" then
@@ -13182,7 +13538,7 @@ end
 end
 })
 
-configMain:CreateButton({
+photoConfigButton({
 Name = "Export to clipboard",
 Callback = function()
 syncLiveConfig()
@@ -13196,8 +13552,8 @@ end
 end
 })
 
-configMain:CreateButton({
-Name = "Reset menu style",
+photoConfigButton({
+Name = "Reset menu layout",
 Callback = function()
 window.Accent=Color3.fromRGB(175,205,75)
 window.MainFrame.Position=UDim2.new(0.5,0,0.5,0)
@@ -13208,7 +13564,14 @@ library:Notify({Message="Menu style and position reset",Duration=3})
 end
 })
 
-configMain:CreateButton({
+photoConfigButton({
+Name = "Lua script manager",
+Callback = function()
+if UI.LuaPage and UI.LuaPage.Set then UI.LuaPage:Set(true) end
+end
+})
+
+photoConfigButton({
 Name = "Unload",
 Callback = function() window:Unload() end
 })
