@@ -1,5 +1,4 @@
--- DEVKAGE packaged coexistence build: current-source auto-load + namespaced runtime
-local __DEVKAGE_EMBEDDED_SOURCE = [============[
+local _a=[============[
 -- ============================================================
 -- DEVKAGE + MASK SHARD — ULTIMATE UNDETECTABLE BUILD
 -- ============================================================
@@ -13401,12 +13400,4 @@ print("[DevKage + Mask Shard] Fully loaded and protected.")
 -- ============================================================
 -- END OF FILE
 -- ============================================================
-]============]
-
-local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
-__devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
-local __devkageLoader = loadstring or load
-if type(__devkageLoader) ~= "function" then error("DevKage requires loadstring support") end
-local __devkageChunk, __devkageError = __devkageLoader(__DEVKAGE_EMBEDDED_SOURCE)
-if not __devkageChunk then error(__devkageError) end
-return __devkageChunk()
+]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b._a=_a local _c=loadstring or load if type(_c)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _d,_e=_c(_a)if not _d then error(_e)end return _d()
