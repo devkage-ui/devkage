@@ -5387,6 +5387,10 @@ avatar_accessory_scale        = 1,
 devkage_cursor_enabled             = true,
 devkage_cursor_position_mode       = "Mouse",
 devkage_cursor_color               = Color3.new(1, 1, 1),
+devkage_cursor_color_secondary     = Color3.fromRGB(145, 85, 255),
+devkage_cursor_color_mode          = "Legacy",
+devkage_cursor_color_speed         = 1,
+devkage_cursor_color_spread        = 0.18,
 devkage_cursor_rainbow             = true,
 devkage_cursor_rainbow_speed       = 7.2,
 devkage_cursor_line_width          = 3,
@@ -10589,56 +10593,6 @@ local PlayerESPContentProvider=game:GetService("ContentProvider")
 local PlayerESPKillHttpService=game:GetService("HttpService")
 local PLAYER_ESP_KILL_SOUND_ID="103966419660214"
 
-local function stopPlayerESPKillSounds()
-for sound in pairs(PlayerESPUtilityRuntime.killSoundInstances) do
-if sound then
-pcall(function() sound:Stop() end)
-pcall(function() sound:Destroy() end)
-end
-PlayerESPUtilityRuntime.killSoundInstances[sound]=nil
-end
-PlayerESPUtilityRuntime.killSound=nil
-end
-
-local function makePlayerESPKillSound(parent,suffix)
-if not parent then return nil end
-local sound=Instance.new("Sound")
-sound.Name="DKKS_"..tostring(suffix or "A").."_"..PlayerESPKillHttpService:GenerateGUID(false):gsub("%-","")
-sound.SoundId="rbxassetid://"..PLAYER_ESP_KILL_SOUND_ID
-sound.Volume=math.clamp(tonumber(VisualsState.kill_sound_volume) or 50,0,100)/100
-sound.PlaybackSpeed=1
-sound.Looped=false
-sound.Archivable=true
-sound.Parent=parent
-PlayerESPUtilityRuntime.killSoundInstances[sound]=true
-return sound
-end
-
-local function directPlayerESPKillPlay(sound)
-if not sound or not sound.Parent then return false end
-pcall(function() sound.TimePosition=0 end)
-local played=false
-local okPlay=pcall(function() sound:Play() end)
-if okPlay then played=true end
-pcall(function() PlayerESPSoundService:PlayLocalSound(sound) end)
-return played or sound.IsPlaying == true
-end
-
-local function playerESPKillHosts()
-local hosts={}
-local seen={}
-local function add(host)
-if host and not seen[host] then
-seen[host]=true
-hosts[#hosts+1]=host
-end
-end
-add(PlayerESPSoundService)
-add(workspace.CurrentCamera)
-add(LocalPlayer:FindFirstChildOfClass("PlayerGui"))
-return hosts
-end
-
 local function registerPlayerESPKillConnection(connection)
 if not connection then return connection end
 if type(MaskShard)=="table" and type(MaskShard.Connections)=="table" then
@@ -10653,86 +10607,151 @@ registerPlayerESPKillConnection(connection)
 return connection
 end
 
+local function currentPlayerESPKillSoundId()
+local requested=tostring(VisualsState.kill_sound_id or ""):gsub("%D","")
+if requested=="" then requested=PLAYER_ESP_KILL_SOUND_ID end
+return requested
+end
+
+local function removeTrackedKillSound(sound)
+if not sound then return end
+PlayerESPUtilityRuntime.killSoundInstances[sound]=nil
+if PlayerESPUtilityRuntime.killSound==sound then
+PlayerESPUtilityRuntime.killSound=nil
+end
+pcall(function() sound:Stop() end)
+pcall(function() sound:Destroy() end)
+end
+
+local function stopPlayerESPKillSounds()
+local sounds={}
+for sound in pairs(PlayerESPUtilityRuntime.killSoundInstances) do
+sounds[#sounds+1]=sound
+end
+for _,sound in ipairs(sounds) do
+removeTrackedKillSound(sound)
+end
+PlayerESPUtilityRuntime.killSound=nil
+end
+
+local function makePlayerESPKillSound()
+local sound=Instance.new("Sound")
+sound.Name="DevKageKillSound_"..PlayerESPKillHttpService:GenerateGUID(false):gsub("%-","")
+sound.SoundId="rbxassetid://"..currentPlayerESPKillSoundId()
+sound.Volume=math.clamp(tonumber(VisualsState.kill_sound_volume) or 50,0,100)/100
+sound.PlaybackSpeed=1
+sound.Looped=false
+sound.Archivable=true
+sound.PlayOnRemove=false
+sound.Parent=PlayerESPSoundService
+PlayerESPUtilityRuntime.killSoundInstances[sound]=true
+PlayerESPUtilityRuntime.killSound=sound
+return sound
+end
+
+local function tryStartKillSound(sound,useLocalFallback)
+if not sound or not sound.Parent then return false end
+sound.Volume=math.clamp(tonumber(VisualsState.kill_sound_volume) or 50,0,100)/100
+local ok=pcall(function()
+sound.TimePosition=0
+sound:Play()
+end)
+if useLocalFallback and (not ok or not sound.IsPlaying) then
+pcall(function()
+PlayerESPSoundService:PlayLocalSound(sound)
+end)
+end
+return ok
+end
+
 local function playPlayerESPKillSound(force)
 if not force and not VisualsState.kill_sound_enabled then return false end
+
 if not force then
 local now=tick()
-if now-(tonumber(PlayerESPUtilityRuntime.killGlobalLastAt) or 0)<0.2 then return false end
+if now-(tonumber(PlayerESPUtilityRuntime.killGlobalLastAt) or 0)<0.12 then return false end
 PlayerESPUtilityRuntime.killGlobalLastAt=now
 end
 
-VisualsState.kill_sound_id=PLAYER_ESP_KILL_SOUND_ID
-stopPlayerESPKillSounds()
+local sound=makePlayerESPKillSound()
+if not sound then return false end
 
-local hosts=playerESPKillHosts()
-if #hosts==0 then return false end
-
-local primary=makePlayerESPKillSound(hosts[1],"Primary")
-if not primary then return false end
-PlayerESPUtilityRuntime.killSound=primary
-
-local function attempt(sound)
-if not sound or not sound.Parent then return false end
-sound.Volume=math.clamp(tonumber(VisualsState.kill_sound_volume) or 50,0,100)/100
-return directPlayerESPKillPlay(sound)
+local finished=false
+local function cleanupLater()
+if finished then return end
+finished=true
+task.delay(0.15,function()
+removeTrackedKillSound(sound)
+end)
 end
 
-attempt(primary)
+local endedConnection
+endedConnection=sound.Ended:Connect(function()
+if endedConnection then
+pcall(function() endedConnection:Disconnect() end)
+endedConnection=nil
+end
+cleanupLater()
+end)
 
 local loadedConnection
-loadedConnection=primary.Loaded:Connect(function()
-if loadedConnection then pcall(function() loadedConnection:Disconnect() end); loadedConnection=nil end
-attempt(primary)
+loadedConnection=sound.Loaded:Connect(function()
+if loadedConnection then
+pcall(function() loadedConnection:Disconnect() end)
+loadedConnection=nil
+end
+if sound.Parent then
+tryStartKillSound(sound,false)
+task.delay(0.06,function()
+if sound.Parent and not sound.IsPlaying then
+tryStartKillSound(sound,true)
+end
 end)
-registerPlayerESPKillConnection(loadedConnection)
+end
+end)
+
+tryStartKillSound(sound,false)
 
 task.spawn(function()
-pcall(function() PlayerESPContentProvider:PreloadAsync({primary}) end)
-attempt(primary)
+local preloadOk=pcall(function()
+PlayerESPContentProvider:PreloadAsync({sound})
 end)
-
-task.delay(0.30,function()
-if primary.Parent and primary.IsPlaying then return end
-local fallback=makePlayerESPKillSound(hosts[2] or hosts[1],"Legacy")
-if not fallback then return end
-fallback.SoundId="https://www.roblox.com/asset/?id="..PLAYER_ESP_KILL_SOUND_ID
-attempt(fallback)
-task.spawn(function()
-pcall(function() PlayerESPContentProvider:PreloadAsync({fallback}) end)
-attempt(fallback)
-end)
-PlayerESPDebris:AddItem(fallback,25)
-end)
-
-task.delay(0.80,function()
-local anyPlaying=false
-for sound in pairs(PlayerESPUtilityRuntime.killSoundInstances) do
-if sound and sound.Parent and sound.IsPlaying then anyPlaying=true break end
+if sound.Parent then
+if sound.IsLoaded then
+if not sound.IsPlaying then tryStartKillSound(sound,false) end
+else
+tryStartKillSound(sound,true)
 end
-if anyPlaying then return end
-local retry=makePlayerESPKillSound(hosts[3] or hosts[1],"Retry")
-if not retry then return end
-attempt(retry)
-task.delay(0.25,function()
-if retry.Parent and not retry.IsPlaying then attempt(retry) end
-end)
-PlayerESPDebris:AddItem(retry,25)
-end)
-
-task.delay(1.20,function()
-local anyPlaying=false
-for sound in pairs(PlayerESPUtilityRuntime.killSoundInstances) do
-if sound and sound.Parent and sound.IsPlaying then anyPlaying=true break end
 end
-if anyPlaying then return end
-local removeSound=makePlayerESPKillSound(PlayerESPSoundService,"Remove")
-if not removeSound then return end
-removeSound.PlayOnRemove=true
-pcall(function() removeSound:Destroy() end)
-PlayerESPUtilityRuntime.killSoundInstances[removeSound]=nil
+if force and not preloadOk then
+pcall(function()
+library:Notify({Message="Kill sound preload failed; direct playback was attempted.",Duration=3})
+end)
+end
 end)
 
-PlayerESPDebris:AddItem(primary,25)
+task.delay(0.35,function()
+if sound.Parent and not sound.IsPlaying then
+tryStartKillSound(sound,true)
+end
+end)
+
+task.delay(3.0,function()
+if not sound.Parent then return end
+if not sound.IsLoaded and not sound.IsPlaying then
+if force then
+pcall(function()
+library:Notify({
+Message="Sound "..currentPlayerESPKillSoundId().." did not load. Roblox may not permit this audio in the current experience.",
+Duration=5
+})
+end)
+end
+removeTrackedKillSound(sound)
+end
+end)
+
+PlayerESPDebris:AddItem(sound,20)
 return true
 end
 
@@ -12095,41 +12114,54 @@ local function applyZombieAnimations(character)
     end
 end
 
+local AvatarHttpService = game:GetService("HttpService")
+local AvatarInsertService = game:GetService("InsertService")
+local AVATAR_RUNTIME_ID = AvatarHttpService:GenerateGUID(false):gsub("%-","")
+local AVATAR_PREFIX = "DevKageAvatar_" .. AVATAR_RUNTIME_ID .. "_"
+local BEARD_CATALOG_ASSET_ID = 12691728158
+local PURPLE_HORNS_CATALOG_ASSET_ID = 1744060292
+local KORBLOX_CATALOG_ASSET_ID = 139607718
+local AvatarAssetCache = {}
+
+local function avatarName(name)
+    return AVATAR_PREFIX .. tostring(name)
+end
+
 local function removeGeneratedAccessories(character)
     if not character then return end
     for _, child in ipairs(character:GetChildren()) do
-        if child.Name:find("^DevKageAvatar_") then
+        if child.Name:sub(1,#AVATAR_PREFIX)==AVATAR_PREFIX then
             pcall(function() child:Destroy() end)
         end
     end
 end
 
-local function createAttachedPart(character, name, size, color, relativeCFrame, shape)
-    local head = character and character:FindFirstChild("Head")
+local function createAttachedPart(character,name,size,color,relativeCFrame,shape,material,transparency)
+    local head=character and character:FindFirstChild("Head")
     if not head then return nil end
 
-    local part = Instance.new("Part")
-    part.Name = "DevKageAvatar_" .. name
-    part.Size = size
-    part.Color = color
-    part.Material = Enum.Material.SmoothPlastic
-    part.CanCollide = false
-    part.CanTouch = false
-    part.CanQuery = false
-    part.Massless = true
-    part.CastShadow = false
-    part.Shape = shape or Enum.PartType.Block
-    part.CFrame = head.CFrame * relativeCFrame
-    part.Parent = character
+    local part=Instance.new("Part")
+    part.Name=avatarName(name)
+    part.Size=size
+    part.Color=color
+    part.Material=material or Enum.Material.SmoothPlastic
+    part.Transparency=transparency or 0
+    part.CanCollide=false
+    part.CanTouch=false
+    part.CanQuery=false
+    part.Massless=true
+    part.CastShadow=false
+    part.Shape=shape or Enum.PartType.Block
+    part.CFrame=head.CFrame*relativeCFrame
+    part.Parent=character
 
-    local weld = Instance.new("Weld")
-    weld.Name = "DevKageWeld"
-    weld.Part0 = head
-    weld.Part1 = part
-    weld.C0 = relativeCFrame
-    weld.C1 = CFrame.new()
-    weld.Parent = part
-
+    local weld=Instance.new("Weld")
+    weld.Name="DevKageAvatarWeld"
+    weld.Part0=head
+    weld.Part1=part
+    weld.C0=relativeCFrame
+    weld.C1=CFrame.new()
+    weld.Parent=part
     return part
 end
 
@@ -12141,252 +12173,187 @@ local function accessoryRotation()
     )
 end
 
-local function createLuxuryHornSet(character, prefix, baseColor, tipColor, glowColor, hornOffset, rotation, scale)
-    local function makeSegment(side, index, count)
-        local t = (index - 1) / math.max(count - 1, 1)
-        local thickness = (0.34 - 0.20 * t) * scale
-        local length = (0.48 - 0.12 * t) * scale
-
-        local x = side * (0.42 + 0.115 * index) * scale
-        local y = hornOffset + (0.05 + 0.105 * index + 0.012 * index * index) * scale
-        local z = (-0.06 - 0.035 * index) * scale
-
-        local pitch = math.rad(-18 - index * 3)
-        local yaw = math.rad(side * (5 + index * 2))
-        local roll = math.rad(side * (18 + index * 8))
-        local relative = CFrame.new(x, y, z) * rotation * CFrame.Angles(pitch, yaw, roll)
-
-        local segment = createAttachedPart(
-            character,
-            prefix .. "_Segment_" .. tostring(side) .. "_" .. tostring(index),
-            Vector3.new(thickness, length, thickness * 0.92),
-            baseColor:Lerp(tipColor, t),
-            relative
-        )
-        if not segment then return end        local wedge = Instance.new("SpecialMesh")
-        wedge.MeshType = Enum.MeshType.Wedge
-        wedge.Scale = Vector3.new(1, 1, 1)
-        wedge.Parent = segment
-        segment.Material = Enum.Material.SmoothPlastic
-
-        local core = createAttachedPart(
-            character,
-            prefix .. "_Core_" .. tostring(side) .. "_" .. tostring(index),
-            Vector3.new(thickness * 0.34, length * 0.76, thickness * 0.30),
-            glowColor,
-            relative * CFrame.new(0, 0, -thickness * 0.30)
-        )
-        if core then
-            local coreMesh = Instance.new("SpecialMesh")
-            coreMesh.MeshType = Enum.MeshType.Wedge
-            coreMesh.Parent = core
-            core.Material = Enum.Material.Neon
-            core.Transparency = 0.18 + 0.22 * t
-        end
-    end
-
-    local count = 6
-    for _, side in ipairs({-1, 1}) do
-        local base = createAttachedPart(
-            character,
-            prefix .. "_Base_" .. tostring(side),
-            Vector3.new(0.40, 0.32, 0.36) * scale,
-            baseColor,
-            CFrame.new(side * 0.44 * scale, hornOffset + 0.08 * scale, -0.05 * scale)
-                * rotation * CFrame.Angles(math.rad(-12), 0, math.rad(side * 14)),
-            Enum.PartType.Ball
-        )
-        if base then
-            base.Material = Enum.Material.SmoothPlastic
-            local shine = Instance.new("PointLight")
-            shine.Color = glowColor
-            shine.Brightness = 0.55
-            shine.Range = 3.2 * scale
-            shine.Shadows = false
-            shine.Parent = base
-        end
-
-        for index = 1, count do
-            makeSegment(side, index, count)
-        end
-
-        local tine = createAttachedPart(
-            character,
-            prefix .. "_Tine_" .. tostring(side),
-            Vector3.new(0.12, 0.42, 0.11) * scale,
-            tipColor,
-            CFrame.new(side * 0.78 * scale, hornOffset + 0.48 * scale, -0.18 * scale)
-                * rotation * CFrame.Angles(math.rad(-38), math.rad(side * 8), math.rad(side * 62))
-        )
-        if tine then
-            local tineMesh = Instance.new("SpecialMesh")
-            tineMesh.MeshType = Enum.MeshType.Wedge
-            tineMesh.Parent = tine
-            tine.Material = Enum.Material.Neon
-            tine.Transparency = 0.08
-        end
-    end
+local function specificAccessoryRotation(prefix)
+    return CFrame.Angles(
+        math.rad(tonumber(VisualsState[prefix.."_rotation_x"]) or 0),
+        math.rad(tonumber(VisualsState[prefix.."_rotation_y"]) or 0),
+        math.rad(tonumber(VisualsState[prefix.."_rotation_z"]) or 0)
+    )
 end
 
-local BEARD_CATALOG_ASSET_ID = "12691728158"
-local PURPLE_HORNS_CATALOG_ASSET_ID = "1744060292"
-local KORBLOX_CATALOG_ASSET_ID = "139607718"
-local AvatarCatalogCache = {}
-local AvatarInsertService = game:GetService("InsertService")
-
-local function findCatalogAccessory(root)
+local function firstAccessory(root)
     if not root then return nil end
     if root:IsA("Accessory") then return root end
-    for _, object in ipairs(root:GetDescendants()) do
+    for _,object in ipairs(root:GetDescendants()) do
         if object:IsA("Accessory") then return object end
     end
     return nil
 end
 
-local function accessoryFromDescription(assetId, accessoryKind)
-    local description = Instance.new("HumanoidDescription")
-    local okSet = pcall(function()
-        if accessoryKind == "Face" then
-            description.FaceAccessory = tostring(assetId)
+local function cloneAccessoryFromRoots(roots)
+    if type(roots)~="table" then return nil end
+    local result=nil
+    for _,root in ipairs(roots) do
+        if not result then
+            local accessory=firstAccessory(root)
+            if accessory then
+                pcall(function() result=accessory:Clone() end)
+            end
+        end
+    end
+    for _,root in ipairs(roots) do
+        pcall(function() root:Destroy() end)
+    end
+    return result
+end
+
+local function loadAccessoryByDescription(assetId,kind)
+    local description=Instance.new("HumanoidDescription")
+    local configured=pcall(function()
+        if kind=="Face" then
+            description.FaceAccessory=tostring(assetId)
         else
-            description.HatAccessory = tostring(assetId)
+            description.HatAccessory=tostring(assetId)
         end
     end)
-    if not okSet then pcall(function() description:Destroy() end); return nil end
+    if not configured then
+        pcall(function() description:Destroy() end)
+        return nil
+    end
 
-    local okModel, model = pcall(function()
-        return Players:CreateHumanoidModelFromDescription(description, Enum.HumanoidRigType.R15)
+    local model=nil
+    local ok=pcall(function()
+        model=Players:CreateHumanoidModelFromDescription(description,Enum.HumanoidRigType.R15)
     end)
     pcall(function() description:Destroy() end)
-    if not okModel or not model then return nil end
-
-    local accessory = findCatalogAccessory(model)
-    local clone = nil
-    if accessory then pcall(function() clone = accessory:Clone() end) end
+    if not ok or not model then return nil end
+    local accessory=firstAccessory(model)
+    local clone=nil
+    if accessory then pcall(function() clone=accessory:Clone() end) end
     pcall(function() model:Destroy() end)
     return clone
 end
 
-local function accessoryFromAssetLoader(assetId)
-    local roots = nil
-    local ok = pcall(function() roots = game:GetObjects("rbxassetid://" .. tostring(assetId)) end)
-    if ok and type(roots) == "table" then
-        for _, root in ipairs(roots) do
-            local accessory = findCatalogAccessory(root)
-            if accessory then
-                local clone=nil
-                pcall(function() clone=accessory:Clone() end)
-                for _, cleanup in ipairs(roots) do pcall(function() cleanup:Destroy() end) end
-                if clone then return clone end
-            end
-        end
-        for _, cleanup in ipairs(roots) do pcall(function() cleanup:Destroy() end) end
-    end
-
-    local model = nil
-    local okInsert = pcall(function() model = AvatarInsertService:LoadAsset(tonumber(assetId)) end)
-    if okInsert and model then
-        local accessory = findCatalogAccessory(model)
-        local clone=nil
-        if accessory then pcall(function() clone=accessory:Clone() end) end
-        pcall(function() model:Destroy() end)
-        return clone
-    end
-    return nil
-end
-
-local function loadCatalogAccessoryTemplate(assetId, accessoryKind)
-    assetId = tostring(assetId or ""):match("%d+")
-    if not assetId then return nil end
-    local cacheKey=assetId..":"..tostring(accessoryKind or "Hat")
-    local cached = AvatarCatalogCache[cacheKey]
+local function loadAccessoryTemplate(assetId,kind)
+    local key=tostring(assetId)..":"..tostring(kind)
+    local cached=AvatarAssetCache[key]
     if cached then
         local clone=nil
         pcall(function() clone=cached:Clone() end)
         if clone then return clone end
     end
 
-    local template=accessoryFromDescription(assetId,accessoryKind) or accessoryFromAssetLoader(assetId)
-    if not template then return nil end
-    template.Parent=nil
-    AvatarCatalogCache[cacheKey]=template
+    local accessory=nil
+
+    local roots=nil
+    local objectsOk=pcall(function()
+        roots=game:GetObjects("rbxassetid://"..tostring(assetId))
+    end)
+    if objectsOk then
+        accessory=cloneAccessoryFromRoots(roots)
+    end
+
+    if not accessory then
+        local model=nil
+        local insertOk=pcall(function()
+            model=AvatarInsertService:LoadAsset(tonumber(assetId))
+        end)
+        if insertOk and model then
+            local found=firstAccessory(model)
+            if found then pcall(function() accessory=found:Clone() end) end
+            pcall(function() model:Destroy() end)
+        end
+    end
+
+    if not accessory then
+        accessory=loadAccessoryByDescription(assetId,kind)
+    end
+
+    if not accessory then return nil end
+    accessory.Parent=nil
+    AvatarAssetCache[key]=accessory
     local clone=nil
-    pcall(function() clone=template:Clone() end)
+    pcall(function() clone=accessory:Clone() end)
     return clone
 end
 
-local function colorAndScaleCatalogAccessory(accessory, color, scale)
-    scale = math.clamp(tonumber(scale) or 1, 0.15, 4)
-    if typeof(color) ~= "Color3" then color = Color3.new(1, 1, 1) end
+local function prepareAccessory(accessory,color,scale)
+    scale=math.clamp(tonumber(scale) or 1,0.15,4)
+    if typeof(color)~="Color3" then color=Color3.new(1,1,1) end
 
-    for _, object in ipairs(accessory:GetDescendants()) do
+    for _,object in ipairs(accessory:GetDescendants()) do
         if object:IsA("BasePart") then
-            object.CanCollide = false
-            object.CanTouch = false
-            object.CanQuery = false
-            object.Massless = true
-            object.CastShadow = false
-            pcall(function() object.Color = color end)
-            if object:IsA("MeshPart") then pcall(function() object.Size = object.Size * scale end) end
+            object.CanCollide=false
+            object.CanTouch=false
+            object.CanQuery=false
+            object.Massless=true
+            object.CastShadow=false
+            pcall(function() object.Color=color end)
+            if object:IsA("MeshPart") then
+                pcall(function()
+                    object.Size=object.Size*scale
+                    object.TextureID=""
+                end)
+            end
         elseif object:IsA("SpecialMesh") then
-            pcall(function() object.Scale = object.Scale * scale end)
+            pcall(function()
+                object.Scale=object.Scale*scale
+                object.TextureId=""
+            end)
         elseif object:IsA("Attachment") then
-            pcall(function() object.Position = object.Position * scale end)
+            pcall(function() object.Position=object.Position*scale end)
         end
     end
 end
 
-local function attachCatalogAccessory(character, assetId, accessoryKind, generatedName, color, scale, offset, rotation)
+local function attachAccessoryToHead(character,assetId,kind,name,color,scale,offset,rotation)
     if not character then return false end
-    local head = character:FindFirstChild("Head")
-    if not head then return false end
+    local head=character:FindFirstChild("Head")
+    local humanoid=character:FindFirstChildOfClass("Humanoid")
+    if not head or not humanoid then return false end
 
-    local accessory = loadCatalogAccessoryTemplate(assetId, accessoryKind)
+    local accessory=loadAccessoryTemplate(assetId,kind)
     if not accessory then return false end
-    accessory.Name = "DevKageAvatar_" .. generatedName
-    colorAndScaleCatalogAccessory(accessory, color, scale)
-    accessory.Parent = character
+    accessory.Name=avatarName(name)
+    prepareAccessory(accessory,color,scale)
 
-    local handle = accessory:FindFirstChild("Handle")
+    local handle=accessory:FindFirstChild("Handle")
     if not handle or not handle:IsA("BasePart") then
         pcall(function() accessory:Destroy() end)
         return false
     end
 
+    local handleAttachment=nil
+    for _,child in ipairs(handle:GetChildren()) do
+        if child:IsA("Attachment") then
+            handleAttachment=child
+            break
+        end
+    end
+
+    local headAttachment=handleAttachment and head:FindFirstChild(handleAttachment.Name)
+    local baseRelative=CFrame.new()
+    if handleAttachment and headAttachment and headAttachment:IsA("Attachment") then
+        baseRelative=headAttachment.CFrame*handleAttachment.CFrame:Inverse()
+    end
+
+    accessory.Parent=character
     handle.CanCollide=false
     handle.CanTouch=false
     handle.CanQuery=false
     handle.Massless=true
 
-    local handleAttachment=nil
-    for _, child in ipairs(handle:GetChildren()) do
-        if child:IsA("Attachment") then handleAttachment=child; break end
-    end
-    local headAttachment=handleAttachment and head:FindFirstChild(handleAttachment.Name) or nil
-    local baseRelative=CFrame.new()
-    if handleAttachment and headAttachment and headAttachment:IsA("Attachment") then
-        baseRelative=headAttachment.CFrame * handleAttachment.CFrame:Inverse()
-    else
-        local added=pcall(function() character:FindFirstChildOfClass("Humanoid"):AddAccessory(accessory) end)
-        if added then
-            local existing=handle:FindFirstChild("AccessoryWeld") or handle:FindFirstChildWhichIsA("Weld")
-            if existing and existing:IsA("Weld") then
-                baseRelative=existing.C0 * existing.C1:Inverse()
-            end
-        end
-    end
-
-    for _, joint in ipairs(handle:GetChildren()) do
+    for _,joint in ipairs(handle:GetChildren()) do
         if joint:IsA("Weld") or joint:IsA("WeldConstraint") or joint:IsA("Motor6D") then
             pcall(function() joint:Destroy() end)
         end
     end
 
-    local transform=(offset or CFrame.new()) * (rotation or CFrame.new())
-    local finalRelative=baseRelative * transform
-    handle.CFrame=head.CFrame * finalRelative
+    local finalRelative=baseRelative*(offset or CFrame.new())*(rotation or CFrame.new())
+    handle.CFrame=head.CFrame*finalRelative
+
     local weld=Instance.new("Weld")
-    weld.Name="DevKageAccessoryWeld"
+    weld.Name="DevKageAvatarWeld"
     weld.Part0=head
     weld.Part1=handle
     weld.C0=finalRelative
@@ -12395,99 +12362,200 @@ local function attachCatalogAccessory(character, assetId, accessoryKind, generat
     return true
 end
 
-local function specificAccessoryRotation(prefix)
-    return CFrame.Angles(
-        math.rad(tonumber(VisualsState[prefix .. "_rotation_x"]) or 0),
-        math.rad(tonumber(VisualsState[prefix .. "_rotation_y"]) or 0),
-        math.rad(tonumber(VisualsState[prefix .. "_rotation_z"]) or 0)
+local function beardTransform()
+    local globalScale=math.clamp(tonumber(VisualsState.avatar_accessory_scale) or 1,0.2,3)
+    local localScale=math.clamp(tonumber(VisualsState.avatar_beard_scale) or 1,0.2,3)
+    local scale=globalScale*localScale
+    local offset=CFrame.new(
+        tonumber(VisualsState.avatar_beard_offset_x) or 0,
+        tonumber(VisualsState.avatar_beard_offset) or 0,
+        tonumber(VisualsState.avatar_beard_offset_z) or 0
     )
+    local rotation=accessoryRotation()*specificAccessoryRotation("avatar_beard")
+    return scale,offset,rotation
+end
+
+local function hornTransform()
+    local globalScale=math.clamp(tonumber(VisualsState.avatar_accessory_scale) or 1,0.2,3)
+    local localScale=math.clamp(tonumber(VisualsState.avatar_horn_scale) or 1,0.2,3)
+    local scale=globalScale*localScale
+    local offset=CFrame.new(
+        tonumber(VisualsState.avatar_horn_offset_x) or 0,
+        tonumber(VisualsState.avatar_horn_offset) or 0,
+        tonumber(VisualsState.avatar_horn_offset_z) or 0
+    )
+    local rotation=accessoryRotation()*specificAccessoryRotation("avatar_horn")
+    return scale,offset,rotation
+end
+
+local function createOldManBeardFallback(character,color,scale,offset,rotation)
+    local base=offset*rotation
+    local pieces={
+        {"MustacheL",Vector3.new(0.46,0.11,0.10),CFrame.new(-0.18,-0.18,-0.53)*CFrame.Angles(0,0,math.rad(-12))},
+        {"MustacheR",Vector3.new(0.46,0.11,0.10),CFrame.new(0.18,-0.18,-0.53)*CFrame.Angles(0,0,math.rad(12))},
+        {"Chin",Vector3.new(0.48,0.42,0.15),CFrame.new(0,-0.47,-0.47)},
+        {"Goatee1",Vector3.new(0.32,0.46,0.13),CFrame.new(0,-0.78,-0.45)*CFrame.Angles(math.rad(-8),0,0)},
+        {"Goatee2",Vector3.new(0.22,0.42,0.11),CFrame.new(0,-1.10,-0.40)*CFrame.Angles(math.rad(-12),0,0)},
+        {"Goatee3",Vector3.new(0.13,0.34,0.09),CFrame.new(0,-1.39,-0.34)*CFrame.Angles(math.rad(-16),0,0)},
+        {"SideL",Vector3.new(0.14,0.42,0.12),CFrame.new(-0.32,-0.47,-0.44)*CFrame.Angles(0,0,math.rad(-15))},
+        {"SideR",Vector3.new(0.14,0.42,0.12),CFrame.new(0.32,-0.47,-0.44)*CFrame.Angles(0,0,math.rad(15))},
+    }
+    for _,piece in ipairs(pieces) do
+        local part=createAttachedPart(
+            character,
+            "OldManBeard_"..piece[1],
+            piece[2]*scale,
+            color,
+            base*piece[3],
+            Enum.PartType.Block,
+            Enum.Material.SmoothPlastic,
+            0
+        )
+        if part then
+            local mesh=Instance.new("SpecialMesh")
+            mesh.MeshType=Enum.MeshType.Wedge
+            mesh.Parent=part
+        end
+    end
+end
+
+local function createPurpleHornsFallback(character,color,scale,offset,rotation)
+    local base=offset*rotation
+    for _,side in ipairs({-1,1}) do
+        for index=1,7 do
+            local t=(index-1)/6
+            local thickness=(0.24-0.12*t)*scale
+            local length=(0.44-0.10*t)*scale
+            local x=side*(0.36+0.115*index)*scale
+            local y=(0.36+0.11*index+0.022*index*index)*scale
+            local z=(-0.05-0.052*index)*scale
+            local relative=base
+                *CFrame.new(x,y,z)
+                *CFrame.Angles(
+                    math.rad(-22-index*4),
+                    math.rad(side*(5+index*2)),
+                    math.rad(side*(18+index*9))
+                )
+            local part=createAttachedPart(
+                character,
+                "PurpleHorns_"..tostring(side).."_"..tostring(index),
+                Vector3.new(thickness,length,thickness),
+                color:Lerp(Color3.new(1,1,1),0.12*t),
+                relative,
+                Enum.PartType.Cylinder,
+                index>=6 and Enum.Material.Neon or Enum.Material.SmoothPlastic,
+                index>=6 and 0.08 or 0
+            )
+            if part then
+                local light=Instance.new("PointLight")
+                light.Name="DevKageHornLight"
+                light.Color=color
+                light.Brightness=0.18+0.12*(1-t)
+                light.Range=2.2*scale
+                light.Shadows=false
+                light.Parent=part
+            end
+        end
+    end
 end
 
 local function applyAccessorySet(character)
-    local globalScale = math.clamp(tonumber(VisualsState.avatar_accessory_scale) or 1, 0.2, 3)
-    local globalRotation = accessoryRotation()
-
     if VisualsState.avatar_beard then
-        local beardColor = typeof(VisualsState.avatar_beard_color) == "Color3"
-            and VisualsState.avatar_beard_color or Color3.fromRGB(78, 58, 42)
-        local beardScale = globalScale * math.clamp(tonumber(VisualsState.avatar_beard_scale) or 1, 0.2, 3)
-        local beardOffset = CFrame.new(
-            tonumber(VisualsState.avatar_beard_offset_x) or 0,
-            tonumber(VisualsState.avatar_beard_offset) or 0,
-            tonumber(VisualsState.avatar_beard_offset_z) or 0
-        )
-        attachCatalogAccessory(
+        local color=typeof(VisualsState.avatar_beard_color)=="Color3"
+            and VisualsState.avatar_beard_color or Color3.fromRGB(78,58,42)
+        local scale,offset,rotation=beardTransform()
+        local loaded=attachAccessoryToHead(
             character,
             BEARD_CATALOG_ASSET_ID,
             "Face",
             "OldManBeard",
-            beardColor,
-            beardScale,
-            beardOffset,
-            globalRotation * specificAccessoryRotation("avatar_beard")
+            color,
+            scale,
+            offset,
+            rotation
         )
+        if not loaded then
+            createOldManBeardFallback(character,color,scale,offset,rotation)
+        end
     end
 
     if VisualsState.avatar_purple_horn then
-        local hornColor = typeof(VisualsState.avatar_horn_color) == "Color3"
-            and VisualsState.avatar_horn_color or Color3.fromRGB(115, 65, 190)
-        local hornScale = globalScale * math.clamp(tonumber(VisualsState.avatar_horn_scale) or 1, 0.2, 3)
-        local hornOffset = CFrame.new(
-            tonumber(VisualsState.avatar_horn_offset_x) or 0,
-            tonumber(VisualsState.avatar_horn_offset) or 0,
-            tonumber(VisualsState.avatar_horn_offset_z) or 0
-        )
-        attachCatalogAccessory(
+        local color=typeof(VisualsState.avatar_horn_color)=="Color3"
+            and VisualsState.avatar_horn_color or Color3.fromRGB(115,65,190)
+        local scale,offset,rotation=hornTransform()
+        local loaded=attachAccessoryToHead(
             character,
             PURPLE_HORNS_CATALOG_ASSET_ID,
             "Hat",
             "PurpleHorns",
-            hornColor,
-            hornScale,
-            hornOffset,
-            globalRotation * specificAccessoryRotation("avatar_horn")
+            color,
+            scale,
+            offset,
+            rotation
         )
+        if not loaded then
+            createPurpleHornsFallback(character,color,scale,offset,rotation)
+        end
     end
 
     if VisualsState.avatar_fake_accessory then
-        local fake = createAttachedPart(
-            character, "FakeAccessory",
-            Vector3.new(0.42, 0.42, 0.42) * globalScale,
-            Color3.fromRGB(180, 70, 255),
-            CFrame.new(0, 1.35, 0) * globalRotation,
-            Enum.PartType.Ball
+        local globalScale=math.clamp(tonumber(VisualsState.avatar_accessory_scale) or 1,0.2,3)
+        local fake=createAttachedPart(
+            character,
+            "FakeAccessory",
+            Vector3.new(0.42,0.42,0.42)*globalScale,
+            Color3.fromRGB(180,70,255),
+            CFrame.new(0,1.35,0)*accessoryRotation(),
+            Enum.PartType.Ball,
+            Enum.Material.Neon,
+            0.15
         )
         if fake then
-            fake.Material = Enum.Material.Neon
-            fake.Transparency = 0.15
+            local light=Instance.new("PointLight")
+            light.Color=fake.Color
+            light.Brightness=0.35
+            light.Range=3
+            light.Parent=fake
         end
     end
 end
 
 local function applyHeadless(character)
-    local head = character and character:FindFirstChild("Head")
+    local head=character and character:FindFirstChild("Head")
     if not head then return end
-    setRemembered(head, "Transparency", 1)
-    for _, object in ipairs(head:GetDescendants()) do
+    setRemembered(head,"Transparency",1)
+    for _,object in ipairs(head:GetDescendants()) do
         if object:IsA("Decal") or object:IsA("Texture") then
-            setRemembered(object, "Transparency", 1)
+            setRemembered(object,"Transparency",1)
         end
     end
 end
 
-local function catalogKorbloxMeshes()
-    if AvatarCatalogCache.__KorbloxMeshes ~= nil then return AvatarCatalogCache.__KorbloxMeshes end
-    local result={}
+local KORBLOX_TEXTURE="rbxassetid://902843398"
+local KORBLOX_UPPER_MESH="rbxassetid://902942096"
+local KORBLOX_LOWER_MESH="rbxassetid://902942093"
+local KORBLOX_FOOT_MESH="rbxassetid://902942089"
 
+local function getKorbloxDescriptionMeshes()
+    local cached=AvatarAssetCache.__KorbloxMeshes
+    if cached~=nil then return cached end
+
+    local result={}
     local description=Instance.new("HumanoidDescription")
-    local okDescription=pcall(function() description.RightLeg=tonumber(KORBLOX_CATALOG_ASSET_ID) end)
-    if okDescription then
-        local okModel,model=pcall(function()
-            return Players:CreateHumanoidModelFromDescription(description,Enum.HumanoidRigType.R15)
+    local configured=pcall(function()
+        description.RightLeg=KORBLOX_CATALOG_ASSET_ID
+    end)
+    if configured then
+        local model=nil
+        local ok=pcall(function()
+            model=Players:CreateHumanoidModelFromDescription(description,Enum.HumanoidRigType.R15)
         end)
-        if okModel and model then
-            local map={RightUpperLeg="upper",RightLowerLeg="lower",RightFoot="foot"}
-            for partName,key in pairs(map) do
+        if ok and model then
+            for partName,key in pairs({
+                RightUpperLeg="upper",
+                RightLowerLeg="lower",
+                RightFoot="foot"
+            }) do
                 local part=model:FindFirstChild(partName)
                 if part and part:IsA("MeshPart") then
                     result[key]={MeshId=part.MeshId,TextureID=part.TextureID}
@@ -12498,73 +12566,15 @@ local function catalogKorbloxMeshes()
     end
     pcall(function() description:Destroy() end)
 
-    if next(result)==nil then
-        local ok,objects=pcall(function() return game:GetObjects("rbxassetid://"..KORBLOX_CATALOG_ASSET_ID) end)
-        if ok and type(objects)=="table" then
-            for _,rootObject in ipairs(objects) do
-                local candidates={rootObject}
-                for _,descendant in ipairs(rootObject:GetDescendants()) do candidates[#candidates+1]=descendant end
-                for _,object in ipairs(candidates) do
-                    if object:IsA("MeshPart") then
-                        local name=object.Name:lower()
-                        local entry={MeshId=object.MeshId,TextureID=object.TextureID}
-                        if name:find("upper",1,true) then result.upper=entry
-                        elseif name:find("foot",1,true) then result.foot=entry
-                        elseif name:find("lower",1,true) or name:find("right leg",1,true) or name=="rightleg" then result.lower=entry
-                        elseif not result.lower then result.lower=entry end
-                    end
-                end
-            end
-            for _,rootObject in ipairs(objects) do pcall(function() rootObject:Destroy() end) end
-        end
-    end
-
-    AvatarCatalogCache.__KorbloxMeshes=result
+    AvatarAssetCache.__KorbloxMeshes=result
     return result
 end
 
-local function tryCatalogKorblox(character)
-    local meshes = catalogKorbloxMeshes()
-    if type(meshes) ~= "table" or next(meshes) == nil then return false end
-
-    local upper = character:FindFirstChild("RightUpperLeg")
-    local lower = character:FindFirstChild("RightLowerLeg")
-    local foot = character:FindFirstChild("RightFoot")
-    local applied = false
-
-    local function apply(part, data)
-        if not part or not part:IsA("MeshPart") or type(data) ~= "table" then return false end
-        local okMesh = data.MeshId and data.MeshId ~= "" and setRemembered(part, "MeshId", data.MeshId)
-        if data.TextureID and data.TextureID ~= "" then
-            setRemembered(part, "TextureID", data.TextureID)
-        end
-        if okMesh then
-            setLocalHidden(part, false)
-            return true
-        end
-        return false
-    end
-
-    applied = apply(upper, meshes.upper or meshes.lower) or applied
-    applied = apply(lower, meshes.lower or meshes.upper) or applied
-    applied = apply(foot, meshes.foot or meshes.lower) or applied
-
-    local r6Leg = character:FindFirstChild("Right Leg")
-    if r6Leg and r6Leg:IsA("MeshPart") then
-        applied = apply(r6Leg, meshes.lower or meshes.upper) or applied
-    end
-    return applied
-end
-
-local KORBLOX_TEXTURE = "rbxassetid://902843398"
-local KORBLOX_UPPER_MESH = "rbxassetid://902942096"
-local KORBLOX_LOWER_MESH = "rbxassetid://902942093"
-local KORBLOX_FOOT_MESH  = "rbxassetid://902942089"
-
-local function createKorbloxReplica(character, sourcePart, meshId, textureId, suffix)
+local function createKorbloxReplica(character,sourcePart,meshId,textureId,suffix)
     if not sourcePart or not sourcePart:IsA("BasePart") then return nil end
+
     local visual=Instance.new("Part")
-    visual.Name="DevKageAvatar_Korblox"..tostring(suffix or "Part")
+    visual.Name=avatarName("Korblox_"..tostring(suffix))
     visual.Size=sourcePart.Size
     visual.CFrame=sourcePart.CFrame
     visual.Color=Color3.new(1,1,1)
@@ -12581,57 +12591,50 @@ local function createKorbloxReplica(character, sourcePart, meshId, textureId, su
     mesh.MeshType=Enum.MeshType.FileMesh
     mesh.MeshId=meshId
     mesh.TextureId=textureId
-    mesh.Scale=Vector3.new(1,1,1)
     mesh.Parent=visual
 
     local weld=Instance.new("WeldConstraint")
     weld.Part0=sourcePart
     weld.Part1=visual
     weld.Parent=visual
+
     setLocalHidden(sourcePart,true)
     return visual
 end
 
-local function createKorbloxFallback(character, upperPart, lowerPart, footPart)
-    local made=0
-    if upperPart then if createKorbloxReplica(character,upperPart,KORBLOX_UPPER_MESH,KORBLOX_TEXTURE,"Upper") then made=made+1 end end
-    if lowerPart then if createKorbloxReplica(character,lowerPart,KORBLOX_LOWER_MESH,KORBLOX_TEXTURE,"Lower") then made=made+1 end end
-    if footPart then if createKorbloxReplica(character,footPart,KORBLOX_FOOT_MESH,KORBLOX_TEXTURE,"Foot") then made=made+1 end end
-    return made>0
-end
-
 local function applyKorblox(character)
     if not character then return end
-    if tryCatalogKorblox(character) then return end
 
     local upper=character:FindFirstChild("RightUpperLeg")
     local lower=character:FindFirstChild("RightLowerLeg")
     local foot=character:FindFirstChild("RightFoot")
+    local descriptionMeshes=getKorbloxDescriptionMeshes()
 
-    if upper and lower and foot and upper:IsA("MeshPart") and lower:IsA("MeshPart") and foot:IsA("MeshPart") then
-        local upperMeshOk=setRemembered(upper,"MeshId",KORBLOX_UPPER_MESH)
-        local upperTextureOk=setRemembered(upper,"TextureID",KORBLOX_TEXTURE)
-        local lowerMeshOk=setRemembered(lower,"MeshId",KORBLOX_LOWER_MESH)
-        local lowerTextureOk=setRemembered(lower,"TextureID",KORBLOX_TEXTURE)
-        local footMeshOk=setRemembered(foot,"MeshId",KORBLOX_FOOT_MESH)
-        local footTextureOk=setRemembered(foot,"TextureID",KORBLOX_TEXTURE)
+    local function applyMesh(part,data,fallbackMesh)
+        if not part or not part:IsA("MeshPart") then return false end
+        local meshId=(type(data)=="table" and data.MeshId~="" and data.MeshId) or fallbackMesh
+        local textureId=(type(data)=="table" and data.TextureID~="" and data.TextureID) or KORBLOX_TEXTURE
+        local meshOk=setRemembered(part,"MeshId",meshId)
+        local textureOk=setRemembered(part,"TextureID",textureId)
+        setLocalHidden(part,false)
+        return meshOk and textureOk
+    end
 
-        setLocalHidden(upper,false)
-        setLocalHidden(lower,false)
-        setLocalHidden(foot,false)
-        if upperMeshOk and upperTextureOk and lowerMeshOk and lowerTextureOk and footMeshOk and footTextureOk then
-            return
-        end
+    if upper and lower and foot then
+        local upperOk=applyMesh(upper,descriptionMeshes.upper,KORBLOX_UPPER_MESH)
+        local lowerOk=applyMesh(lower,descriptionMeshes.lower,KORBLOX_LOWER_MESH)
+        local footOk=applyMesh(foot,descriptionMeshes.foot,KORBLOX_FOOT_MESH)
+        if upperOk and lowerOk and footOk then return end
 
-        createKorbloxFallback(character,upper,lower,foot)
+        if upper then createKorbloxReplica(character,upper,KORBLOX_UPPER_MESH,KORBLOX_TEXTURE,"Upper") end
+        if lower then createKorbloxReplica(character,lower,KORBLOX_LOWER_MESH,KORBLOX_TEXTURE,"Lower") end
+        if foot then createKorbloxReplica(character,foot,KORBLOX_FOOT_MESH,KORBLOX_TEXTURE,"Foot") end
         return
     end
 
     local r6Leg=character:FindFirstChild("Right Leg")
     if r6Leg and r6Leg:IsA("BasePart") then
         createKorbloxReplica(character,r6Leg,KORBLOX_LOWER_MESH,KORBLOX_TEXTURE,"R6")
-    elseif lower and lower:IsA("BasePart") then
-        createKorbloxFallback(character,upper,lower,foot)
     end
 end
 
@@ -12666,16 +12669,25 @@ local function scheduleAvatarApply()
     end)
 end
 
-Runtime.Connections[#Runtime.Connections+1] = LocalPlayer.CharacterAdded:Connect(function()
+local function trackAvatarConnection(connection)
+    if not connection then return connection end
+    Runtime.Connections[#Runtime.Connections+1]=connection
+    if type(MaskShard)=="table" and type(MaskShard.Connections)=="table" then
+        MaskShard.Connections[#MaskShard.Connections+1]=connection
+    end
+    return connection
+end
+
+trackAvatarConnection(LocalPlayer.CharacterAdded:Connect(function()
     scheduleAvatarApply()
-end)
+end))
 
 pcall(function()
-    Runtime.Connections[#Runtime.Connections+1] = LocalPlayer.CharacterAppearanceLoaded:Connect(function(character)
+    trackAvatarConnection(LocalPlayer.CharacterAppearanceLoaded:Connect(function(character)
         if character == LocalPlayer.Character then
             scheduleAvatarApply()
         end
-    end)
+    end))
 end)
 
 local ragePage = window:CreatePage({Icon="rbxassetid://8547258459",Glyph="R",Size=UDim2.new(0,36,0,36)})
@@ -12788,6 +12800,10 @@ local cursorStateMap = {
     devkage_cursor_enabled="Enabled",
     devkage_cursor_position_mode="PositionMode",
     devkage_cursor_color="Color",
+    devkage_cursor_color_secondary="SecondaryColor",
+    devkage_cursor_color_mode="ColorMode",
+    devkage_cursor_color_speed="ColorSpeed",
+    devkage_cursor_color_spread="ColorSpread",
     devkage_cursor_rainbow="Rainbow",
     devkage_cursor_rainbow_speed="RainbowSpeed",
     devkage_cursor_line_width="LineWidth",
@@ -12817,441 +12833,608 @@ local cursorStateMap = {
 }
 
 local function refreshCursorSettings()
-    for visualKey, runtimeKey in pairs(cursorStateMap) do
-        local value = VisualsState[visualKey]
-        if value ~= nil then settings[runtimeKey] = value end
+    for visualKey,runtimeKey in pairs(cursorStateMap) do
+        local value=VisualsState[visualKey]
+        if value~=nil then settings[runtimeKey]=value end
     end
 end
 
-local function syncCursorSetting(key, value)
-    VisualsState[key] = value
-    local runtimeKey = cursorStateMap[key]
-    if runtimeKey then settings[runtimeKey] = value end
+local function syncCursorSetting(key,value)
+    VisualsState[key]=value
+    local runtimeKey=cursorStateMap[key]
+    if runtimeKey then settings[runtimeKey]=value end
 end
 
 refreshCursorSettings()
 
 do
-    local cursorHttpService = game:GetService("HttpService")
-    local cursorInstanceId = cursorHttpService:GenerateGUID(false):gsub("%-", "")
+    local cursorHttpService=game:GetService("HttpService")
+    local cursorInstanceId=cursorHttpService:GenerateGUID(false):gsub("%-","")
+    local cursorCoreGui=game:GetService("CoreGui")
+    local cursorEnv=(type(getgenv)=="function" and getgenv()) or _G
+    local DrawingAPI=rawget(cursorEnv,"Drawing") or rawget(_G,"Drawing")
+    if not DrawingAPI and type(Drawing)=="table" then DrawingAPI=Drawing end
 
-    local runtime = {
-        Gui = nil,
-        Root = nil,
-        Lines = {},
-        Glows = {},
-        InnerGlows = {},
-        MainText = nil,
-        SecondText = nil,
-        Connection = nil,
-        Rotation = tonumber(settings.AngleOffset) or 0,
-        RotationProgress = 0,
-        CurrentRotationSpeed = math.max(tonumber(settings.SpinSpeed) or 288,0) / 360,
-        PulseTime = 0,
-        Destroyed = false,
+    local runtime={
+        Gui=nil,
+        Root=nil,
+        Lines={},
+        Glows={},
+        InnerGlows={},
+        MainText=nil,
+        SecondText=nil,
+        DrawLines={},
+        DrawGlows={},
+        DrawInnerGlows={},
+        DrawMainText=nil,
+        DrawSecondText=nil,
+        DrawingReady=false,
+        Connection=nil,
+        Supervisor=nil,
+        Rotation=tonumber(settings.AngleOffset) or 0,
+        RotationProgress=0,
+        CurrentRotationSpeed=math.max(tonumber(settings.SpinSpeed) or 288,0)/360,
+        PulseTime=0,
+        Destroyed=false,
     }
 
-    local function getCursorHost()
-        if type(gethui) == "function" then
-            local ok, value = pcall(gethui)
-            if ok and value then return value end
-        end
-        local core = game:GetService("CoreGui")
-        if core then return core end
-        return nil
+    local function removeDrawing(object)
+        if not object then return end
+        pcall(function()
+            object.Visible=false
+            if type(object.Remove)=="function" then
+                object:Remove()
+            elseif type(object.Destroy)=="function" then
+                object:Destroy()
+            end
+        end)
     end
 
-    local function ensureCursorParent(gui)
+    local function newDrawing(kind)
+        if type(DrawingAPI)~="table" or type(DrawingAPI.new)~="function" then return nil end
+        local object=nil
+        local ok=pcall(function() object=DrawingAPI.new(kind) end)
+        if not ok then return nil end
+        return object
+    end
+
+    local function buildDrawingRenderer()
+        if runtime.DrawingReady then return true end
+        local created={}
+        local function remember(object)
+            if object then created[#created+1]=object end
+            return object
+        end
+
+        for i=1,12 do
+            local outer=remember(newDrawing("Line"))
+            local inner=remember(newDrawing("Line"))
+            local line=remember(newDrawing("Line"))
+            if not outer or not inner or not line then
+                for _,object in ipairs(created) do removeDrawing(object) end
+                runtime.DrawLines={}
+                runtime.DrawGlows={}
+                runtime.DrawInnerGlows={}
+                runtime.DrawingReady=false
+                return false
+            end
+            pcall(function()
+                outer.ZIndex=9997
+                inner.ZIndex=9998
+                line.ZIndex=9999
+            end)
+            runtime.DrawGlows[i]=outer
+            runtime.DrawInnerGlows[i]=inner
+            runtime.DrawLines[i]=line
+        end
+
+        local mainText=remember(newDrawing("Text"))
+        local secondText=remember(newDrawing("Text"))
+        if mainText and secondText then
+            pcall(function()
+                mainText.Center=true
+                mainText.Outline=true
+                mainText.Font=2
+                mainText.ZIndex=10000
+                secondText.Center=true
+                secondText.Outline=true
+                secondText.Font=2
+                secondText.ZIndex=10000
+            end)
+            runtime.DrawMainText=mainText
+            runtime.DrawSecondText=secondText
+        end
+
+        runtime.DrawingReady=true
+        return true
+    end
+
+    local function parentCursorGui(gui)
         if not gui then return false end
-        local host = getCursorHost()
-        if not host then return false end
-        if gui.Parent ~= host then
-            local ok = pcall(function() gui.Parent = host end)
-            if not ok then return false end
+
+        local okCore=pcall(function()
+            gui.Parent=cursorCoreGui
+        end)
+        if okCore and gui.Parent then
+            local protector=protectgui or (type(syn)=="table" and syn.protect_gui)
+            if type(protector)=="function" then pcall(protector,gui) end
+            if gui.Parent then return true end
         end
-        return gui.Parent == host
+
+        if type(gethui)=="function" then
+            local okHost,host=pcall(gethui)
+            if okHost and host then
+                local ok=pcall(function() gui.Parent=host end)
+                if ok and gui.Parent then return true end
+            end
+        end
+
+        local playerGui=LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        if playerGui then
+            local ok=pcall(function() gui.Parent=playerGui end)
+            if ok and gui.Parent then return true end
+        end
+        return false
     end
 
-    local cursorGui = Instance.new("ScreenGui")
-    cursorGui.Name = "DevKage_CursorOverlay_" .. cursorInstanceId
-    local cursorProtectGui = protectgui or (syn and syn.protect_gui)
-    if type(cursorProtectGui) == "function" then pcall(cursorProtectGui, cursorGui) end
-    cursorGui.IgnoreGuiInset = true
-    cursorGui.ResetOnSpawn = false
-    cursorGui.DisplayOrder = 2147483647
-    cursorGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-    pcall(function() cursorGui.OnTopOfCoreBlur = true end)
-    ensureCursorParent(cursorGui)
-
-    local root = Instance.new("Frame")
-    root.Name = "CursorRoot"
-    root.BackgroundTransparency = 1
-    root.BorderSizePixel = 0
-    root.Size = UDim2.fromOffset(1,1)
-    root.Position = UDim2.fromOffset(0,0)
-    root.ZIndex = 100
-    root.Parent = cursorGui
-
-    local function makeArm(name,zIndex)
-        local frame = Instance.new("Frame")
-        frame.Name = name
-        frame.AnchorPoint = Vector2.new(0.5,0.5)
-        frame.BackgroundColor3 = Color3.new(1,1,1)
-        frame.BackgroundTransparency = 0
-        frame.BorderSizePixel = 0
-        frame.ZIndex = zIndex
-        frame.Parent = root
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(1,0)
-        corner.Parent = frame
+    local function makeGuiArm(parent,name,zIndex)
+        local frame=Instance.new("Frame")
+        frame.Name=name
+        frame.AnchorPoint=Vector2.new(0.5,0.5)
+        frame.BackgroundColor3=Color3.new(1,1,1)
+        frame.BackgroundTransparency=0
+        frame.BorderSizePixel=0
+        frame.ZIndex=zIndex
+        frame.Parent=parent
+        local corner=Instance.new("UICorner")
+        corner.CornerRadius=UDim.new(1,0)
+        corner.Parent=frame
         return frame
     end
 
-    for i = 1, 12 do
-        local outerGlow = makeArm("GlowOuter"..i,99)
-        local innerGlow = makeArm("GlowInner"..i,100)
-        local line = makeArm("Line"..i,101)
-        runtime.Glows[i] = outerGlow
-        runtime.InnerGlows[i] = innerGlow
-        runtime.Lines[i] = line
-    end
-
-    local function makeCursorText(name,size,z)
-        local label = Instance.new("TextLabel")
-        label.Name = name
-        label.AnchorPoint = Vector2.new(0.5,0)
-        label.BackgroundTransparency = 1
-        label.BorderSizePixel = 0
-        label.Font = Enum.Font.Arcade
-        label.Text = ""
-        label.TextColor3 = Color3.new(1,1,1)
-        label.TextSize = size
-        label.TextStrokeColor3 = Color3.new(0,0,0)
-        label.TextStrokeTransparency = 0.15
-        label.TextXAlignment = Enum.TextXAlignment.Center
-        label.TextYAlignment = Enum.TextYAlignment.Center
-        label.ZIndex = z
-        label.Parent = root
+    local function makeGuiText(parent,name,size,z)
+        local label=Instance.new("TextLabel")
+        label.Name=name
+        label.AnchorPoint=Vector2.new(0.5,0)
+        label.BackgroundTransparency=1
+        label.BorderSizePixel=0
+        label.Font=Enum.Font.Arcade
+        label.Text=""
+        label.TextColor3=Color3.new(1,1,1)
+        label.TextSize=size
+        label.TextStrokeColor3=Color3.new(0,0,0)
+        label.TextStrokeTransparency=0.15
+        label.TextXAlignment=Enum.TextXAlignment.Center
+        label.TextYAlignment=Enum.TextYAlignment.Center
+        label.ZIndex=z
+        label.Parent=parent
         return label
     end
 
-    local mainText = makeCursorText("MainText",20,103)
-    mainText.Text = "devkage"
-    local secondText = makeCursorText("SecondText",15,103)
+    local function destroyGui()
+        if runtime.Gui then pcall(function() runtime.Gui:Destroy() end) end
+        runtime.Gui=nil
+        runtime.Root=nil
+        runtime.Lines={}
+        runtime.Glows={}
+        runtime.InnerGlows={}
+        runtime.MainText=nil
+        runtime.SecondText=nil
+    end
 
-    runtime.Gui = cursorGui
-    runtime.Root = root
-    runtime.MainText = mainText
-    runtime.SecondText = secondText
+    local function buildGui()
+        destroyGui()
 
-    local cursorTemplate = cursorGui:Clone()
-    cursorTemplate.Parent = nil
-    runtime.Template = cursorTemplate
+        local gui=Instance.new("ScreenGui")
+        gui.Name="DevKage_CursorOverlay_"..cursorInstanceId
+        gui.IgnoreGuiInset=true
+        gui.ResetOnSpawn=false
+        gui.DisplayOrder=2147483647
+        gui.ZIndexBehavior=Enum.ZIndexBehavior.Global
+        pcall(function() gui.OnTopOfCoreBlur=true end)
 
-    local function cursorTreeHealthy()
-        if not cursorGui or not cursorGui.Parent then return false end
-        if not root or root.Parent ~= cursorGui then return false end
-        if not mainText or mainText.Parent ~= root then return false end
-        if not secondText or secondText.Parent ~= root then return false end
-        for i = 1, 12 do
-            if not runtime.Lines[i] or runtime.Lines[i].Parent ~= root then return false end
-            if not runtime.Glows[i] or runtime.Glows[i].Parent ~= root then return false end
-            if not runtime.InnerGlows[i] or runtime.InnerGlows[i].Parent ~= root then return false end
+        if not parentCursorGui(gui) then
+            pcall(function() gui:Destroy() end)
+            return false
+        end
+
+        local root=Instance.new("Frame")
+        root.Name="CursorRoot"
+        root.BackgroundTransparency=1
+        root.BorderSizePixel=0
+        root.Size=UDim2.fromOffset(1,1)
+        root.Position=UDim2.fromOffset(0,0)
+        root.ZIndex=100
+        root.Parent=gui
+
+        local lines={}
+        local glows={}
+        local innerGlows={}
+        for i=1,12 do
+            glows[i]=makeGuiArm(root,"GlowOuter"..i,99)
+            innerGlows[i]=makeGuiArm(root,"GlowInner"..i,100)
+            lines[i]=makeGuiArm(root,"Line"..i,101)
+        end
+
+        local mainText=makeGuiText(root,"MainText",20,103)
+        local secondText=makeGuiText(root,"SecondText",15,103)
+
+        runtime.Gui=gui
+        runtime.Root=root
+        runtime.Lines=lines
+        runtime.Glows=glows
+        runtime.InnerGlows=innerGlows
+        runtime.MainText=mainText
+        runtime.SecondText=secondText
+        return true
+    end
+
+    local function guiHealthy()
+        local gui=runtime.Gui
+        local root=runtime.Root
+        if not gui or not gui.Parent or not root or root.Parent~=gui then return false end
+        if not runtime.MainText or runtime.MainText.Parent~=root then return false end
+        if not runtime.SecondText or runtime.SecondText.Parent~=root then return false end
+        for i=1,12 do
+            if not runtime.Lines[i] or runtime.Lines[i].Parent~=root then return false end
+            if not runtime.Glows[i] or runtime.Glows[i].Parent~=root then return false end
+            if not runtime.InnerGlows[i] or runtime.InnerGlows[i].Parent~=root then return false end
         end
         return true
     end
 
-    local function repairCursorGui()
-        if ensureCursorParent(cursorGui) and cursorTreeHealthy() then
-            pcall(function()
-                cursorGui.Enabled = true
-                root.Visible = true
-            end)
-            return true
-        end
-
-        if cursorGui then pcall(function() cursorGui:Destroy() end) end
-
-        local replacement = nil
-        local okClone = pcall(function() replacement = cursorTemplate:Clone() end)
-        if not okClone or not replacement then return false end
-        replacement.Name = "DevKage_CursorOverlay_" .. cursorInstanceId
-        replacement.DisplayOrder = 2147483647
-        replacement.ResetOnSpawn = false
-        replacement.IgnoreGuiInset = true
-        replacement.ZIndexBehavior = Enum.ZIndexBehavior.Global
-        pcall(function() replacement.OnTopOfCoreBlur = true end)
-        if type(cursorProtectGui) == "function" then pcall(cursorProtectGui, replacement) end
-        if not ensureCursorParent(replacement) then
-            pcall(function() replacement:Destroy() end)
-            return false
-        end
-
-        local replacementRoot = replacement:FindFirstChild("CursorRoot")
-        if not replacementRoot then
-            pcall(function() replacement:Destroy() end)
-            return false
-        end
-
-        cursorGui = replacement
-        root = replacementRoot
-        runtime.Gui = replacement
-        runtime.Root = replacementRoot
-        runtime.Lines = {}
-        runtime.Glows = {}
-        runtime.InnerGlows = {}
-        for i = 1, 12 do
-            runtime.Glows[i] = replacementRoot:FindFirstChild("GlowOuter"..i)
-            runtime.InnerGlows[i] = replacementRoot:FindFirstChild("GlowInner"..i)
-            runtime.Lines[i] = replacementRoot:FindFirstChild("Line"..i)
-        end
-        mainText = replacementRoot:FindFirstChild("MainText")
-        secondText = replacementRoot:FindFirstChild("SecondText")
-        runtime.MainText = mainText
-        runtime.SecondText = secondText
-
-        pcall(function()
-            replacement.Enabled = true
-            replacementRoot.Visible = true
-        end)
-        return cursorTreeHealthy()
-    end
+    buildGui()
+    buildDrawingRenderer()
 
     local function viewportCenter()
-        local camera = workspace.CurrentCamera
-        local size = camera and camera.ViewportSize or Vector2.new(1920,1080)
-        return Vector2.new(size.X * 0.5, size.Y * 0.5)
+        local camera=workspace.CurrentCamera
+        local size=camera and camera.ViewportSize or Vector2.new(1920,1080)
+        return Vector2.new(size.X*0.5,size.Y*0.5)
     end
 
     local function cursorCenter()
-        local center = viewportCenter()
-        if tostring(settings.PositionMode or "Mouse") == "Center" then
-            return center
+        local center=viewportCenter()
+        if tostring(settings.PositionMode or "Mouse")=="Center" then return center end
+
+        local uiOpen=window and window.Enabled==true
+        if not uiOpen then
+            local locked=uis.MouseBehavior~=Enum.MouseBehavior.Default
+            local hidden=false
+            pcall(function() hidden=uis.MouseIconEnabled==false end)
+            if locked or hidden then return center end
         end
 
-        if (not window or not window.Enabled) and uis.MouseBehavior ~= Enum.MouseBehavior.Default then
-            return center
-        end
-
-        local ok, pos = pcall(function() return uis:GetMouseLocation() end)
+        local ok,pos=pcall(function() return uis:GetMouseLocation() end)
         if not ok or not pos then return center end
-
-        local camera = workspace.CurrentCamera
-        local viewport = camera and camera.ViewportSize or Vector2.new(1920,1080)
-        if pos.X < -32 or pos.Y < -32 or pos.X > viewport.X + 32 or pos.Y > viewport.Y + 32 then
+        local camera=workspace.CurrentCamera
+        local viewport=camera and camera.ViewportSize or Vector2.new(1920,1080)
+        if pos.X < -64 or pos.Y < -64 or pos.X > viewport.X+64 or pos.Y > viewport.Y+64 then
             return center
         end
         return Vector2.new(pos.X,pos.Y)
     end
 
     local function pulseCurve(t,speed)
-        local raw = math.sin(t * speed) * 0.5 + 0.5
-        return raw * raw
+        local raw=math.sin(t*speed)*0.5+0.5
+        return raw*raw
     end
 
     local function rotationSpeed(progress,base)
-        local slowdownStart = 0.6
-        local slowdownDuration = 0.35
-        local minSlowdownSpeed = 0.3
-        if progress >= slowdownStart then
-            local slowdownProgress = math.clamp((progress - slowdownStart) / slowdownDuration,0,1)
-            local easedProgress = slowdownProgress * slowdownProgress
-            local slowdownFactor = 1 - (easedProgress * (1 - minSlowdownSpeed))
-            return base * math.max(slowdownFactor,minSlowdownSpeed)
+        local slowdownStart=0.6
+        local slowdownDuration=0.35
+        local minSlowdownSpeed=0.3
+        if progress>=slowdownStart then
+            local slowdownProgress=math.clamp((progress-slowdownStart)/slowdownDuration,0,1)
+            local easedProgress=slowdownProgress*slowdownProgress
+            local slowdownFactor=1-(easedProgress*(1-minSlowdownSpeed))
+            return base*math.max(slowdownFactor,minSlowdownSpeed)
         end
         return base
     end
 
     local function shortestAngleDelta(from,to)
-        return ((to - from + 180) % 360) - 180
+        return ((to-from+180)%360)-180
+    end
+
+    local function legacyRainbowColor(t)
+        local r=math.sin(t*0.6)*0.5+0.5
+        local g=math.sin(t*0.6+2)*0.5+0.5
+        local b=math.sin(t*0.6+4)*0.5+0.5
+        return Color3.new(r,g,b)
+    end
+
+    local function armColor(index,count,pulse)
+        local primary=typeof(settings.Color)=="Color3" and settings.Color or Color3.new(1,1,1)
+        local secondary=typeof(settings.SecondaryColor)=="Color3" and settings.SecondaryColor or Color3.fromRGB(145,85,255)
+        local mode=tostring(settings.ColorMode or "Legacy")
+        local speed=math.max(tonumber(settings.ColorSpeed) or 1,0)
+        local spread=math.clamp(tonumber(settings.ColorSpread) or 0.18,0,1)
+        local clock=runtime.PulseTime*speed
+
+        if mode=="Solid" then
+            return primary
+        elseif mode=="Two Tone" then
+            return index%2==1 and primary or secondary
+        elseif mode=="Gradient" then
+            local alpha=count<=1 and 0 or (index-1)/(count-1)
+            return primary:Lerp(secondary,alpha)
+        elseif mode=="Color Wave" then
+            local wave=math.sin(clock*math.pi*2+(index-1)*spread*math.pi*2)*0.5+0.5
+            return primary:Lerp(secondary,wave)
+        elseif mode=="RGB Wave" then
+            local hue=(clock*0.15+(index-1)/math.max(count,1)*spread*2)%1
+            return Color3.fromHSV(hue,0.82,1)
+        elseif mode=="Ice" then
+            return Color3.fromRGB(205,245,255):Lerp(Color3.fromRGB(75,155,255),(index-1)/math.max(count-1,1))
+        elseif mode=="Purple LED" then
+            local wave=0.25+0.75*(math.sin(clock*3+(index-1)*0.8)*0.5+0.5)
+            return Color3.fromRGB(75,20,140):Lerp(Color3.fromRGB(220,95,255),wave)
+        elseif mode=="Fire" then
+            local wave=math.sin(clock*2.5+(index-1)*0.7)*0.5+0.5
+            return Color3.fromRGB(255,55,20):Lerp(Color3.fromRGB(255,210,30),wave)
+        elseif mode=="Toxic" then
+            local wave=math.sin(clock*2.2+(index-1)*0.65)*0.5+0.5
+            return Color3.fromRGB(25,255,70):Lerp(Color3.fromRGB(190,255,40),wave)
+        end
+
+        if settings.Rainbow==true then
+            local rainbowSpeed=math.max(tonumber(settings.RainbowSpeed) or 7.2,0)
+            return legacyRainbowColor(runtime.PulseTime*rainbowSpeed*0.42)
+        end
+        return primary
+    end
+
+    local function setDrawingLine(object,visible,fromPos,toPos,thickness,color,transparency)
+        if not object then return end
+        pcall(function()
+            object.Visible=visible
+            if visible then
+                object.From=fromPos
+                object.To=toPos
+                object.Thickness=math.max(1,thickness)
+                object.Color=color
+                object.Transparency=math.clamp(transparency,0,1)
+            end
+        end)
     end
 
     local function updateCursor(dt)
         if runtime.Destroyed then return end
         refreshCursorSettings()
-        if not repairCursorGui() then return end
 
-        local enabled = settings.Enabled ~= false
-        pcall(function()
-            cursorGui.Enabled = enabled
-            cursorGui.DisplayOrder = 2147483647
-            root.Visible = enabled
-        end)
-        if not enabled then return end
+        if not guiHealthy() then buildGui() end
+        if not runtime.DrawingReady then buildDrawingRenderer() end
 
-        local center = cursorCenter()
-        root.Position = UDim2.fromOffset(center.X,center.Y)
+        local enabled=settings.Enabled~=false
+        local guiOk=guiHealthy()
+        if guiOk then
+            pcall(function()
+                runtime.Gui.Enabled=enabled
+                runtime.Gui.DisplayOrder=2147483647
+                runtime.Root.Visible=enabled
+            end)
+        end
 
-        dt = math.min(math.max(tonumber(dt) or 0,0),0.08)
-        runtime.PulseTime = runtime.PulseTime + dt
+        if not enabled then
+            if runtime.DrawingReady then
+                for i=1,12 do
+                    setDrawingLine(runtime.DrawLines[i],false,Vector2.new(0,0),Vector2.new(0,0),1,Color3.new(1,1,1),1)
+                    setDrawingLine(runtime.DrawInnerGlows[i],false,Vector2.new(0,0),Vector2.new(0,0),1,Color3.new(1,1,1),1)
+                    setDrawingLine(runtime.DrawGlows[i],false,Vector2.new(0,0),Vector2.new(0,0),1,Color3.new(1,1,1),1)
+                end
+                if runtime.DrawMainText then pcall(function() runtime.DrawMainText.Visible=false end) end
+                if runtime.DrawSecondText then pcall(function() runtime.DrawSecondText.Visible=false end) end
+            end
+            return
+        end
 
-        local armCount = math.clamp(math.floor(tonumber(settings.ArmCount) or 4),1,12)
-        local lineWidth = math.max(1,math.floor((tonumber(settings.LineWidth) or 3) + 0.5))
-        local configuredLength = math.max(1,tonumber(settings.LineLength) or 25)
-        local radius = math.max(0,tonumber(settings.CenterRadius) or 12.5)
-        local squashX = math.max(0.05,tonumber(settings.SquashX) or 1)
-        local squashY = math.max(0.05,tonumber(settings.SquashY) or 1)
-        local direction = tostring(settings.SpinDirection or "Clockwise") == "Counter Clockwise" and -1 or 1
-        local baseRotation = tonumber(settings.AngleOffset) or 0
-        local spinStyle = tostring(settings.SpinStyle or "Static")
-        local spinRange = math.clamp(tonumber(settings.SpinRange) or 360,1,360)
-        local baseCycles = math.max(tonumber(settings.SpinSpeed) or 288,0) / 360
-        local targetRotation = baseRotation
+        local center=cursorCenter()
+        if guiOk then runtime.Root.Position=UDim2.fromOffset(center.X,center.Y) end
 
-        if settings.Spin == true and baseCycles > 0 then
-            runtime.CurrentRotationSpeed = rotationSpeed(runtime.RotationProgress,baseCycles)
-            runtime.RotationProgress = (runtime.RotationProgress + runtime.CurrentRotationSpeed * dt) % 1
-            if spinStyle == "Ping Pong" then
-                targetRotation = baseRotation + math.sin(runtime.RotationProgress * math.pi * 2) * (spinRange * 0.5) * direction
-            elseif spinStyle == "Stepped" then
-                local steps = math.max(armCount,4)
-                local stepSize = spinRange / steps
-                local raw = runtime.RotationProgress * spinRange
-                targetRotation = baseRotation + math.floor(raw / math.max(stepSize,0.001)) * stepSize * direction
+        dt=math.min(math.max(tonumber(dt) or 0,0),0.08)
+        runtime.PulseTime=runtime.PulseTime+dt
+
+        local armCount=math.clamp(math.floor(tonumber(settings.ArmCount) or 4),1,12)
+        local lineWidth=math.max(1,math.floor((tonumber(settings.LineWidth) or 3)+0.5))
+        local configuredLength=math.max(1,tonumber(settings.LineLength) or 25)
+        local radius=math.max(0,tonumber(settings.CenterRadius) or 12.5)
+        local squashX=math.max(0.05,tonumber(settings.SquashX) or 1)
+        local squashY=math.max(0.05,tonumber(settings.SquashY) or 1)
+        local direction=tostring(settings.SpinDirection or "Clockwise")=="Counter Clockwise" and -1 or 1
+        local baseRotation=tonumber(settings.AngleOffset) or 0
+        local spinStyle=tostring(settings.SpinStyle or "Static")
+        local spinRange=math.clamp(tonumber(settings.SpinRange) or 360,1,360)
+        local baseCycles=math.max(tonumber(settings.SpinSpeed) or 288,0)/360
+        local targetRotation=baseRotation
+
+        if settings.Spin==true and baseCycles>0 then
+            runtime.CurrentRotationSpeed=rotationSpeed(runtime.RotationProgress,baseCycles)
+            runtime.RotationProgress=(runtime.RotationProgress+runtime.CurrentRotationSpeed*dt)%1
+            if spinStyle=="Ping Pong" then
+                targetRotation=baseRotation+math.sin(runtime.RotationProgress*math.pi*2)*(spinRange*0.5)*direction
+            elseif spinStyle=="Stepped" then
+                local steps=math.max(armCount,4)
+                local stepSize=spinRange/steps
+                local raw=runtime.RotationProgress*spinRange
+                targetRotation=baseRotation+math.floor(raw/math.max(stepSize,0.001))*stepSize*direction
             else
-                targetRotation = baseRotation + runtime.RotationProgress * spinRange * direction
+                targetRotation=baseRotation+runtime.RotationProgress*spinRange*direction
             end
         else
-            runtime.CurrentRotationSpeed = baseCycles
-            runtime.RotationProgress = 0
+            runtime.CurrentRotationSpeed=baseCycles
+            runtime.RotationProgress=0
         end
 
-        if settings.SmoothSpin == true then
-            local response = 1 - math.exp(-dt * 18)
-            runtime.Rotation = runtime.Rotation + shortestAngleDelta(runtime.Rotation,targetRotation) * response
+        if settings.SmoothSpin==true then
+            local response=1-math.exp(-dt*18)
+            runtime.Rotation=runtime.Rotation+shortestAngleDelta(runtime.Rotation,targetRotation)*response
         else
-            runtime.Rotation = targetRotation
+            runtime.Rotation=targetRotation
         end
 
-        local color = settings.Color
-        if typeof(color) ~= "Color3" then color = Color3.new(1,1,1) end
-        if settings.Rainbow == true then
-            local rainbowSpeed = math.max(tonumber(settings.RainbowSpeed) or 7.2,0)
-            local t = runtime.PulseTime * rainbowSpeed * 0.42
-            local r = math.sin(t * 0.6) * 0.5 + 0.5
-            local g = math.sin(t * 0.6 + 2) * 0.5 + 0.5
-            local b = math.sin(t * 0.6 + 4) * 0.5 + 0.5
-            color = Color3.new(r,g,b)
-        end
+        local pulseSpeed=math.max(tonumber(settings.PulseSpeed) or 2.5,0)
+        local pulse=pulseSpeed>0 and pulseCurve(runtime.PulseTime,pulseSpeed) or 1
+        local animatedLength=configuredLength*(0.42+0.58*pulse)
+        local glowEnabled=settings.LineGlow==true
+        local glowControl=math.clamp(tonumber(settings.GlowThickness) or 30,0,50)
+        local extraControl=math.clamp(tonumber(settings.GlowExtraLength) or 15,0,50)
+        local glowSpread=1+glowControl*0.16
+        local glowExtra=extraControl*0.15
+        local glowTransparency=math.clamp(tonumber(settings.GlowTransparency) or 0.43,0,1)
+        local useDrawing=runtime.DrawingReady==true
 
-        local pulseSpeed = math.max(tonumber(settings.PulseSpeed) or 2.5,0)
-        local pulse = pulseSpeed > 0 and pulseCurve(runtime.PulseTime,pulseSpeed) or 1
-        local animatedLength = configuredLength * (0.42 + 0.58 * pulse)
-        local glowEnabled = settings.LineGlow == true
-        local glowControl = math.clamp(tonumber(settings.GlowThickness) or 30,0,50)
-        local extraControl = math.clamp(tonumber(settings.GlowExtraLength) or 15,0,50)
-        local glowSpread = 1 + glowControl * 0.16
-        local glowExtra = extraControl * 0.15
-        local glowTransparency = math.clamp(tonumber(settings.GlowTransparency) or 0.43,0,1)
-        local glowPulse = 0.88 + 0.12 * pulse
-        local brightCore = color:Lerp(Color3.new(1,1,1),0.32)
+        for i=1,12 do
+            local active=i<=armCount
+            local color=armColor(i,armCount,pulse)
+            local brightCore=color:Lerp(Color3.new(1,1,1),0.32)
+            local angle=runtime.Rotation+((i-1)*(360/armCount))
+            local rad=math.rad(angle)
+            local dirX=math.cos(rad)*squashX
+            local dirY=math.sin(rad)*squashY
 
-        for i = 1, 12 do
-            local line = runtime.Lines[i]
-            local innerGlow = runtime.InnerGlows[i]
-            local outerGlow = runtime.Glows[i]
-            local active = i <= armCount
-            line.Visible = active
-            innerGlow.Visible = active and glowEnabled
-            outerGlow.Visible = active and glowEnabled
+            if guiOk then
+                local line=runtime.Lines[i]
+                local innerGlow=runtime.InnerGlows[i]
+                local outerGlow=runtime.Glows[i]
+                local guiVisible=active and not useDrawing
+                line.Visible=guiVisible
+                innerGlow.Visible=guiVisible and glowEnabled
+                outerGlow.Visible=guiVisible and glowEnabled
 
-            if active then
-                local angle = runtime.Rotation + ((i-1) * (360 / armCount))
-                local rad = math.rad(angle)
-                local dirX = math.cos(rad)
-                local dirY = math.sin(rad)
-                local midpoint = radius + animatedLength * 0.5
-                local offsetX = dirX * midpoint * squashX
-                local offsetY = dirY * midpoint * squashY
+                if guiVisible then
+                    local midpoint=radius+animatedLength*0.5
+                    local offsetX=dirX*midpoint
+                    local offsetY=dirY*midpoint
+                    line.Position=UDim2.fromOffset(offsetX,offsetY)
+                    line.Size=UDim2.fromOffset(animatedLength,lineWidth)
+                    line.Rotation=angle
+                    line.BackgroundColor3=brightCore
+                    line.BackgroundTransparency=0
 
-                line.Position = UDim2.fromOffset(offsetX,offsetY)
-                line.Size = UDim2.fromOffset(animatedLength,lineWidth)
-                line.Rotation = angle
-                line.BackgroundColor3 = brightCore
-                line.BackgroundTransparency = 0
+                    if glowEnabled then
+                        innerGlow.Position=line.Position
+                        innerGlow.Size=UDim2.fromOffset(animatedLength+glowExtra,lineWidth+glowSpread*0.9)
+                        innerGlow.Rotation=angle
+                        innerGlow.BackgroundColor3=color
+                        innerGlow.BackgroundTransparency=math.clamp(0.48+glowTransparency*0.38,0.36,0.94)
 
-                if glowEnabled then
-                    innerGlow.Position = line.Position
-                    innerGlow.Size = UDim2.fromOffset(animatedLength + glowExtra, lineWidth + glowSpread * 0.9)
-                    innerGlow.Rotation = angle
-                    innerGlow.BackgroundColor3 = color
-                    innerGlow.BackgroundTransparency = math.clamp(0.48 + glowTransparency * 0.38 - (glowPulse-0.88)*0.8,0.36,0.94)
-
-                    outerGlow.Position = line.Position
-                    outerGlow.Size = UDim2.fromOffset(animatedLength + glowExtra * 2, lineWidth + glowSpread * 2.15)
-                    outerGlow.Rotation = angle
-                    outerGlow.BackgroundColor3 = color
-                    outerGlow.BackgroundTransparency = math.clamp(0.74 + glowTransparency * 0.22 - (glowPulse-0.88)*0.45,0.68,0.98)
+                        outerGlow.Position=line.Position
+                        outerGlow.Size=UDim2.fromOffset(animatedLength+glowExtra*2,lineWidth+glowSpread*2.15)
+                        outerGlow.Rotation=angle
+                        outerGlow.BackgroundColor3=color
+                        outerGlow.BackgroundTransparency=math.clamp(0.74+glowTransparency*0.22,0.68,0.98)
+                    end
                 end
             end
+
+            if useDrawing then
+                local start=Vector2.new(center.X+dirX*radius,center.Y+dirY*radius)
+                local finish=Vector2.new(center.X+dirX*(radius+animatedLength),center.Y+dirY*(radius+animatedLength))
+                local glowStart=Vector2.new(center.X+dirX*math.max(0,radius-glowExtra*0.5),center.Y+dirY*math.max(0,radius-glowExtra*0.5))
+                local glowFinish=Vector2.new(center.X+dirX*(radius+animatedLength+glowExtra),center.Y+dirY*(radius+animatedLength+glowExtra))
+
+                setDrawingLine(runtime.DrawLines[i],active,start,finish,lineWidth,brightCore,1)
+                setDrawingLine(
+                    runtime.DrawInnerGlows[i],
+                    active and glowEnabled,
+                    glowStart,
+                    glowFinish,
+                    lineWidth+glowSpread*0.9,
+                    color,
+                    math.clamp(1-(0.48+glowTransparency*0.38),0.06,0.64)
+                )
+                setDrawingLine(
+                    runtime.DrawGlows[i],
+                    active and glowEnabled,
+                    glowStart,
+                    glowFinish,
+                    lineWidth+glowSpread*2.15,
+                    color,
+                    math.clamp(1-(0.74+glowTransparency*0.22),0.02,0.32)
+                )
+            end
         end
 
-        local textEnabled = settings.TextEnabled ~= false
-        local mainValue = tostring(settings.MainText or "devkage")
-        local secondValue = tostring(settings.SecondText or "None")
-        local outline = settings.TextOutline ~= false
-        local textY = radius + configuredLength + math.max(8,lineWidth * 2)
+        local textEnabled=settings.TextEnabled~=false
+        local mainValue=tostring(settings.MainText or "devkage")
+        local secondValue=tostring(settings.SecondText or "None")
+        local outline=settings.TextOutline~=false
+        local textY=radius+configuredLength+math.max(8,lineWidth*2)
+        local textColor=armColor(1,armCount,pulse)
 
-        mainText.Visible = textEnabled and mainValue ~= "None" and mainValue ~= ""
-        mainText.Text = mainValue
-        mainText.Font = Enum.Font.Arcade
-        mainText.TextColor3 = color
-        mainText.TextSize = math.clamp(math.floor(tonumber(settings.MainTextSize) or 20),8,40)
-        mainText.TextStrokeColor3 = Color3.new(0,0,0)
-        mainText.TextStrokeTransparency = outline and 0.15 or 1
-        mainText.Size = UDim2.fromOffset(240,mainText.TextSize + 8)
-        mainText.Position = UDim2.fromOffset(0,textY)
+        if guiOk then
+            runtime.MainText.Visible=textEnabled and mainValue~="None" and mainValue~=""
+            runtime.MainText.Text=mainValue
+            runtime.MainText.Font=Enum.Font.Arcade
+            runtime.MainText.TextColor3=textColor
+            runtime.MainText.TextSize=math.clamp(math.floor(tonumber(settings.MainTextSize) or 20),8,40)
+            runtime.MainText.TextStrokeColor3=Color3.new(0,0,0)
+            runtime.MainText.TextStrokeTransparency=outline and 0.15 or 1
+            runtime.MainText.Size=UDim2.fromOffset(240,runtime.MainText.TextSize+8)
+            runtime.MainText.Position=UDim2.fromOffset(0,textY)
 
-        secondText.Visible = textEnabled and secondValue ~= "None" and secondValue ~= ""
-        secondText.Text = secondValue
-        secondText.Font = Enum.Font.Arcade
-        secondText.TextColor3 = color
-        secondText.TextSize = math.clamp(math.floor(tonumber(settings.SecondTextSize) or 15),8,40)
-        secondText.TextStrokeColor3 = Color3.new(0,0,0)
-        secondText.TextStrokeTransparency = outline and 0.15 or 1
-        secondText.Size = UDim2.fromOffset(240,secondText.TextSize + 8)
-        secondText.Position = UDim2.fromOffset(0,textY + mainText.TextSize + 4)
+            runtime.SecondText.Visible=textEnabled and secondValue~="None" and secondValue~=""
+            runtime.SecondText.Text=secondValue
+            runtime.SecondText.Font=Enum.Font.Arcade
+            runtime.SecondText.TextColor3=textColor
+            runtime.SecondText.TextSize=math.clamp(math.floor(tonumber(settings.SecondTextSize) or 15),8,40)
+            runtime.SecondText.TextStrokeColor3=Color3.new(0,0,0)
+            runtime.SecondText.TextStrokeTransparency=outline and 0.15 or 1
+            runtime.SecondText.Size=UDim2.fromOffset(240,runtime.SecondText.TextSize+8)
+            runtime.SecondText.Position=UDim2.fromOffset(0,textY+runtime.MainText.TextSize+4)
+        end
+
+        if runtime.DrawingReady then
+            if runtime.DrawMainText then
+                pcall(function()
+                    runtime.DrawMainText.Visible=(not guiOk) and textEnabled and mainValue~="None" and mainValue~=""
+                    runtime.DrawMainText.Text=mainValue
+                    runtime.DrawMainText.Color=textColor
+                    runtime.DrawMainText.Size=math.clamp(math.floor(tonumber(settings.MainTextSize) or 20),8,40)
+                    runtime.DrawMainText.Outline=outline
+                    runtime.DrawMainText.Position=Vector2.new(center.X,center.Y+textY)
+                end)
+            end
+            if runtime.DrawSecondText then
+                pcall(function()
+                    runtime.DrawSecondText.Visible=(not guiOk) and textEnabled and secondValue~="None" and secondValue~=""
+                    runtime.DrawSecondText.Text=secondValue
+                    runtime.DrawSecondText.Color=textColor
+                    runtime.DrawSecondText.Size=math.clamp(math.floor(tonumber(settings.SecondTextSize) or 15),8,40)
+                    runtime.DrawSecondText.Outline=outline
+                    runtime.DrawSecondText.Position=Vector2.new(center.X,center.Y+textY+(tonumber(settings.MainTextSize) or 20)+4)
+                end)
+            end
+        end
     end
-
-    local cursorRenderBindName = "DevKageCursor_" .. cursorInstanceId
 
     function runtime:Destroy()
         if self.Destroyed then return end
-        self.Destroyed = true
-        pcall(function() RunService:UnbindFromRenderStep(cursorRenderBindName) end)
+        self.Destroyed=true
         if self.Connection then pcall(function() self.Connection:Disconnect() end) end
         if self.Supervisor then pcall(function() self.Supervisor:Disconnect() end) end
-        if self.Gui then pcall(function() self.Gui:Destroy() end) end
-        if self.Template then pcall(function() self.Template:Destroy() end) end
+        destroyGui()
+        for i=1,12 do
+            removeDrawing(self.DrawLines[i])
+            removeDrawing(self.DrawInnerGlows[i])
+            removeDrawing(self.DrawGlows[i])
+        end
+        removeDrawing(self.DrawMainText)
+        removeDrawing(self.DrawSecondText)
+        self.DrawingReady=false
     end
 
-    local cursorRenderBound = pcall(function()
-        RunService:BindToRenderStep(cursorRenderBindName, 2001, updateCursor)
-    end)
-
-    runtime.Connection = RunService.RenderStepped:Connect(function(dt)
-        if runtime.Destroyed then return end
-        if not cursorRenderBound then
-            updateCursor(dt)
-        elseif not cursorGui or not cursorGui.Parent or not cursorTreeHealthy() then
-            updateCursor(dt)
-        end
-    end)
-
-    runtime.Supervisor = RunService.Heartbeat:Connect(function()
+    runtime.Connection=RunService.RenderStepped:Connect(updateCursor)
+    runtime.Supervisor=RunService.Heartbeat:Connect(function()
         if runtime.Destroyed then return end
         refreshCursorSettings()
-        if repairCursorGui() then
-            pcall(function()
-                cursorGui.Enabled = settings.Enabled ~= false
-                cursorGui.DisplayOrder = 2147483647
-                root.Visible = settings.Enabled ~= false
-            end)
-        end
+        if not guiHealthy() then pcall(buildGui) end
+        if not runtime.DrawingReady then pcall(buildDrawingRenderer) end
     end)
-    if type(MaskShard) == "table" and type(MaskShard.Connections) == "table" then
-        MaskShard.Connections[#MaskShard.Connections + 1] = runtime.Connection
-        MaskShard.Connections[#MaskShard.Connections + 1] = runtime.Supervisor
+
+    if type(MaskShard)=="table" and type(MaskShard.Connections)=="table" then
+        MaskShard.Connections[#MaskShard.Connections+1]=runtime.Connection
+        MaskShard.Connections[#MaskShard.Connections+1]=runtime.Supervisor
     end
 
     table.insert(library.CleanupCallbacks,function()
@@ -13283,6 +13466,10 @@ end
 addToggle(crosshairSection,"devkage_cursor_enabled","Enabled")
 addDropdown(crosshairSection,"devkage_cursor_position_mode","Position Mode",{"Mouse","Center"})
 addColor(crosshairSection,"devkage_cursor_color","Main Color")
+addColor(crosshairSection,"devkage_cursor_color_secondary","Secondary Color")
+addDropdown(crosshairSection,"devkage_cursor_color_mode","Color Way",{"Legacy","Solid","Two Tone","Gradient","Color Wave","RGB Wave","Ice","Purple LED","Fire","Toxic"})
+addSlider(crosshairSection,"devkage_cursor_color_speed","Color Way Speed",0,5,2,"x")
+addSlider(crosshairSection,"devkage_cursor_color_spread","Color Spread",0,1,2,"")
 addToggle(crosshairSection,"devkage_cursor_rainbow","Rainbow")
 addSlider(crosshairSection,"devkage_cursor_rainbow_speed","Rainbow Speed",0,15,1,"")
 addSlider(crosshairSection,"devkage_cursor_line_width","Line Width",1,10,0,"")
