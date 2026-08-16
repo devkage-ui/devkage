@@ -12852,12 +12852,12 @@ do
     }
 
     local function getCursorHost()
-        local core = game:GetService("CoreGui")
-        if core then return core end
         if type(gethui) == "function" then
             local ok, value = pcall(gethui)
             if ok and value then return value end
         end
+        local core = game:GetService("CoreGui")
+        if core then return core end
         return nil
     end
 
@@ -12948,17 +12948,50 @@ do
     cursorTemplate.Parent = nil
     runtime.Template = cursorTemplate
 
+    local function cursorTreeHealthy()
+        if not cursorGui or not cursorGui.Parent then return false end
+        if not root or root.Parent ~= cursorGui then return false end
+        if not mainText or mainText.Parent ~= root then return false end
+        if not secondText or secondText.Parent ~= root then return false end
+        for i = 1, 12 do
+            if not runtime.Lines[i] or runtime.Lines[i].Parent ~= root then return false end
+            if not runtime.Glows[i] or runtime.Glows[i].Parent ~= root then return false end
+            if not runtime.InnerGlows[i] or runtime.InnerGlows[i].Parent ~= root then return false end
+        end
+        return true
+    end
+
     local function repairCursorGui()
-        if ensureCursorParent(cursorGui) then return true end
+        if ensureCursorParent(cursorGui) and cursorTreeHealthy() then
+            pcall(function()
+                cursorGui.Enabled = true
+                root.Visible = true
+            end)
+            return true
+        end
+
+        if cursorGui then pcall(function() cursorGui:Destroy() end) end
+
         local replacement = nil
         local okClone = pcall(function() replacement = cursorTemplate:Clone() end)
         if not okClone or not replacement then return false end
         replacement.Name = "DevKage_CursorOverlay_" .. cursorInstanceId
+        replacement.DisplayOrder = 2147483647
+        replacement.ResetOnSpawn = false
+        replacement.IgnoreGuiInset = true
+        replacement.ZIndexBehavior = Enum.ZIndexBehavior.Global
+        pcall(function() replacement.OnTopOfCoreBlur = true end)
         if type(cursorProtectGui) == "function" then pcall(cursorProtectGui, replacement) end
-        if not ensureCursorParent(replacement) then pcall(function() replacement:Destroy() end); return false end
+        if not ensureCursorParent(replacement) then
+            pcall(function() replacement:Destroy() end)
+            return false
+        end
 
         local replacementRoot = replacement:FindFirstChild("CursorRoot")
-        if not replacementRoot then pcall(function() replacement:Destroy() end); return false end
+        if not replacementRoot then
+            pcall(function() replacement:Destroy() end)
+            return false
+        end
 
         cursorGui = replacement
         root = replacementRoot
@@ -12976,7 +13009,12 @@ do
         secondText = replacementRoot:FindFirstChild("SecondText")
         runtime.MainText = mainText
         runtime.SecondText = secondText
-        return mainText ~= nil and secondText ~= nil
+
+        pcall(function()
+            replacement.Enabled = true
+            replacementRoot.Visible = true
+        end)
+        return cursorTreeHealthy()
     end
 
     local function viewportCenter()
@@ -12986,13 +13024,23 @@ do
     end
 
     local function cursorCenter()
+        local center = viewportCenter()
         if tostring(settings.PositionMode or "Mouse") == "Center" then
-            return viewportCenter()
+            return center
         end
-        if (not window or not window.Enabled) and uis.MouseBehavior == Enum.MouseBehavior.LockCenter then
-            return viewportCenter()
+
+        if (not window or not window.Enabled) and uis.MouseBehavior ~= Enum.MouseBehavior.Default then
+            return center
         end
-        local pos = uis:GetMouseLocation()
+
+        local ok, pos = pcall(function() return uis:GetMouseLocation() end)
+        if not ok or not pos then return center end
+
+        local camera = workspace.CurrentCamera
+        local viewport = camera and camera.ViewportSize or Vector2.new(1920,1080)
+        if pos.X < -32 or pos.Y < -32 or pos.X > viewport.X + 32 or pos.Y > viewport.Y + 32 then
+            return center
+        end
         return Vector2.new(pos.X,pos.Y)
     end
 
@@ -13024,7 +13072,11 @@ do
         if not repairCursorGui() then return end
 
         local enabled = settings.Enabled ~= false
-        cursorGui.Enabled = enabled
+        pcall(function()
+            cursorGui.Enabled = enabled
+            cursorGui.DisplayOrder = 2147483647
+            root.Visible = enabled
+        end)
         if not enabled then return end
 
         local center = cursorCenter()
@@ -13161,22 +13213,40 @@ do
         secondText.Position = UDim2.fromOffset(0,textY + mainText.TextSize + 4)
     end
 
+    local cursorRenderBindName = "DevKageCursor_" .. cursorInstanceId
+
     function runtime:Destroy()
         if self.Destroyed then return end
         self.Destroyed = true
+        pcall(function() RunService:UnbindFromRenderStep(cursorRenderBindName) end)
         if self.Connection then pcall(function() self.Connection:Disconnect() end) end
         if self.Supervisor then pcall(function() self.Supervisor:Disconnect() end) end
         if self.Gui then pcall(function() self.Gui:Destroy() end) end
         if self.Template then pcall(function() self.Template:Destroy() end) end
     end
 
-    runtime.Connection = RunService.RenderStepped:Connect(updateCursor)
+    local cursorRenderBound = pcall(function()
+        RunService:BindToRenderStep(cursorRenderBindName, 2001, updateCursor)
+    end)
+
+    runtime.Connection = RunService.RenderStepped:Connect(function(dt)
+        if runtime.Destroyed then return end
+        if not cursorRenderBound then
+            updateCursor(dt)
+        elseif not cursorGui or not cursorGui.Parent or not cursorTreeHealthy() then
+            updateCursor(dt)
+        end
+    end)
+
     runtime.Supervisor = RunService.Heartbeat:Connect(function()
         if runtime.Destroyed then return end
         refreshCursorSettings()
         if repairCursorGui() then
-            cursorGui.Enabled = settings.Enabled ~= false
-            cursorGui.DisplayOrder = 2147483647
+            pcall(function()
+                cursorGui.Enabled = settings.Enabled ~= false
+                cursorGui.DisplayOrder = 2147483647
+                root.Visible = settings.Enabled ~= false
+            end)
         end
     end)
     if type(MaskShard) == "table" and type(MaskShard.Connections) == "table" then
