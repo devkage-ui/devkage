@@ -5362,9 +5362,24 @@ avatar_retry_delay            = 0.8,
 avatar_beard                  = false,
 avatar_red_horn               = false,
 avatar_blue_horn              = false,
+avatar_purple_horn            = false,
 avatar_fake_accessory         = false,
-avatar_beard_offset           = -1.56,
-avatar_horn_offset            = 1.2,
+avatar_beard_color            = Color3.fromRGB(78, 58, 42),
+avatar_beard_offset           = 0,
+avatar_beard_offset_x         = 0,
+avatar_beard_offset_z         = 0,
+avatar_beard_scale            = 1,
+avatar_beard_rotation_x       = 0,
+avatar_beard_rotation_y       = 0,
+avatar_beard_rotation_z       = 0,
+avatar_horn_color             = Color3.fromRGB(115, 65, 190),
+avatar_horn_offset            = 0,
+avatar_horn_offset_x          = 0,
+avatar_horn_offset_z          = 0,
+avatar_horn_scale             = 1,
+avatar_horn_rotation_x        = 0,
+avatar_horn_rotation_y        = 0,
+avatar_horn_rotation_z        = 0,
 avatar_rotation_x             = 0,
 avatar_rotation_y             = 0,
 avatar_rotation_z             = 0,
@@ -10457,9 +10472,13 @@ killLastAt = setmetatable({}, {__mode="k"}),
 killWatchedPlayers = setmetatable({}, {__mode="k"}),
 killCounterValues = setmetatable({}, {__mode="k"}),
 killAttributeValues = {},
+killWatchedTools = setmetatable({}, {__mode="k"}),
+killSoundInstances = setmetatable({}, {__mode="k"}),
 killCounterStarted = false,
 killAttackStarted = false,
 killRecentAttackAt = 0,
+killRecentTarget = nil,
+killRecentTargetAt = 0,
 killGlobalLastAt = 0
 }
 local PlayerESPSkyboxes = {
@@ -10567,6 +10586,71 @@ end})
 local PlayerESPSoundService=game:GetService("SoundService")
 local PlayerESPDebris=game:GetService("Debris")
 local PlayerESPContentProvider=game:GetService("ContentProvider")
+local PlayerESPKillHttpService=game:GetService("HttpService")
+local PLAYER_ESP_KILL_SOUND_ID="103966419660214"
+
+local function stopPlayerESPKillSounds()
+for sound in pairs(PlayerESPUtilityRuntime.killSoundInstances) do
+if sound then
+pcall(function() sound:Stop() end)
+pcall(function() sound:Destroy() end)
+end
+PlayerESPUtilityRuntime.killSoundInstances[sound]=nil
+end
+PlayerESPUtilityRuntime.killSound=nil
+end
+
+local function makePlayerESPKillSound(parent,suffix)
+if not parent then return nil end
+local sound=Instance.new("Sound")
+sound.Name="DKKS_"..tostring(suffix or "A").."_"..PlayerESPKillHttpService:GenerateGUID(false):gsub("%-","")
+sound.SoundId="rbxassetid://"..PLAYER_ESP_KILL_SOUND_ID
+sound.Volume=math.clamp(tonumber(VisualsState.kill_sound_volume) or 50,0,100)/100
+sound.PlaybackSpeed=1
+sound.Looped=false
+sound.Archivable=false
+sound.Parent=parent
+PlayerESPUtilityRuntime.killSoundInstances[sound]=true
+return sound
+end
+
+local function directPlayerESPKillPlay(sound)
+if not sound or not sound.Parent then return false end
+pcall(function() sound.TimePosition=0 end)
+pcall(function() sound:Play() end)
+pcall(function() PlayerESPSoundService:PlayLocalSound(sound) end)
+return sound.IsPlaying == true
+end
+
+local function playerESPKillHosts()
+local hosts={}
+local seen={}
+local function add(host)
+if host and not seen[host] then
+seen[host]=true
+hosts[#hosts+1]=host
+end
+end
+add(LocalPlayer:FindFirstChildOfClass("PlayerGui"))
+add(workspace.CurrentCamera)
+add(PlayerESPSoundService)
+return hosts
+end
+
+local function registerPlayerESPKillConnection(connection)
+if not connection then return connection end
+if type(MaskShard)=="table" and type(MaskShard.Connections)=="table" then
+MaskShard.Connections[#MaskShard.Connections+1]=connection
+end
+return connection
+end
+
+local function createPlayerESPKillConnection(signal,callback)
+local connection=utility:CreateConnection(signal,callback)
+registerPlayerESPKillConnection(connection)
+return connection
+end
+
 local function playPlayerESPKillSound(force)
 if not force and not VisualsState.kill_sound_enabled then return false end
 if not force then
@@ -10574,72 +10658,69 @@ local now=tick()
 if now-(tonumber(PlayerESPUtilityRuntime.killGlobalLastAt) or 0)<0.2 then return false end
 PlayerESPUtilityRuntime.killGlobalLastAt=now
 end
-local id="103966419660214"
-VisualsState.kill_sound_id=id
-if PlayerESPUtilityRuntime.killSound then
-pcall(function() PlayerESPUtilityRuntime.killSound:Stop(); PlayerESPUtilityRuntime.killSound:Destroy() end)
-PlayerESPUtilityRuntime.killSound=nil
-end
 
-local sound=Instance.new("Sound")
-sound.Name="DevKage_KillSound"
-sound.SoundId="rbxassetid://"..id
-sound.Volume=math.clamp(tonumber(VisualsState.kill_sound_volume) or 50,0,100)/100
-sound.PlaybackSpeed=1
-sound.Looped=false
-sound.Parent=PlayerESPSoundService
-PlayerESPUtilityRuntime.killSound=sound
+VisualsState.kill_sound_id=PLAYER_ESP_KILL_SOUND_ID
+stopPlayerESPKillSounds()
 
-local function tryPlay(targetSound)
-if not targetSound or not targetSound.Parent then return false end
-pcall(function() targetSound.TimePosition=0 end)
-local played=false
-pcall(function()
-PlayerESPSoundService:PlayLocalSound(targetSound)
-played=true
-end)
-pcall(function()
-if not targetSound.IsPlaying then targetSound:Play() end
-end)
-return played or targetSound.IsPlaying
-end
+local hosts=playerESPKillHosts()
+if #hosts==0 then return false end
 
-tryPlay(sound)
-
-task.spawn(function()
-if not sound.Parent then return end
-pcall(function() PlayerESPContentProvider:PreloadAsync({sound}) end)
-if not sound.Parent then return end
-if sound.IsLoaded or sound.TimeLength>0 then
-tryPlay(sound)
-end
-end)
+local primary=makePlayerESPKillSound(hosts[1],"Primary")
+if not primary then return false end
+PlayerESPUtilityRuntime.killSound=primary
+directPlayerESPKillPlay(primary)
 
 local loadedConnection
-loadedConnection=sound.Loaded:Connect(function()
-if loadedConnection then pcall(function() loadedConnection:Disconnect() end) loadedConnection=nil end
-if sound.Parent and not sound.IsPlaying then tryPlay(sound) end
-end)
-
--- Some experiences aggressively manage SoundService children. If the primary
--- local sound is still not playing after loading has had a moment, retry from
--- the local camera without changing the requested asset or any other feature.
-task.delay(0.35,function()
-if not sound.Parent or sound.IsPlaying then return end
-local camera=workspace.CurrentCamera
-if not camera then
-tryPlay(sound)
-return
+loadedConnection=primary.Loaded:Connect(function()
+if loadedConnection then
+pcall(function() loadedConnection:Disconnect() end)
+loadedConnection=nil
 end
-local fallback=sound:Clone()
-fallback.Name="DevKage_KillSound_LocalFallback"
-fallback.Parent=camera
-pcall(function() PlayerESPSoundService:PlayLocalSound(fallback) end)
-pcall(function() if not fallback.IsPlaying then fallback:Play() end end)
-PlayerESPDebris:AddItem(fallback,30)
+if primary.Parent and not primary.IsPlaying then
+directPlayerESPKillPlay(primary)
+end
+end)
+registerPlayerESPKillConnection(loadedConnection)
+
+task.spawn(function()
+if not primary.Parent then return end
+pcall(function() PlayerESPContentProvider:PreloadAsync({primary}) end)
+if primary.Parent and not primary.IsPlaying then
+directPlayerESPKillPlay(primary)
+end
 end)
 
-PlayerESPDebris:AddItem(sound,30)
+task.delay(0.20,function()
+if primary.Parent and primary.IsPlaying then return end
+local host=hosts[2] or hosts[1]
+local fallback=makePlayerESPKillSound(host,"Fallback")
+if not fallback then return end
+directPlayerESPKillPlay(fallback)
+task.spawn(function()
+pcall(function() PlayerESPContentProvider:PreloadAsync({fallback}) end)
+if fallback.Parent and not fallback.IsPlaying then directPlayerESPKillPlay(fallback) end
+end)
+PlayerESPDebris:AddItem(fallback,20)
+end)
+
+task.delay(0.75,function()
+local anyPlaying=false
+for sound in pairs(PlayerESPUtilityRuntime.killSoundInstances) do
+if sound and sound.Parent and sound.IsPlaying then anyPlaying=true break end
+end
+if anyPlaying then return end
+
+local host=hosts[3] or hosts[1]
+local lastResort=makePlayerESPKillSound(host,"RemovePlay")
+if not lastResort then return end
+pcall(function()
+lastResort.PlayOnRemove=true
+lastResort:Destroy()
+end)
+PlayerESPUtilityRuntime.killSoundInstances[lastResort]=nil
+end)
+
+PlayerESPDebris:AddItem(primary,20)
 return true
 end
 
@@ -10672,9 +10753,8 @@ newHp=tonumber(newHp) or 0
 if lastHp<=0 or newHp>0 then return end
 local credited=playerESPKillCreditedToLocal(plr,humanoid)
 if not credited then
-local env=(type(getgenv)=="function" and getgenv()) or _G
-local recent=env.__DevKageLastCombatTarget
-credited=type(recent)=="table" and recent.Player==plr and (tick()-(tonumber(recent.Time) or 0))<=8
+credited=PlayerESPUtilityRuntime.killRecentTarget==plr
+and (tick()-(tonumber(PlayerESPUtilityRuntime.killRecentTargetAt) or 0))<=8
 end
 if not credited and tick()-(tonumber(PlayerESPUtilityRuntime.killRecentAttackAt) or 0)<=4.0 then
 credited=true
@@ -10692,12 +10772,12 @@ task.spawn(function()
 local humanoid=character:FindFirstChildOfClass("Humanoid") or character:WaitForChild("Humanoid",8)
 if not humanoid or not humanoid.Parent then return end
 local lastHp=humanoid.Health
-utility:CreateConnection(humanoid.HealthChanged,function(newHp)
+createPlayerESPKillConnection(humanoid.HealthChanged,function(newHp)
 local previous=lastHp
 lastHp=newHp
 if previous>0 and newHp<=0 then tryPlayerESPKillSound(plr,previous,newHp,humanoid) end
 end)
-utility:CreateConnection(humanoid.Died,function()
+createPlayerESPKillConnection(humanoid.Died,function()
 tryPlayerESPKillSound(plr,math.max(lastHp,1),0,humanoid)
 end)
 end)
@@ -10706,7 +10786,7 @@ local function watchPlayerESPKillPlayer(plr)
 if not VisualsState.kill_sound_enabled or not plr or plr==LocalPlayer then return end
 if PlayerESPUtilityRuntime.killWatchedPlayers[plr] then return end
 PlayerESPUtilityRuntime.killWatchedPlayers[plr]=true
-utility:CreateConnection(plr.CharacterAdded,function(character) watchPlayerESPKillCharacter(plr,character) end)
+createPlayerESPKillConnection(plr.CharacterAdded,function(character) watchPlayerESPKillCharacter(plr,character) end)
 if plr.Character then watchPlayerESPKillCharacter(plr,plr.Character) end
 end
 
@@ -10738,7 +10818,7 @@ if not object or not killCounterName(object.Name) then return end
 if not (object:IsA("IntValue") or object:IsA("NumberValue")) then return end
 if PlayerESPUtilityRuntime.killCounterValues[object]~=nil then return end
 PlayerESPUtilityRuntime.killCounterValues[object]=tonumber(object.Value) or 0
-utility:CreateConnection(object:GetPropertyChangedSignal("Value"),function()
+createPlayerESPKillConnection(object:GetPropertyChangedSignal("Value"),function()
 updateKillCounterObject(object)
 end)
 end
@@ -10768,27 +10848,27 @@ watchKillCounterObject(object)
 end
 
 pcall(function()
-utility:CreateConnection(LocalPlayer.AttributeChanged,function(name)
+createPlayerESPKillConnection(LocalPlayer.AttributeChanged,function(name)
 updateKillAttribute(name)
 end)
 end)
-utility:CreateConnection(LocalPlayer.DescendantAdded,function(object)
+createPlayerESPKillConnection(LocalPlayer.DescendantAdded,function(object)
 task.defer(watchKillCounterObject,object)
 end)
 end
 
 local function watchLocalAttackTool(tool)
-if not tool or not tool:IsA("Tool") or tool:GetAttribute("DevKageKillSoundWatched") then return end
-pcall(function() tool:SetAttribute("DevKageKillSoundWatched",true) end)
-utility:CreateConnection(tool.Activated,function()
+if not tool or not tool:IsA("Tool") or PlayerESPUtilityRuntime.killWatchedTools[tool] then return end
+PlayerESPUtilityRuntime.killWatchedTools[tool]=true
+createPlayerESPKillConnection(tool.Activated,function()
 PlayerESPUtilityRuntime.killRecentAttackAt=tick()
 local ok,mouse=pcall(function() return LocalPlayer:GetMouse() end)
 local targetPart=ok and mouse and mouse.Target or nil
 local targetModel=targetPart and targetPart:FindFirstAncestorOfClass("Model") or nil
 local targetPlayer=targetModel and Players:GetPlayerFromCharacter(targetModel) or nil
 if targetPlayer and targetPlayer~=LocalPlayer then
-local env=(type(getgenv)=="function" and getgenv()) or _G
-env.__DevKageLastCombatTarget={Player=targetPlayer,Time=tick()}
+PlayerESPUtilityRuntime.killRecentTarget=targetPlayer
+PlayerESPUtilityRuntime.killRecentTargetAt=tick()
 end
 end)
 end
@@ -10803,11 +10883,11 @@ local targetPart=ok and mouse and mouse.Target or nil
 local targetModel=targetPart and targetPart:FindFirstAncestorOfClass("Model") or nil
 local targetPlayer=targetModel and Players:GetPlayerFromCharacter(targetModel) or nil
 if targetPlayer and targetPlayer~=LocalPlayer then
-local env=(type(getgenv)=="function" and getgenv()) or _G
-env.__DevKageLastCombatTarget={Player=targetPlayer,Time=tick()}
+PlayerESPUtilityRuntime.killRecentTarget=targetPlayer
+PlayerESPUtilityRuntime.killRecentTargetAt=tick()
 end
 end
-utility:CreateConnection(uis.InputBegan,function(input,processed)
+createPlayerESPKillConnection(uis.InputBegan,function(input,processed)
 if processed then return end
 if input.UserInputType==Enum.UserInputType.MouseButton1 or input.KeyCode==Enum.KeyCode.ButtonR2 then
 rememberPrimaryAttack()
@@ -10816,12 +10896,12 @@ end)
 local function watchCharacter(character)
 if not character then return end
 for _,child in ipairs(character:GetChildren()) do watchLocalAttackTool(child) end
-utility:CreateConnection(character.ChildAdded,function(child)
+createPlayerESPKillConnection(character.ChildAdded,function(child)
 task.defer(watchLocalAttackTool,child)
 end)
 end
 if LocalPlayer.Character then watchCharacter(LocalPlayer.Character) end
-utility:CreateConnection(LocalPlayer.CharacterAdded,function(character)
+createPlayerESPKillConnection(LocalPlayer.CharacterAdded,function(character)
 task.defer(watchCharacter,character)
 end)
 end
@@ -10858,7 +10938,7 @@ PlayerESPUtilityRuntime.killFeedTexts[object]=initialText
 if isNew and VisualsState.kill_sound_enabled and looksLikeLocalKill(initialText) then
 playPlayerESPKillSound(false)
 end
-utility:CreateConnection(object:GetPropertyChangedSignal("Text"),function()
+createPlayerESPKillConnection(object:GetPropertyChangedSignal("Text"),function()
 local text=tostring(object.Text or "")
 local previous=PlayerESPUtilityRuntime.killFeedTexts[object]
 PlayerESPUtilityRuntime.killFeedTexts[object]=text
@@ -10870,7 +10950,7 @@ end
 local playerGui=LocalPlayer:FindFirstChild("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui",8)
 if playerGui then
 for _,object in ipairs(playerGui:GetDescendants()) do inspect(object,false) end
-utility:CreateConnection(playerGui.DescendantAdded,function(object)
+createPlayerESPKillConnection(playerGui.DescendantAdded,function(object)
     task.defer(inspect,object,true)
 end)
 end
@@ -10882,7 +10962,7 @@ startLocalAttackWatcher()
 startLocalKillFeedWatcher()
 for _,plr in ipairs(Players:GetPlayers()) do watchPlayerESPKillPlayer(plr) end
 end
-utility:CreateConnection(Players.PlayerAdded,function(plr)
+createPlayerESPKillConnection(Players.PlayerAdded,function(plr)
 if VisualsState.kill_sound_enabled then watchPlayerESPKillPlayer(plr) end
 end)
 utility:CreateConnection(Lighting.ChildAdded,function(child)
@@ -10915,23 +10995,23 @@ if PlayerESPUtilityRuntime.killSound and PlayerESPUtilityRuntime.killSound.Paren
 end})
 playeresp:CreateButton({Name="Play Kill Sound",Callback=function() playPlayerESPKillSound(true) end})
 
-getgenv().__DevKagePlayKillSound=function() return playPlayerESPKillSound(true) end
-getgenv().__DevKageTryKillSound=function(plr,lastHp,newHp)
+local killSoundEnv=(type(getgenv)=="function" and getgenv()) or _G
+local exportedPlayKillSound=function() return playPlayerESPKillSound(true) end
+local exportedTryKillSound=function(plr,lastHp,newHp)
 local character=plr and plr.Character
 local humanoid=character and character:FindFirstChildOfClass("Humanoid")
 return tryPlayerESPKillSound(plr,lastHp,newHp,humanoid)
 end
+if killSoundEnv.__DevKagePlayKillSound==nil then killSoundEnv.__DevKagePlayKillSound=exportedPlayKillSound end
+if killSoundEnv.__DevKageTryKillSound==nil then killSoundEnv.__DevKageTryKillSound=exportedTryKillSound end
 
 table.insert(library.CleanupCallbacks,function()
 VisualsState.skybox_enabled=false
 restorePlayerESPOriginalSky()
-if PlayerESPUtilityRuntime.killSound then
-pcall(function() PlayerESPUtilityRuntime.killSound:Stop(); PlayerESPUtilityRuntime.killSound:Destroy() end)
-PlayerESPUtilityRuntime.killSound=nil
-end
+stopPlayerESPKillSounds()
 pcall(function()
-if getgenv().__DevKagePlayKillSound then getgenv().__DevKagePlayKillSound=nil end
-if getgenv().__DevKageTryKillSound then getgenv().__DevKageTryKillSound=nil end
+if killSoundEnv.__DevKagePlayKillSound==exportedPlayKillSound then killSoundEnv.__DevKagePlayKillSound=nil end
+if killSoundEnv.__DevKageTryKillSound==exportedTryKillSound then killSoundEnv.__DevKageTryKillSound=nil end
 end)
 end)
 
@@ -12136,58 +12216,184 @@ local function createLuxuryHornSet(character, prefix, baseColor, tipColor, glowC
     end
 end
 
-local function applyAccessorySet(character)
-    local scale = math.clamp(tonumber(VisualsState.avatar_accessory_scale) or 1, 0.2, 3)
-    local rotation = accessoryRotation()
-    local beardOffset = tonumber(VisualsState.avatar_beard_offset) or -1.56
-    local hornOffset = tonumber(VisualsState.avatar_horn_offset) or 1.2
+local BEARD_CATALOG_ASSET_ID = "12691728158"
+local PURPLE_HORNS_CATALOG_ASSET_ID = "1744060292"
+local KORBLOX_CATALOG_ASSET_ID = "139607718"
+local AvatarCatalogCache = {}
 
-    if VisualsState.avatar_beard then
-        local beard = createAttachedPart(
-            character, "Beard",
-            Vector3.new(0.82, 0.48, 0.12) * scale,
-            Color3.fromRGB(55, 35, 22),
-            CFrame.new(0, beardOffset, -0.48) * rotation
-        )
-        if beard then
-            local mesh = Instance.new("SpecialMesh")
-            mesh.MeshType = Enum.MeshType.Wedge
-            mesh.Parent = beard
+local function findCatalogAccessory(root)
+    if not root then return nil end
+    if root:IsA("Accessory") then return root end
+    local ok, accessory = pcall(function()
+        return root:FindFirstChildWhichIsA("Accessory", true)
+    end)
+    if ok then return accessory end
+    return nil
+end
+
+local function loadCatalogAccessoryTemplate(assetId)
+    assetId = tostring(assetId or ""):match("%d+")
+    if not assetId then return nil end
+    local cached = AvatarCatalogCache[assetId]
+    if cached then
+        local ok, clone = pcall(function() return cached:Clone() end)
+        if ok then return clone end
+    end
+
+    local ok, objects = pcall(function()
+        return game:GetObjects("rbxassetid://" .. assetId)
+    end)
+    if not ok or type(objects) ~= "table" then return nil end
+
+    local template = nil
+    for _, rootObject in ipairs(objects) do
+        local accessory = findCatalogAccessory(rootObject)
+        if accessory and not template then
+            local clonedOk, cloned = pcall(function() return accessory:Clone() end)
+            if clonedOk then template = cloned end
+        end
+    end
+    for _, rootObject in ipairs(objects) do
+        pcall(function() rootObject:Destroy() end)
+    end
+
+    if template then
+        AvatarCatalogCache[assetId] = template
+        local okClone, clone = pcall(function() return template:Clone() end)
+        if okClone then return clone end
+    end
+    return nil
+end
+
+local function colorAndScaleCatalogAccessory(accessory, color, scale)
+    scale = math.clamp(tonumber(scale) or 1, 0.15, 4)
+    if typeof(color) ~= "Color3" then color = Color3.new(1, 1, 1) end
+
+    for _, object in ipairs(accessory:GetDescendants()) do
+        if object:IsA("BasePart") then
+            object.CanCollide = false
+            object.CanTouch = false
+            object.CanQuery = false
+            object.Massless = true
+            object.CastShadow = false
+            pcall(function() object.Color = color end)
+            if object:IsA("MeshPart") then
+                pcall(function() object.Size = object.Size * scale end)
+            end
+        elseif object:IsA("SpecialMesh") then
+            pcall(function() object.Scale = object.Scale * scale end)
+        end
+    end
+end
+
+local function attachCatalogAccessory(character, assetId, generatedName, color, scale, offset, rotation)
+    if not character then return false end
+    local head = character:FindFirstChild("Head")
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not head or not humanoid then return false end
+
+    local accessory = loadCatalogAccessoryTemplate(assetId)
+    if not accessory then return false end
+    accessory.Name = "DevKageAvatar_" .. generatedName
+    colorAndScaleCatalogAccessory(accessory, color, scale)
+
+    local added = pcall(function()
+        humanoid:AddAccessory(accessory)
+    end)
+    if not added or accessory.Parent ~= character then
+        accessory.Parent = character
+    end
+
+    local handle = accessory:FindFirstChild("Handle")
+    if not handle or not handle:IsA("BasePart") then
+        return accessory.Parent == character
+    end
+
+    handle.CanCollide = false
+    handle.CanTouch = false
+    handle.CanQuery = false
+    handle.Massless = true
+
+    local weld = handle:FindFirstChild("AccessoryWeld")
+        or handle:FindFirstChildWhichIsA("Weld")
+        or handle:FindFirstChildWhichIsA("WeldConstraint")
+
+    local transform = (offset or CFrame.new()) * (rotation or CFrame.new())
+    if weld and weld:IsA("Weld") then
+        pcall(function() weld.C0 = weld.C0 * transform end)
+    elseif weld and weld:IsA("Motor6D") then
+        pcall(function() weld.C0 = weld.C0 * transform end)
+    else
+        for _, child in ipairs(handle:GetChildren()) do
+            if child:IsA("Weld") and child.Part0 == head then
+                pcall(function() child.C0 = child.C0 * transform end)
+                weld = child
+                break
+            end
         end
     end
 
-    if VisualsState.avatar_red_horn then
-        createLuxuryHornSet(
+    return accessory.Parent == character
+end
+
+local function specificAccessoryRotation(prefix)
+    return CFrame.Angles(
+        math.rad(tonumber(VisualsState[prefix .. "_rotation_x"]) or 0),
+        math.rad(tonumber(VisualsState[prefix .. "_rotation_y"]) or 0),
+        math.rad(tonumber(VisualsState[prefix .. "_rotation_z"]) or 0)
+    )
+end
+
+local function applyAccessorySet(character)
+    local globalScale = math.clamp(tonumber(VisualsState.avatar_accessory_scale) or 1, 0.2, 3)
+    local globalRotation = accessoryRotation()
+
+    if VisualsState.avatar_beard then
+        local beardColor = typeof(VisualsState.avatar_beard_color) == "Color3"
+            and VisualsState.avatar_beard_color or Color3.fromRGB(78, 58, 42)
+        local beardScale = globalScale * math.clamp(tonumber(VisualsState.avatar_beard_scale) or 1, 0.2, 3)
+        local beardOffset = CFrame.new(
+            tonumber(VisualsState.avatar_beard_offset_x) or 0,
+            tonumber(VisualsState.avatar_beard_offset) or 0,
+            tonumber(VisualsState.avatar_beard_offset_z) or 0
+        )
+        attachCatalogAccessory(
             character,
-            "InfernalHorn",
-            Color3.fromRGB(95, 5, 8),
-            Color3.fromRGB(255, 74, 18),
-            Color3.fromRGB(255, 185, 45),
-            hornOffset,
-            rotation,
-            scale
+            BEARD_CATALOG_ASSET_ID,
+            "OldManBeard",
+            beardColor,
+            beardScale,
+            beardOffset,
+            globalRotation * specificAccessoryRotation("avatar_beard")
         )
     end
 
-    if VisualsState.avatar_blue_horn then
-        createLuxuryHornSet(
+    if VisualsState.avatar_purple_horn then
+        local hornColor = typeof(VisualsState.avatar_horn_color) == "Color3"
+            and VisualsState.avatar_horn_color or Color3.fromRGB(115, 65, 190)
+        local hornScale = globalScale * math.clamp(tonumber(VisualsState.avatar_horn_scale) or 1, 0.2, 3)
+        local hornOffset = CFrame.new(
+            tonumber(VisualsState.avatar_horn_offset_x) or 0,
+            tonumber(VisualsState.avatar_horn_offset) or 0,
+            tonumber(VisualsState.avatar_horn_offset_z) or 0
+        )
+        attachCatalogAccessory(
             character,
-            "FrozenHorn",
-            Color3.fromRGB(12, 34, 92),
-            Color3.fromRGB(72, 190, 255),
-            Color3.fromRGB(175, 245, 255),
+            PURPLE_HORNS_CATALOG_ASSET_ID,
+            "PurpleHorns",
+            hornColor,
+            hornScale,
             hornOffset,
-            rotation,
-            scale
+            globalRotation * specificAccessoryRotation("avatar_horn")
         )
     end
 
     if VisualsState.avatar_fake_accessory then
         local fake = createAttachedPart(
             character, "FakeAccessory",
-            Vector3.new(0.42, 0.42, 0.42) * scale,
+            Vector3.new(0.42, 0.42, 0.42) * globalScale,
             Color3.fromRGB(180, 70, 255),
-            CFrame.new(0, 1.35, 0) * rotation,
+            CFrame.new(0, 1.35, 0) * globalRotation,
             Enum.PartType.Ball
         )
         if fake then
@@ -12206,6 +12412,78 @@ local function applyHeadless(character)
             setRemembered(object, "Transparency", 1)
         end
     end
+end
+
+local function catalogKorbloxMeshes()
+    if AvatarCatalogCache.__KorbloxMeshes ~= nil then
+        return AvatarCatalogCache.__KorbloxMeshes
+    end
+
+    local result = {}
+    local ok, objects = pcall(function()
+        return game:GetObjects("rbxassetid://" .. KORBLOX_CATALOG_ASSET_ID)
+    end)
+    if ok and type(objects) == "table" then
+        for _, rootObject in ipairs(objects) do
+            local candidates = {rootObject}
+            for _, descendant in ipairs(rootObject:GetDescendants()) do
+                candidates[#candidates + 1] = descendant
+            end
+            for _, object in ipairs(candidates) do
+                if object:IsA("MeshPart") then
+                    local name = object.Name:lower()
+                    local entry = {MeshId=object.MeshId, TextureID=object.TextureID}
+                    if name:find("upper",1,true) then result.upper = entry
+                    elseif name:find("foot",1,true) then result.foot = entry
+                    elseif name:find("lower",1,true) or name:find("right leg",1,true) or name=="rightleg" then result.lower = entry
+                    elseif not result.lower then result.lower = entry end
+                elseif object:IsA("CharacterMesh") then
+                    local entry = {
+                        MeshId = "rbxassetid://" .. tostring(object.MeshId),
+                        TextureID = "rbxassetid://" .. tostring(object.BaseTextureId)
+                    }
+                    if not result.lower then result.lower = entry end
+                end
+            end
+        end
+        for _, rootObject in ipairs(objects) do pcall(function() rootObject:Destroy() end) end
+    end
+
+    AvatarCatalogCache.__KorbloxMeshes = result
+    return result
+end
+
+local function tryCatalogKorblox(character)
+    local meshes = catalogKorbloxMeshes()
+    if type(meshes) ~= "table" or next(meshes) == nil then return false end
+
+    local upper = character:FindFirstChild("RightUpperLeg")
+    local lower = character:FindFirstChild("RightLowerLeg")
+    local foot = character:FindFirstChild("RightFoot")
+    local applied = false
+
+    local function apply(part, data)
+        if not part or not part:IsA("MeshPart") or type(data) ~= "table" then return false end
+        local okMesh = data.MeshId and data.MeshId ~= "" and setRemembered(part, "MeshId", data.MeshId)
+        if data.TextureID and data.TextureID ~= "" then
+            setRemembered(part, "TextureID", data.TextureID)
+        end
+        if okMesh then
+            setLocalHidden(part, false)
+            return true
+        end
+        return false
+    end
+
+    applied = apply(upper, meshes.upper or meshes.lower) or applied
+    applied = apply(lower, meshes.lower or meshes.upper) or applied
+    applied = apply(foot, meshes.foot or meshes.lower) or applied
+
+    local r6Leg = character:FindFirstChild("Right Leg")
+    if r6Leg and r6Leg:IsA("MeshPart") then
+        applied = apply(r6Leg, meshes.lower or meshes.upper) or applied
+    end
+    return applied
 end
 
 local KORBLOX_TEXTURE = "rbxassetid://902843398"
@@ -12254,6 +12532,7 @@ end
 
 local function applyKorblox(character)
     if not character then return end
+    if tryCatalogKorblox(character) then return end
 
     local upper=character:FindFirstChild("RightUpperLeg")
     local lower=character:FindFirstChild("RightLowerLeg")
@@ -12333,7 +12612,7 @@ local ragePage = window:CreatePage({Icon="rbxassetid://8547258459",Glyph="R",Siz
 local worldTextureSection = ragePage:CreateSection({Name="World Texture",Side="Left",Size=330})
 local accessoriesSection = ragePage:CreateSection({Name="Accessories",Side="Left",Size=300})
 local avatarSection = ragePage:CreateSection({Name="Avatar",Side="Right",Size=330})
-local accessorySettingsSection = ragePage:CreateSection({Name="Accessory Settings",Side="Right",Size=360})
+local accessorySettingsSection = ragePage:CreateSection({Name="Accessory Settings",Side="Right",Size=760})
 
 local function trackVisualControl(key, control)
     UI.VisualControls[key] = control
@@ -12369,6 +12648,12 @@ local function avatarSlider(section, key, name, minimum, maximum, decimals, suff
         Callback=function(v) VisualsState[key]=v; scheduleAvatarApply() end
     }))
 end
+local function avatarColor(section, key, name)
+    trackVisualControl(key, section:CreateColorpicker({
+        Name=name, State=VisualsState[key], Flag="visuals."..key,
+        Callback=function(v) VisualsState[key]=v; scheduleAvatarApply() end
+    }))
+end
 
 avatarToggle(avatarSection,"avatar_zombie_animations","Zombie Animations")
 avatarToggle(avatarSection,"avatar_korblox","Korblox")
@@ -12377,17 +12662,32 @@ avatarSlider(avatarSection,"avatar_apply_delay","Apply Delay",0,3,2,"s")
 avatarSlider(avatarSection,"avatar_retry_count","Retry Count",1,10,0,"")
 avatarSlider(avatarSection,"avatar_retry_delay","Retry Delay",0.05,3,2,"s")
 
-avatarToggle(accessoriesSection,"avatar_beard","Beard")
-avatarToggle(accessoriesSection,"avatar_red_horn","Red Horn")
-avatarToggle(accessoriesSection,"avatar_blue_horn","Blue Horn")
+avatarToggle(accessoriesSection,"avatar_beard","Old Man Beard")
+avatarToggle(accessoriesSection,"avatar_purple_horn","Purple Horns")
 avatarToggle(accessoriesSection,"avatar_fake_accessory","Fake Avatar Accessory")
 
-avatarSlider(accessorySettingsSection,"avatar_beard_offset","Beard Vertical Offset",-3,3,2,"")
-avatarSlider(accessorySettingsSection,"avatar_horn_offset","Horn Vertical Offset",-3,3,2,"")
-avatarSlider(accessorySettingsSection,"avatar_rotation_x","Rotation X",-180,180,0,"°")
-avatarSlider(accessorySettingsSection,"avatar_rotation_y","Rotation Y",-180,180,0,"°")
-avatarSlider(accessorySettingsSection,"avatar_rotation_z","Rotation Z",-180,180,0,"°")
-avatarSlider(accessorySettingsSection,"avatar_accessory_scale","Accessory Scale",0.2,3,2,"x")
+avatarColor(accessorySettingsSection,"avatar_beard_color","Beard Color")
+avatarSlider(accessorySettingsSection,"avatar_beard_scale","Beard Size",0.2,3,2,"x")
+avatarSlider(accessorySettingsSection,"avatar_beard_offset_x","Beard Left / Right",-3,3,2,"")
+avatarSlider(accessorySettingsSection,"avatar_beard_offset","Beard Up / Down",-3,3,2,"")
+avatarSlider(accessorySettingsSection,"avatar_beard_offset_z","Beard Forward / Back",-3,3,2,"")
+avatarSlider(accessorySettingsSection,"avatar_beard_rotation_x","Beard Rotation X",-180,180,0,"°")
+avatarSlider(accessorySettingsSection,"avatar_beard_rotation_y","Beard Rotation Y",-180,180,0,"°")
+avatarSlider(accessorySettingsSection,"avatar_beard_rotation_z","Beard Rotation Z",-180,180,0,"°")
+
+avatarColor(accessorySettingsSection,"avatar_horn_color","Purple Horns Color")
+avatarSlider(accessorySettingsSection,"avatar_horn_scale","Purple Horns Size",0.2,3,2,"x")
+avatarSlider(accessorySettingsSection,"avatar_horn_offset_x","Horns Left / Right",-3,3,2,"")
+avatarSlider(accessorySettingsSection,"avatar_horn_offset","Horns Up / Down",-3,3,2,"")
+avatarSlider(accessorySettingsSection,"avatar_horn_offset_z","Horns Forward / Back",-3,3,2,"")
+avatarSlider(accessorySettingsSection,"avatar_horn_rotation_x","Horns Rotation X",-180,180,0,"°")
+avatarSlider(accessorySettingsSection,"avatar_horn_rotation_y","Horns Rotation Y",-180,180,0,"°")
+avatarSlider(accessorySettingsSection,"avatar_horn_rotation_z","Horns Rotation Z",-180,180,0,"°")
+
+avatarSlider(accessorySettingsSection,"avatar_rotation_x","All Accessories Rotation X",-180,180,0,"°")
+avatarSlider(accessorySettingsSection,"avatar_rotation_y","All Accessories Rotation Y",-180,180,0,"°")
+avatarSlider(accessorySettingsSection,"avatar_rotation_z","All Accessories Rotation Z",-180,180,0,"°")
+avatarSlider(accessorySettingsSection,"avatar_accessory_scale","All Accessories Scale",0.2,3,2,"x")
 
 UI.WorldAvatarRuntime = Runtime
 
@@ -12413,8 +12713,7 @@ local textSection = mouseLockPage:CreateSection({Name="Crosshair Text",Side="Lef
 local animationSection = mouseLockPage:CreateSection({Name="Crosshair Animation",Side="Right",Size=470})
 local advancedSection = mouseLockPage:CreateSection({Name="Crosshair Glow",Side="Right",Size=300})
 
-local settings = getgenv().__DevKageCursorSettings or {}
-getgenv().__DevKageCursorSettings = settings
+local settings = {}
 
 local function syncCursorSetting(key, value)
     VisualsState[key] = value
@@ -12458,11 +12757,8 @@ for key, value in pairs(VisualsState) do
 end
 
 do
-    local env = (type(getgenv) == "function" and getgenv()) or _G
-    local oldRuntime = env.__DevKageCursorRuntime
-    if type(oldRuntime) == "table" and type(oldRuntime.Destroy) == "function" then
-        pcall(function() oldRuntime:Destroy() end)
-    end
+    local cursorHttpService = game:GetService("HttpService")
+    local cursorInstanceId = cursorHttpService:GenerateGUID(false):gsub("%-", "")
 
     local runtime = {
         Gui = nil,
@@ -12491,11 +12787,14 @@ do
     end
 
     local cursorGui = Instance.new("ScreenGui")
-    cursorGui.Name = "DevKage_CursorOverlay"
+    cursorGui.Name = "DevKage_CursorOverlay_" .. cursorInstanceId
+    local cursorProtectGui = protectgui or (syn and syn.protect_gui)
+    if type(cursorProtectGui) == "function" then pcall(cursorProtectGui, cursorGui) end
     cursorGui.IgnoreGuiInset = true
     cursorGui.ResetOnSpawn = false
     cursorGui.DisplayOrder = 1000000
     cursorGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+    pcall(function() cursorGui.OnTopOfCoreBlur = true end)
     cursorGui.Parent = getCursorHost()
 
     local root = Instance.new("Frame")
@@ -12569,8 +12868,7 @@ do
         if tostring(settings.PositionMode or "Mouse") == "Center" then
             return viewportCenter()
         end
-        local windowRuntime = env.__DevKageWindow
-        if (not windowRuntime or not windowRuntime.Enabled) and uis.MouseBehavior == Enum.MouseBehavior.LockCenter then
+        if (not window or not window.Enabled) and uis.MouseBehavior == Enum.MouseBehavior.LockCenter then
             return viewportCenter()
         end
         local pos = uis:GetMouseLocation()
@@ -12748,15 +13046,24 @@ do
         if self.Destroyed then return end
         self.Destroyed = true
         if self.Connection then pcall(function() self.Connection:Disconnect() end) end
+        if self.Supervisor then pcall(function() self.Supervisor:Disconnect() end) end
         if self.Gui and self.Gui.Parent then pcall(function() self.Gui:Destroy() end) end
-        if env.__DevKageCursorRuntime == self then env.__DevKageCursorRuntime = nil end
     end
 
     runtime.Connection = RunService.RenderStepped:Connect(updateCursor)
+    runtime.Supervisor = RunService.Heartbeat:Connect(function()
+        if runtime.Destroyed then return end
+        if not cursorGui.Parent then
+            pcall(function() cursorGui.Parent = getCursorHost() end)
+        end
+        if cursorGui.Parent then
+            cursorGui.Enabled = settings.Enabled ~= false
+        end
+    end)
     if type(MaskShard) == "table" and type(MaskShard.Connections) == "table" then
         MaskShard.Connections[#MaskShard.Connections + 1] = runtime.Connection
+        MaskShard.Connections[#MaskShard.Connections + 1] = runtime.Supervisor
     end
-    env.__DevKageCursorRuntime = runtime
 
     table.insert(library.CleanupCallbacks,function()
         runtime:Destroy()
@@ -13120,6 +13427,11 @@ if type(data.ua_favorites)=="table" then UA.favorites=data.ua_favorites end
 
 applyRuntimeState(VisualsState,data.visuals)
 applyRuntimeState(VisualsState,data)
+if VisualsState.avatar_blue_horn == true and VisualsState.avatar_purple_horn ~= true then
+VisualsState.avatar_purple_horn = true
+end
+VisualsState.avatar_blue_horn = false
+VisualsState.avatar_red_horn = false
 VisualsState.fov_value=math.clamp(tonumber(VisualsState.fov_value) or 70,1,120)
 VisualsState.third_person_distance=math.clamp(tonumber(VisualsState.third_person_distance) or 5,5,90)
 VisualsState.animation_id=tostring(VisualsState.animation_id or ""):match("%d+") or ""
