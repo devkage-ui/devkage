@@ -597,8 +597,70 @@ function library:CreateWindow(Properties)
         library.ThemeRoot = ScreenGui
 
         local PreviousMouseIconEnabled = uis.MouseIconEnabled
+        local PreviousMouseBehavior = uis.MouseBehavior
+        local MenuInputRuntime = {
+            Guarding = false,
+            SavedMouseIconEnabled = PreviousMouseIconEnabled,
+            SavedMouseBehavior = PreviousMouseBehavior,
+        }
+
+        local function saveGameplayMouseState()
+            if MenuInputRuntime.Guarding then return end
+            MenuInputRuntime.SavedMouseIconEnabled = uis.MouseIconEnabled
+            MenuInputRuntime.SavedMouseBehavior = uis.MouseBehavior
+        end
+
+        local function applyMenuMouseState()
+            if not Window.Enabled then return end
+            MenuInputRuntime.Guarding = true
+            pcall(function()
+                if uis.MouseBehavior ~= Enum.MouseBehavior.Default then
+                    uis.MouseBehavior = Enum.MouseBehavior.Default
+                end
+            end)
+            pcall(function()
+                if not uis.MouseIconEnabled then
+                    uis.MouseIconEnabled = true
+                end
+            end)
+            MenuInputRuntime.Guarding = false
+        end
+
+        local function restoreGameplayMouseState()
+            MenuInputRuntime.Guarding = true
+            pcall(function()
+                uis.MouseBehavior = MenuInputRuntime.SavedMouseBehavior or PreviousMouseBehavior
+            end)
+            pcall(function()
+                uis.MouseIconEnabled = MenuInputRuntime.SavedMouseIconEnabled
+            end)
+            MenuInputRuntime.Guarding = false
+        end
+
         if Window.Enabled then
-            uis.MouseIconEnabled = true
+            applyMenuMouseState()
+        end
+
+        local menuMouseBehaviorConnection = utility:CreateConnection(uis:GetPropertyChangedSignal("MouseBehavior"), function()
+            if Window.Enabled and not MenuInputRuntime.Guarding and uis.MouseBehavior ~= Enum.MouseBehavior.Default then
+                task.defer(applyMenuMouseState)
+            end
+        end)
+        local menuMouseIconConnection = utility:CreateConnection(uis:GetPropertyChangedSignal("MouseIconEnabled"), function()
+            if Window.Enabled and not MenuInputRuntime.Guarding and not uis.MouseIconEnabled then
+                task.defer(applyMenuMouseState)
+            end
+        end)
+        local menuMouseRenderConnection = utility:CreateConnection(game:GetService("RunService").RenderStepped, function()
+            if Window.Enabled then
+                applyMenuMouseState()
+            end
+        end)
+
+        if type(MaskShard) == "table" and type(MaskShard.Connections) == "table" then
+            MaskShard.Connections[#MaskShard.Connections + 1] = menuMouseBehaviorConnection
+            MaskShard.Connections[#MaskShard.Connections + 1] = menuMouseIconConnection
+            MaskShard.Connections[#MaskShard.Connections + 1] = menuMouseRenderConnection
         end
 
         local ScreenGui_MainFrame = utility:RenderObject("Frame", {
@@ -807,7 +869,7 @@ function library:CreateWindow(Properties)
                     pcall(function() connection:Disconnect() end)
                 end
                 if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
-                uis.MouseIconEnabled = PreviousMouseIconEnabled
+                restoreGameplayMouseState()
                 library = nil
                 utility = nil
             end
@@ -869,8 +931,14 @@ function library:CreateWindow(Properties)
         end
 
         function Window:Toggle()
-            Window.Enabled = not Window.Enabled
-            uis.MouseIconEnabled = Window.Enabled and true or PreviousMouseIconEnabled
+            if Window.Enabled then
+                Window.Enabled = false
+                restoreGameplayMouseState()
+            else
+                saveGameplayMouseState()
+                Window.Enabled = true
+                applyMenuMouseState()
+            end
             if not Window.Enabled and library.KeybindManager and library.KeybindManager.HideMenu then
                 library.KeybindManager:HideMenu()
             end
@@ -10512,6 +10580,7 @@ if PlayerESPUtilityRuntime.killSound then
 pcall(function() PlayerESPUtilityRuntime.killSound:Stop(); PlayerESPUtilityRuntime.killSound:Destroy() end)
 PlayerESPUtilityRuntime.killSound=nil
 end
+
 local sound=Instance.new("Sound")
 sound.Name="DevKage_KillSound"
 sound.SoundId="rbxassetid://"..id
@@ -10521,44 +10590,53 @@ sound.Looped=false
 sound.Parent=PlayerESPSoundService
 PlayerESPUtilityRuntime.killSound=sound
 
+local function tryPlay(targetSound)
+if not targetSound or not targetSound.Parent then return false end
+pcall(function() targetSound.TimePosition=0 end)
+local played=false
+pcall(function()
+PlayerESPSoundService:PlayLocalSound(targetSound)
+played=true
+end)
+pcall(function()
+if not targetSound.IsPlaying then targetSound:Play() end
+end)
+return played or targetSound.IsPlaying
+end
+
+tryPlay(sound)
+
 task.spawn(function()
 if not sound.Parent then return end
-local loaded=false
-local preloadFinished=false
-
-task.spawn(function()
-    pcall(function() PlayerESPContentProvider:PreloadAsync({sound}) end)
-    preloadFinished=true
-end)
-
-local began=tick()
-while sound.Parent and not sound.IsLoaded and sound.TimeLength<=0 and tick()-began<5 do
-    if preloadFinished and tick()-began>1.25 then break end
-    task.wait(0.03)
-end
-loaded=sound.IsLoaded or sound.TimeLength>0
-
+pcall(function() PlayerESPContentProvider:PreloadAsync({sound}) end)
 if not sound.Parent then return end
-sound.TimePosition=0
-local okPlay=pcall(function()
-    sound:Play()
+if sound.IsLoaded or sound.TimeLength>0 then
+tryPlay(sound)
+end
 end)
-if (not okPlay or not sound.IsPlaying) and sound.Parent then
-    pcall(function()
-        PlayerESPSoundService:PlayLocalSound(sound)
-    end)
-end
 
-if loaded then
-    task.delay(0.12,function()
-        if sound.Parent and not sound.IsPlaying then
-            pcall(function()
-                sound.TimePosition=0
-                sound:Play()
-            end)
-        end
-    end)
+local loadedConnection
+loadedConnection=sound.Loaded:Connect(function()
+if loadedConnection then pcall(function() loadedConnection:Disconnect() end) loadedConnection=nil end
+if sound.Parent and not sound.IsPlaying then tryPlay(sound) end
+end)
+
+-- Some experiences aggressively manage SoundService children. If the primary
+-- local sound is still not playing after loading has had a moment, retry from
+-- the local camera without changing the requested asset or any other feature.
+task.delay(0.35,function()
+if not sound.Parent or sound.IsPlaying then return end
+local camera=workspace.CurrentCamera
+if not camera then
+tryPlay(sound)
+return
 end
+local fallback=sound:Clone()
+fallback.Name="DevKage_KillSound_LocalFallback"
+fallback.Parent=camera
+pcall(function() PlayerESPSoundService:PlayLocalSound(fallback) end)
+pcall(function() if not fallback.IsPlaying then fallback:Play() end end)
+PlayerESPDebris:AddItem(fallback,30)
 end)
 
 PlayerESPDebris:AddItem(sound,30)
@@ -10638,6 +10716,9 @@ return lower:find("kill",1,true)~=nil
 or lower:find("elimination",1,true)~=nil
 or lower:find("elims",1,true)~=nil
 or lower:find("knockout",1,true)~=nil
+or lower=="ko"
+or lower=="kos"
+or lower:find("frag",1,true)~=nil
 end
 
 local function updateKillCounterObject(object)
@@ -10715,6 +10796,23 @@ end
 local function startLocalAttackWatcher()
 if PlayerESPUtilityRuntime.killAttackStarted then return end
 PlayerESPUtilityRuntime.killAttackStarted=true
+local function rememberPrimaryAttack()
+PlayerESPUtilityRuntime.killRecentAttackAt=tick()
+local ok,mouse=pcall(function() return LocalPlayer:GetMouse() end)
+local targetPart=ok and mouse and mouse.Target or nil
+local targetModel=targetPart and targetPart:FindFirstAncestorOfClass("Model") or nil
+local targetPlayer=targetModel and Players:GetPlayerFromCharacter(targetModel) or nil
+if targetPlayer and targetPlayer~=LocalPlayer then
+local env=(type(getgenv)=="function" and getgenv()) or _G
+env.__DevKageLastCombatTarget={Player=targetPlayer,Time=tick()}
+end
+end
+utility:CreateConnection(uis.InputBegan,function(input,processed)
+if processed then return end
+if input.UserInputType==Enum.UserInputType.MouseButton1 or input.KeyCode==Enum.KeyCode.ButtonR2 then
+rememberPrimaryAttack()
+end
+end)
 local function watchCharacter(character)
 if not character then return end
 for _,child in ipairs(character:GetChildren()) do watchLocalAttackTool(child) end
@@ -10751,11 +10849,15 @@ end
 end
 return false
 end
-local function inspect(object)
+local function inspect(object,isNew)
 if not object or not object.Parent then return end
 if not (object:IsA("TextLabel") or object:IsA("TextButton")) then return end
 if PlayerESPUtilityRuntime.killFeedTexts[object]~=nil then return end
-PlayerESPUtilityRuntime.killFeedTexts[object]=tostring(object.Text or "")
+local initialText=tostring(object.Text or "")
+PlayerESPUtilityRuntime.killFeedTexts[object]=initialText
+if isNew and VisualsState.kill_sound_enabled and looksLikeLocalKill(initialText) then
+playPlayerESPKillSound(false)
+end
 utility:CreateConnection(object:GetPropertyChangedSignal("Text"),function()
 local text=tostring(object.Text or "")
 local previous=PlayerESPUtilityRuntime.killFeedTexts[object]
@@ -10767,9 +10869,9 @@ end)
 end
 local playerGui=LocalPlayer:FindFirstChild("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui",8)
 if playerGui then
-for _,object in ipairs(playerGui:GetDescendants()) do inspect(object) end
+for _,object in ipairs(playerGui:GetDescendants()) do inspect(object,false) end
 utility:CreateConnection(playerGui.DescendantAdded,function(object)
-    task.defer(inspect,object)
+    task.defer(inspect,object,true)
 end)
 end
 end
@@ -12378,13 +12480,23 @@ do
         Destroyed = false,
     }
 
+    local function getCursorHost()
+        local host = nil
+        if type(gethui) == "function" then
+            local ok, value = pcall(gethui)
+            if ok and value then host = value end
+        end
+        if not host then host = game:GetService("CoreGui") end
+        return host
+    end
+
     local cursorGui = Instance.new("ScreenGui")
     cursorGui.Name = "DevKage_CursorOverlay"
     cursorGui.IgnoreGuiInset = true
     cursorGui.ResetOnSpawn = false
     cursorGui.DisplayOrder = 1000000
     cursorGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-    cursorGui.Parent = game:GetService("CoreGui")
+    cursorGui.Parent = getCursorHost()
 
     local root = Instance.new("Frame")
     root.Name = "CursorRoot"
@@ -12447,11 +12559,19 @@ do
     runtime.MainText = mainText
     runtime.SecondText = secondText
 
+    local function viewportCenter()
+        local camera = workspace.CurrentCamera
+        local size = camera and camera.ViewportSize or Vector2.new(1920,1080)
+        return Vector2.new(size.X * 0.5, size.Y * 0.5)
+    end
+
     local function cursorCenter()
         if tostring(settings.PositionMode or "Mouse") == "Center" then
-            local camera = workspace.CurrentCamera
-            local size = camera and camera.ViewportSize or Vector2.new(1920,1080)
-            return Vector2.new(size.X * 0.5, size.Y * 0.5)
+            return viewportCenter()
+        end
+        local windowRuntime = env.__DevKageWindow
+        if (not windowRuntime or not windowRuntime.Enabled) and uis.MouseBehavior == Enum.MouseBehavior.LockCenter then
+            return viewportCenter()
         end
         local pos = uis:GetMouseLocation()
         return Vector2.new(pos.X,pos.Y)
@@ -12480,7 +12600,11 @@ do
     end
 
     local function updateCursor(dt)
-        if runtime.Destroyed or not cursorGui.Parent then return end
+        if runtime.Destroyed then return end
+        if not cursorGui.Parent then
+            pcall(function() cursorGui.Parent = getCursorHost() end)
+            if not cursorGui.Parent then return end
+        end
 
         local enabled = settings.Enabled ~= false
         cursorGui.Enabled = enabled
@@ -12629,6 +12753,9 @@ do
     end
 
     runtime.Connection = RunService.RenderStepped:Connect(updateCursor)
+    if type(MaskShard) == "table" and type(MaskShard.Connections) == "table" then
+        MaskShard.Connections[#MaskShard.Connections + 1] = runtime.Connection
+    end
     env.__DevKageCursorRuntime = runtime
 
     table.insert(library.CleanupCallbacks,function()
