@@ -338,11 +338,16 @@ library.Theme = library.Theme or {
     UI = Color3.fromRGB(23, 23, 23),
     Toggle = Color3.fromRGB(175, 205, 75),
     Slider = Color3.fromRGB(175, 205, 75),
-    Text = Color3.fromRGB(205, 205, 205)
+    Text = Color3.fromRGB(205, 205, 205),
+    TopBar = Color3.fromRGB(255, 255, 255),
+    TopBarTransparency = 0
 }
+if library.Theme.TopBar == nil then library.Theme.TopBar = Color3.fromRGB(255, 255, 255) end
+if library.Theme.TopBarTransparency == nil then library.Theme.TopBarTransparency = 0 end
 library.ThemeUIObjects = library.ThemeUIObjects or {}
 library.ThemeToggleControls = library.ThemeToggleControls or {}
 library.ThemeSliderFrames = library.ThemeSliderFrames or {}
+library.ThemeTopBars = library.ThemeTopBars or {}
 library.ThemeObservedRoots = library.ThemeObservedRoots or {}
 library.ThemeRoot = library.ThemeRoot or nil
 
@@ -356,6 +361,21 @@ function library:ThemeColorFromGray(gray)
         math.clamp(base.G * scale, 0, 1),
         math.clamp(base.B * scale, 0, 1)
     )
+end
+
+function library:RegisterThemeTopBar(bar)
+    if not bar or not bar:IsA("ImageLabel") then return bar end
+    self.ThemeTopBars[#self.ThemeTopBars + 1] = bar
+    pcall(function()
+        bar.ImageColor3 = self.Theme.TopBar
+        bar.ImageTransparency = math.clamp(tonumber(self.Theme.TopBarTransparency) or 0, 0, 1)
+    end)
+    return bar
+end
+
+function library:SetTopBarTransparency(value)
+    self.Theme.TopBarTransparency = math.clamp(tonumber(value) or 0, 0, 1)
+    self:ApplyTheme()
 end
 
 function utility:RegisterThemeObject(Render, RenderProperties)
@@ -470,6 +490,18 @@ function library:ApplyTheme()
         end
     end
 
+    for index = #self.ThemeTopBars, 1, -1 do
+        local bar = self.ThemeTopBars[index]
+        if not bar or bar.Parent == nil then
+            table.remove(self.ThemeTopBars, index)
+        else
+            pcall(function()
+                bar.ImageColor3 = self.Theme.TopBar
+                bar.ImageTransparency = math.clamp(tonumber(self.Theme.TopBarTransparency) or 0, 0, 1)
+            end)
+        end
+    end
+
     local function applyRoot(root)
         if not root or root.Parent == nil then return end
         self:ObserveThemeRoot(root)
@@ -485,7 +517,7 @@ end
 
 function library:SetThemeColor(kind, color)
     if typeof(color) ~= "Color3" then return false end
-    if kind ~= "UI" and kind ~= "Toggle" and kind ~= "Slider" and kind ~= "Text" then return false end
+    if kind ~= "UI" and kind ~= "Toggle" and kind ~= "Slider" and kind ~= "Text" and kind ~= "TopBar" then return false end
     self.Theme[kind] = color
     self:ApplyTheme()
     return true
@@ -596,71 +628,109 @@ function library:CreateWindow(Properties)
         Window.Root = ScreenGui
         library.ThemeRoot = ScreenGui
 
+        local CursorLayer = Instance.new("ScreenGui")
+        CursorLayer.Name = "DevKage_CursorLayer_" .. game:GetService("HttpService"):GenerateGUID(false):gsub("%-", "")
+        CursorLayer.DisplayOrder = 2147483647
+        CursorLayer.Enabled = true
+        CursorLayer.IgnoreGuiInset = true
+        CursorLayer.ResetOnSpawn = false
+        CursorLayer.ZIndexBehavior = Enum.ZIndexBehavior.Global
+        CursorLayer.Parent = ScreenGui.Parent
+        Window.CursorLayer = CursorLayer
+
         local PreviousMouseIconEnabled = uis.MouseIconEnabled
         local PreviousMouseBehavior = uis.MouseBehavior
         local MenuInputRuntime = {
             Guarding = false,
-            SavedMouseIconEnabled = PreviousMouseIconEnabled,
-            SavedMouseBehavior = PreviousMouseBehavior,
         }
-
-        local function saveGameplayMouseState()
-            if MenuInputRuntime.Guarding then return end
-            MenuInputRuntime.SavedMouseIconEnabled = uis.MouseIconEnabled
-            MenuInputRuntime.SavedMouseBehavior = uis.MouseBehavior
-        end
+        local MenuRunService = game:GetService("RunService")
+        local MenuHttpService = game:GetService("HttpService")
+        local MenuMouseBindName = "DevKageMenuMouse_" .. MenuHttpService:GenerateGUID(false):gsub("%-", "")
 
         local function applyMenuMouseState()
             if not Window.Enabled then return end
             MenuInputRuntime.Guarding = true
             pcall(function()
-                if uis.MouseBehavior ~= Enum.MouseBehavior.Default then
-                    uis.MouseBehavior = Enum.MouseBehavior.Default
-                end
+                uis.MouseBehavior = Enum.MouseBehavior.Default
             end)
             pcall(function()
-                if not uis.MouseIconEnabled then
-                    uis.MouseIconEnabled = true
-                end
+                uis.MouseIconEnabled = true
             end)
             MenuInputRuntime.Guarding = false
+        end
+
+        local function applyGameplayMouseState()
+            if Window.Enabled then return end
+            MenuInputRuntime.Guarding = true
+            pcall(function()
+                uis.MouseBehavior = Enum.MouseBehavior.LockCenter
+            end)
+            pcall(function()
+                uis.MouseIconEnabled = false
+            end)
+            MenuInputRuntime.Guarding = false
+        end
+
+        local function applyRequestedMouseState()
+            if Window.Enabled then
+                applyMenuMouseState()
+            else
+                applyGameplayMouseState()
+            end
         end
 
         local function restoreGameplayMouseState()
             MenuInputRuntime.Guarding = true
             pcall(function()
-                uis.MouseBehavior = MenuInputRuntime.SavedMouseBehavior or PreviousMouseBehavior
+                uis.MouseBehavior = PreviousMouseBehavior
             end)
             pcall(function()
-                uis.MouseIconEnabled = MenuInputRuntime.SavedMouseIconEnabled
+                uis.MouseIconEnabled = PreviousMouseIconEnabled
             end)
             MenuInputRuntime.Guarding = false
         end
 
-        if Window.Enabled then
-            applyMenuMouseState()
-        end
+        applyRequestedMouseState()
 
         local menuMouseBehaviorConnection = utility:CreateConnection(uis:GetPropertyChangedSignal("MouseBehavior"), function()
-            if Window.Enabled and not MenuInputRuntime.Guarding and uis.MouseBehavior ~= Enum.MouseBehavior.Default then
-                task.defer(applyMenuMouseState)
+            if not MenuInputRuntime.Guarding then
+                task.defer(applyRequestedMouseState)
             end
         end)
         local menuMouseIconConnection = utility:CreateConnection(uis:GetPropertyChangedSignal("MouseIconEnabled"), function()
-            if Window.Enabled and not MenuInputRuntime.Guarding and not uis.MouseIconEnabled then
+            if not MenuInputRuntime.Guarding then
+                task.defer(applyRequestedMouseState)
+            end
+        end)
+        local menuMouseRenderConnection = utility:CreateConnection(MenuRunService.RenderStepped, function()
+            applyRequestedMouseState()
+            if Window.Enabled then
                 task.defer(applyMenuMouseState)
             end
         end)
-        local menuMouseRenderConnection = utility:CreateConnection(game:GetService("RunService").RenderStepped, function()
-            if Window.Enabled then
-                applyMenuMouseState()
-            end
+
+        pcall(function()
+            MenuRunService:BindToRenderStep(
+                MenuMouseBindName,
+                Enum.RenderPriority.Last.Value + 1000000,
+                applyRequestedMouseState
+            )
         end)
+
+        local menuMouseLateBind = {
+            Disconnect = function()
+                pcall(function()
+                    MenuRunService:UnbindFromRenderStep(MenuMouseBindName)
+                end)
+            end
+        }
+        library.Connections[#library.Connections + 1] = menuMouseLateBind
 
         if type(MaskShard) == "table" and type(MaskShard.Connections) == "table" then
             MaskShard.Connections[#MaskShard.Connections + 1] = menuMouseBehaviorConnection
             MaskShard.Connections[#MaskShard.Connections + 1] = menuMouseIconConnection
             MaskShard.Connections[#MaskShard.Connections + 1] = menuMouseRenderConnection
+            MaskShard.Connections[#MaskShard.Connections + 1] = menuMouseLateBind
         end
 
         local ScreenGui_MainFrame = utility:RenderObject("Frame", {
@@ -749,7 +819,7 @@ function library:CreateWindow(Properties)
             Position            = UDim2.new(0, 1, 0, 0),
             Size                = UDim2.new(1, -1, 1, 0)
         })
-        utility:RenderObject("ImageLabel", {
+        local MainRainbowTopBar = utility:RenderObject("ImageLabel", {
             BackgroundColor3    = Color3.fromRGB(0, 0, 0),
             BackgroundTransparency = 1,
             BorderColor3        = Color3.fromRGB(0, 0, 0),
@@ -758,8 +828,10 @@ function library:CreateWindow(Properties)
             Position            = UDim2.new(0, 1, 0, 1),
             Size                = UDim2.new(1, -2, 1, -2),
             Image               = "rbxassetid://8508019876",
-            ImageColor3         = Color3.fromRGB(255, 255, 255)
+            ImageColor3         = library.Theme.TopBar,
+            ImageTransparency   = math.clamp(tonumber(library.Theme.TopBarTransparency) or 0, 0, 1)
         })
+        library:RegisterThemeTopBar(MainRainbowTopBar)
         local Pages_InnerBorder_InnerFrame = utility:RenderObject("Frame", {
             BackgroundColor3    = Color3.fromRGB(20, 20, 20),
             BackgroundTransparency = 0,
@@ -869,6 +941,7 @@ function library:CreateWindow(Properties)
                     pcall(function() connection:Disconnect() end)
                 end
                 if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
+                if Window.CursorLayer and Window.CursorLayer.Parent then Window.CursorLayer:Destroy() end
                 restoreGameplayMouseState()
                 library = nil
                 utility = nil
@@ -879,6 +952,7 @@ function library:CreateWindow(Properties)
         Window["PagesHolder"] = Pages_InnerBorder_InnerFrame
         Window["ScreenGui"]   = ScreenGui
         Window["MainFrame"]    = ScreenGui_MainFrame
+        Window["CursorLayer"]  = CursorLayer
 
         do
             local dragging  = false
@@ -931,14 +1005,8 @@ function library:CreateWindow(Properties)
         end
 
         function Window:Toggle()
-            if Window.Enabled then
-                Window.Enabled = false
-                restoreGameplayMouseState()
-            else
-                saveGameplayMouseState()
-                Window.Enabled = true
-                applyMenuMouseState()
-            end
+            Window.Enabled = not Window.Enabled
+            applyRequestedMouseState()
             if not Window.Enabled and library.KeybindManager and library.KeybindManager.HideMenu then
                 library.KeybindManager:HideMenu()
             end
@@ -1200,7 +1268,7 @@ function library:CreatePage(Properties)
             ClipsDescendants     = true
         })
         utility:RenderObject("UIListLayout", {
-            Padding             = UDim.new(0, 18),
+            Padding             = UDim.new(0, 8),
             Parent              = Page_Page_Left,
             FillDirection       = "Vertical",
             HorizontalAlignment = "Left",
@@ -1209,10 +1277,10 @@ function library:CreatePage(Properties)
         utility:RenderObject("UIPadding", {
             Parent = Page_Page_Left,
             PaddingTop = UDim.new(0, 9),
-            PaddingBottom = UDim.new(0, 18)
+            PaddingBottom = UDim.new(0, 10)
         })
         utility:RenderObject("UIListLayout", {
-            Padding             = UDim.new(0, 18),
+            Padding             = UDim.new(0, 8),
             Parent              = Page_Page_Right,
             FillDirection       = "Vertical",
             HorizontalAlignment = "Left",
@@ -1221,7 +1289,7 @@ function library:CreatePage(Properties)
         utility:RenderObject("UIPadding", {
             Parent = Page_Page_Right,
             PaddingTop = UDim.new(0, 9),
-            PaddingBottom = UDim.new(0, 18)
+            PaddingBottom = UDim.new(0, 10)
         })
 
         Page["Page"]  = Page_Page
@@ -1553,9 +1621,11 @@ local function bindRainbowBar(parent, zindex)
     bar.Position = UDim2.new(0, 1, 0, 1)
     bar.Size = UDim2.new(1, -2, 1, -2)
     bar.Image = "rbxassetid://8508019876"
-    bar.ImageColor3 = Color3.fromRGB(255, 255, 255)
+    bar.ImageColor3 = library.Theme.TopBar
+    bar.ImageTransparency = math.clamp(tonumber(library.Theme.TopBarTransparency) or 0, 0, 1)
     bar.ZIndex = zindex
     bar.Parent = holder
+    library:RegisterThemeTopBar(bar)
     return bar
 end
 
@@ -5354,7 +5424,6 @@ world_texture_tile_size       = 9,
 world_texture_transparency    = 0,
 world_texture_white_only      = false,
 avatar_zombie_animations      = false,
-avatar_korblox                = false,
 avatar_headless               = false,
 avatar_apply_delay            = 0.35,
 avatar_retry_count            = 3,
@@ -12120,7 +12189,6 @@ local AVATAR_RUNTIME_ID = AvatarHttpService:GenerateGUID(false):gsub("%-","")
 local AVATAR_PREFIX = "DevKageAvatar_" .. AVATAR_RUNTIME_ID .. "_"
 local BEARD_CATALOG_ASSET_ID = 12691728158
 local PURPLE_HORNS_CATALOG_ASSET_ID = 1744060292
-local KORBLOX_CATALOG_ASSET_ID = 139607718
 local AvatarAssetCache = {}
 
 local function avatarName(name)
@@ -12531,112 +12599,6 @@ local function applyHeadless(character)
     end
 end
 
-local KORBLOX_TEXTURE="rbxassetid://902843398"
-local KORBLOX_UPPER_MESH="rbxassetid://902942096"
-local KORBLOX_LOWER_MESH="rbxassetid://902942093"
-local KORBLOX_FOOT_MESH="rbxassetid://902942089"
-
-local function getKorbloxDescriptionMeshes()
-    local cached=AvatarAssetCache.__KorbloxMeshes
-    if cached~=nil then return cached end
-
-    local result={}
-    local description=Instance.new("HumanoidDescription")
-    local configured=pcall(function()
-        description.RightLeg=KORBLOX_CATALOG_ASSET_ID
-    end)
-    if configured then
-        local model=nil
-        local ok=pcall(function()
-            model=Players:CreateHumanoidModelFromDescription(description,Enum.HumanoidRigType.R15)
-        end)
-        if ok and model then
-            for partName,key in pairs({
-                RightUpperLeg="upper",
-                RightLowerLeg="lower",
-                RightFoot="foot"
-            }) do
-                local part=model:FindFirstChild(partName)
-                if part and part:IsA("MeshPart") then
-                    result[key]={MeshId=part.MeshId,TextureID=part.TextureID}
-                end
-            end
-            pcall(function() model:Destroy() end)
-        end
-    end
-    pcall(function() description:Destroy() end)
-
-    AvatarAssetCache.__KorbloxMeshes=result
-    return result
-end
-
-local function createKorbloxReplica(character,sourcePart,meshId,textureId,suffix)
-    if not sourcePart or not sourcePart:IsA("BasePart") then return nil end
-
-    local visual=Instance.new("Part")
-    visual.Name=avatarName("Korblox_"..tostring(suffix))
-    visual.Size=sourcePart.Size
-    visual.CFrame=sourcePart.CFrame
-    visual.Color=Color3.new(1,1,1)
-    visual.Material=Enum.Material.SmoothPlastic
-    visual.Transparency=0
-    visual.CanCollide=false
-    visual.CanTouch=false
-    visual.CanQuery=false
-    visual.Massless=true
-    visual.CastShadow=false
-    visual.Parent=character
-
-    local mesh=Instance.new("SpecialMesh")
-    mesh.MeshType=Enum.MeshType.FileMesh
-    mesh.MeshId=meshId
-    mesh.TextureId=textureId
-    mesh.Parent=visual
-
-    local weld=Instance.new("WeldConstraint")
-    weld.Part0=sourcePart
-    weld.Part1=visual
-    weld.Parent=visual
-
-    setLocalHidden(sourcePart,true)
-    return visual
-end
-
-local function applyKorblox(character)
-    if not character then return end
-
-    local upper=character:FindFirstChild("RightUpperLeg")
-    local lower=character:FindFirstChild("RightLowerLeg")
-    local foot=character:FindFirstChild("RightFoot")
-    local descriptionMeshes=getKorbloxDescriptionMeshes()
-
-    local function applyMesh(part,data,fallbackMesh)
-        if not part or not part:IsA("MeshPart") then return false end
-        local meshId=(type(data)=="table" and data.MeshId~="" and data.MeshId) or fallbackMesh
-        local textureId=(type(data)=="table" and data.TextureID~="" and data.TextureID) or KORBLOX_TEXTURE
-        local meshOk=setRemembered(part,"MeshId",meshId)
-        local textureOk=setRemembered(part,"TextureID",textureId)
-        setLocalHidden(part,false)
-        return meshOk and textureOk
-    end
-
-    if upper and lower and foot then
-        local upperOk=applyMesh(upper,descriptionMeshes.upper,KORBLOX_UPPER_MESH)
-        local lowerOk=applyMesh(lower,descriptionMeshes.lower,KORBLOX_LOWER_MESH)
-        local footOk=applyMesh(foot,descriptionMeshes.foot,KORBLOX_FOOT_MESH)
-        if upperOk and lowerOk and footOk then return end
-
-        if upper then createKorbloxReplica(character,upper,KORBLOX_UPPER_MESH,KORBLOX_TEXTURE,"Upper") end
-        if lower then createKorbloxReplica(character,lower,KORBLOX_LOWER_MESH,KORBLOX_TEXTURE,"Lower") end
-        if foot then createKorbloxReplica(character,foot,KORBLOX_FOOT_MESH,KORBLOX_TEXTURE,"Foot") end
-        return
-    end
-
-    local r6Leg=character:FindFirstChild("Right Leg")
-    if r6Leg and r6Leg:IsA("BasePart") then
-        createKorbloxReplica(character,r6Leg,KORBLOX_LOWER_MESH,KORBLOX_TEXTURE,"R6")
-    end
-end
 
 local function applyAvatarNow(character)
     character = character or LocalPlayer.Character
@@ -12647,7 +12609,6 @@ local function applyAvatarNow(character)
 
     if VisualsState.avatar_zombie_animations then applyZombieAnimations(character) end
     if VisualsState.avatar_headless then applyHeadless(character) end
-    if VisualsState.avatar_korblox then applyKorblox(character) end
     applyAccessorySet(character)
 end
 
@@ -12738,7 +12699,6 @@ local function avatarColor(section, key, name)
 end
 
 avatarToggle(avatarSection,"avatar_zombie_animations","Zombie Animations")
-avatarToggle(avatarSection,"avatar_korblox","Korblox")
 avatarToggle(avatarSection,"avatar_headless","Headless")
 avatarSlider(avatarSection,"avatar_apply_delay","Apply Delay",0,3,2,"s")
 avatarSlider(avatarSection,"avatar_retry_count","Retry Count",1,10,0,"")
@@ -13012,7 +12972,10 @@ do
     end
 
     local function destroyGui()
-        if runtime.Gui then pcall(function() runtime.Gui:Destroy() end) end
+        if runtime.Root then pcall(function() runtime.Root:Destroy() end) end
+        if runtime.Gui and runtime.Gui ~= window.CursorLayer then
+            pcall(function() runtime.Gui:Destroy() end)
+        end
         runtime.Gui=nil
         runtime.Root=nil
         runtime.Lines={}
@@ -13025,18 +12988,24 @@ do
     local function buildGui()
         destroyGui()
 
-        local gui=Instance.new("ScreenGui")
-        gui.Name="DevKage_CursorOverlay_"..cursorInstanceId
-        gui.IgnoreGuiInset=true
-        gui.ResetOnSpawn=false
-        gui.DisplayOrder=2147483647
-        gui.ZIndexBehavior=Enum.ZIndexBehavior.Global
-        pcall(function() gui.OnTopOfCoreBlur=true end)
-
-        if not parentCursorGui(gui) then
-            pcall(function() gui:Destroy() end)
-            return false
+        local gui=window and window.CursorLayer or nil
+        if not gui or not gui.Parent then
+            gui=Instance.new("ScreenGui")
+            gui.Name="DevKage_CursorLayer_"..cursorInstanceId
+            gui.IgnoreGuiInset=true
+            gui.ResetOnSpawn=false
+            gui.DisplayOrder=2147483647
+            gui.ZIndexBehavior=Enum.ZIndexBehavior.Global
+            pcall(function() gui.OnTopOfCoreBlur=true end)
+            if not parentCursorGui(gui) then
+                pcall(function() gui:Destroy() end)
+                return false
+            end
+            window.CursorLayer=gui
         end
+
+        gui.Enabled=true
+        gui.DisplayOrder=2147483647
 
         local root=Instance.new("Frame")
         root.Name="CursorRoot"
@@ -13094,14 +13063,14 @@ do
 
     local function cursorCenter()
         local center=viewportCenter()
-        if tostring(settings.PositionMode or "Mouse")=="Center" then return center end
-
         local uiOpen=window and window.Enabled==true
+
         if not uiOpen then
-            local locked=uis.MouseBehavior~=Enum.MouseBehavior.Default
-            local hidden=false
-            pcall(function() hidden=uis.MouseIconEnabled==false end)
-            if locked or hidden then return center end
+            return center
+        end
+
+        if tostring(settings.PositionMode or "Mouse")=="Center" then
+            return center
         end
 
         local ok,pos=pcall(function() return uis:GetMouseLocation() end)
@@ -13281,7 +13250,7 @@ do
         local glowSpread=1+glowControl*0.16
         local glowExtra=extraControl*0.15
         local glowTransparency=math.clamp(tonumber(settings.GlowTransparency) or 0.43,0,1)
-        local useDrawing=runtime.DrawingReady==true
+        local useDrawing=runtime.DrawingReady==true and not guiOk
 
         for i=1,12 do
             local active=i<=armCount
@@ -13428,6 +13397,12 @@ do
     runtime.Supervisor=RunService.Heartbeat:Connect(function()
         if runtime.Destroyed then return end
         refreshCursorSettings()
+        if window and window.CursorLayer and not window.CursorLayer.Parent then
+            pcall(function()
+                local host=window.ScreenGui and window.ScreenGui.Parent
+                if host then window.CursorLayer.Parent=host end
+            end)
+        end
         if not guiHealthy() then pcall(buildGui) end
         if not runtime.DrawingReady then pcall(buildDrawingRenderer) end
     end)
@@ -13507,7 +13482,7 @@ UI.LuaPage = settingPage
 local luaSection = settingPage:CreateSection({ Name = "Lua Editor", Side = "Left", Size = 520 })
 local luaControls = settingPage:CreateSection({ Name = "Lua Controls", Side = "Right", Size = 300 })
 
-UI.ThemeSection = settingPage:CreateSection({ Name = "Theme Changer", Side = "Right", Size = 150 })
+UI.ThemeSection = settingPage:CreateSection({ Name = "Theme Changer", Side = "Right", Size = 215 })
 UI.ThemeControls = {}
 UI.ThemeControls.UI = UI.ThemeSection:CreateColorpicker({
     Name = "UI Color",
@@ -13532,6 +13507,24 @@ UI.ThemeControls.Text = UI.ThemeSection:CreateColorpicker({
     State = library.Theme.Text,
     Flag = "theme.text",
     Callback = function(color) library:SetThemeColor("Text", color) end
+})
+UI.ThemeControls.TopBar = UI.ThemeSection:CreateColorpicker({
+    Name = "Top Rainbow Color",
+    State = library.Theme.TopBar,
+    Flag = "theme.top_bar",
+    Callback = function(color) library:SetThemeColor("TopBar", color) end
+})
+UI.ThemeTopBarOpacity = UI.ThemeSection:CreateSlider({
+    Name = "Top Rainbow Opacity",
+    State = math.floor((1 - math.clamp(tonumber(library.Theme.TopBarTransparency) or 0, 0, 1)) * 100 + 0.5),
+    Min = 0,
+    Max = 100,
+    Decimals = 0,
+    Suffix = "%",
+    Flag = "theme.top_bar_opacity",
+    Callback = function(value)
+        library:SetTopBarTransparency(1 - (math.clamp(tonumber(value) or 100, 0, 100) / 100))
+    end
 })
 library:ApplyTheme()
 
@@ -13781,6 +13774,7 @@ end
 
 local function applyLoadedConfig(data)
 if type(data) ~= "table" then return false end
+local cursorEnabledBeforeLoad = VisualsState.devkage_cursor_enabled
 local controls=UI.Spoofer
 local profile = type(data.profile)=="table" and data.profile or data
 for key,value in pairs(profile) do
@@ -13803,6 +13797,7 @@ if type(data.ua_favorites)=="table" then UA.favorites=data.ua_favorites end
 
 applyRuntimeState(VisualsState,data.visuals)
 applyRuntimeState(VisualsState,data)
+VisualsState.devkage_cursor_enabled = cursorEnabledBeforeLoad ~= false
 if VisualsState.avatar_blue_horn == true and VisualsState.avatar_purple_horn ~= true then
 VisualsState.avatar_purple_horn = true
 end
@@ -13821,6 +13816,9 @@ if UI.ThemeControls then
 for key,control in pairs(UI.ThemeControls) do
 if library.Theme[key] then control:Set(library.Theme[key],control:GetAlpha(),true) end
 end
+end
+if UI.ThemeTopBarOpacity then
+UI.ThemeTopBarOpacity:Set(math.floor((1-math.clamp(tonumber(library.Theme.TopBarTransparency) or 0,0,1))*100+0.5),true)
 end
 applyRuntimeState(AntiAimState,data.antiAim)
 local legacyAntiAim={enabled=data.aa_enabled,mode=data.aa_mode,custom_yaw=data.aa_custom_yaw,custom_pitch=data.aa_custom_pitch,random_range=data.aa_random_range,jitter=data.aa_jitter,jitter_range=data.aa_jitter_range}
@@ -13922,14 +13920,7 @@ local configMain = configPage:CreateSection({ Name = "Configs", Side = "Left", S
 local playerSection = configPage:CreateSection({ Name = "Players", Side = "Right", Size = 500 })
 local configActions = configPage:CreateSection({ Name = "Config Auto-Load", Side = "Right", Size = 210 })
 local scriptSettingsSection = configPage:CreateSection({ Name = "Script Settings", Side = "Right", Size = 150 })
-local blacklistSection = configPage:CreateSection({ Name = "Player Blacklist", Side = "Left", Size = 250 })
-do
-local blacklistRoot = blacklistSection.Holder and blacklistSection.Holder.Parent and blacklistSection.Holder.Parent.Parent
-if blacklistRoot then
-blacklistRoot.Visible = false
-blacklistRoot.Size = UDim2.new(1,0,0,0)
-end
-end
+rebuildBlacklistList = function() end
 
 local scriptAutoLoadToggle
 local scriptSilentLoadToggle
@@ -13974,56 +13965,6 @@ end
 end
 })
 
-local selectedBlacklistId = nil
-local blacklistFrame = Instance.new("ScrollingFrame")
-blacklistFrame.Name = "BlacklistEntries"
-blacklistFrame.BackgroundColor3 = Color3.fromRGB(12,12,12)
-blacklistFrame.BorderColor3 = Color3.fromRGB(0,0,0)
-blacklistFrame.BorderSizePixel = 1
-blacklistFrame.ScrollBarThickness = 4
-blacklistFrame.ScrollBarImageColor3 = Color3.fromRGB(70,70,70)
-blacklistFrame.CanvasSize = UDim2.new(0,0,0,0)
-blacklistFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-blacklistFrame.Size = UDim2.new(1,-20,0,150)
-blacklistFrame.ZIndex = 10
-blacklistFrame.Parent = blacklistSection.Holder
-local blacklistLayout = Instance.new("UIListLayout")
-blacklistLayout.Padding = UDim.new(0,1)
-blacklistLayout.Parent = blacklistFrame
-
-rebuildBlacklistList = function()
-for _,child in ipairs(blacklistFrame:GetChildren()) do
-if child.Name=="BlacklistRow" or child.Name=="BlacklistEmpty" then child:Destroy() end
-end
-local entries={}
-for id,entry in pairs(PlayerBlacklist) do table.insert(entries,{id=id,entry=entry}) end
-table.sort(entries,function(a,b) return tostring(a.entry.displayName or a.entry.name or a.id):lower()<tostring(b.entry.displayName or b.entry.name or b.id):lower() end)
-if #entries==0 then
-local empty=Instance.new("TextLabel"); empty.Name="BlacklistEmpty"; empty.BackgroundTransparency=1; empty.Size=UDim2.new(1,-8,0,26); empty.Font=Enum.Font.Code; empty.TextSize=10; empty.TextColor3=Color3.fromRGB(125,125,125); empty.Text="No blacklisted players"; empty.ZIndex=11; empty.Parent=blacklistFrame
-return
-end
-for _,item in ipairs(entries) do
-local row=Instance.new("TextButton"); row.Name="BlacklistRow"; row.AutoButtonColor=false; row.BackgroundColor3=selectedBlacklistId==item.id and Color3.fromRGB(55,35,35) or Color3.fromRGB(25,25,25); row.BorderColor3=Color3.fromRGB(0,0,0); row.Size=UDim2.new(1,-8,0,28); row.Font=Enum.Font.Code; row.TextSize=9; row.TextColor3=Color3.fromRGB(215,215,215); row.TextXAlignment=Enum.TextXAlignment.Left; row.Text="  "..tostring(item.entry.displayName or item.entry.name or item.id).."  ["..item.id.."]"; row.ZIndex=11; row.Parent=blacklistFrame
-row.MouseButton1Click:Connect(function() selectedBlacklistId=item.id; rebuildBlacklistList() end)
-end
-end
-
-blacklistSection:CreateButton({Name="Remove Selected",Callback=function()
-if not selectedBlacklistId then library:Notify({Message="Select a blacklist entry first",Duration=3}); return end
-local player=Players:GetPlayerByUserId(tonumber(selectedBlacklistId) or -1)
-local previous=PlayerBlacklist[selectedBlacklistId]
-PlayerBlacklist[selectedBlacklistId]=nil
-local saved,err=savePlayerBlacklist()
-if saved then
-selectedBlacklistId=nil
-else
-PlayerBlacklist[tostring(selectedBlacklistId)]=previous
-end
-rebuildBlacklistList(); rebuildServerPlayerList()
-library:Notify({Message=saved and "Blacklist entry removed" or ("Blacklist save failed: "..tostring(err)),Duration=4})
-end})
-blacklistSection:CreateLabel({Text="Local blacklist storage."})
-rebuildBlacklistList()
 
 local function createConfigNameField()
 local holder = Instance.new("Frame")
@@ -14298,7 +14239,7 @@ playerSelectionCaption.Font = Enum.Font.Code
 playerSelectionCaption.TextSize = 9
 playerSelectionCaption.TextColor3 = Color3.fromRGB(150,150,150)
 playerSelectionCaption.TextXAlignment = Enum.TextXAlignment.Left
-playerSelectionCaption.Text = "Selected user"
+playerSelectionCaption.Text = "Blacklist selection"
 playerSelectionCaption.ZIndex = 10
 playerSelectionCaption.Parent = playerSection.Holder
 
@@ -14320,12 +14261,12 @@ local selectPlayerButton = Instance.new("TextButton")
 selectPlayerButton.AutoButtonColor = false
 selectPlayerButton.BackgroundColor3 = Color3.fromRGB(31,31,31)
 selectPlayerButton.BorderColor3 = Color3.fromRGB(8,8,8)
-selectPlayerButton.Size = UDim2.new(1,-20,0,24)
+selectPlayerButton.Size = UDim2.new(0.5,-12,0,24)
 selectPlayerButton.Position = UDim2.new(0,10,0,226)
 selectPlayerButton.Font = Enum.Font.Code
 selectPlayerButton.TextSize = 9
 selectPlayerButton.TextColor3 = Color3.fromRGB(205,205,205)
-selectPlayerButton.Text = "Block"
+selectPlayerButton.Text = "Blacklist"
 selectPlayerButton.ZIndex = 10
 selectPlayerButton.Parent = playerSection.Holder
 
@@ -14333,12 +14274,12 @@ local clearPlayerButton = Instance.new("TextButton")
 clearPlayerButton.AutoButtonColor = false
 clearPlayerButton.BackgroundColor3 = Color3.fromRGB(31,31,31)
 clearPlayerButton.BorderColor3 = Color3.fromRGB(8,8,8)
-clearPlayerButton.Size = UDim2.new(1,-20,0,24)
+clearPlayerButton.Size = UDim2.new(0.5,-12,0,24)
 clearPlayerButton.Position = UDim2.new(0.5,2,0,226)
 clearPlayerButton.Font = Enum.Font.Code
 clearPlayerButton.TextSize = 9
 clearPlayerButton.TextColor3 = Color3.fromRGB(205,205,205)
-clearPlayerButton.Text = "Unblock"
+clearPlayerButton.Text = "Remove"
 clearPlayerButton.ZIndex = 10
 clearPlayerButton.Parent = playerSection.Holder
 
