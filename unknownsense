@@ -643,6 +643,7 @@ function library:CreateWindow(Properties)
         local MenuInputRuntime = {
             Guarding = false,
         }
+        Window.CursorControlMode = "Free Cursor"
         local MenuRunService = game:GetService("RunService")
         local MenuHttpService = game:GetService("HttpService")
         local MenuMouseBindName = "DevKageMenuMouse_" .. MenuHttpService:GenerateGUID(false):gsub("%-", "")
@@ -662,12 +663,21 @@ function library:CreateWindow(Properties)
         local function applyGameplayMouseState()
             if Window.Enabled then return end
             MenuInputRuntime.Guarding = true
-            pcall(function()
-                uis.MouseBehavior = Enum.MouseBehavior.LockCenter
-            end)
-            pcall(function()
-                uis.MouseIconEnabled = false
-            end)
+            if Window.CursorControlMode == "Cursor Lock" then
+                pcall(function()
+                    uis.MouseBehavior = Enum.MouseBehavior.LockCenter
+                end)
+                pcall(function()
+                    uis.MouseIconEnabled = false
+                end)
+            else
+                pcall(function()
+                    uis.MouseBehavior = Enum.MouseBehavior.Default
+                end)
+                pcall(function()
+                    uis.MouseIconEnabled = true
+                end)
+            end
             MenuInputRuntime.Guarding = false
         end
 
@@ -688,6 +698,18 @@ function library:CreateWindow(Properties)
                 uis.MouseIconEnabled = PreviousMouseIconEnabled
             end)
             MenuInputRuntime.Guarding = false
+        end
+
+        function Window:SetCursorControlMode(mode)
+            mode = tostring(mode or "Free Cursor")
+            if mode ~= "Cursor Lock" then mode = "Free Cursor" end
+            Window.CursorControlMode = mode
+            applyRequestedMouseState()
+            return mode
+        end
+
+        function Window:GetCursorControlMode()
+            return Window.CursorControlMode
         end
 
         applyRequestedMouseState()
@@ -5455,6 +5477,7 @@ avatar_rotation_z             = 0,
 avatar_accessory_scale        = 1,
 devkage_cursor_enabled             = true,
 devkage_cursor_position_mode       = "Mouse",
+devkage_cursor_control_mode        = "Free Cursor",
 devkage_cursor_color               = Color3.new(1, 1, 1),
 devkage_cursor_color_secondary     = Color3.fromRGB(145, 85, 255),
 devkage_cursor_color_mode          = "Legacy",
@@ -5495,6 +5518,9 @@ skybox_preset            = "Default",
 kill_sound_enabled       = false,
 kill_sound_id            = "103966419660214",
 kill_sound_volume        = 50,
+hit_sound_enabled        = false,
+hit_sound_id             = "103966419660214",
+hit_sound_volume         = 35,
 }
 
 local ESPAppearanceRuntime = {
@@ -10541,18 +10567,21 @@ sky = nil,
 originalSky = nil,
 originalSkyCaptured = false,
 killSound = nil,
+hitSound = nil,
 killLastAt = setmetatable({}, {__mode="k"}),
+hitLastAt = setmetatable({}, {__mode="k"}),
 killWatchedPlayers = setmetatable({}, {__mode="k"}),
 killCounterValues = setmetatable({}, {__mode="k"}),
 killAttributeValues = {},
 killWatchedTools = setmetatable({}, {__mode="k"}),
-killSoundInstances = setmetatable({}, {__mode="k"}),
+combatSoundInstances = setmetatable({}, {__mode="k"}),
 killCounterStarted = false,
 killAttackStarted = false,
 killRecentAttackAt = 0,
 killRecentTarget = nil,
 killRecentTargetAt = 0,
-killGlobalLastAt = 0
+killGlobalLastAt = 0,
+hitGlobalLastAt = 0
 }
 local PlayerESPSkyboxes = {
 Default = {SkyboxBk="rbxassetid://91458024",SkyboxDn="rbxassetid://91457980",SkyboxFt="rbxassetid://91458024",SkyboxLf="rbxassetid://91458024",SkyboxRt="rbxassetid://91458024",SkyboxUp="rbxassetid://91458002"},
@@ -10659,10 +10688,11 @@ end})
 local PlayerESPSoundService=game:GetService("SoundService")
 local PlayerESPDebris=game:GetService("Debris")
 local PlayerESPContentProvider=game:GetService("ContentProvider")
-local PlayerESPKillHttpService=game:GetService("HttpService")
+local PlayerESPCombatHttpService=game:GetService("HttpService")
 local PLAYER_ESP_KILL_SOUND_ID="103966419660214"
+local PLAYER_ESP_HIT_SOUND_ID="103966419660214"
 
-local function registerPlayerESPKillConnection(connection)
+local function registerPlayerESPCombatConnection(connection)
 if not connection then return connection end
 if type(MaskShard)=="table" and type(MaskShard.Connections)=="table" then
 MaskShard.Connections[#MaskShard.Connections+1]=connection
@@ -10670,62 +10700,59 @@ end
 return connection
 end
 
-local function createPlayerESPKillConnection(signal,callback)
+local function createPlayerESPCombatConnection(signal,callback)
 local connection=utility:CreateConnection(signal,callback)
-registerPlayerESPKillConnection(connection)
+registerPlayerESPCombatConnection(connection)
 return connection
 end
 
-local function currentPlayerESPKillSoundId()
-local requested=tostring(VisualsState.kill_sound_id or ""):gsub("%D","")
-if requested=="" then requested=PLAYER_ESP_KILL_SOUND_ID end
+local function combatSoundsEnabled()
+return VisualsState.kill_sound_enabled==true or VisualsState.hit_sound_enabled==true
+end
+
+local function normalizedCombatSoundId(value,fallback)
+local requested=tostring(value or ""):gsub("%D","")
+if requested=="" then requested=tostring(fallback) end
 return requested
 end
 
-local function removeTrackedKillSound(sound)
-if not sound then return end
-PlayerESPUtilityRuntime.killSoundInstances[sound]=nil
-if PlayerESPUtilityRuntime.killSound==sound then
-PlayerESPUtilityRuntime.killSound=nil
+local function combatSoundSettings(kind)
+if kind=="hit" then
+return normalizedCombatSoundId(VisualsState.hit_sound_id,PLAYER_ESP_HIT_SOUND_ID),
+math.clamp(tonumber(VisualsState.hit_sound_volume) or 35,0,100)/100,
+VisualsState.hit_sound_enabled==true
 end
+return normalizedCombatSoundId(VisualsState.kill_sound_id,PLAYER_ESP_KILL_SOUND_ID),
+math.clamp(tonumber(VisualsState.kill_sound_volume) or 50,0,100)/100,
+VisualsState.kill_sound_enabled==true
+end
+
+local function removeCombatSound(sound)
+if not sound then return end
+PlayerESPUtilityRuntime.combatSoundInstances[sound]=nil
+if PlayerESPUtilityRuntime.killSound==sound then PlayerESPUtilityRuntime.killSound=nil end
+if PlayerESPUtilityRuntime.hitSound==sound then PlayerESPUtilityRuntime.hitSound=nil end
 pcall(function() sound:Stop() end)
 pcall(function() sound:Destroy() end)
 end
 
-local function stopPlayerESPKillSounds()
-local sounds={}
-for sound in pairs(PlayerESPUtilityRuntime.killSoundInstances) do
-sounds[#sounds+1]=sound
+local function stopCombatSounds()
+local pending={}
+for sound in pairs(PlayerESPUtilityRuntime.combatSoundInstances) do
+pending[#pending+1]=sound
 end
-for _,sound in ipairs(sounds) do
-removeTrackedKillSound(sound)
-end
+for _,sound in ipairs(pending) do removeCombatSound(sound) end
 PlayerESPUtilityRuntime.killSound=nil
+PlayerESPUtilityRuntime.hitSound=nil
 end
 
-local function makePlayerESPKillSound()
-local sound=Instance.new("Sound")
-sound.Name="DevKageKillSound_"..PlayerESPKillHttpService:GenerateGUID(false):gsub("%-","")
-sound.SoundId="rbxassetid://"..currentPlayerESPKillSoundId()
-sound.Volume=math.clamp(tonumber(VisualsState.kill_sound_volume) or 50,0,100)/100
-sound.PlaybackSpeed=1
-sound.Looped=false
-sound.Archivable=true
-sound.PlayOnRemove=false
-sound.Parent=PlayerESPSoundService
-PlayerESPUtilityRuntime.killSoundInstances[sound]=true
-PlayerESPUtilityRuntime.killSound=sound
-return sound
-end
-
-local function tryStartKillSound(sound,useLocalFallback)
+local function startCombatSound(sound)
 if not sound or not sound.Parent then return false end
-sound.Volume=math.clamp(tonumber(VisualsState.kill_sound_volume) or 50,0,100)/100
 local ok=pcall(function()
 sound.TimePosition=0
 sound:Play()
 end)
-if useLocalFallback and (not ok or not sound.IsPlaying) then
+if sound.Parent and not sound.IsPlaying then
 pcall(function()
 PlayerESPSoundService:PlayLocalSound(sound)
 end)
@@ -10733,98 +10760,85 @@ end
 return ok
 end
 
-local function playPlayerESPKillSound(force)
-if not force and not VisualsState.kill_sound_enabled then return false end
+local function playCombatSound(kind,force)
+kind=(kind=="hit") and "hit" or "kill"
+local soundId,volume,enabled=combatSoundSettings(kind)
+if not force and not enabled then return false end
 
-if not force then
 local now=tick()
-if now-(tonumber(PlayerESPUtilityRuntime.killGlobalLastAt) or 0)<0.12 then return false end
-PlayerESPUtilityRuntime.killGlobalLastAt=now
-end
+local stampKey=(kind=="hit") and "hitGlobalLastAt" or "killGlobalLastAt"
+local minGap=(kind=="hit") and 0.045 or 0.12
+if not force and now-(tonumber(PlayerESPUtilityRuntime[stampKey]) or 0)<minGap then return false end
+PlayerESPUtilityRuntime[stampKey]=now
 
-local sound=makePlayerESPKillSound()
-if not sound then return false end
+local sound=Instance.new("Sound")
+sound.Name="DevKageCombat_"..kind.."_"..PlayerESPCombatHttpService:GenerateGUID(false):gsub("%-","")
+sound.SoundId="rbxassetid://"..soundId
+sound.Volume=volume
+sound.PlaybackSpeed=1
+sound.Looped=false
+sound.Archivable=true
+sound.PlayOnRemove=false
+sound.Parent=PlayerESPSoundService
 
-local finished=false
-local function cleanupLater()
-if finished then return end
-finished=true
-task.delay(0.15,function()
-removeTrackedKillSound(sound)
-end)
-end
+PlayerESPUtilityRuntime.combatSoundInstances[sound]=true
+if kind=="hit" then PlayerESPUtilityRuntime.hitSound=sound else PlayerESPUtilityRuntime.killSound=sound end
 
 local endedConnection
 endedConnection=sound.Ended:Connect(function()
-if endedConnection then
-pcall(function() endedConnection:Disconnect() end)
-endedConnection=nil
-end
-cleanupLater()
+if endedConnection then pcall(function() endedConnection:Disconnect() end) end
+task.delay(0.05,function() removeCombatSound(sound) end)
 end)
+registerPlayerESPCombatConnection(endedConnection)
 
 local loadedConnection
 loadedConnection=sound.Loaded:Connect(function()
-if loadedConnection then
-pcall(function() loadedConnection:Disconnect() end)
-loadedConnection=nil
-end
-if sound.Parent then
-tryStartKillSound(sound,false)
-task.delay(0.06,function()
-if sound.Parent and not sound.IsPlaying then
-tryStartKillSound(sound,true)
-end
+if loadedConnection then pcall(function() loadedConnection:Disconnect() end) end
+if sound.Parent and not sound.IsPlaying then startCombatSound(sound) end
 end)
-end
-end)
+registerPlayerESPCombatConnection(loadedConnection)
 
-tryStartKillSound(sound,false)
+startCombatSound(sound)
 
 task.spawn(function()
-local preloadOk=pcall(function()
+pcall(function()
 PlayerESPContentProvider:PreloadAsync({sound})
 end)
-if sound.Parent then
-if sound.IsLoaded then
-if not sound.IsPlaying then tryStartKillSound(sound,false) end
-else
-tryStartKillSound(sound,true)
-end
-end
-if force and not preloadOk then
-pcall(function()
-library:Notify({Message="Kill sound preload failed; direct playback was attempted.",Duration=3})
-end)
-end
+if sound.Parent and not sound.IsPlaying then startCombatSound(sound) end
 end)
 
-task.delay(0.35,function()
+task.delay(0.18,function()
 if sound.Parent and not sound.IsPlaying then
-tryStartKillSound(sound,true)
+pcall(function() PlayerESPSoundService:PlayLocalSound(sound) end)
 end
 end)
 
-task.delay(3.0,function()
-if not sound.Parent then return end
-if not sound.IsLoaded and not sound.IsPlaying then
 if force then
+task.delay(2.5,function()
+if sound.Parent and not sound.IsLoaded and not sound.IsPlaying then
 pcall(function()
 library:Notify({
-Message="Sound "..currentPlayerESPKillSoundId().." did not load. Roblox may not permit this audio in the current experience.",
-Duration=5
+Message=((kind=="hit") and "Hit" or "Kill").." sound "..soundId.." could not be loaded by Roblox in this experience.",
+Duration=4
 })
 end)
 end
-removeTrackedKillSound(sound)
-end
 end)
+end
 
-PlayerESPDebris:AddItem(sound,20)
+PlayerESPDebris:AddItem(sound,15)
 return true
 end
 
-local function playerESPKillCreditedToLocal(plr,humanoid)
+local function playPlayerESPKillSound(force)
+return playCombatSound("kill",force)
+end
+
+local function playPlayerESPHitSound(force)
+return playCombatSound("hit",force)
+end
+
+local function playerESPCombatCreditedToLocal(plr,humanoid)
 if not plr or plr==LocalPlayer or not humanoid then return false end
 for _,tagName in ipairs({"creator","Creator","killer","Killer","lastHitBy","LastHitBy"}) do
 local tag=humanoid:FindFirstChild(tagName)
@@ -10846,48 +10860,78 @@ end
 return false
 end
 
+local function recentlyAttackedPlayer(plr,maxAge)
+if not plr or plr==LocalPlayer then return false end
+return PlayerESPUtilityRuntime.killRecentTarget==plr
+and tick()-(tonumber(PlayerESPUtilityRuntime.killRecentTargetAt) or 0)<=maxAge
+end
+
+local function tryPlayerESPHitSound(plr,lastHp,newHp,humanoid)
+if not VisualsState.hit_sound_enabled or not plr or plr==LocalPlayer then return end
+lastHp=tonumber(lastHp) or 0
+newHp=tonumber(newHp) or 0
+if lastHp<=0 or newHp>=lastHp or newHp<=0 then return end
+
+local credited=playerESPCombatCreditedToLocal(plr,humanoid)
+if not credited then credited=recentlyAttackedPlayer(plr,1.5) end
+if not credited then return end
+
+local now=tick()
+if now-(PlayerESPUtilityRuntime.hitLastAt[plr] or 0)<0.055 then return end
+PlayerESPUtilityRuntime.hitLastAt[plr]=now
+playPlayerESPHitSound(false)
+end
+
 local function tryPlayerESPKillSound(plr,lastHp,newHp,humanoid)
 if not VisualsState.kill_sound_enabled or not plr or plr==LocalPlayer then return end
 lastHp=tonumber(lastHp) or 0
 newHp=tonumber(newHp) or 0
 if lastHp<=0 or newHp>0 then return end
-local credited=playerESPKillCreditedToLocal(plr,humanoid)
-if not credited then
-credited=PlayerESPUtilityRuntime.killRecentTarget==plr
-and (tick()-(tonumber(PlayerESPUtilityRuntime.killRecentTargetAt) or 0))<=8
-end
-if not credited and tick()-(tonumber(PlayerESPUtilityRuntime.killRecentAttackAt) or 0)<=4.0 then
-credited=true
-end
+
+local credited=playerESPCombatCreditedToLocal(plr,humanoid)
+if not credited then credited=recentlyAttackedPlayer(plr,8) end
+if not credited and tick()-(tonumber(PlayerESPUtilityRuntime.killRecentAttackAt) or 0)<=4 then credited=true end
 if not credited then return end
+
 local now=tick()
 if now-(PlayerESPUtilityRuntime.killLastAt[plr] or 0)<0.35 then return end
 PlayerESPUtilityRuntime.killLastAt[plr]=now
 playPlayerESPKillSound(false)
 end
 
-local function watchPlayerESPKillCharacter(plr,character)
+local function watchPlayerESPCombatCharacter(plr,character)
 if not plr or plr==LocalPlayer or not character then return end
 task.spawn(function()
 local humanoid=character:FindFirstChildOfClass("Humanoid") or character:WaitForChild("Humanoid",8)
 if not humanoid or not humanoid.Parent then return end
 local lastHp=humanoid.Health
-createPlayerESPKillConnection(humanoid.HealthChanged,function(newHp)
+
+createPlayerESPCombatConnection(humanoid.HealthChanged,function(newHp)
 local previous=lastHp
 lastHp=newHp
-if previous>0 and newHp<=0 then tryPlayerESPKillSound(plr,previous,newHp,humanoid) end
+if newHp<previous then
+if newHp<=0 then
+tryPlayerESPKillSound(plr,previous,newHp,humanoid)
+else
+tryPlayerESPHitSound(plr,previous,newHp,humanoid)
+end
+end
 end)
-createPlayerESPKillConnection(humanoid.Died,function()
+
+createPlayerESPCombatConnection(humanoid.Died,function()
 tryPlayerESPKillSound(plr,math.max(lastHp,1),0,humanoid)
 end)
 end)
 end
-local function watchPlayerESPKillPlayer(plr)
-if not VisualsState.kill_sound_enabled or not plr or plr==LocalPlayer then return end
+
+local function watchPlayerESPCombatPlayer(plr)
+if not combatSoundsEnabled() or not plr or plr==LocalPlayer then return end
 if PlayerESPUtilityRuntime.killWatchedPlayers[plr] then return end
 PlayerESPUtilityRuntime.killWatchedPlayers[plr]=true
-createPlayerESPKillConnection(plr.CharacterAdded,function(character) watchPlayerESPKillCharacter(plr,character) end)
-if plr.Character then watchPlayerESPKillCharacter(plr,plr.Character) end
+createPlayerESPCombatConnection(plr.CharacterAdded,function(character)
+watchPlayerESPCombatCharacter(plr,character)
+end)
+if plr.Character then watchPlayerESPCombatCharacter(plr,plr.Character) end
 end
 
 local function killCounterName(name)
@@ -10918,7 +10962,7 @@ if not object or not killCounterName(object.Name) then return end
 if not (object:IsA("IntValue") or object:IsA("NumberValue")) then return end
 if PlayerESPUtilityRuntime.killCounterValues[object]~=nil then return end
 PlayerESPUtilityRuntime.killCounterValues[object]=tonumber(object.Value) or 0
-createPlayerESPKillConnection(object:GetPropertyChangedSignal("Value"),function()
+createPlayerESPCombatConnection(object:GetPropertyChangedSignal("Value"),function()
 updateKillCounterObject(object)
 end)
 end
@@ -10943,65 +10987,58 @@ if killCounterName(name) and tonumber(value) then
 PlayerESPUtilityRuntime.killAttributeValues[name]=tonumber(value)
 end
 end
-for _,object in ipairs(LocalPlayer:GetDescendants()) do
-watchKillCounterObject(object)
-end
+for _,object in ipairs(LocalPlayer:GetDescendants()) do watchKillCounterObject(object) end
 
 pcall(function()
-createPlayerESPKillConnection(LocalPlayer.AttributeChanged,function(name)
+createPlayerESPCombatConnection(LocalPlayer.AttributeChanged,function(name)
 updateKillAttribute(name)
 end)
 end)
-createPlayerESPKillConnection(LocalPlayer.DescendantAdded,function(object)
+
+createPlayerESPCombatConnection(LocalPlayer.DescendantAdded,function(object)
 task.defer(watchKillCounterObject,object)
 end)
+end
+
+local function rememberCombatTarget()
+PlayerESPUtilityRuntime.killRecentAttackAt=tick()
+local ok,mouse=pcall(function() return LocalPlayer:GetMouse() end)
+local targetPart=ok and mouse and mouse.Target or nil
+local targetModel=targetPart and targetPart:FindFirstAncestorOfClass("Model") or nil
+local targetPlayer=targetModel and Players:GetPlayerFromCharacter(targetModel) or nil
+if targetPlayer and targetPlayer~=LocalPlayer then
+PlayerESPUtilityRuntime.killRecentTarget=targetPlayer
+PlayerESPUtilityRuntime.killRecentTargetAt=tick()
+end
 end
 
 local function watchLocalAttackTool(tool)
 if not tool or not tool:IsA("Tool") or PlayerESPUtilityRuntime.killWatchedTools[tool] then return end
 PlayerESPUtilityRuntime.killWatchedTools[tool]=true
-createPlayerESPKillConnection(tool.Activated,function()
-PlayerESPUtilityRuntime.killRecentAttackAt=tick()
-local ok,mouse=pcall(function() return LocalPlayer:GetMouse() end)
-local targetPart=ok and mouse and mouse.Target or nil
-local targetModel=targetPart and targetPart:FindFirstAncestorOfClass("Model") or nil
-local targetPlayer=targetModel and Players:GetPlayerFromCharacter(targetModel) or nil
-if targetPlayer and targetPlayer~=LocalPlayer then
-PlayerESPUtilityRuntime.killRecentTarget=targetPlayer
-PlayerESPUtilityRuntime.killRecentTargetAt=tick()
-end
-end)
+createPlayerESPCombatConnection(tool.Activated,rememberCombatTarget)
 end
 
 local function startLocalAttackWatcher()
 if PlayerESPUtilityRuntime.killAttackStarted then return end
 PlayerESPUtilityRuntime.killAttackStarted=true
-local function rememberPrimaryAttack()
-PlayerESPUtilityRuntime.killRecentAttackAt=tick()
-local ok,mouse=pcall(function() return LocalPlayer:GetMouse() end)
-local targetPart=ok and mouse and mouse.Target or nil
-local targetModel=targetPart and targetPart:FindFirstAncestorOfClass("Model") or nil
-local targetPlayer=targetModel and Players:GetPlayerFromCharacter(targetModel) or nil
-if targetPlayer and targetPlayer~=LocalPlayer then
-PlayerESPUtilityRuntime.killRecentTarget=targetPlayer
-PlayerESPUtilityRuntime.killRecentTargetAt=tick()
-end
-end
-createPlayerESPKillConnection(uis.InputBegan,function(input,processed)
+
+createPlayerESPCombatConnection(uis.InputBegan,function(input,processed)
 if processed then return end
 if input.UserInputType==Enum.UserInputType.MouseButton1 or input.KeyCode==Enum.KeyCode.ButtonR2 then
-rememberPrimaryAttack()
+rememberCombatTarget()
 end
 end)
+
 local function watchCharacter(character)
 if not character then return end
 for _,child in ipairs(character:GetChildren()) do watchLocalAttackTool(child) end
-createPlayerESPKillConnection(character.ChildAdded,function(child)
+createPlayerESPCombatConnection(character.ChildAdded,function(child)
 task.defer(watchLocalAttackTool,child)
 end)
 end
+
 if LocalPlayer.Character then watchCharacter(LocalPlayer.Character) end
-createPlayerESPKillConnection(LocalPlayer.CharacterAdded,function(character)
+createPlayerESPCombatConnection(LocalPlayer.CharacterAdded,function(character)
 task.defer(watchCharacter,character)
 end)
 end
@@ -11010,8 +11047,9 @@ local function startLocalKillFeedWatcher()
 if PlayerESPUtilityRuntime.killFeedStarted then return end
 PlayerESPUtilityRuntime.killFeedStarted=true
 PlayerESPUtilityRuntime.killFeedTexts=PlayerESPUtilityRuntime.killFeedTexts or setmetatable({}, {__mode="k"})
-local function looksLikeLocalKill(text)
-local lower=tostring(text or ""):lower()
+
+local function looksLikeLocalKill(value)
+local lower=tostring(value or ""):lower()
 if lower=="" then return false end
 if lower:find("killed you",1,true) or lower:find("you were killed",1,true) or lower:find("you died",1,true) or lower:find("defeated by",1,true) then return false end
 if lower:find("you eliminated",1,true) or lower:find("you killed",1,true) or lower:find("you defeated",1,true) then return true end
@@ -11029,42 +11067,53 @@ end
 end
 return false
 end
+
 local function inspect(object,isNew)
 if not object or not object.Parent then return end
 if not (object:IsA("TextLabel") or object:IsA("TextButton")) then return end
 if PlayerESPUtilityRuntime.killFeedTexts[object]~=nil then return end
-local initialText=tostring(object.Text or "")
-PlayerESPUtilityRuntime.killFeedTexts[object]=initialText
-if isNew and VisualsState.kill_sound_enabled and looksLikeLocalKill(initialText) then
+local initial=tostring(object.Text or "")
+PlayerESPUtilityRuntime.killFeedTexts[object]=initial
+
+if isNew and VisualsState.kill_sound_enabled and looksLikeLocalKill(initial) then
 playPlayerESPKillSound(false)
 end
-createPlayerESPKillConnection(object:GetPropertyChangedSignal("Text"),function()
-local text=tostring(object.Text or "")
+
+createPlayerESPCombatConnection(object:GetPropertyChangedSignal("Text"),function()
+local value=tostring(object.Text or "")
 local previous=PlayerESPUtilityRuntime.killFeedTexts[object]
-PlayerESPUtilityRuntime.killFeedTexts[object]=text
-if text~=previous and VisualsState.kill_sound_enabled and looksLikeLocalKill(text) then
+PlayerESPUtilityRuntime.killFeedTexts[object]=value
+if value~=previous and VisualsState.kill_sound_enabled and looksLikeLocalKill(value) then
 playPlayerESPKillSound(false)
 end
 end)
 end
+
 local playerGui=LocalPlayer:FindFirstChild("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui",8)
 if playerGui then
 for _,object in ipairs(playerGui:GetDescendants()) do inspect(object,false) end
-createPlayerESPKillConnection(playerGui.DescendantAdded,function(object)
-    task.defer(inspect,object,true)
+createPlayerESPCombatConnection(playerGui.DescendantAdded,function(object)
+task.defer(inspect,object,true)
 end)
 end
 end
 
+local function startCombatWatchers()
+if not combatSoundsEnabled() then return end
+startLocalAttackWatcher()
 if VisualsState.kill_sound_enabled then
 startLocalKillCounterWatcher()
-startLocalAttackWatcher()
 startLocalKillFeedWatcher()
-for _,plr in ipairs(Players:GetPlayers()) do watchPlayerESPKillPlayer(plr) end
 end
-createPlayerESPKillConnection(Players.PlayerAdded,function(plr)
-if VisualsState.kill_sound_enabled then watchPlayerESPKillPlayer(plr) end
+for _,plr in ipairs(Players:GetPlayers()) do watchPlayerESPCombatPlayer(plr) end
+end
+
+if combatSoundsEnabled() then startCombatWatchers() end
+
+createPlayerESPCombatConnection(Players.PlayerAdded,function(plr)
+if combatSoundsEnabled() then watchPlayerESPCombatPlayer(plr) end
 end)
+
 utility:CreateConnection(Lighting.ChildAdded,function(child)
 if VisualsState.skybox_enabled and child:IsA("Sky") and child~=PlayerESPUtilityRuntime.sky then
 task.defer(function()
@@ -11076,43 +11125,92 @@ end)
 end
 end)
 
-VisualControls.kill_sound_enabled=playeresp:CreateToggle({Name="Kill Sound",State=VisualsState.kill_sound_enabled,Flag="visuals.kill_sound_enabled",Callback=function(v)
+VisualControls.kill_sound_enabled=playeresp:CreateToggle({
+Name="Kill Sound",
+State=VisualsState.kill_sound_enabled,
+Flag="visuals.kill_sound_enabled",
+Callback=function(v)
 VisualsState.kill_sound_enabled=v
-if v then
-startLocalKillCounterWatcher()
-startLocalAttackWatcher()
-startLocalKillFeedWatcher()
-for _,plr in ipairs(Players:GetPlayers()) do watchPlayerESPKillPlayer(plr) end
+if v then startCombatWatchers() end
 end
-end})
-VisualControls.kill_sound_id=playeresp:CreateInput({Name="Kill Sound ID",Placeholder="103966419660214",Default=tostring(VisualsState.kill_sound_id or ""):match("%d+") or "103966419660214",Numeric=true,DigitsOnly=true,MaxLength=20,Flag="visuals.kill_sound_id",Callback=function(v)
-local cleaned=tostring(v or ""):gsub("%D","")
-VisualsState.kill_sound_id=(cleaned~="" and cleaned) or "103966419660214"
-end})
-VisualControls.kill_sound_volume=playeresp:CreateSlider({Name="Kill Sound Volume",State=VisualsState.kill_sound_volume,Min=0,Max=100,Decimals=0,Suffix="%",Flag="visuals.kill_sound_volume",Callback=function(v)
+})
+
+VisualControls.kill_sound_id=playeresp:CreateInput({
+Name="Kill Sound ID",
+Placeholder=PLAYER_ESP_KILL_SOUND_ID,
+Default=normalizedCombatSoundId(VisualsState.kill_sound_id,PLAYER_ESP_KILL_SOUND_ID),
+Numeric=true,
+DigitsOnly=true,
+MaxLength=20,
+Flag="visuals.kill_sound_id",
+Callback=function(v)
+VisualsState.kill_sound_id=normalizedCombatSoundId(v,PLAYER_ESP_KILL_SOUND_ID)
+end
+})
+
+VisualControls.kill_sound_volume=playeresp:CreateSlider({
+Name="Kill Sound Volume",
+State=VisualsState.kill_sound_volume,
+Min=0,
+Max=100,
+Decimals=0,
+Suffix="%",
+Flag="visuals.kill_sound_volume",
+Callback=function(v)
 VisualsState.kill_sound_volume=math.clamp(tonumber(v) or 50,0,100)
-if PlayerESPUtilityRuntime.killSound and PlayerESPUtilityRuntime.killSound.Parent then PlayerESPUtilityRuntime.killSound.Volume=VisualsState.kill_sound_volume/100 end
-end})
+if PlayerESPUtilityRuntime.killSound and PlayerESPUtilityRuntime.killSound.Parent then
+PlayerESPUtilityRuntime.killSound.Volume=VisualsState.kill_sound_volume/100
+end
+end
+})
+
 playeresp:CreateButton({Name="Play Kill Sound",Callback=function() playPlayerESPKillSound(true) end})
 
-local killSoundEnv=(type(getgenv)=="function" and getgenv()) or _G
-local exportedPlayKillSound=function() return playPlayerESPKillSound(true) end
-local exportedTryKillSound=function(plr,lastHp,newHp)
-local character=plr and plr.Character
-local humanoid=character and character:FindFirstChildOfClass("Humanoid")
-return tryPlayerESPKillSound(plr,lastHp,newHp,humanoid)
+VisualControls.hit_sound_enabled=playeresp:CreateToggle({
+Name="Hit Sound",
+State=VisualsState.hit_sound_enabled,
+Flag="visuals.hit_sound_enabled",
+Callback=function(v)
+VisualsState.hit_sound_enabled=v
+if v then startCombatWatchers() end
 end
-if killSoundEnv.__DevKagePlayKillSound==nil then killSoundEnv.__DevKagePlayKillSound=exportedPlayKillSound end
-if killSoundEnv.__DevKageTryKillSound==nil then killSoundEnv.__DevKageTryKillSound=exportedTryKillSound end
+})
+
+VisualControls.hit_sound_id=playeresp:CreateInput({
+Name="Hit Sound ID",
+Placeholder=PLAYER_ESP_HIT_SOUND_ID,
+Default=normalizedCombatSoundId(VisualsState.hit_sound_id,PLAYER_ESP_HIT_SOUND_ID),
+Numeric=true,
+DigitsOnly=true,
+MaxLength=20,
+Flag="visuals.hit_sound_id",
+Callback=function(v)
+VisualsState.hit_sound_id=normalizedCombatSoundId(v,PLAYER_ESP_HIT_SOUND_ID)
+end
+})
+
+VisualControls.hit_sound_volume=playeresp:CreateSlider({
+Name="Hit Sound Volume",
+State=VisualsState.hit_sound_volume,
+Min=0,
+Max=100,
+Decimals=0,
+Suffix="%",
+Flag="visuals.hit_sound_volume",
+Callback=function(v)
+VisualsState.hit_sound_volume=math.clamp(tonumber(v) or 35,0,100)
+if PlayerESPUtilityRuntime.hitSound and PlayerESPUtilityRuntime.hitSound.Parent then
+PlayerESPUtilityRuntime.hitSound.Volume=VisualsState.hit_sound_volume/100
+end
+end
+})
+
+playeresp:CreateButton({Name="Play Hit Sound",Callback=function() playPlayerESPHitSound(true) end})
 
 table.insert(library.CleanupCallbacks,function()
 VisualsState.skybox_enabled=false
 restorePlayerESPOriginalSky()
-stopPlayerESPKillSounds()
-pcall(function()
-if killSoundEnv.__DevKagePlayKillSound==exportedPlayKillSound then killSoundEnv.__DevKagePlayKillSound=nil end
-if killSoundEnv.__DevKageTryKillSound==exportedTryKillSound then killSoundEnv.__DevKageTryKillSound=nil end
-end)
+stopCombatSounds()
 end)
 
 if VisualsState.skybox_enabled then applyPlayerESPSkybox() end
@@ -12759,6 +12857,7 @@ local settings = {}
 local cursorStateMap = {
     devkage_cursor_enabled="Enabled",
     devkage_cursor_position_mode="PositionMode",
+    devkage_cursor_control_mode="ControlMode",
     devkage_cursor_color="Color",
     devkage_cursor_color_secondary="SecondaryColor",
     devkage_cursor_color_mode="ColorMode",
@@ -12803,6 +12902,9 @@ local function syncCursorSetting(key,value)
     VisualsState[key]=value
     local runtimeKey=cursorStateMap[key]
     if runtimeKey then settings[runtimeKey]=value end
+    if key=="devkage_cursor_control_mode" and window and window.SetCursorControlMode then
+        window:SetCursorControlMode(value)
+    end
 end
 
 refreshCursorSettings()
@@ -13064,12 +13166,9 @@ do
     local function cursorCenter()
         local center=viewportCenter()
         local uiOpen=window and window.Enabled==true
+        local controlMode=tostring(settings.ControlMode or (window and window.CursorControlMode) or "Free Cursor")
 
-        if not uiOpen then
-            return center
-        end
-
-        if tostring(settings.PositionMode or "Mouse")=="Center" then
+        if not uiOpen and controlMode=="Cursor Lock" then
             return center
         end
 
@@ -13439,7 +13538,10 @@ local function addColor(section,key,name)
 end
 
 addToggle(crosshairSection,"devkage_cursor_enabled","Enabled")
-addDropdown(crosshairSection,"devkage_cursor_position_mode","Position Mode",{"Mouse","Center"})
+addDropdown(crosshairSection,"devkage_cursor_control_mode","Cursor Control",{"Free Cursor","Cursor Lock"})
+if window and window.SetCursorControlMode then
+    window:SetCursorControlMode(VisualsState.devkage_cursor_control_mode)
+end
 addColor(crosshairSection,"devkage_cursor_color","Main Color")
 addColor(crosshairSection,"devkage_cursor_color_secondary","Secondary Color")
 addDropdown(crosshairSection,"devkage_cursor_color_mode","Color Way",{"Legacy","Solid","Two Tone","Gradient","Color Wave","RGB Wave","Ice","Purple LED","Fire","Toxic"})
@@ -13798,6 +13900,12 @@ if type(data.ua_favorites)=="table" then UA.favorites=data.ua_favorites end
 applyRuntimeState(VisualsState,data.visuals)
 applyRuntimeState(VisualsState,data)
 VisualsState.devkage_cursor_enabled = cursorEnabledBeforeLoad ~= false
+if VisualsState.devkage_cursor_control_mode ~= "Cursor Lock" then
+VisualsState.devkage_cursor_control_mode = "Free Cursor"
+end
+if window and window.SetCursorControlMode then
+window:SetCursorControlMode(VisualsState.devkage_cursor_control_mode)
+end
 if VisualsState.avatar_blue_horn == true and VisualsState.avatar_purple_horn ~= true then
 VisualsState.avatar_purple_horn = true
 end
