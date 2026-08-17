@@ -642,6 +642,8 @@ function library:CreateWindow(Properties)
         local PreviousMouseBehavior = uis.MouseBehavior
         local MenuInputRuntime = {
             Guarding = false,
+            SavedMouseIconEnabled = PreviousMouseIconEnabled,
+            SavedMouseBehavior = PreviousMouseBehavior,
         }
         Window.CursorControlMode = "Free Cursor"
         local MenuRunService = game:GetService("RunService")
@@ -660,31 +662,38 @@ function library:CreateWindow(Properties)
             MenuInputRuntime.Guarding = false
         end
 
-        local function applyGameplayMouseState()
-            if Window.Enabled then return end
+        local function captureGameplayMouseState()
+            MenuInputRuntime.SavedMouseBehavior = uis.MouseBehavior
+            MenuInputRuntime.SavedMouseIconEnabled = uis.MouseIconEnabled
+        end
+
+        local function restoreSavedMouseState()
             MenuInputRuntime.Guarding = true
-            if Window.CursorControlMode == "Cursor Lock" then
-                pcall(function()
-                    uis.MouseBehavior = Enum.MouseBehavior.LockCenter
-                end)
-                pcall(function()
-                    uis.MouseIconEnabled = false
-                end)
-            else
-                pcall(function()
-                    uis.MouseBehavior = Enum.MouseBehavior.Default
-                end)
-                pcall(function()
-                    uis.MouseIconEnabled = true
-                end)
-            end
+            pcall(function()
+                uis.MouseBehavior = MenuInputRuntime.SavedMouseBehavior
+            end)
+            pcall(function()
+                uis.MouseIconEnabled = MenuInputRuntime.SavedMouseIconEnabled
+            end)
+            MenuInputRuntime.Guarding = false
+        end
+
+        local function applyGameplayMouseState()
+            if Window.Enabled or Window.CursorControlMode ~= "Cursor Lock" then return end
+            MenuInputRuntime.Guarding = true
+            pcall(function()
+                uis.MouseBehavior = Enum.MouseBehavior.LockCenter
+            end)
+            pcall(function()
+                uis.MouseIconEnabled = false
+            end)
             MenuInputRuntime.Guarding = false
         end
 
         local function applyRequestedMouseState()
             if Window.Enabled then
                 applyMenuMouseState()
-            else
+            elseif Window.CursorControlMode == "Cursor Lock" then
                 applyGameplayMouseState()
             end
         end
@@ -703,8 +712,15 @@ function library:CreateWindow(Properties)
         function Window:SetCursorControlMode(mode)
             mode = tostring(mode or "Free Cursor")
             if mode ~= "Cursor Lock" then mode = "Free Cursor" end
+            local previousMode = Window.CursorControlMode
             Window.CursorControlMode = mode
-            applyRequestedMouseState()
+            if Window.Enabled then
+                applyMenuMouseState()
+            elseif mode == "Cursor Lock" then
+                applyGameplayMouseState()
+            elseif previousMode == "Cursor Lock" then
+                restoreSavedMouseState()
+            end
             return mode
         end
 
@@ -1027,8 +1043,18 @@ function library:CreateWindow(Properties)
         end
 
         function Window:Toggle()
-            Window.Enabled = not Window.Enabled
-            applyRequestedMouseState()
+            if Window.Enabled then
+                Window.Enabled = false
+                if Window.CursorControlMode == "Cursor Lock" then
+                    applyGameplayMouseState()
+                else
+                    restoreSavedMouseState()
+                end
+            else
+                captureGameplayMouseState()
+                Window.Enabled = true
+                applyMenuMouseState()
+            end
             if not Window.Enabled and library.KeybindManager and library.KeybindManager.HideMenu then
                 library.KeybindManager:HideMenu()
             end
@@ -1614,6 +1640,11 @@ library.KeybindManager = library.KeybindManager or {
     CaptureControl = nil,
     InputReady = false,
     CleanupReady = false,
+    ModAlertFrame = nil,
+    ModAlertLabel = nil,
+    ModAlertStroke = nil,
+    ModAlertActive = false,
+    ModAlertFlashConnection = nil,
 }
 
 local BindManager = library.KeybindManager
@@ -1744,6 +1775,57 @@ function BindManager:EnsureUI(window)
     local activePadding = Instance.new("UIPadding")
     activePadding.PaddingBottom = UDim.new(0, 5)
     activePadding.Parent = activeList
+
+    local modAlert = Instance.new("Frame")
+    modAlert.Name = "ModAlert"
+    modAlert.BackgroundColor3 = Color3.fromRGB(75, 10, 10)
+    modAlert.BorderSizePixel = 0
+    modAlert.Size = UDim2.new(1, 0, 0, 20)
+    modAlert.LayoutOrder = -100000
+    modAlert.Visible = false
+    modAlert.ZIndex = 40004
+    modAlert.Parent = activeList
+    self.ModAlertFrame = modAlert
+
+    local modAlertStroke = Instance.new("UIStroke")
+    modAlertStroke.Color = Color3.fromRGB(255, 35, 35)
+    modAlertStroke.Thickness = 1
+    modAlertStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    modAlertStroke.Parent = modAlert
+    self.ModAlertStroke = modAlertStroke
+
+    local modAlertLabel = Instance.new("TextLabel")
+    modAlertLabel.Name = "AlertText"
+    modAlertLabel.BackgroundTransparency = 1
+    modAlertLabel.Size = UDim2.fromScale(1, 1)
+    modAlertLabel.Font = Enum.Font.Code
+    modAlertLabel.Text = "!mod detected!"
+    modAlertLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
+    modAlertLabel.TextSize = 10
+    modAlertLabel.TextStrokeColor3 = Color3.fromRGB(40, 0, 0)
+    modAlertLabel.TextStrokeTransparency = 0.2
+    modAlertLabel.TextXAlignment = Enum.TextXAlignment.Center
+    modAlertLabel.ZIndex = 40005
+    modAlertLabel.Parent = modAlert
+    self.ModAlertLabel = modAlertLabel
+
+    if not self.ModAlertFlashConnection then
+        local modRunService = game:GetService("RunService")
+        self.ModAlertFlashConnection = utility:CreateConnection(modRunService.RenderStepped, function()
+            if not self.ModAlertActive or not self.ModAlertFrame or not self.ModAlertFrame.Parent then return end
+            local pulse = math.sin(os.clock() * 7) * 0.5 + 0.5
+            local dark = Color3.fromRGB(58, 5, 5)
+            local bright = Color3.fromRGB(120, 12, 12)
+            local textDark = Color3.fromRGB(220, 30, 30)
+            local textBright = Color3.fromRGB(255, 105, 105)
+            self.ModAlertFrame.BackgroundColor3 = dark:Lerp(bright, pulse)
+            if self.ModAlertLabel then self.ModAlertLabel.TextColor3 = textDark:Lerp(textBright, pulse) end
+            if self.ModAlertStroke then self.ModAlertStroke.Color = Color3.fromRGB(190, 20, 20):Lerp(Color3.fromRGB(255, 70, 70), pulse) end
+        end)
+        if type(MaskShard) == "table" and type(MaskShard.Connections) == "table" then
+            MaskShard.Connections[#MaskShard.Connections + 1] = self.ModAlertFlashConnection
+        end
+    end
 
     local menu = Instance.new("Frame")
     menu.Name = "BindMenu"
@@ -1935,8 +2017,24 @@ function BindManager:EnsureUI(window)
         table.insert(library.CleanupCallbacks, function()
             if self.Overlay and self.Overlay.Parent then self.Overlay:Destroy() end
             self.Overlay = nil
+            self.ModAlertFrame = nil
+            self.ModAlertLabel = nil
+            self.ModAlertStroke = nil
+            self.ModAlertActive = false
+            self.ModAlertFlashConnection = nil
         end)
     end
+end
+
+function BindManager:SetModAlert(active, window)
+    if (not self.Overlay or not self.Overlay.Parent) and window then
+        self:EnsureUI(window)
+    end
+    self.ModAlertActive = active == true
+    if self.ModAlertFrame then
+        self.ModAlertFrame.Visible = self.ModAlertActive
+    end
+    self:RefreshActive()
 end
 
 function BindManager:RefreshControl(control)
@@ -1994,7 +2092,7 @@ function BindManager:RefreshActive()
             state.Parent = row
         end
     end
-    self.ActiveFrame.Visible = count > 0
+    self.ActiveFrame.Visible = count > 0 or self.ModAlertActive == true
 end
 
 function BindManager:RefreshMenu()
@@ -5475,6 +5573,7 @@ avatar_rotation_x             = 0,
 avatar_rotation_y             = 0,
 avatar_rotation_z             = 0,
 avatar_accessory_scale        = 1,
+mod_detector_enabled          = false,
 devkage_cursor_enabled             = true,
 devkage_cursor_position_mode       = "Mouse",
 devkage_cursor_control_mode        = "Free Cursor",
@@ -12752,6 +12851,7 @@ end)
 local ragePage = window:CreatePage({Icon="rbxassetid://8547258459",Glyph="R",Size=UDim2.new(0,36,0,36)})
 local worldTextureSection = ragePage:CreateSection({Name="World Texture",Side="Left",Size=330})
 local accessoriesSection = ragePage:CreateSection({Name="Accessories",Side="Left",Size=300})
+local modDetectorSection = ragePage:CreateSection({Name="Mod Detector",Side="Left",Size=120})
 local avatarSection = ragePage:CreateSection({Name="Avatar",Side="Right",Size=330})
 local accessorySettingsSection = ragePage:CreateSection({Name="Accessory Settings",Side="Right",Size=760})
 
@@ -12796,6 +12896,230 @@ local function avatarColor(section, key, name)
     }))
 end
 
+local ModDetectorRuntime = {
+    Enabled = false,
+    Token = 0,
+    StaffIds = {},
+    StaffIdsReady = false,
+    Connections = {},
+    Detected = false,
+}
+
+local ModDetectorHttpService = game:GetService("HttpService")
+local ModDetectorGroupId = game.CreatorType == Enum.CreatorType.Group and tonumber(game.CreatorId) or nil
+
+local function modDetectorRoleIsStaff(roleName)
+    local normalized = " " .. tostring(roleName or ""):lower():gsub("[^%w]+", " ") .. " "
+    local words = {
+        " moderator ", " mod ", " admin ", " administrator ",
+        " staff ", " owner ", " manager ", " developer ", " dev "
+    }
+    for _, word in ipairs(words) do
+        if normalized:find(word, 1, true) then return true end
+    end
+    return false
+end
+
+local function modDetectorSetAlert(active)
+    active = active == true
+    ModDetectorRuntime.Detected = active
+    local manager = library and library.KeybindManager
+    if manager and manager.SetModAlert then
+        manager:SetModAlert(active, window)
+    end
+end
+
+local function modDetectorTrack(connection)
+    if not connection then return connection end
+    ModDetectorRuntime.Connections[#ModDetectorRuntime.Connections + 1] = connection
+    if type(MaskShard) == "table" and type(MaskShard.Connections) == "table" then
+        MaskShard.Connections[#MaskShard.Connections + 1] = connection
+    end
+    return connection
+end
+
+local function modDetectorReadJson(url)
+    local ok, body = pcall(function()
+        return game:HttpGet(url)
+    end)
+    if not ok or type(body) ~= "string" or body == "" then return nil end
+    local decodeOk, data = pcall(function()
+        return ModDetectorHttpService:JSONDecode(body)
+    end)
+    return decodeOk and data or nil
+end
+
+local function modDetectorOnlineStaffPresent()
+    if not ModDetectorGroupId then return false end
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            local ok, role = pcall(function()
+                return plr:GetRoleInGroup(ModDetectorGroupId)
+            end)
+            if ok and modDetectorRoleIsStaff(role) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function modDetectorLoadStaffIds(token)
+    if ModDetectorRuntime.StaffIdsReady then return true end
+    if not ModDetectorGroupId then return false end
+
+    local roles = modDetectorReadJson(
+        ("https://groups.roblox.com/v1/groups/%d/roles"):format(ModDetectorGroupId)
+    )
+    if token ~= ModDetectorRuntime.Token or not ModDetectorRuntime.Enabled then return false end
+    if type(roles) ~= "table" or type(roles.roles) ~= "table" then return false end
+
+    local roleIds = {}
+    for _, role in ipairs(roles.roles) do
+        if type(role) == "table" and tonumber(role.id) and modDetectorRoleIsStaff(role.name) then
+            roleIds[#roleIds + 1] = tonumber(role.id)
+        end
+    end
+
+    local collected = {}
+    for _, roleId in ipairs(roleIds) do
+        local cursor = ""
+        local pageCount = 0
+        repeat
+            if token ~= ModDetectorRuntime.Token or not ModDetectorRuntime.Enabled then return false end
+            pageCount = pageCount + 1
+            local url = ("https://groups.roblox.com/v1/groups/%d/roles/%d/users?limit=100&sortOrder=Asc"):format(
+                ModDetectorGroupId,
+                roleId
+            )
+            if cursor ~= "" then
+                url = url .. "&cursor=" .. ModDetectorHttpService:UrlEncode(cursor)
+            end
+
+            local data = modDetectorReadJson(url)
+            if type(data) ~= "table" or type(data.data) ~= "table" then break end
+
+            for _, entry in ipairs(data.data) do
+                local userId = tonumber(entry.userId)
+                    or tonumber(entry.id)
+                    or (type(entry.user) == "table" and tonumber(entry.user.userId))
+                    or (type(entry.user) == "table" and tonumber(entry.user.id))
+                if userId then collected[userId] = true end
+            end
+
+            cursor = tostring(data.nextPageCursor or "")
+            task.wait(0.03)
+        until cursor == "" or pageCount >= 25
+    end
+
+    if token ~= ModDetectorRuntime.Token or not ModDetectorRuntime.Enabled then return false end
+    ModDetectorRuntime.StaffIds = collected
+    ModDetectorRuntime.StaffIdsReady = true
+    return true
+end
+
+local function modDetectorPlayerHasStaffFriend(plr, token)
+    if not plr or plr == LocalPlayer then return false end
+    if not ModDetectorRuntime.StaffIdsReady or next(ModDetectorRuntime.StaffIds) == nil then return false end
+
+    local ok, pages = pcall(function()
+        return Players:GetFriendsAsync(plr.UserId)
+    end)
+    if not ok or not pages then return false end
+
+    local pageCount = 0
+    while token == ModDetectorRuntime.Token and ModDetectorRuntime.Enabled do
+        pageCount = pageCount + 1
+        local page = pages:GetCurrentPage()
+        for _, friend in ipairs(page) do
+            if ModDetectorRuntime.StaffIds[tonumber(friend.Id)] then
+                return true
+            end
+        end
+
+        if pages.IsFinished or pageCount >= 6 then break end
+        local advanced = pcall(function()
+            pages:AdvanceToNextPageAsync()
+        end)
+        if not advanced then break end
+        task.wait(0.03)
+    end
+    return false
+end
+
+local function modDetectorScan(token)
+    if token ~= ModDetectorRuntime.Token or not ModDetectorRuntime.Enabled then return end
+
+    if modDetectorOnlineStaffPresent() then
+        modDetectorSetAlert(true)
+        return
+    end
+
+    modDetectorSetAlert(false)
+
+    if not ModDetectorRuntime.StaffIdsReady then
+        modDetectorLoadStaffIds(token)
+    end
+    if token ~= ModDetectorRuntime.Token or not ModDetectorRuntime.Enabled then return end
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and modDetectorPlayerHasStaffFriend(plr, token) then
+            modDetectorSetAlert(true)
+            return
+        end
+        if token ~= ModDetectorRuntime.Token or not ModDetectorRuntime.Enabled then return end
+    end
+
+    modDetectorSetAlert(false)
+end
+
+local function modDetectorQueueScan(delaySeconds)
+    if not ModDetectorRuntime.Enabled then return end
+    local token = ModDetectorRuntime.Token
+    task.delay(delaySeconds or 0, function()
+        if token == ModDetectorRuntime.Token and ModDetectorRuntime.Enabled then
+            modDetectorScan(token)
+        end
+    end)
+end
+
+local function setModDetectorEnabled(enabled)
+    enabled = enabled == true
+    VisualsState.mod_detector_enabled = enabled
+    ModDetectorRuntime.Enabled = enabled
+    ModDetectorRuntime.Token = ModDetectorRuntime.Token + 1
+    modDetectorSetAlert(false)
+
+    if not enabled then return end
+
+    local token = ModDetectorRuntime.Token
+    task.spawn(function()
+        modDetectorScan(token)
+        while token == ModDetectorRuntime.Token and ModDetectorRuntime.Enabled do
+            task.wait(30)
+            if token == ModDetectorRuntime.Token and ModDetectorRuntime.Enabled then
+                modDetectorScan(token)
+            end
+        end
+    end)
+end
+
+modDetectorTrack(utility:CreateConnection(Players.PlayerAdded, function()
+    modDetectorQueueScan(2)
+end))
+modDetectorTrack(utility:CreateConnection(Players.PlayerRemoving, function()
+    modDetectorQueueScan(0.25)
+end))
+
+trackVisualControl("mod_detector_enabled", modDetectorSection:CreateToggle({
+    Name="Mod Detector",
+    State=VisualsState.mod_detector_enabled,
+    Flag="visuals.mod_detector_enabled",
+    Callback=function(v)
+        setModDetectorEnabled(v)
+    end
+}))
+
 avatarToggle(avatarSection,"avatar_zombie_animations","Zombie Animations")
 avatarToggle(avatarSection,"avatar_headless","Headless")
 avatarSlider(avatarSection,"avatar_apply_delay","Apply Delay",0,3,2,"s")
@@ -12831,12 +13155,22 @@ avatarSlider(accessorySettingsSection,"avatar_accessory_scale","All Accessories 
 
 UI.WorldAvatarRuntime = Runtime
 
+if VisualsState.mod_detector_enabled then
+    setModDetectorEnabled(true)
+end
+
 table.insert(library.CleanupCallbacks, function()
     Runtime.TextureToken = Runtime.TextureToken + 1
     Runtime.AvatarToken = Runtime.AvatarToken + 1
     task.spawn(clearWorldTextures)
     restoreAvatarProperties()
     removeGeneratedAccessories(LocalPlayer.Character)
+    ModDetectorRuntime.Enabled = false
+    ModDetectorRuntime.Token = ModDetectorRuntime.Token + 1
+    modDetectorSetAlert(false)
+    for _, connection in ipairs(ModDetectorRuntime.Connections) do
+        pcall(function() connection:Disconnect() end)
+    end
     for _, connection in ipairs(Runtime.Connections) do
         pcall(function() connection:Disconnect() end)
     end
@@ -14335,6 +14669,7 @@ for index, plr in ipairs(playersNow) do
     row.MouseButton1Click:Connect(function()
         selectedServerPlayer = plr
         playerSelectionLabel.Text = "  " .. tostring(plr.Name)
+            .. (isPlayerBlacklisted(plr) and "  [BLACKLISTED]" or "  [WHITELISTED]")
         rebuildServerPlayerList()
     end)
 end
@@ -14347,7 +14682,7 @@ playerSelectionCaption.Font = Enum.Font.Code
 playerSelectionCaption.TextSize = 9
 playerSelectionCaption.TextColor3 = Color3.fromRGB(150,150,150)
 playerSelectionCaption.TextXAlignment = Enum.TextXAlignment.Left
-playerSelectionCaption.Text = "Blacklist selection"
+playerSelectionCaption.Text = "Blacklist / Whitelist"
 playerSelectionCaption.ZIndex = 10
 playerSelectionCaption.Parent = playerSection.Holder
 
@@ -14387,21 +14722,25 @@ clearPlayerButton.Position = UDim2.new(0.5,2,0,226)
 clearPlayerButton.Font = Enum.Font.Code
 clearPlayerButton.TextSize = 9
 clearPlayerButton.TextColor3 = Color3.fromRGB(205,205,205)
-clearPlayerButton.Text = "Remove"
+clearPlayerButton.Text = "Whitelist"
 clearPlayerButton.ZIndex = 10
 clearPlayerButton.Parent = playerSection.Holder
 
 selectPlayerButton.MouseButton1Click:Connect(function()
 if selectedServerPlayer then
 local saved=setPlayerBlacklisted(selectedServerPlayer,true)
-if saved then playerSelectionLabel.Text="  "..tostring(selectedServerPlayer.Name) end
+if saved then
+playerSelectionLabel.Text="  "..tostring(selectedServerPlayer.Name).."  [BLACKLISTED]"
+end
 end
 end)
 
 clearPlayerButton.MouseButton1Click:Connect(function()
 if selectedServerPlayer then
 local saved=setPlayerBlacklisted(selectedServerPlayer,false)
-if saved then playerSelectionLabel.Text="  "..tostring(selectedServerPlayer.Name) end
+if saved then
+playerSelectionLabel.Text="  "..tostring(selectedServerPlayer.Name).."  [WHITELISTED]"
+end
 end
 end)
 
