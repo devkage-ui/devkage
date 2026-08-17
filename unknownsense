@@ -14171,13 +14171,20 @@ local id=typeof(playerOrId)=="Instance" and playerOrId.UserId or playerOrId
 return PlayerBlacklist[tostring(id)]~=nil
 end
 
-local function setPlayerBlacklisted(player,blocked)
+local function setPlayerBlacklisted(player,blocked,reason)
 if not player then return false,"Select a player first" end
 if player==LocalPlayer then return false,"You cannot blacklist yourself" end
 local key=tostring(player.UserId)
 local previous=PlayerBlacklist[key]
 if blocked then
-PlayerBlacklist[key]={userId=player.UserId,name=player.Name,displayName=player.DisplayName,addedAt=os.time()}
+local cleanedReason=tostring(reason or ""):sub(1,180)
+PlayerBlacklist[key]={
+userId=player.UserId,
+name=player.Name,
+displayName=player.DisplayName,
+reason=cleanedReason,
+addedAt=(type(previous)=="table" and previous.addedAt) or os.time()
+}
 else
 PlayerBlacklist[key]=nil
 end
@@ -14358,11 +14365,27 @@ UI.Lua.setStatus("Config applied")
 return true
 end
 
-local configMain = configPage:CreateSection({ Name = "Configs", Side = "Left", Size = 500 })
-local playerSection = configPage:CreateSection({ Name = "Players", Side = "Right", Size = 500 })
+local configMain = configPage:CreateSection({ Name = "Configs", Side = "Left", Size = 535 })
+local playerSection = configPage:CreateSection({ Name = "Players", Side = "Right", Size = 585 })
 local configActions = configPage:CreateSection({ Name = "Config Auto-Load", Side = "Right", Size = 210 })
 local scriptSettingsSection = configPage:CreateSection({ Name = "Script Settings", Side = "Right", Size = 150 })
 rebuildBlacklistList = function() end
+
+local configPhotoRoot=Instance.new("Frame")
+configPhotoRoot.Name="ConfigPhotoRoot"
+configPhotoRoot.BackgroundTransparency=1
+configPhotoRoot.BorderSizePixel=0
+configPhotoRoot.Size=UDim2.new(1,0,0,505)
+configPhotoRoot.LayoutOrder=1
+configPhotoRoot.Parent=configMain.Holder
+
+local playerPhotoRoot=Instance.new("Frame")
+playerPhotoRoot.Name="PlayerPhotoRoot"
+playerPhotoRoot.BackgroundTransparency=1
+playerPhotoRoot.BorderSizePixel=0
+playerPhotoRoot.Size=UDim2.new(1,0,0,555)
+playerPhotoRoot.LayoutOrder=1
+playerPhotoRoot.Parent=playerSection.Holder
 
 local scriptAutoLoadToggle
 local scriptSilentLoadToggle
@@ -14413,16 +14436,17 @@ local holder = Instance.new("Frame")
 holder.Name = "ConfigNameField"
 holder.BackgroundTransparency = 1
 holder.BorderSizePixel = 0
-holder.Size = UDim2.new(1,0,0,31)
+holder.Size = UDim2.new(1,-20,0,29)
+holder.Position = UDim2.new(0,10,0,6)
 holder.ZIndex = 10
-holder.Parent = configMain.Holder
+holder.Parent = configPhotoRoot
 
 local outer = Instance.new("Frame")
 outer.BackgroundColor3 = Color3.fromRGB(10,10,10)
 outer.BorderColor3 = Color3.fromRGB(0,0,0)
 outer.BorderSizePixel = 1
-outer.Position = UDim2.new(0,10,0,4)
-outer.Size = UDim2.new(1,-20,0,23)
+outer.Position = UDim2.new(0,0,0,1)
+outer.Size = UDim2.new(1,0,0,26)
 outer.ZIndex = 11
 outer.Parent = holder
 
@@ -14455,7 +14479,7 @@ local marker = Instance.new("TextLabel")
 marker.BackgroundTransparency = 1
 marker.BorderSizePixel = 0
 marker.Font = Enum.Font.Code
-marker.Text = "□"
+marker.Text = "▢"
 marker.TextColor3 = Color3.fromRGB(145,145,145)
 marker.TextSize = 11
 marker.TextXAlignment = Enum.TextXAlignment.Center
@@ -14486,10 +14510,10 @@ listFrame.BorderSizePixel = 1
 listFrame.ScrollBarThickness = 4
 listFrame.CanvasSize = UDim2.new(0,0,0,0)
 listFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-listFrame.Size = UDim2.new(1,-20,0,180)
-listFrame.Position = UDim2.new(0,10,0,10)
+listFrame.Size = UDim2.new(1,-20,0,225)
+listFrame.Position = UDim2.new(0,10,0,40)
 listFrame.ZIndex = 10
-listFrame.Parent = configMain.Holder
+listFrame.Parent = configPhotoRoot
 configListHolder = listFrame
 
 local listLayout = Instance.new("UIListLayout")
@@ -14521,14 +14545,11 @@ row.Name = "ConfigRow"
 row.AutoButtonColor = false
 row.BackgroundColor3 = (configSelected == name) and Color3.fromRGB(55,55,55) or Color3.fromRGB(25,25,25)
 row.BorderColor3 = Color3.fromRGB(0,0,0)
-row.Size = UDim2.new(1,-8,0,28)
+row.Size = UDim2.new(1,-8,0,26)
 local currentAuto = get_autoload()
-row.Text = "      " .. tostring(name) .. ((currentAuto == name) and "   [AUTO]" or "")
+row.Text = "    " .. tostring(name) .. ((currentAuto == name) and "   [AUTO]" or "")
 row.TextXAlignment = Enum.TextXAlignment.Left
 row.Font = Enum.Font.Code
-local rowIcon=Instance.new("ImageLabel")
-rowIcon.BackgroundTransparency=1; rowIcon.Image="rbxassetid://8547269749"; rowIcon.ImageColor3=Color3.fromRGB(150,150,150)
-rowIcon.Size=UDim2.fromOffset(16,16); rowIcon.Position=UDim2.fromOffset(5,6); rowIcon.ZIndex=12; rowIcon.Parent=row
 row.TextSize = 11
 row.TextColor3 = Color3.fromRGB(205,205,205)
 row.ZIndex = 11
@@ -14546,6 +14567,8 @@ end
 
 local selectedServerPlayer = nil
 local playerSelectionLabel
+local playerReasonBox
+local serverPlayerCountLabel
 local playerListFrame = Instance.new("ScrollingFrame")
 playerListFrame.Name = "ServerPlayers"
 playerListFrame.BackgroundColor3 = Color3.fromRGB(12,12,12)
@@ -14555,10 +14578,10 @@ playerListFrame.ScrollBarThickness = 4
 playerListFrame.ScrollBarImageColor3 = Color3.fromRGB(70,70,70)
 playerListFrame.CanvasSize = UDim2.new(0,0,0,0)
 playerListFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-playerListFrame.Size = UDim2.new(1,-20,0,280)
-playerListFrame.Position = UDim2.new(0,10,0,10)
+playerListFrame.Size = UDim2.new(1,-20,0,315)
+playerListFrame.Position = UDim2.new(0,10,0,48)
 playerListFrame.ZIndex = 10
-playerListFrame.Parent = playerSection.Holder
+playerListFrame.Parent = playerPhotoRoot
 
 local playerListLayout = Instance.new("UIListLayout")
 playerListLayout.Padding = UDim.new(0,1)
@@ -14574,11 +14597,18 @@ end
 
 local playersNow = {}
 for _, player in ipairs(Players:GetPlayers()) do
-if player ~= LocalPlayer then table.insert(playersNow, player) end
+table.insert(playersNow, player)
 end
 table.sort(playersNow, function(a,b)
+    if a==LocalPlayer and b~=LocalPlayer then return true end
+    if b==LocalPlayer and a~=LocalPlayer then return false end
     return tostring(a.DisplayName):lower() < tostring(b.DisplayName):lower()
 end)
+
+if serverPlayerCountLabel then
+local count=#playersNow
+serverPlayerCountLabel.Text=tostring(count).." player"..(count==1 and "" or "s").." in server"
+end
 
 if #playersNow == 0 then
     local empty = Instance.new("TextLabel")
@@ -14598,11 +14628,12 @@ for index, plr in ipairs(playersNow) do
     row.Name = "Player_" .. tostring(plr.UserId)
     row.AutoButtonColor = false
     row.BackgroundColor3 =
-        (selectedServerPlayer == plr) and Color3.fromRGB(48,52,32)
-        or isPlayerBlacklisted(plr) and Color3.fromRGB(48,28,28)
-        or Color3.fromRGB(22,22,22)
-    row.BorderColor3 = Color3.fromRGB(0,0,0)
-    row.Size = UDim2.new(1,-8,0,30)
+        (selectedServerPlayer == plr) and Color3.fromRGB(28,28,28)
+        or isPlayerBlacklisted(plr) and Color3.fromRGB(38,22,22)
+        or Color3.fromRGB(20,20,20)
+    row.BorderColor3 = Color3.fromRGB(2,2,2)
+    row.BorderSizePixel = 1
+    row.Size = UDim2.new(1,-8,0,52)
     row.Text = ""
     row.ZIndex = 11
     row.Parent = playerListFrame
@@ -14610,8 +14641,8 @@ for index, plr in ipairs(playersNow) do
     local avatar = Instance.new("ImageLabel")
     avatar.BackgroundTransparency = 1
     avatar.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
-    avatar.Size = UDim2.fromOffset(22,22)
-    avatar.Position = UDim2.fromOffset(5,4)
+    avatar.Size = UDim2.fromOffset(32,32)
+    avatar.Position = UDim2.fromOffset(9,10)
     avatar.ZIndex = 12
     avatar.Parent = row
 
@@ -14623,124 +14654,206 @@ for index, plr in ipairs(playersNow) do
                 Enum.ThumbnailSize.Size48x48
             )
         end)
-        if ok and row.Parent then
-            avatar.Image = image
-        end
+        if ok and row.Parent then avatar.Image=image end
     end)
 
     local nameLabel = Instance.new("TextLabel")
     nameLabel.BackgroundTransparency = 1
-    nameLabel.Position = UDim2.fromOffset(34,2)
-    nameLabel.Size = UDim2.new(1,-40,0,15)
+    nameLabel.Position = UDim2.fromOffset(50,0)
+    nameLabel.Size = UDim2.new(1,-58,1,0)
     nameLabel.Font = Enum.Font.Code
-    nameLabel.TextSize = 9
+    nameLabel.TextSize = 10
     nameLabel.TextColor3 =
-        (selectedServerPlayer == plr) and Color3.fromRGB(190,220,95) or Color3.fromRGB(210,210,210)
+        (selectedServerPlayer == plr) and Color3.fromRGB(185,210,88)
+        or Color3.fromRGB(205,205,205)
     nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-    nameLabel.Text = plr.DisplayName
+    nameLabel.Text = tostring(plr.DisplayName)
     nameLabel.ZIndex = 12
     nameLabel.Parent = row
 
-    local userLabel = Instance.new("TextLabel")
-    userLabel.BackgroundTransparency = 1
-    userLabel.Position = UDim2.fromOffset(34,15)
-    userLabel.Size = UDim2.new(1,-40,0,12)
-    userLabel.Font = Enum.Font.Code
-    userLabel.TextSize = 8
-    userLabel.TextColor3 = Color3.fromRGB(120,120,120)
-    userLabel.TextXAlignment = Enum.TextXAlignment.Left
-    userLabel.Text = "@" .. tostring(plr.Name)
-    userLabel.ZIndex = 12
-    userLabel.Parent = row
-
     row.MouseEnter:Connect(function()
         if selectedServerPlayer ~= plr then
-            row.BackgroundColor3 = Color3.fromRGB(32,32,32)
+            row.BackgroundColor3 = Color3.fromRGB(29,29,29)
         end
     end)
 
     row.MouseLeave:Connect(function()
         row.BackgroundColor3 =
-            (selectedServerPlayer == plr) and Color3.fromRGB(48,52,32)
-            or isPlayerBlacklisted(plr) and Color3.fromRGB(48,28,28)
-            or Color3.fromRGB(22,22,22)
+            (selectedServerPlayer == plr) and Color3.fromRGB(28,28,28)
+            or isPlayerBlacklisted(plr) and Color3.fromRGB(38,22,22)
+            or Color3.fromRGB(20,20,20)
     end)
 
     row.MouseButton1Click:Connect(function()
         selectedServerPlayer = plr
-        playerSelectionLabel.Text = "  " .. tostring(plr.Name)
-            .. (isPlayerBlacklisted(plr) and "  [BLACKLISTED]" or "  [WHITELISTED]")
+        if playerSelectionLabel then
+            playerSelectionLabel.Text = "Selected: " .. tostring(plr.Name)
+        end
+        if playerReasonBox then
+            local entry=PlayerBlacklist[tostring(plr.UserId)]
+            playerReasonBox.Text=(type(entry)=="table" and tostring(entry.reason or "")) or ""
+        end
         rebuildServerPlayerList()
     end)
 end
 end
 
-local playerSelectionCaption = Instance.new("TextLabel")
-playerSelectionCaption.BackgroundTransparency = 1
-playerSelectionCaption.Size = UDim2.new(1,-20,0,16)
-playerSelectionCaption.Font = Enum.Font.Code
-playerSelectionCaption.TextSize = 9
-playerSelectionCaption.TextColor3 = Color3.fromRGB(150,150,150)
-playerSelectionCaption.TextXAlignment = Enum.TextXAlignment.Left
-playerSelectionCaption.Text = "Blacklist / Whitelist"
-playerSelectionCaption.ZIndex = 10
-playerSelectionCaption.Parent = playerSection.Holder
+local serverPlayersCaption=Instance.new("TextLabel")
+serverPlayersCaption.BackgroundTransparency=1
+serverPlayersCaption.BorderSizePixel=0
+serverPlayersCaption.Position=UDim2.new(0,10,0,5)
+serverPlayersCaption.Size=UDim2.new(1,-20,0,18)
+serverPlayersCaption.Font=Enum.Font.Code
+serverPlayersCaption.Text="Server players"
+serverPlayersCaption.TextColor3=Color3.fromRGB(205,205,205)
+serverPlayersCaption.TextSize=10
+serverPlayersCaption.TextXAlignment=Enum.TextXAlignment.Left
+serverPlayersCaption.ZIndex=10
+serverPlayersCaption.Parent=playerPhotoRoot
 
-playerSelectionLabel = Instance.new("TextLabel")
-playerSelectionLabel.BackgroundColor3 = Color3.fromRGB(19,19,19)
-playerSelectionLabel.BackgroundTransparency = 0
-playerSelectionLabel.BorderColor3 = Color3.fromRGB(4,4,4)
-playerSelectionLabel.BorderSizePixel = 1
-playerSelectionLabel.Size = UDim2.new(1,-20,0,24)
-playerSelectionLabel.Font = Enum.Font.Code
-playerSelectionLabel.TextSize = 9
-playerSelectionLabel.TextColor3 = Color3.fromRGB(195,195,195)
-playerSelectionLabel.TextXAlignment = Enum.TextXAlignment.Left
-playerSelectionLabel.Text = "  None"
-playerSelectionLabel.ZIndex = 10
-playerSelectionLabel.Parent = playerSection.Holder
+serverPlayerCountLabel=Instance.new("TextLabel")
+serverPlayerCountLabel.BackgroundTransparency=1
+serverPlayerCountLabel.BorderSizePixel=0
+serverPlayerCountLabel.Position=UDim2.new(0,10,0,24)
+serverPlayerCountLabel.Size=UDim2.new(1,-20,0,15)
+serverPlayerCountLabel.Font=Enum.Font.Code
+serverPlayerCountLabel.Text="0 players in server"
+serverPlayerCountLabel.TextColor3=Color3.fromRGB(125,125,125)
+serverPlayerCountLabel.TextSize=9
+serverPlayerCountLabel.TextXAlignment=Enum.TextXAlignment.Left
+serverPlayerCountLabel.ZIndex=10
+serverPlayerCountLabel.Parent=playerPhotoRoot
 
-local selectPlayerButton = Instance.new("TextButton")
-selectPlayerButton.AutoButtonColor = false
-selectPlayerButton.BackgroundColor3 = Color3.fromRGB(31,31,31)
-selectPlayerButton.BorderColor3 = Color3.fromRGB(8,8,8)
-selectPlayerButton.Size = UDim2.new(0.5,-12,0,24)
-selectPlayerButton.Position = UDim2.new(0,10,0,226)
-selectPlayerButton.Font = Enum.Font.Code
-selectPlayerButton.TextSize = 9
-selectPlayerButton.TextColor3 = Color3.fromRGB(205,205,205)
-selectPlayerButton.Text = "Blacklist"
-selectPlayerButton.ZIndex = 10
-selectPlayerButton.Parent = playerSection.Holder
+playerSelectionLabel=Instance.new("TextLabel")
+playerSelectionLabel.BackgroundTransparency=1
+playerSelectionLabel.BorderSizePixel=0
+playerSelectionLabel.Position=UDim2.new(0,10,0,371)
+playerSelectionLabel.Size=UDim2.new(1,-20,0,16)
+playerSelectionLabel.Font=Enum.Font.Code
+playerSelectionLabel.TextSize=9
+playerSelectionLabel.TextColor3=Color3.fromRGB(135,135,135)
+playerSelectionLabel.TextXAlignment=Enum.TextXAlignment.Left
+playerSelectionLabel.Text="Selected: none"
+playerSelectionLabel.ZIndex=10
+playerSelectionLabel.Parent=playerPhotoRoot
 
-local clearPlayerButton = Instance.new("TextButton")
-clearPlayerButton.AutoButtonColor = false
-clearPlayerButton.BackgroundColor3 = Color3.fromRGB(31,31,31)
-clearPlayerButton.BorderColor3 = Color3.fromRGB(8,8,8)
-clearPlayerButton.Size = UDim2.new(0.5,-12,0,24)
-clearPlayerButton.Position = UDim2.new(0.5,2,0,226)
-clearPlayerButton.Font = Enum.Font.Code
-clearPlayerButton.TextSize = 9
-clearPlayerButton.TextColor3 = Color3.fromRGB(205,205,205)
-clearPlayerButton.Text = "Whitelist"
-clearPlayerButton.ZIndex = 10
-clearPlayerButton.Parent = playerSection.Holder
+local reasonCaption=Instance.new("TextLabel")
+reasonCaption.BackgroundTransparency=1
+reasonCaption.BorderSizePixel=0
+reasonCaption.Position=UDim2.new(0,10,0,394)
+reasonCaption.Size=UDim2.new(1,-20,0,18)
+reasonCaption.Font=Enum.Font.Code
+reasonCaption.Text="Reason"
+reasonCaption.TextColor3=Color3.fromRGB(205,205,205)
+reasonCaption.TextSize=10
+reasonCaption.TextXAlignment=Enum.TextXAlignment.Left
+reasonCaption.ZIndex=10
+reasonCaption.Parent=playerPhotoRoot
+
+local reasonOuter=Instance.new("Frame")
+reasonOuter.BackgroundColor3=Color3.fromRGB(10,10,10)
+reasonOuter.BorderColor3=Color3.fromRGB(0,0,0)
+reasonOuter.BorderSizePixel=1
+reasonOuter.Position=UDim2.new(0,10,0,416)
+reasonOuter.Size=UDim2.new(1,-20,0,39)
+reasonOuter.ZIndex=10
+reasonOuter.Parent=playerPhotoRoot
+
+local reasonInner=Instance.new("Frame")
+reasonInner.BackgroundColor3=Color3.fromRGB(24,24,24)
+reasonInner.BorderColor3=Color3.fromRGB(48,48,48)
+reasonInner.BorderSizePixel=1
+reasonInner.Position=UDim2.new(0,1,0,1)
+reasonInner.Size=UDim2.new(1,-2,1,-2)
+reasonInner.ZIndex=11
+reasonInner.Parent=reasonOuter
+
+playerReasonBox=Instance.new("TextBox")
+playerReasonBox.BackgroundTransparency=1
+playerReasonBox.BorderSizePixel=0
+playerReasonBox.ClearTextOnFocus=false
+playerReasonBox.Font=Enum.Font.Code
+playerReasonBox.PlaceholderColor3=Color3.fromRGB(105,105,105)
+playerReasonBox.PlaceholderText="Type a reason..."
+playerReasonBox.Text=""
+playerReasonBox.TextColor3=Color3.fromRGB(205,205,205)
+playerReasonBox.TextSize=10
+playerReasonBox.TextXAlignment=Enum.TextXAlignment.Left
+playerReasonBox.Position=UDim2.new(0,8,0,0)
+playerReasonBox.Size=UDim2.new(1,-16,1,0)
+playerReasonBox.ZIndex=12
+playerReasonBox.Parent=reasonInner
+
+local function makePlayerActionButton(name,y)
+    local outer=Instance.new("Frame")
+    outer.Name=name.."Outer"
+    outer.BackgroundColor3=Color3.fromRGB(8,8,8)
+    outer.BorderColor3=Color3.fromRGB(0,0,0)
+    outer.BorderSizePixel=1
+    outer.Position=UDim2.new(0,10,0,y)
+    outer.Size=UDim2.new(1,-20,0,37)
+    outer.ZIndex=10
+    outer.Parent=playerPhotoRoot
+
+    local inner=Instance.new("Frame")
+    inner.BackgroundColor3=Color3.fromRGB(29,29,29)
+    inner.BorderColor3=Color3.fromRGB(47,47,47)
+    inner.BorderSizePixel=1
+    inner.Position=UDim2.new(0,1,0,1)
+    inner.Size=UDim2.new(1,-2,1,-2)
+    inner.ZIndex=11
+    inner.Parent=outer
+
+    local button=Instance.new("TextButton")
+    button.BackgroundTransparency=1
+    button.BorderSizePixel=0
+    button.AutoButtonColor=false
+    button.Font=Enum.Font.Code
+    button.Text=name
+    button.TextColor3=Color3.fromRGB(215,215,215)
+    button.TextSize=10
+    button.Size=UDim2.fromScale(1,1)
+    button.ZIndex=12
+    button.Parent=inner
+
+    utility:CreateConnection(button.MouseEnter,function()
+        inner.BackgroundColor3=Color3.fromRGB(38,38,38)
+    end)
+    utility:CreateConnection(button.MouseLeave,function()
+        inner.BackgroundColor3=Color3.fromRGB(29,29,29)
+    end)
+    return button
+end
+
+local selectPlayerButton=makePlayerActionButton("Blacklist",463)
+local clearPlayerButton=makePlayerActionButton("Whitelist",507)
 
 selectPlayerButton.MouseButton1Click:Connect(function()
-if selectedServerPlayer then
-local saved=setPlayerBlacklisted(selectedServerPlayer,true)
-if saved then
-playerSelectionLabel.Text="  "..tostring(selectedServerPlayer.Name).."  [BLACKLISTED]"
+if not selectedServerPlayer then
+library:Notify({Message="Select a player first",Duration=3})
+return
 end
+local saved,err=setPlayerBlacklisted(selectedServerPlayer,true,playerReasonBox.Text)
+if saved then
+playerSelectionLabel.Text="Selected: "..tostring(selectedServerPlayer.Name)
+rebuildServerPlayerList()
+else
+library:Notify({Message="Blacklist failed: "..tostring(err),Duration=4})
 end
 end)
 
 clearPlayerButton.MouseButton1Click:Connect(function()
-if selectedServerPlayer then
-local saved=setPlayerBlacklisted(selectedServerPlayer,false)
-if saved then
-playerSelectionLabel.Text="  "..tostring(selectedServerPlayer.Name).."  [WHITELISTED]"
+if not selectedServerPlayer then
+library:Notify({Message="Select a player first",Duration=3})
+return
 end
+local saved,err=setPlayerBlacklisted(selectedServerPlayer,false)
+if saved then
+playerReasonBox.Text=""
+playerSelectionLabel.Text="Selected: "..tostring(selectedServerPlayer.Name)
+rebuildServerPlayerList()
+else
+library:Notify({Message="Whitelist failed: "..tostring(err),Duration=4})
 end
 end)
 
@@ -14751,7 +14864,7 @@ end)
 utility:CreateConnection(Players.PlayerRemoving, function(plr)
 if selectedServerPlayer == plr then
 selectedServerPlayer = nil
-playerSelectionLabel.Text = "  None"
+playerSelectionLabel.Text = "Selected: none"
 end
 task.defer(rebuildServerPlayerList)
 end)
@@ -14766,22 +14879,25 @@ if not configNameBox then
 configNameBox = createConfigNameField()
 end
 
+local configPhotoActionIndex=0
 local function photoConfigButton(properties)
 properties = properties or {}
+configPhotoActionIndex=configPhotoActionIndex+1
 local holder = Instance.new("Frame")
 holder.Name = "ConfigAction_"..tostring(properties.Name or "Button")
 holder.BackgroundTransparency = 1
 holder.BorderSizePixel = 0
-holder.Size = UDim2.new(1,0,0,25)
+holder.Size = UDim2.new(1,-20,0,27)
+holder.Position = UDim2.new(0,10,0,270+((configPhotoActionIndex-1)*29))
 holder.ZIndex = 10
-holder.Parent = configMain.Holder
+holder.Parent = configPhotoRoot
 
 local outer = Instance.new("Frame")
 outer.BackgroundColor3 = Color3.fromRGB(9,9,9)
 outer.BorderColor3 = Color3.fromRGB(0,0,0)
 outer.BorderSizePixel = 1
-outer.Position = UDim2.new(0,10,0,2)
-outer.Size = UDim2.new(1,-20,0,22)
+outer.Position = UDim2.new(0,0,0,1)
+outer.Size = UDim2.new(1,0,0,25)
 outer.ZIndex = 11
 outer.Parent = holder
 
