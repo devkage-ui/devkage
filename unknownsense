@@ -628,16 +628,6 @@ function library:CreateWindow(Properties)
         Window.Root = ScreenGui
         library.ThemeRoot = ScreenGui
 
-        local CursorLayer = Instance.new("ScreenGui")
-        CursorLayer.Name = "DevKage_CursorLayer_" .. game:GetService("HttpService"):GenerateGUID(false):gsub("%-", "")
-        CursorLayer.DisplayOrder = 2147483647
-        CursorLayer.Enabled = true
-        CursorLayer.IgnoreGuiInset = true
-        CursorLayer.ResetOnSpawn = false
-        CursorLayer.ZIndexBehavior = Enum.ZIndexBehavior.Global
-        CursorLayer.Parent = ScreenGui.Parent
-        Window.CursorLayer = CursorLayer
-
         local PreviousMouseIconEnabled = uis.MouseIconEnabled
         local PreviousMouseBehavior = uis.MouseBehavior
         local MenuInputRuntime = {
@@ -650,6 +640,15 @@ function library:CreateWindow(Properties)
         local MenuHttpService = game:GetService("HttpService")
         local MenuMouseBindName = "DevKageMenuMouse_" .. MenuHttpService:GenerateGUID(false):gsub("%-", "")
 
+        local function externalCursorAlive()
+            local env = (type(getgenv) == "function" and getgenv()) or _G
+            local bridge = env.__DevKageCursorBridgeV1
+            return type(bridge) == "table"
+                and bridge.Protocol == "DevKage.MaskShard.Cursor/1"
+                and bridge.ExternalAttached == true
+                and (os.clock() - (tonumber(bridge.ExternalHeartbeat) or 0)) < 2
+        end
+
         local function applyMenuMouseState()
             if not Window.Enabled then return end
             MenuInputRuntime.Guarding = true
@@ -657,7 +656,7 @@ function library:CreateWindow(Properties)
                 uis.MouseBehavior = Enum.MouseBehavior.Default
             end)
             pcall(function()
-                uis.MouseIconEnabled = false
+                uis.MouseIconEnabled = not externalCursorAlive()
             end)
             MenuInputRuntime.Guarding = false
         end
@@ -986,7 +985,6 @@ function library:CreateWindow(Properties)
                     pcall(function() connection:Disconnect() end)
                 end
                 if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
-                if Window.CursorLayer and Window.CursorLayer.Parent then Window.CursorLayer:Destroy() end
                 restoreGameplayMouseState()
                 library = nil
                 utility = nil
@@ -997,7 +995,6 @@ function library:CreateWindow(Properties)
         Window["PagesHolder"] = Pages_InnerBorder_InnerFrame
         Window["ScreenGui"]   = ScreenGui
         Window["MainFrame"]    = ScreenGui_MainFrame
-        Window["CursorLayer"]  = CursorLayer
 
         do
             local dragging  = false
@@ -1595,6 +1592,9 @@ function pages:CreateSection(Properties)
 
         Section["Holder"] = Holder_Frame_ContentHolder
         Section["Extra"]  = Section_Holder_Extra
+        Section["Root"]   = Section_Holder
+        Section["Frame"]  = Section_Holder_Frame
+        Section["Title"]  = Section_Holder_Title
 
         function Section:CloseContent()
             if Section.Content.Open then
@@ -4201,6 +4201,12 @@ avatarModsAlpha = 0.18,
 avatarModsSpeed = 1,
 avatarModsSize = 1,
 avatarModsBrightness = 3,
+avatarModsWingSpread = 1,
+avatarModsWingHeight = 0,
+avatarModsAuraRadius = 1,
+avatarModsParticleDensity = 1,
+avatarModsRainbowSaturation = 0.82,
+luaAutoExecute = false,
 espBoxColor = {50,100,200},
 espBoxAlpha = 0.50,
 espGlowColor = {25,180,75},
@@ -8610,6 +8616,12 @@ chinaHatAlpha = cfg.chinaHatAlpha,
     avatarModsSpeed = cfg.avatarModsSpeed,
     avatarModsSize = cfg.avatarModsSize,
     avatarModsBrightness = cfg.avatarModsBrightness,
+    avatarModsWingSpread = cfg.avatarModsWingSpread,
+    avatarModsWingHeight = cfg.avatarModsWingHeight,
+    avatarModsAuraRadius = cfg.avatarModsAuraRadius,
+    avatarModsParticleDensity = cfg.avatarModsParticleDensity,
+    avatarModsRainbowSaturation = cfg.avatarModsRainbowSaturation,
+    luaAutoExecute = cfg.luaAutoExecute,
     luaCode = cfg.luaCode,
     ua_equipped  = (function()
         local out = {}
@@ -9917,165 +9929,459 @@ local runtimeEnv = (type(getgenv) == "function" and getgenv()) or _G
 if runtimeEnv.__DevKageAvatarMods and runtimeEnv.__DevKageAvatarMods.Destroy then
     pcall(function() runtimeEnv.__DevKageAvatarMods:Destroy() end)
 end
+
 runtimeEnv.__DevKageAvatarMods = (function()
     local API = {}
-    local state = {objects={}, entries={}, connection=nil, characterConnection=nil, character=nil, light=nil, highlight=nil, emitter=nil}
+    local WING_ASSET_ID = 7241359754
+    local InsertService = game:GetService("InsertService")
+    local state = {
+        objects={},
+        entries={},
+        connection=nil,
+        characterConnection=nil,
+        character=nil,
+        light=nil,
+        highlight=nil,
+        wingTemplate=nil,
+        wingTemplateTried=false,
+        buildToken=0,
+    }
 
-    local function configColor()
-        return auraColorFromConfig(getgenv().__DevKageConfig.avatarModsColor, Color3.fromRGB(255,235,170))
+    local function cfg()
+        return getgenv().__DevKageConfig
     end
 
-    local function animatedColor(now)
-        local base = configColor()
-        if getgenv().__DevKageConfig.avatarModsRainbow == true then
-            local h = (now * 0.10 * math.max(tonumber(getgenv().__DevKageConfig.avatarModsSpeed) or 1,0.05)) % 1
-            return Color3.fromHSV(h, 0.55, 1)
+    local function configColor()
+        return auraColorFromConfig(cfg().avatarModsColor, Color3.fromRGB(190,95,255))
+    end
+
+    local function animatedColor(now,phase)
+        local base=configColor()
+        if cfg().avatarModsRainbow == true then
+            local speed=math.max(tonumber(cfg().avatarModsSpeed) or 1,0.05)
+            local saturation=math.clamp(tonumber(cfg().avatarModsRainbowSaturation) or 0.82,0,1)
+            return Color3.fromHSV((now*0.085*speed+(phase or 0))%1,saturation,1)
         end
         return base
     end
 
     local function remember(object)
-        state.objects[#state.objects+1] = object
+        if object then state.objects[#state.objects+1]=object end
         return object
     end
 
-    local function basePart(className,size)
-        local part = Instance.new(className or "Part")
-        part.Name = "DevKage_AvatarMod"
-        part.Anchored = true
-        part.CanCollide = false
-        part.CanTouch = false
-        part.CanQuery = false
-        part.CastShadow = false
-        part.Material = Enum.Material.Neon
-        part.TopSurface = Enum.SurfaceType.Smooth
-        part.BottomSurface = Enum.SurfaceType.Smooth
-        part.Size = size
-        part.Transparency = math.clamp(tonumber(getgenv().__DevKageConfig.avatarModsAlpha) or 0.18,0,0.92)
-        part.Color = configColor()
-        part.Parent = workspace
-        return remember(part)
+    local function clearVisualsOnly()
+        state.buildToken=state.buildToken+1
+        if state.connection then pcall(function() state.connection:Disconnect() end); state.connection=nil end
+        for _,object in ipairs(state.objects) do
+            pcall(function() object:Destroy() end)
+        end
+        state.objects={}
+        state.entries={}
+        state.light=nil
+        state.highlight=nil
+        state.character=nil
     end
 
-    local function newPart(size,shape)
-        local part = basePart("Part",size)
-        if shape then part.Shape = shape end
-        return part
+    local function findAccessory(root)
+        if not root then return nil end
+        if root:IsA("Accessory") then return root end
+        for _,object in ipairs(root:GetDescendants()) do
+            if object:IsA("Accessory") then return object end
+        end
+        return nil
     end
 
-    local function addHalo(ringIndex,height,radius,tiltX,tiltZ,segments,thickness)
-        segments = math.max(tonumber(segments) or 48,36)
-        local t = thickness or 0.045
+    local function cloneAccessoryFromRoots(roots)
+        if type(roots)~="table" then return nil end
+        local result=nil
+        for _,root in ipairs(roots) do
+            if not result then
+                local accessory=findAccessory(root)
+                if accessory then pcall(function() result=accessory:Clone() end) end
+            end
+        end
+        for _,root in ipairs(roots) do pcall(function() root:Destroy() end) end
+        return result
+    end
+
+    local function loadWingTemplate()
+        if state.wingTemplate then
+            local copy=nil
+            pcall(function() copy=state.wingTemplate:Clone() end)
+            return copy
+        end
+        if state.wingTemplateTried then return nil end
+        state.wingTemplateTried=true
+
+        local accessory=nil
+
+        local description=Instance.new("HumanoidDescription")
+        local descriptionOk=pcall(function()
+            description.BackAccessory=tostring(WING_ASSET_ID)
+        end)
+        if descriptionOk then
+            local model=nil
+            local modelOk=pcall(function()
+                model=Players:CreateHumanoidModelFromDescription(description,Enum.HumanoidRigType.R15)
+            end)
+            if modelOk and model then
+                local found=findAccessory(model)
+                if found then pcall(function() accessory=found:Clone() end) end
+                pcall(function() model:Destroy() end)
+            end
+        end
+        pcall(function() description:Destroy() end)
+
+        if not accessory then
+            local roots=nil
+            local getOk=pcall(function()
+                roots=game:GetObjects("rbxassetid://"..tostring(WING_ASSET_ID))
+            end)
+            if getOk then accessory=cloneAccessoryFromRoots(roots) end
+        end
+
+        if not accessory then
+            local model=nil
+            local insertOk=pcall(function()
+                model=InsertService:LoadAsset(WING_ASSET_ID)
+            end)
+            if insertOk and model then
+                local found=findAccessory(model)
+                if found then pcall(function() accessory=found:Clone() end) end
+                pcall(function() model:Destroy() end)
+            end
+        end
+
+        if accessory then
+            accessory.Parent=nil
+            state.wingTemplate=accessory
+            local copy=nil
+            pcall(function() copy=accessory:Clone() end)
+            return copy
+        end
+        return nil
+    end
+
+    local function findMatchingAttachment(character,handle)
+        for _,handleAttachment in ipairs(handle:GetChildren()) do
+            if handleAttachment:IsA("Attachment") then
+                for _,candidate in ipairs(character:GetDescendants()) do
+                    if candidate:IsA("Attachment")
+                    and candidate.Name==handleAttachment.Name
+                    and candidate.Parent
+                    and candidate.Parent:IsA("BasePart") then
+                        return candidate.Parent,candidate,handleAttachment
+                    end
+                end
+            end
+        end
+        return nil,nil,nil
+    end
+
+    local function tintAccessory(accessory,color,alpha)
+        for _,object in ipairs(accessory:GetDescendants()) do
+            if object:IsA("BasePart") then
+                object.CanCollide=false
+                object.CanTouch=false
+                object.CanQuery=false
+                object.Massless=true
+                object.CastShadow=false
+                object.Color=color
+                object.Transparency=math.clamp(alpha,0,0.9)
+            end
+        end
+    end
+
+    local function scaleWingAccessory(accessory,scale,spread)
+        local handle=accessory:FindFirstChild("Handle")
+        if not handle or not handle:IsA("BasePart") then return end
+
+        if handle:IsA("MeshPart") then
+            handle.Size=Vector3.new(
+                handle.Size.X*scale*spread,
+                handle.Size.Y*scale,
+                handle.Size.Z*scale
+            )
+        end
+
+        for _,object in ipairs(handle:GetDescendants()) do
+            if object:IsA("SpecialMesh") then
+                object.Scale=Vector3.new(
+                    object.Scale.X*scale*spread,
+                    object.Scale.Y*scale,
+                    object.Scale.Z*scale
+                )
+            elseif object:IsA("Attachment") then
+                object.Position=Vector3.new(
+                    object.Position.X*scale*spread,
+                    object.Position.Y*scale,
+                    object.Position.Z*scale
+                )
+            end
+        end
+    end
+
+    local function addCatalogWings(character,scale,layer)
+        local accessory=loadWingTemplate()
+        if not accessory then return false end
+
+        local handle=accessory:FindFirstChild("Handle")
+        if not handle or not handle:IsA("BasePart") then
+            pcall(function() accessory:Destroy() end)
+            return false
+        end
+
+        local spread=math.clamp(tonumber(cfg().avatarModsWingSpread) or 1,0.55,1.75)
+        scaleWingAccessory(accessory,scale,spread)
+        local bodyPart,bodyAttachment,handleAttachment=findMatchingAttachment(character,handle)
+        if not bodyPart then
+            bodyPart=character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
+        end
+        if not bodyPart then
+            pcall(function() accessory:Destroy() end)
+            return false
+        end
+
+        local baseC0=CFrame.new()
+        if bodyAttachment and handleAttachment then
+            baseC0=bodyAttachment.CFrame*handleAttachment.CFrame:Inverse()
+        else
+            baseC0=CFrame.new(0,0.15,0.55)*CFrame.Angles(0,math.rad(180),0)
+        end
+
+        local old=handle:FindFirstChild("AccessoryWeld")
+        if old then pcall(function() old:Destroy() end) end
+
+        accessory.Name="DevKage_PremiumWings"
+        accessory.Parent=character
+        tintAccessory(accessory,configColor(),tonumber(cfg().avatarModsAlpha) or 0.18)
+
+        local weld=Instance.new("Weld")
+        weld.Name="DevKagePremiumWingWeld"
+        weld.Part0=bodyPart
+        weld.Part1=handle
+        weld.C1=CFrame.new()
+        weld.C0=baseC0
+        weld.Parent=handle
+
+        remember(accessory)
+        state.entries[#state.entries+1]={
+            Kind="WingAccessory",
+            Accessory=accessory,
+            Handle=handle,
+            Weld=weld,
+            BaseC0=baseC0,
+            Layer=layer or 1,
+            Scale=scale,
+        }
+        return true
+    end
+
+    local function makeInvisibleHolder(name)
+        local holder=Instance.new("Part")
+        holder.Name=name
+        holder.Anchored=true
+        holder.CanCollide=false
+        holder.CanTouch=false
+        holder.CanQuery=false
+        holder.CastShadow=false
+        holder.Transparency=1
+        holder.Size=Vector3.new(0.1,0.1,0.1)
+        holder.Parent=workspace
+        remember(holder)
+        return holder
+    end
+
+    local function beamColorSequence(c1,c2)
+        return ColorSequence.new({
+            ColorSequenceKeypoint.new(0,c1),
+            ColorSequenceKeypoint.new(1,c2 or c1)
+        })
+    end
+
+    local function addBeamRing(anchorKind,ringIndex,height,radius,tiltX,tiltZ,segments,width,speedMul,phase)
+        segments=math.clamp(math.floor(tonumber(segments) or 36),20,72)
+        local holder=makeInvisibleHolder("DevKage_PremiumAuraRing")
+        local attachments={}
+        local beams={}
         for i=1,segments do
-            local arc = (math.pi*2*radius/segments)*1.08
-            local part = newPart(Vector3.new(arc,t,t))
-            state.entries[#state.entries+1] = {
-                Kind="Halo",Part=part,Index=i,Count=segments,Ring=ringIndex,
-                Height=height,Radius=radius,TiltX=tiltX or 0,TiltZ=tiltZ or 0
-            }
+            local angle=((i-1)/segments)*math.pi*2
+            local attachment=Instance.new("Attachment")
+            attachment.Name="RingPoint"..i
+            attachment.Position=Vector3.new(math.cos(angle)*radius,0,math.sin(angle)*radius)
+            attachment.Parent=holder
+            attachments[i]=attachment
         end
+        for i=1,segments do
+            local beam=Instance.new("Beam")
+            beam.Name="DevKage_PremiumAuraBeam"
+            beam.Attachment0=attachments[i]
+            beam.Attachment1=attachments[(i%segments)+1]
+            beam.FaceCamera=true
+            beam.Width0=width
+            beam.Width1=width
+            beam.LightEmission=1
+            beam.LightInfluence=0
+            beam.Segments=3
+            beam.Transparency=NumberSequence.new(0.10)
+            beam.Color=beamColorSequence(configColor(),configColor())
+            beam.Parent=holder
+            beams[i]=beam
+        end
+        state.entries[#state.entries+1]={
+            Kind="Ring",
+            Holder=holder,
+            Beams=beams,
+            Anchor=anchorKind,
+            Ring=ringIndex,
+            Height=height,
+            Radius=radius,
+            TiltX=tiltX or 0,
+            TiltZ=tiltZ or 0,
+            Speed=speedMul or 0.3,
+            Phase=phase or 0,
+        }
     end
 
-    local function addWing(side,count,spread,lengthScale,layer)
-        count = count or 12
-        layer = layer or 1
+    local function addEnergyWingFallback(side,scale,layer)
+        local holder=makeInvisibleHolder("DevKage_PremiumEnergyWing")
+        local rootAttachment=Instance.new("Attachment")
+        rootAttachment.Name="WingRoot"
+        rootAttachment.Parent=holder
+
+        local count=18
+        local beams={}
         for i=1,count do
-            local f = (i-1)/math.max(count-1,1)
-            local length = (1.10 + f*1.45) * (lengthScale or 1)
-            local width = (0.34 - f*0.10) * (lengthScale or 1)
-            local feather = basePart("WedgePart",Vector3.new(width,length,0.18 + (1-f)*0.06))
-            state.entries[#state.entries+1] = {Kind="Wing",Part=feather,Index=i,Count=count,Side=side,Spread=spread or 1,Layer=layer}
+            local f=(i-1)/math.max(count-1,1)
+            local tip=Instance.new("Attachment")
+            tip.Name="WingTip"..i
+            tip.Position=Vector3.new(
+                side*(0.45+f*3.5)*scale,
+                (1.65-f*2.85+(layer-1)*0.22)*scale,
+                (0.15+f*1.15+(layer-1)*0.10)*scale
+            )
+            tip.Parent=holder
+
+            local beam=Instance.new("Beam")
+            beam.Name="DevKage_EnergyFeather"
+            beam.Attachment0=rootAttachment
+            beam.Attachment1=tip
+            beam.FaceCamera=true
+            beam.Width0=(0.16-0.05*f)*scale
+            beam.Width1=(0.055-0.025*f)*scale
+            beam.CurveSize0=side*(0.18+f*0.35)*scale
+            beam.CurveSize1=-side*(0.10+f*0.20)*scale
+            beam.LightEmission=1
+            beam.LightInfluence=0
+            beam.Segments=8
+            beam.Transparency=NumberSequence.new({
+                NumberSequenceKeypoint.new(0,0.08),
+                NumberSequenceKeypoint.new(0.80,0.18),
+                NumberSequenceKeypoint.new(1,0.55)
+            })
+            beam.Color=beamColorSequence(configColor():Lerp(Color3.new(1,1,1),0.35),configColor())
+            beam.Parent=holder
+            beams[#beams+1]=beam
+        end
+
+        state.entries[#state.entries+1]={
+            Kind="EnergyWing",
+            Holder=holder,
+            Beams=beams,
+            Side=side,
+            Layer=layer or 1,
+        }
+    end
+
+    local function addPremiumWings(character,size,layers)
+        layers=math.clamp(math.floor(tonumber(layers) or 1),1,3)
+        local any=false
+        for layer=1,layers do
+            local factor=1-(layer-1)*0.18
+            if addCatalogWings(character,size*factor,layer) then
+                any=true
+            end
+        end
+        if not any then
+            for layer=1,layers do
+                local factor=1-(layer-1)*0.17
+                addEnergyWingFallback(-1,size*factor,layer)
+                addEnergyWingFallback(1,size*factor,layer)
+            end
         end
     end
 
-    local function addCrown(count,radius,height)
-        for i=1,(count or 9) do
-            local spike = basePart("WedgePart",Vector3.new(0.16,0.62,0.22))
-            state.entries[#state.entries+1] = {Kind="Crown",Part=spike,Index=i,Count=count or 9,Radius=radius or 0.72,Height=height or 1.0}
-        end
-    end
-
-    local function addAngelOrbs(count,radius,vertical)
-        for i=1,count do
-            local orb = newPart(Vector3.new(0.16,0.16,0.16),Enum.PartType.Ball)
-            state.entries[#state.entries+1] = {Kind="Orb",Part=orb,Index=i,Count=count,Radius=radius or 2.2,Vertical=vertical or 0.65}
-        end
-    end
-
-    local function addAscensionRings(size)
-        for ring=1,4 do
-            addHalo(ring,(-1.65+(ring-1)*1.12)*size,(1.40+ring*0.16)*size,math.rad((ring%2==0) and 8 or -8),math.rad((ring-2.5)*5),44,0.038*size)
-        end
-    end
-
-    local function addFinishingGlow(root,character,size)
-        local light = Instance.new("PointLight")
-        light.Name = "DevKage_AvatarModsLight"
-        light.Color = configColor()
-        light.Brightness = math.max(tonumber(getgenv().__DevKageConfig.avatarModsBrightness) or 3,0)
-        light.Range = 13 + 7*size
-        light.Shadows = false
-        light.Parent = root
-        state.light = remember(light)
-
-        local highlight = Instance.new("Highlight")
-        highlight.Name = "DevKage_AvatarModsGlow"
-        highlight.FillColor = configColor()
-        highlight.OutlineColor = configColor():Lerp(Color3.new(1,1,1),0.35)
-        highlight.FillTransparency = 0.94
-        highlight.OutlineTransparency = 0.22
-        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        highlight.Parent = character
-        state.highlight = remember(highlight)
-
-        local attachment = Instance.new("Attachment")
-        attachment.Name = "DevKage_AngelShimmer"
-        attachment.Parent = root
+    local function addParticles(parent,name,baseRate,size,kind)
+        local attachment=Instance.new("Attachment")
+        attachment.Name=name.."_Attachment"
+        attachment.Parent=parent
         remember(attachment)
 
-        local emitter = Instance.new("ParticleEmitter")
-        emitter.Name = "DevKage_AngelShimmerEmitter"
-        emitter.Texture = "rbxasset://textures/particles/sparkles_main.dds"
-        emitter.Rate = 18
-        emitter.Speed = NumberRange.new(0.12,0.55)
-        emitter.Lifetime = NumberRange.new(1.0,1.8)
-        emitter.Size = NumberSequence.new({
-            NumberSequenceKeypoint.new(0,0.05*size),
+        local emitter=Instance.new("ParticleEmitter")
+        emitter.Name=name
+        emitter.Texture="rbxasset://textures/particles/sparkles_main.dds"
+        emitter.Rate=baseRate
+        emitter.Speed=kind=="Floor" and NumberRange.new(0.25,0.85) or NumberRange.new(0.05,0.4)
+        emitter.Lifetime=kind=="Floor" and NumberRange.new(1.15,2.25) or NumberRange.new(0.75,1.7)
+        emitter.Size=NumberSequence.new({
+            NumberSequenceKeypoint.new(0,0.04*size),
             NumberSequenceKeypoint.new(0.35,0.14*size),
             NumberSequenceKeypoint.new(1,0)
         })
-        emitter.Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0,0.44),
-            NumberSequenceKeypoint.new(0.7,0.68),
+        emitter.Transparency=NumberSequence.new({
+            NumberSequenceKeypoint.new(0,0.18),
+            NumberSequenceKeypoint.new(0.65,0.55),
             NumberSequenceKeypoint.new(1,1)
         })
-        emitter.SpreadAngle = Vector2.new(180,180)
-        emitter.Rotation = NumberRange.new(0,360)
-        emitter.RotSpeed = NumberRange.new(-45,45)
-        emitter.LightEmission = 1
-        emitter.LightInfluence = 0
-        emitter.ZOffset = 0.12
-        emitter.Color = ColorSequence.new(configColor())
-        emitter.Parent = attachment
-        state.emitter = remember(emitter)
+        emitter.SpreadAngle=Vector2.new(180,180)
+        emitter.Rotation=NumberRange.new(0,360)
+        emitter.RotSpeed=NumberRange.new(-70,70)
+        emitter.LightEmission=1
+        emitter.LightInfluence=0
+        emitter.ZOffset=0.2
+        emitter.Color=ColorSequence.new(configColor())
+        pcall(function()
+            emitter.Shape=kind=="Floor" and Enum.ParticleEmitterShape.Disc or Enum.ParticleEmitterShape.Sphere
+            emitter.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward
+            emitter.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+        end)
+        emitter.Parent=attachment
+        state.entries[#state.entries+1]={
+            Kind="Emitter",
+            Emitter=emitter,
+            BaseRate=baseRate,
+            Size=size,
+        }
     end
 
-    function API:Destroy()
-        if state.connection then pcall(function() state.connection:Disconnect() end); state.connection=nil end
-        if state.characterConnection then pcall(function() state.characterConnection:Disconnect() end); state.characterConnection=nil end
-        for _,object in ipairs(state.objects) do pcall(function() object:Destroy() end) end
-        state.objects={}; state.entries={}; state.light=nil; state.highlight=nil; state.emitter=nil; state.character=nil
-    end
+    local function addFinishingGlow(root,head,character,size,intensity)
+        local light=Instance.new("PointLight")
+        light.Name="DevKage_PremiumAvatarLight"
+        light.Color=configColor()
+        light.Brightness=math.max(tonumber(cfg().avatarModsBrightness) or 3,0)
+        light.Range=(12+9*size)*(intensity or 1)
+        light.Shadows=false
+        light.Parent=root
+        state.light=remember(light)
 
-    local function clearVisualsOnly()
-        if state.connection then pcall(function() state.connection:Disconnect() end); state.connection=nil end
-        for _,object in ipairs(state.objects) do pcall(function() object:Destroy() end) end
-        state.objects={}; state.entries={}; state.light=nil; state.highlight=nil; state.emitter=nil
+        local highlight=Instance.new("Highlight")
+        highlight.Name="DevKage_PremiumAvatarGlow"
+        highlight.FillColor=configColor()
+        highlight.OutlineColor=configColor():Lerp(Color3.new(1,1,1),0.35)
+        highlight.FillTransparency=0.965
+        highlight.OutlineTransparency=0.34
+        highlight.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Parent=character
+        state.highlight=remember(highlight)
+
+        addParticles(head,"DevKage_HeadAura",16*intensity,size,"Head")
+        addParticles(root,"DevKage_FloorAura",22*intensity,size,"Floor")
     end
 
     local function normalizedPreset(value)
-        local preset = tostring(value or "Guardian Angel")
-        local aliases = {
+        local preset=tostring(value or "Guardian Angel")
+        local aliases={
             ["Premium Aura"]="Guardian Angel",
             ["Halo Crown"]="Angel Crown",
             ["Orbiting Feathers"]="Guardian Angel",
@@ -10088,148 +10394,216 @@ runtimeEnv.__DevKageAvatarMods = (function()
 
     local function build(character)
         clearVisualsOnly()
-        if getgenv().__DevKageConfig.avatarModsEnabled ~= true or not character or not character.Parent then return end
-        local root = character:FindFirstChild("HumanoidRootPart")
-        local head = character:FindFirstChild("Head")
-        if not root or not head then return end
-        state.character = character
+        local myToken=state.buildToken
+        if cfg().avatarModsEnabled~=true or not character or not character.Parent then return end
 
-        local preset = normalizedPreset(getgenv().__DevKageConfig.avatarModsType)
-        local size = math.clamp(tonumber(getgenv().__DevKageConfig.avatarModsSize) or 1,0.55,2.0)
+        local root=character:FindFirstChild("HumanoidRootPart")
+        local head=character:FindFirstChild("Head")
+        local torso=character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso") or root
+        if not root or not head or not torso then return end
 
-        if preset == "Angel Halo" then
-            addHalo(1,0.74*size,1.18*size,math.rad(4),0,52,0.05*size)
-        elseif preset == "Double Angel Halo" then
-            addHalo(1,0.66*size,1.10*size,math.rad(6),0,50,0.05*size)
-            addHalo(2,0.92*size,1.40*size,math.rad(-7),math.rad(3),56,0.038*size)
-        elseif preset == "Angel Wings" then
-            addWing(-1,13,1.0,1.08*size,1); addWing(1,13,1.0,1.08*size,1)
-        elseif preset == "Seraph Wings" then
-            addWing(-1,15,1.08,1.18*size,1); addWing(1,15,1.08,1.18*size,1)
-            addWing(-1,11,0.78,0.92*size,2); addWing(1,11,0.78,0.92*size,2)
-            addWing(-1,8,0.58,0.72*size,3); addWing(1,8,0.58,0.72*size,3)
-        elseif preset == "Archangel Wings" then
-            addWing(-1,17,1.16,1.30*size,1); addWing(1,17,1.16,1.30*size,1)
-            addWing(-1,12,0.82,0.98*size,2); addWing(1,12,0.82,0.98*size,2)
-            addHalo(1,0.72*size,1.28*size,math.rad(4),0,54,0.045*size)
-        elseif preset == "Divine Halo + Wings" then
-            addHalo(1,0.68*size,1.14*size,math.rad(5),0,52,0.05*size)
-            addHalo(2,0.96*size,1.50*size,math.rad(-8),math.rad(5),58,0.036*size)
-            addWing(-1,15,1.10,1.22*size,1); addWing(1,15,1.10,1.22*size,1)
-        elseif preset == "Seraph Halo + Wings" then
-            addHalo(1,0.66*size,1.10*size,math.rad(5),0,50,0.045*size)
-            addHalo(2,0.92*size,1.42*size,math.rad(-8),math.rad(4),56,0.036*size)
-            addHalo(3,1.16*size,1.70*size,math.rad(11),math.rad(-5),60,0.03*size)
-            addWing(-1,15,1.08,1.20*size,1); addWing(1,15,1.08,1.20*size,1)
-            addWing(-1,10,0.72,0.86*size,2); addWing(1,10,0.72,0.86*size,2)
-        elseif preset == "Angel Crown" then
-            addHalo(1,0.72*size,1.08*size,math.rad(9),0,48,0.042*size)
-            addCrown(11,0.74*size,1.02*size)
-        elseif preset == "Ascended Angel" then
-            addWing(-1,13,1.02,1.12*size,1); addWing(1,13,1.02,1.12*size,1)
-            addHalo(1,0.72*size,1.20*size,math.rad(5),0,52,0.045*size)
-            addAscensionRings(size)
-            addAngelOrbs(8,2.25*size,0.58*size)
+        state.character=character
+        local preset=normalizedPreset(cfg().avatarModsType)
+        local size=math.clamp(tonumber(cfg().avatarModsSize) or 1,0.45,2.75)
+        local auraRadius=math.clamp(tonumber(cfg().avatarModsAuraRadius) or 1,0.55,2.0)
+
+        if preset=="Angel Halo" then
+            addBeamRing("Head",1,0.72*size,1.13*size*auraRadius,0,0,44,0.055*size,0.30,0.00)
+        elseif preset=="Double Angel Halo" then
+            addBeamRing("Head",1,0.64*size,1.05*size*auraRadius,math.rad(5),0,42,0.052*size,0.28,0.00)
+            addBeamRing("Head",2,0.92*size,1.40*size*auraRadius,math.rad(-8),math.rad(4),50,0.038*size,-0.22,0.20)
+        elseif preset=="Angel Wings" then
+            addPremiumWings(character,size,1)
+            addBeamRing("Floor",1,-2.55*size,1.75*size*auraRadius,0,0,44,0.045*size,0.24,0.05)
+        elseif preset=="Seraph Wings" then
+            addPremiumWings(character,size,3)
+            addBeamRing("Head",1,0.74*size,1.20*size*auraRadius,math.rad(5),0,46,0.046*size,0.26,0.10)
+            addBeamRing("Floor",1,-2.55*size,2.00*size*auraRadius,0,0,50,0.050*size,-0.20,0.25)
+        elseif preset=="Archangel Wings" then
+            addPremiumWings(character,size*1.10,2)
+            addBeamRing("Head",1,0.76*size,1.28*size*auraRadius,math.rad(4),0,50,0.050*size,0.30,0.10)
+            addBeamRing("Floor",1,-2.55*size,2.10*size*auraRadius,0,0,52,0.052*size,-0.23,0.32)
+        elseif preset=="Divine Halo + Wings" then
+            addPremiumWings(character,size,2)
+            addBeamRing("Head",1,0.66*size,1.10*size*auraRadius,math.rad(4),0,44,0.050*size,0.30,0.00)
+            addBeamRing("Head",2,0.98*size,1.50*size*auraRadius,math.rad(-9),math.rad(5),54,0.034*size,-0.24,0.22)
+            addBeamRing("Floor",1,-2.55*size,2.20*size*auraRadius,0,0,56,0.050*size,0.18,0.44)
+        elseif preset=="Seraph Halo + Wings" then
+            addPremiumWings(character,size,3)
+            addBeamRing("Head",1,0.62*size,1.05*size*auraRadius,math.rad(5),0,44,0.048*size,0.32,0.00)
+            addBeamRing("Head",2,0.91*size,1.38*size*auraRadius,math.rad(-8),math.rad(4),50,0.038*size,-0.27,0.20)
+            addBeamRing("Head",3,1.18*size,1.70*size*auraRadius,math.rad(12),math.rad(-5),56,0.030*size,0.21,0.40)
+            addBeamRing("Floor",1,-2.55*size,2.25*size*auraRadius,0,0,58,0.052*size,-0.18,0.60)
+        elseif preset=="Angel Crown" then
+            addBeamRing("Head",1,0.73*size,0.94*size*auraRadius,math.rad(13),0,40,0.045*size,0.26,0.00)
+            addBeamRing("Head",2,1.00*size,0.70*size*auraRadius,math.rad(-13),math.rad(7),34,0.038*size,-0.23,0.25)
+            addBeamRing("Head",3,1.23*size,0.46*size*auraRadius,math.rad(18),math.rad(-8),28,0.030*size,0.18,0.50)
+        elseif preset=="Ascended Angel" then
+            addPremiumWings(character,size*1.08,3)
+            addBeamRing("Head",1,0.62*size,1.04*size*auraRadius,math.rad(5),0,44,0.050*size,0.31,0.00)
+            addBeamRing("Head",2,0.94*size,1.40*size*auraRadius,math.rad(-9),math.rad(5),52,0.038*size,-0.25,0.20)
+            addBeamRing("Head",3,1.22*size,1.76*size*auraRadius,math.rad(13),math.rad(-6),58,0.030*size,0.20,0.40)
+            addBeamRing("Root",4,-0.55*size,2.02*size*auraRadius,math.rad(72),0,58,0.034*size,-0.16,0.58)
+            addBeamRing("Floor",5,-2.58*size,2.55*size*auraRadius,0,0,64,0.055*size,0.16,0.72)
         else
-            addWing(-1,14,1.05,1.16*size,1); addWing(1,14,1.05,1.16*size,1)
-            addWing(-1,9,0.68,0.82*size,2); addWing(1,9,0.68,0.82*size,2)
-            addHalo(1,0.70*size,1.18*size,math.rad(5),0,52,0.048*size)
-            addHalo(2,0.98*size,1.50*size,math.rad(-8),math.rad(4),58,0.035*size)
-            addAngelOrbs(6,2.10*size,0.45*size)
+            addPremiumWings(character,size,2)
+            addBeamRing("Head",1,0.68*size,1.12*size*auraRadius,math.rad(5),0,46,0.050*size,0.30,0.00)
+            addBeamRing("Head",2,0.98*size,1.47*size*auraRadius,math.rad(-8),math.rad(4),52,0.035*size,-0.24,0.25)
+            addBeamRing("Floor",1,-2.55*size,2.15*size*auraRadius,0,0,56,0.050*size,0.20,0.52)
         end
 
-        addFinishingGlow(root,character,size)
+        if myToken~=state.buildToken then return end
+        addFinishingGlow(root,head,character,size,(preset=="Ascended Angel" or preset=="Seraph Halo + Wings") and 1.45 or 1.0)
 
-        state.connection = RunService.RenderStepped:Connect(function()
-            if getgenv().__DevKageConfig.avatarModsEnabled ~= true or state.character ~= character or not character.Parent then return end
-            local liveRoot = character:FindFirstChild("HumanoidRootPart")
-            local liveHead = character:FindFirstChild("Head")
-            local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso") or liveRoot
-            if not liveRoot or not liveHead or not torso then return end
+        state.connection=RunService.RenderStepped:Connect(function()
+            if cfg().avatarModsEnabled~=true or state.character~=character or not character.Parent then return end
+            local liveRoot=character:FindFirstChild("HumanoidRootPart")
+            local liveHead=character:FindFirstChild("Head")
+            local liveTorso=character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso") or liveRoot
+            if not liveRoot or not liveHead or not liveTorso then return end
 
-            local now = os.clock()
-            local speed = math.max(tonumber(getgenv().__DevKageConfig.avatarModsSpeed) or 1,0.05)
-            local alpha = math.clamp(tonumber(getgenv().__DevKageConfig.avatarModsAlpha) or 0.18,0,0.92)
-            local color = animatedColor(now)
-            local scale = math.clamp(tonumber(getgenv().__DevKageConfig.avatarModsSize) or 1,0.55,2.0)
-            local bright = color:Lerp(Color3.new(1,1,1),0.32)
+            local now=os.clock()
+            local speed=math.max(tonumber(cfg().avatarModsSpeed) or 1,0.05)
+            local alpha=math.clamp(tonumber(cfg().avatarModsAlpha) or 0.18,0,0.90)
+            local density=math.clamp(tonumber(cfg().avatarModsParticleDensity) or 1,0.15,3.0)
+            local wingHeight=math.clamp(tonumber(cfg().avatarModsWingHeight) or 0,-2,2)
+            local baseColor=animatedColor(now,0)
+            local bright=baseColor:Lerp(Color3.new(1,1,1),0.24)
 
-            if state.light then state.light.Color=color; state.light.Brightness=math.max(tonumber(getgenv().__DevKageConfig.avatarModsBrightness) or 3,0) end
-            if state.highlight then state.highlight.FillColor=color; state.highlight.OutlineColor=bright end
-            if state.emitter then state.emitter.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,bright),ColorSequenceKeypoint.new(1,color)}) end
+            if state.light then
+                state.light.Color=baseColor
+                state.light.Brightness=math.max(tonumber(cfg().avatarModsBrightness) or 3,0)
+            end
+            if state.highlight then
+                state.highlight.FillColor=baseColor
+                state.highlight.OutlineColor=bright
+            end
 
             for _,entry in ipairs(state.entries) do
-                local part = entry.Part
-                if part and part.Parent then
-                    part.Color = bright
-                    part.Transparency = math.clamp(alpha + ((entry.Kind=="Wing") and 0.08 or 0),0.04,0.90)
-                    if entry.Kind == "Halo" then
-                        local angle = ((entry.Index-1)/entry.Count)*math.pi*2 + now*speed*((entry.Ring%2==0) and -0.20 or 0.20)
-                        local bob = math.sin(now*speed*1.4 + entry.Ring)*0.035*scale
-                        local base
-                        if math.abs(entry.Height) > 1.5*scale then
-                            base = liveRoot.CFrame * CFrame.new(0,entry.Height+bob,0)
-                        else
-                            base = liveHead.CFrame * CFrame.new(0,entry.Height+bob,0)
+                if entry.Kind=="WingAccessory" then
+                    local accessory=entry.Accessory
+                    local handle=entry.Handle
+                    local weld=entry.Weld
+                    if accessory and accessory.Parent and handle and handle.Parent and weld and weld.Parent then
+                        local layer=tonumber(entry.Layer) or 1
+                        local phase=(layer-1)*0.21
+                        local sway=math.sin(now*speed*1.35+phase)*math.rad(2.2+layer*0.4)
+                        local lift=math.sin(now*speed*1.08+phase)*0.025
+                        weld.C0=entry.BaseC0
+                            *CFrame.new(0,wingHeight+lift,(layer-1)*0.08)
+                            *CFrame.Angles(sway*0.35,0,sway)
+                        tintAccessory(accessory,animatedColor(now,(layer-1)*0.10),alpha+((layer-1)*0.035))
+                    end
+
+                elseif entry.Kind=="EnergyWing" then
+                    local holder=entry.Holder
+                    if holder and holder.Parent then
+                        local layer=tonumber(entry.Layer) or 1
+                        local side=tonumber(entry.Side) or 1
+                        local sway=math.sin(now*speed*1.5+layer*0.4)*math.rad(3.5)
+                        holder.CFrame=liveTorso.CFrame
+                            *CFrame.new(0,wingHeight,0.45+(layer-1)*0.08)
+                            *CFrame.Angles(0,0,side*sway)
+                        for index,beam in ipairs(entry.Beams or {}) do
+                            if beam and beam.Parent then
+                                local c1=animatedColor(now,(index/#entry.Beams)*0.22)
+                                beam.Color=beamColorSequence(c1:Lerp(Color3.new(1,1,1),0.30),c1)
+                            end
                         end
-                        base = base * CFrame.Angles(entry.TiltX,0,entry.TiltZ)
-                        local r = entry.Radius
-                        local pos = (base * CFrame.new(math.cos(angle)*r,0,math.sin(angle)*r)).Position
-                        local tangent = base:VectorToWorldSpace(Vector3.new(-math.sin(angle),0,math.cos(angle)))
-                        part.CFrame = CFrame.new(pos,pos+tangent)
-                    elseif entry.Kind == "Wing" then
-                        local f = (entry.Index-1)/math.max(entry.Count-1,1)
-                        local flap = math.sin(now*speed*1.65 + entry.Index*0.08 + entry.Layer*0.45)*0.065
-                        local layer = tonumber(entry.Layer) or 1
-                        local side = entry.Side
-                        local spread = entry.Spread
-                        local x = side*(0.66 + f*(2.75*spread) + (layer-1)*0.16)*scale
-                        local y = (0.72 - f*1.62 + (layer-1)*0.32)*scale
-                        local z = (0.36 + f*1.15 + (layer-1)*0.16)*scale
-                        local sweep = side*(0.36 + f*0.66 + flap)
-                        local roll = side*math.rad(19 + f*30 - (layer-1)*4)
-                        local pitch = math.rad(-18 + f*22)
-                        part.CFrame = torso.CFrame * CFrame.new(x,y,z) * CFrame.Angles(pitch,sweep,roll)
-                    elseif entry.Kind == "Orb" then
-                        local angle = ((entry.Index-1)/entry.Count)*math.pi*2 + now*speed*(0.42 + (entry.Index%2)*0.05)
-                        local y = math.sin(angle*1.5 + entry.Index)*entry.Vertical + 0.35*scale
-                        part.CFrame = CFrame.new(liveRoot.Position + Vector3.new(math.cos(angle)*entry.Radius,y,math.sin(angle)*entry.Radius))
-                    elseif entry.Kind == "Crown" then
-                        local angle = ((entry.Index-1)/entry.Count)*math.pi*2 + now*speed*0.08
-                        local radius = entry.Radius or 0.72*scale
-                        local y = entry.Height or 1.0*scale
-                        part.CFrame = liveHead.CFrame * CFrame.new(math.cos(angle)*radius,y,math.sin(angle)*radius) * CFrame.Angles(0,-angle,math.rad(16))
+                    end
+
+                elseif entry.Kind=="Ring" then
+                    local holder=entry.Holder
+                    if holder and holder.Parent then
+                        local anchorCFrame
+                        if entry.Anchor=="Head" then
+                            anchorCFrame=liveHead.CFrame
+                        elseif entry.Anchor=="Floor" then
+                            anchorCFrame=CFrame.new(liveRoot.Position)
+                        else
+                            anchorCFrame=liveRoot.CFrame
+                        end
+
+                        local direction=(entry.Ring%2==0) and -1 or 1
+                        local spin=now*speed*(entry.Speed or 0.3)*direction+(entry.Phase or 0)*math.pi*2
+                        local bob=(entry.Anchor=="Head" and math.sin(now*speed*1.6+entry.Ring)*0.035 or 0)
+                        holder.CFrame=anchorCFrame
+                            *CFrame.new(0,(entry.Height or 0)+bob,0)
+                            *CFrame.Angles(entry.TiltX or 0,spin,entry.TiltZ or 0)
+
+                        local beams=entry.Beams or {}
+                        for index,beam in ipairs(beams) do
+                            if beam and beam.Parent then
+                                local phase=(index/math.max(#beams,1))*0.34+(entry.Phase or 0)
+                                local c1=animatedColor(now,phase)
+                                local c2=animatedColor(now,phase+0.035)
+                                beam.Color=beamColorSequence(c1:Lerp(Color3.new(1,1,1),0.18),c2)
+                                beam.Transparency=NumberSequence.new(math.clamp(alpha*0.42,0.03,0.65))
+                            end
+                        end
+                    end
+
+                elseif entry.Kind=="Emitter" then
+                    local emitter=entry.Emitter
+                    if emitter and emitter.Parent then
+                        local c1=animatedColor(now,0.08)
+                        local c2=animatedColor(now,0.26)
+                        emitter.Color=beamColorSequence(c1,c2)
+                        emitter.Rate=(entry.BaseRate or 16)*density
                     end
                 end
             end
         end)
+
+        if type(MaskShard)=="table" and type(MaskShard.Connections)=="table" and state.connection then
+            MaskShard.Connections[#MaskShard.Connections+1]=state.connection
+        end
+    end
+
+    function API:Destroy()
+        clearVisualsOnly()
+        if state.characterConnection then
+            pcall(function() state.characterConnection:Disconnect() end)
+            state.characterConnection=nil
+        end
+        if state.wingTemplate then
+            pcall(function() state.wingTemplate:Destroy() end)
+            state.wingTemplate=nil
+        end
     end
 
     function API:Refresh()
-        if getgenv().__DevKageConfig.avatarModsEnabled ~= true then
+        if cfg().avatarModsEnabled~=true then
             clearVisualsOnly()
             return
         end
-        local character = LocalPlayer.Character
-        if character then task.defer(function() build(character) end) end
+        local character=LocalPlayer.Character
+        if character then
+            task.spawn(function()
+                if character.Parent then build(character) end
+            end)
+        end
     end
 
     function API:SetEnabled(value)
-        getgenv().__DevKageConfig.avatarModsEnabled = value == true
+        cfg().avatarModsEnabled=value==true
         if value then self:Refresh() else clearVisualsOnly() end
     end
 
-    state.characterConnection = LocalPlayer.CharacterAdded:Connect(function(character)
-        if getgenv().__DevKageConfig.avatarModsEnabled == true then
-            task.delay(0.15,function()
+    state.characterConnection=LocalPlayer.CharacterAdded:Connect(function(character)
+        if cfg().avatarModsEnabled==true then
+            task.delay(0.20,function()
                 if character.Parent then build(character) end
             end)
         end
     end)
+    if type(MaskShard)=="table" and type(MaskShard.Connections)=="table" then
+        MaskShard.Connections[#MaskShard.Connections+1]=state.characterConnection
+    end
 
-    if getgenv().__DevKageConfig.avatarModsEnabled == true then task.defer(function() API:Refresh() end) end
+    if cfg().avatarModsEnabled==true then task.defer(function() API:Refresh() end) end
     return API
-end)();
+end)()
 end
 
 local function optionIndex(options, selected)
@@ -10251,7 +10625,7 @@ end
 local UI = {}
 
 (function()
-local spooferPage = window:CreatePage({ Icon = "rbxassetid://8547236654", Glyph = "R", Size = UDim2.new(0, 36, 0, 36) })
+local spooferPage = window:CreatePage({ Icon = "rbxassetid://8547249956", Glyph = "A", Size = UDim2.new(0, 36, 0, 36) })
 
 local chinaHatSection = spooferPage:CreateSection({ Name = "Chinese Man Hat", Side = "Left", Size = 315 })
 
@@ -10349,7 +10723,7 @@ chinaHatToggle:Set(false)
 end
 })
 
-local avatarModsSection = spooferPage:CreateSection({ Name = "Avatar Mods", Side = "Left", Size = 360 })
+local avatarModsSection = spooferPage:CreateSection({ Name = "Avatar Mods", Side = "Left", Size = 520 })
 local avatarModsRuntime = ((type(getgenv)=="function" and getgenv()) or _G).__DevKageAvatarMods
 
 local avatarModsToggle = avatarModsSection:CreateToggle({
@@ -10413,6 +10787,42 @@ local avatarModsTransparencySlider = avatarModsSection:CreateSlider({
 Name = "Transparency", State = math.floor((tonumber(getgenv().__DevKageConfig.avatarModsAlpha) or 0.18)*100+0.5),
 Min = 0, Max = 90, Decimals = 0, Suffix = "%",
 Callback = function(v) getgenv().__DevKageConfig.avatarModsAlpha = math.clamp(v/100,0,0.9) end
+})
+
+local avatarModsWingSpreadSlider = avatarModsSection:CreateSlider({
+Name = "Wing Spread", State = tonumber(getgenv().__DevKageConfig.avatarModsWingSpread) or 1,
+Min = 0.55, Max = 1.75, Decimals = 2, Suffix = "x",
+Callback = function(v)
+getgenv().__DevKageConfig.avatarModsWingSpread = v
+if avatarModsRuntime then avatarModsRuntime:Refresh() end
+end
+})
+
+local avatarModsWingHeightSlider = avatarModsSection:CreateSlider({
+Name = "Wing Height", State = tonumber(getgenv().__DevKageConfig.avatarModsWingHeight) or 0,
+Min = -2, Max = 2, Decimals = 2, Suffix = "",
+Callback = function(v) getgenv().__DevKageConfig.avatarModsWingHeight = v end
+})
+
+local avatarModsAuraRadiusSlider = avatarModsSection:CreateSlider({
+Name = "Aura Radius", State = tonumber(getgenv().__DevKageConfig.avatarModsAuraRadius) or 1,
+Min = 0.55, Max = 2, Decimals = 2, Suffix = "x",
+Callback = function(v)
+getgenv().__DevKageConfig.avatarModsAuraRadius = v
+if avatarModsRuntime then avatarModsRuntime:Refresh() end
+end
+})
+
+local avatarModsParticleDensitySlider = avatarModsSection:CreateSlider({
+Name = "Particle Density", State = tonumber(getgenv().__DevKageConfig.avatarModsParticleDensity) or 1,
+Min = 0.15, Max = 3, Decimals = 2, Suffix = "x",
+Callback = function(v) getgenv().__DevKageConfig.avatarModsParticleDensity = v end
+})
+
+local avatarModsRainbowSaturationSlider = avatarModsSection:CreateSlider({
+Name = "Rainbow Saturation", State = tonumber(getgenv().__DevKageConfig.avatarModsRainbowSaturation) or 0.82,
+Min = 0, Max = 1, Decimals = 2, Suffix = "",
+Callback = function(v) getgenv().__DevKageConfig.avatarModsRainbowSaturation = v end
 })
 
 local rainbowAuraSection = spooferPage:CreateSection({ Name = "Avatar Aura", Side = "Right", Size = 360 })
@@ -10579,7 +10989,10 @@ chinaHatRangeSlider=chinaHatRangeSlider, avatarModsToggle=avatarModsToggle,
 avatarModsTypeDrop=avatarModsTypeDrop, avatarModsColorPicker=avatarModsColorPicker,
 avatarModsRainbowToggle=avatarModsRainbowToggle, avatarModsSpeedSlider=avatarModsSpeedSlider,
 avatarModsSizeSlider=avatarModsSizeSlider, avatarModsBrightnessSlider=avatarModsBrightnessSlider,
-avatarModsTransparencySlider=avatarModsTransparencySlider, rainbowAuraToggle=rainbowAuraToggle,
+avatarModsTransparencySlider=avatarModsTransparencySlider,
+avatarModsWingSpreadSlider=avatarModsWingSpreadSlider, avatarModsWingHeightSlider=avatarModsWingHeightSlider,
+avatarModsAuraRadiusSlider=avatarModsAuraRadiusSlider, avatarModsParticleDensitySlider=avatarModsParticleDensitySlider,
+avatarModsRainbowSaturationSlider=avatarModsRainbowSaturationSlider, rainbowAuraToggle=rainbowAuraToggle,
 rainbowAuraModeDrop=rainbowAuraModeDrop, rainbowAuraColorPicker=rainbowAuraColorPicker,
 rainbowAuraTypeDrop=rainbowAuraTypeDrop, rainbowAuraSpeedSlider=rainbowAuraSpeedSlider,
 rainbowAuraBrightnessSlider=rainbowAuraBrightnessSlider, rainbowAuraAlphaSlider=rainbowAuraAlphaSlider,
@@ -10624,7 +11037,7 @@ end
 
 local function compactVisualSection(section, minimumHeight)
 local holder=section and section.Holder
-local outer=holder and holder.Parent and holder.Parent.Parent
+local outer=section and section.Root or (holder and holder.Parent and holder.Parent.Parent)
 if not holder or not outer then return end
 local layout=holder:FindFirstChildOfClass("UIListLayout")
 local function resize()
@@ -10632,13 +11045,57 @@ if not holder.Parent or not outer.Parent then return end
 local contentHeight=layout and layout.AbsoluteContentSize.Y or holder.AbsoluteCanvasSize.Y
 if contentHeight<=0 then return end
 local height=math.max(tonumber(minimumHeight) or 80,math.ceil(contentHeight)+32)
+section.__ExpandedHeight=height
+if section.__Collapsed~=true then
 outer.Size=UDim2.new(1,0,0,height)
+end
 holder.CanvasPosition=Vector2.new(0,0)
 end
 if layout then
 utility:CreateConnection(layout:GetPropertyChangedSignal("AbsoluteContentSize"),resize)
 end
 task.defer(resize)
+end
+
+local function makeVisualSectionFolder(section)
+if not section or not section.Root or not section.Holder then return end
+local root=section.Root
+local holder=section.Holder
+local extra=section.Extra
+section.__Collapsed=false
+
+local button=Instance.new("TextButton")
+button.Name="FolderToggle"
+button.AnchorPoint=Vector2.new(1,0)
+button.Position=UDim2.new(1,-7,0,-7)
+button.Size=UDim2.fromOffset(24,18)
+button.BackgroundTransparency=1
+button.BorderSizePixel=0
+button.Font=Enum.Font.Code
+button.Text="▼"
+button.TextColor3=Color3.fromRGB(175,205,75)
+button.TextSize=11
+button.ZIndex=60
+button.Parent=root
+
+local function setCollapsed(value)
+section.__Collapsed=value==true
+if section.__Collapsed then
+holder.Visible=false
+if extra then extra.Visible=false end
+root.Size=UDim2.new(1,0,0,22)
+button.Text="▶"
+else
+holder.Visible=true
+if extra then extra.Visible=true end
+root.Size=UDim2.new(1,0,0,section.__ExpandedHeight or section.Size or 120)
+button.Text="▼"
+end
+end
+
+utility:CreateConnection(button.MouseButton1Click,function()
+setCollapsed(not section.__Collapsed)
+end)
 end
 
 local playeresp = visualsPage:CreateSection({Name="Player ESP & Client Effects",Side="Left",Size=850})
@@ -11803,7 +12260,16 @@ compactVisualSection(espExtra,120)
 compactVisualSection(worldSection,120)
 compactVisualSection(lightingSection,140)
 compactVisualSection(snowSection,120)
-compactVisualSection(animationSection,120);
+compactVisualSection(animationSection,120)
+
+makeVisualSectionFolder(playeresp)
+makeVisualSectionFolder(espAppearance)
+makeVisualSectionFolder(espExtra)
+makeVisualSectionFolder(worldSection)
+makeVisualSectionFolder(viewmodelSection)
+makeVisualSectionFolder(lightingSection)
+makeVisualSectionFolder(snowSection)
+makeVisualSectionFolder(animationSection);
 
 (function()
 local SharedSpoofConfig = (type(getgenv) == "function" and getgenv().__DevKageConfig) or {}
@@ -13191,13 +13657,12 @@ scheduleAvatarApply()
 end)();
 
 (function()
-local mouseLockPage = window:CreatePage({Icon="rbxassetid://8547249956",Glyph="A",Size=UDim2.new(0,36,0,36)})
+local mouseLockPage = window:CreatePage({Icon="rbxassetid://8547236654",Glyph="R",Size=UDim2.new(0,36,0,36)})
 local crosshairSection = mouseLockPage:CreateSection({Name="Crosshair",Side="Left",Size=650})
 local textSection = mouseLockPage:CreateSection({Name="Crosshair Text",Side="Left",Size=360})
 local animationSection = mouseLockPage:CreateSection({Name="Crosshair Animation",Side="Right",Size=470})
 local advancedSection = mouseLockPage:CreateSection({Name="Crosshair Glow",Side="Right",Size=300})
 
-local settings = {}
 local cursorStateMap = {
     devkage_cursor_enabled="Enabled",
     devkage_cursor_position_mode="PositionMode",
@@ -13235,666 +13700,67 @@ local cursorStateMap = {
     devkage_cursor_pulse_speed="PulseSpeed",
 }
 
-local function refreshCursorSettings()
+local cursorBridgeEnv=(type(getgenv)=="function" and getgenv()) or _G
+local cursorBridge=cursorBridgeEnv.__DevKageCursorBridgeV1
+if type(cursorBridge)~="table" or cursorBridge.Protocol~="DevKage.MaskShard.Cursor/1" then
+    cursorBridge={
+        Protocol="DevKage.MaskShard.Cursor/1",
+        Settings={},
+        Revision=0,
+        MainAttached=false,
+        MainHeartbeat=0,
+        ExternalAttached=false,
+        ExternalHeartbeat=0,
+    }
+    cursorBridgeEnv.__DevKageCursorBridgeV1=cursorBridge
+end
+cursorBridge.Settings=type(cursorBridge.Settings)=="table" and cursorBridge.Settings or {}
+cursorBridge.MainAttached=true
+
+local function publishCursorSettings(force)
+    local changed=force==true
     for visualKey,runtimeKey in pairs(cursorStateMap) do
         local value=VisualsState[visualKey]
-        if value~=nil then settings[runtimeKey]=value end
+        if value~=nil and cursorBridge.Settings[runtimeKey]~=value then
+            cursorBridge.Settings[runtimeKey]=value
+            changed=true
+        end
+    end
+    cursorBridge.UIOpen=window and window.Enabled==true
+    cursorBridge.ControlMode=tostring(VisualsState.devkage_cursor_control_mode or "Free Cursor")
+    cursorBridge.MainHeartbeat=os.clock()
+    if changed then
+        cursorBridge.Revision=(tonumber(cursorBridge.Revision) or 0)+1
     end
 end
 
 local function syncCursorSetting(key,value)
     VisualsState[key]=value
     local runtimeKey=cursorStateMap[key]
-    if runtimeKey then settings[runtimeKey]=value end
+    if runtimeKey then
+        cursorBridge.Settings[runtimeKey]=value
+        cursorBridge.Revision=(tonumber(cursorBridge.Revision) or 0)+1
+    end
+    cursorBridge.MainHeartbeat=os.clock()
     if key=="devkage_cursor_control_mode" and window and window.SetCursorControlMode then
         window:SetCursorControlMode(value)
     end
 end
 
-refreshCursorSettings()
-
-do
-    local cursorHttpService=game:GetService("HttpService")
-    local cursorInstanceId=cursorHttpService:GenerateGUID(false):gsub("%-","")
-    local cursorCoreGui=game:GetService("CoreGui")
-    local cursorEnv=(type(getgenv)=="function" and getgenv()) or _G
-    local DrawingAPI=rawget(cursorEnv,"Drawing") or rawget(_G,"Drawing")
-    if not DrawingAPI and type(Drawing)=="table" then DrawingAPI=Drawing end
-
-    local runtime={
-        Gui=nil,
-        Root=nil,
-        Lines={},
-        Glows={},
-        InnerGlows={},
-        MainText=nil,
-        SecondText=nil,
-        DrawLines={},
-        DrawGlows={},
-        DrawInnerGlows={},
-        DrawMainText=nil,
-        DrawSecondText=nil,
-        DrawingReady=false,
-        Connection=nil,
-        Supervisor=nil,
-        Rotation=tonumber(settings.AngleOffset) or 0,
-        RotationProgress=0,
-        CurrentRotationSpeed=math.max(tonumber(settings.SpinSpeed) or 288,0)/360,
-        PulseTime=0,
-        Destroyed=false,
-    }
-
-    local function removeDrawing(object)
-        if not object then return end
-        pcall(function()
-            object.Visible=false
-            if type(object.Remove)=="function" then
-                object:Remove()
-            elseif type(object.Destroy)=="function" then
-                object:Destroy()
-            end
-        end)
-    end
-
-    local function newDrawing(kind)
-        if type(DrawingAPI)~="table" or type(DrawingAPI.new)~="function" then return nil end
-        local object=nil
-        local ok=pcall(function() object=DrawingAPI.new(kind) end)
-        if not ok then return nil end
-        return object
-    end
-
-    local function buildDrawingRenderer()
-        if runtime.DrawingReady then return true end
-        local created={}
-        local function remember(object)
-            if object then created[#created+1]=object end
-            return object
-        end
-
-        for i=1,12 do
-            local outer=remember(newDrawing("Line"))
-            local inner=remember(newDrawing("Line"))
-            local line=remember(newDrawing("Line"))
-            if not outer or not inner or not line then
-                for _,object in ipairs(created) do removeDrawing(object) end
-                runtime.DrawLines={}
-                runtime.DrawGlows={}
-                runtime.DrawInnerGlows={}
-                runtime.DrawingReady=false
-                return false
-            end
-            pcall(function()
-                outer.ZIndex=9997
-                inner.ZIndex=9998
-                line.ZIndex=9999
-            end)
-            runtime.DrawGlows[i]=outer
-            runtime.DrawInnerGlows[i]=inner
-            runtime.DrawLines[i]=line
-        end
-
-        local mainText=remember(newDrawing("Text"))
-        local secondText=remember(newDrawing("Text"))
-        if mainText and secondText then
-            pcall(function()
-                mainText.Center=true
-                mainText.Outline=true
-                mainText.Font=2
-                mainText.ZIndex=10000
-                secondText.Center=true
-                secondText.Outline=true
-                secondText.Font=2
-                secondText.ZIndex=10000
-            end)
-            runtime.DrawMainText=mainText
-            runtime.DrawSecondText=secondText
-        end
-
-        runtime.DrawingReady=true
-        return true
-    end
-
-    local function parentCursorGui(gui)
-        if not gui then return false end
-
-        local okCore=pcall(function()
-            gui.Parent=cursorCoreGui
-        end)
-        if okCore and gui.Parent then
-            local protector=protectgui or (type(syn)=="table" and syn.protect_gui)
-            if type(protector)=="function" then pcall(protector,gui) end
-            if gui.Parent then return true end
-        end
-
-        if type(gethui)=="function" then
-            local okHost,host=pcall(gethui)
-            if okHost and host then
-                local ok=pcall(function() gui.Parent=host end)
-                if ok and gui.Parent then return true end
-            end
-        end
-
-        local playerGui=LocalPlayer:FindFirstChildOfClass("PlayerGui")
-        if playerGui then
-            local ok=pcall(function() gui.Parent=playerGui end)
-            if ok and gui.Parent then return true end
-        end
-        return false
-    end
-
-    local function makeGuiArm(parent,name,zIndex)
-        local frame=Instance.new("Frame")
-        frame.Name=name
-        frame.AnchorPoint=Vector2.new(0.5,0.5)
-        frame.BackgroundColor3=Color3.new(1,1,1)
-        frame.BackgroundTransparency=0
-        frame.BorderSizePixel=0
-        frame.ZIndex=zIndex
-        frame.Parent=parent
-        local corner=Instance.new("UICorner")
-        corner.CornerRadius=UDim.new(1,0)
-        corner.Parent=frame
-        return frame
-    end
-
-    local function makeGuiText(parent,name,size,z)
-        local label=Instance.new("TextLabel")
-        label.Name=name
-        label.AnchorPoint=Vector2.new(0.5,0)
-        label.BackgroundTransparency=1
-        label.BorderSizePixel=0
-        label.Font=Enum.Font.Arcade
-        label.Text=""
-        label.TextColor3=Color3.new(1,1,1)
-        label.TextSize=size
-        label.TextStrokeColor3=Color3.new(0,0,0)
-        label.TextStrokeTransparency=0.15
-        label.TextXAlignment=Enum.TextXAlignment.Center
-        label.TextYAlignment=Enum.TextYAlignment.Center
-        label.ZIndex=z
-        label.Parent=parent
-        return label
-    end
-
-    local function destroyGui()
-        if runtime.Root then pcall(function() runtime.Root:Destroy() end) end
-        if runtime.Gui
-        and runtime.Gui ~= window.CursorLayer
-        and runtime.Gui ~= window.ScreenGui then
-            pcall(function() runtime.Gui:Destroy() end)
-        end
-        runtime.Gui=nil
-        runtime.Root=nil
-        runtime.Lines={}
-        runtime.Glows={}
-        runtime.InnerGlows={}
-        runtime.MainText=nil
-        runtime.SecondText=nil
-    end
-
-    local function buildGui()
-        destroyGui()
-
-        local gui=window and window.CursorLayer or nil
-        if not gui or not gui.Parent then
-            gui=Instance.new("ScreenGui")
-            gui.Name="DevKage_CursorLayer_"..cursorInstanceId
-            gui.IgnoreGuiInset=true
-            gui.ResetOnSpawn=false
-            gui.DisplayOrder=2147483647
-            gui.ZIndexBehavior=Enum.ZIndexBehavior.Global
-            pcall(function() gui.OnTopOfCoreBlur=true end)
-            if not parentCursorGui(gui) then
-                pcall(function() gui:Destroy() end)
-                return false
-            end
-            window.CursorLayer=gui
-        end
-
-        gui.Enabled=true
-        gui.DisplayOrder=2147483647
-
-        local root=Instance.new("Frame")
-        root.Name="CursorRoot"
-        root.BackgroundTransparency=1
-        root.BorderSizePixel=0
-        root.Size=UDim2.fromOffset(1,1)
-        root.Position=UDim2.fromOffset(0,0)
-        root.ZIndex=100
-        root.Parent=gui
-
-        local lines={}
-        local glows={}
-        local innerGlows={}
-        for i=1,12 do
-            glows[i]=makeGuiArm(root,"GlowOuter"..i,99)
-            innerGlows[i]=makeGuiArm(root,"GlowInner"..i,100)
-            lines[i]=makeGuiArm(root,"Line"..i,101)
-        end
-
-        local mainText=makeGuiText(root,"MainText",20,103)
-        local secondText=makeGuiText(root,"SecondText",15,103)
-
-        runtime.Gui=gui
-        runtime.Root=root
-        runtime.Lines=lines
-        runtime.Glows=glows
-        runtime.InnerGlows=innerGlows
-        runtime.MainText=mainText
-        runtime.SecondText=secondText
-        return true
-    end
-
-    local function guiHealthy()
-        local gui=runtime.Gui
-        local root=runtime.Root
-        if not gui or not gui.Parent or not root or not root.Parent then return false end
-        local validHost = root.Parent==gui
-            or (window and window.ScreenGui and root.Parent==window.ScreenGui)
-            or (window and window.CursorLayer and root.Parent==window.CursorLayer)
-        if not validHost then return false end
-        if not runtime.MainText or runtime.MainText.Parent~=root then return false end
-        if not runtime.SecondText or runtime.SecondText.Parent~=root then return false end
-        for i=1,12 do
-            if not runtime.Lines[i] or runtime.Lines[i].Parent~=root then return false end
-            if not runtime.Glows[i] or runtime.Glows[i].Parent~=root then return false end
-            if not runtime.InnerGlows[i] or runtime.InnerGlows[i].Parent~=root then return false end
-        end
-        return true
-    end
-
-    buildGui()
-    buildDrawingRenderer()
-
-    local function viewportCenter()
-        local camera=workspace.CurrentCamera
-        local size=camera and camera.ViewportSize or Vector2.new(1920,1080)
-        return Vector2.new(size.X*0.5,size.Y*0.5)
-    end
-
-    local function syncCursorHost()
-        if not runtime.Root or not runtime.Root.Parent then return end
-        local uiOpen=window and window.Enabled==true
-        local desiredHost=nil
-
-        if uiOpen and window and window.ScreenGui and window.ScreenGui.Parent then
-            desiredHost=window.ScreenGui
-        elseif window and window.CursorLayer and window.CursorLayer.Parent then
-            desiredHost=window.CursorLayer
-        end
-
-        if desiredHost and runtime.Root.Parent~=desiredHost then
-            pcall(function()
-                runtime.Root.Parent=desiredHost
-            end)
-        end
-    end
-
-    local function cursorCenter()
-        local center=viewportCenter()
-        local uiOpen=window and window.Enabled==true
-        local controlMode=tostring(settings.ControlMode or (window and window.CursorControlMode) or "Free Cursor")
-
-        if not uiOpen and controlMode=="Cursor Lock" then
-            return center
-        end
-
-        local ok,pos=pcall(function() return uis:GetMouseLocation() end)
-        if not ok or not pos then return center end
-
-        local camera=workspace.CurrentCamera
-        local viewport=camera and camera.ViewportSize or Vector2.new(1920,1080)
-        if pos.X < -32 or pos.Y < -32 or pos.X > viewport.X+32 or pos.Y > viewport.Y+32 then
-            return center
-        end
-
-        return Vector2.new(pos.X,pos.Y)
-    end
-
-    local function pulseCurve(t,speed)
-        local raw=math.sin(t*speed)*0.5+0.5
-        return raw*raw
-    end
-
-    local function rotationSpeed(progress,base)
-        local slowdownStart=0.6
-        local slowdownDuration=0.35
-        local minSlowdownSpeed=0.3
-        if progress>=slowdownStart then
-            local slowdownProgress=math.clamp((progress-slowdownStart)/slowdownDuration,0,1)
-            local easedProgress=slowdownProgress*slowdownProgress
-            local slowdownFactor=1-(easedProgress*(1-minSlowdownSpeed))
-            return base*math.max(slowdownFactor,minSlowdownSpeed)
-        end
-        return base
-    end
-
-    local function shortestAngleDelta(from,to)
-        return ((to-from+180)%360)-180
-    end
-
-    local function legacyRainbowColor(t)
-        local r=math.sin(t*0.6)*0.5+0.5
-        local g=math.sin(t*0.6+2)*0.5+0.5
-        local b=math.sin(t*0.6+4)*0.5+0.5
-        return Color3.new(r,g,b)
-    end
-
-    local function armColor(index,count,pulse)
-        local primary=typeof(settings.Color)=="Color3" and settings.Color or Color3.new(1,1,1)
-        local secondary=typeof(settings.SecondaryColor)=="Color3" and settings.SecondaryColor or Color3.fromRGB(145,85,255)
-        local mode=tostring(settings.ColorMode or "Legacy")
-        local speed=math.max(tonumber(settings.ColorSpeed) or 1,0)
-        local spread=math.clamp(tonumber(settings.ColorSpread) or 0.18,0,1)
-        local clock=runtime.PulseTime*speed
-
-        if mode=="Solid" then
-            return primary
-        elseif mode=="Two Tone" then
-            return index%2==1 and primary or secondary
-        elseif mode=="Gradient" then
-            local alpha=count<=1 and 0 or (index-1)/(count-1)
-            return primary:Lerp(secondary,alpha)
-        elseif mode=="Color Wave" then
-            local wave=math.sin(clock*math.pi*2+(index-1)*spread*math.pi*2)*0.5+0.5
-            return primary:Lerp(secondary,wave)
-        elseif mode=="RGB Wave" then
-            local hue=(clock*0.15+(index-1)/math.max(count,1)*spread*2)%1
-            return Color3.fromHSV(hue,0.82,1)
-        elseif mode=="Ice" then
-            return Color3.fromRGB(205,245,255):Lerp(Color3.fromRGB(75,155,255),(index-1)/math.max(count-1,1))
-        elseif mode=="Purple LED" then
-            local wave=0.25+0.75*(math.sin(clock*3+(index-1)*0.8)*0.5+0.5)
-            return Color3.fromRGB(75,20,140):Lerp(Color3.fromRGB(220,95,255),wave)
-        elseif mode=="Fire" then
-            local wave=math.sin(clock*2.5+(index-1)*0.7)*0.5+0.5
-            return Color3.fromRGB(255,55,20):Lerp(Color3.fromRGB(255,210,30),wave)
-        elseif mode=="Toxic" then
-            local wave=math.sin(clock*2.2+(index-1)*0.65)*0.5+0.5
-            return Color3.fromRGB(25,255,70):Lerp(Color3.fromRGB(190,255,40),wave)
-        end
-
-        if settings.Rainbow==true then
-            local rainbowSpeed=math.max(tonumber(settings.RainbowSpeed) or 7.2,0)
-            return legacyRainbowColor(runtime.PulseTime*rainbowSpeed*0.42)
-        end
-        return primary
-    end
-
-    local function setDrawingLine(object,visible,fromPos,toPos,thickness,color,transparency)
-        if not object then return end
-        pcall(function()
-            object.Visible=visible
-            if visible then
-                object.From=fromPos
-                object.To=toPos
-                object.Thickness=math.max(1,thickness)
-                object.Color=color
-                object.Transparency=math.clamp(transparency,0,1)
-            end
-        end)
-    end
-
-    local function updateCursor(dt)
-        if runtime.Destroyed then return end
-        refreshCursorSettings()
-
-        if not guiHealthy() then buildGui() end
-        if not runtime.DrawingReady then buildDrawingRenderer() end
-
-        local enabled=settings.Enabled~=false
-        syncCursorHost()
-        local guiOk=guiHealthy()
-        if guiOk then
-            pcall(function()
-                if runtime.Gui ~= window.ScreenGui then
-                    runtime.Gui.Enabled=true
-                    runtime.Gui.DisplayOrder=2147483647
-                end
-                runtime.Root.Visible=enabled
-            end)
-        end
-
-        if not enabled then
-            if runtime.DrawingReady then
-                for i=1,12 do
-                    setDrawingLine(runtime.DrawLines[i],false,Vector2.new(0,0),Vector2.new(0,0),1,Color3.new(1,1,1),1)
-                    setDrawingLine(runtime.DrawInnerGlows[i],false,Vector2.new(0,0),Vector2.new(0,0),1,Color3.new(1,1,1),1)
-                    setDrawingLine(runtime.DrawGlows[i],false,Vector2.new(0,0),Vector2.new(0,0),1,Color3.new(1,1,1),1)
-                end
-                if runtime.DrawMainText then pcall(function() runtime.DrawMainText.Visible=false end) end
-                if runtime.DrawSecondText then pcall(function() runtime.DrawSecondText.Visible=false end) end
-            end
-            return
-        end
-
-        local center=cursorCenter()
-        if guiOk then runtime.Root.Position=UDim2.fromOffset(center.X,center.Y) end
-
-        dt=math.min(math.max(tonumber(dt) or 0,0),0.08)
-        runtime.PulseTime=runtime.PulseTime+dt
-
-        local armCount=math.clamp(math.floor(tonumber(settings.ArmCount) or 4),1,12)
-        local lineWidth=math.max(1,math.floor((tonumber(settings.LineWidth) or 3)+0.5))
-        local configuredLength=math.max(1,tonumber(settings.LineLength) or 25)
-        local radius=math.max(0,tonumber(settings.CenterRadius) or 12.5)
-        local squashX=math.max(0.05,tonumber(settings.SquashX) or 1)
-        local squashY=math.max(0.05,tonumber(settings.SquashY) or 1)
-        local direction=tostring(settings.SpinDirection or "Clockwise")=="Counter Clockwise" and -1 or 1
-        local baseRotation=tonumber(settings.AngleOffset) or 0
-        local spinStyle=tostring(settings.SpinStyle or "Static")
-        local spinRange=math.clamp(tonumber(settings.SpinRange) or 360,1,360)
-        local baseCycles=math.max(tonumber(settings.SpinSpeed) or 288,0)/360
-        local targetRotation=baseRotation
-
-        if settings.Spin==true and baseCycles>0 then
-            runtime.CurrentRotationSpeed=rotationSpeed(runtime.RotationProgress,baseCycles)
-            runtime.RotationProgress=(runtime.RotationProgress+runtime.CurrentRotationSpeed*dt)%1
-            if spinStyle=="Ping Pong" then
-                targetRotation=baseRotation+math.sin(runtime.RotationProgress*math.pi*2)*(spinRange*0.5)*direction
-            elseif spinStyle=="Stepped" then
-                local steps=math.max(armCount,4)
-                local stepSize=spinRange/steps
-                local raw=runtime.RotationProgress*spinRange
-                targetRotation=baseRotation+math.floor(raw/math.max(stepSize,0.001))*stepSize*direction
-            else
-                targetRotation=baseRotation+runtime.RotationProgress*spinRange*direction
-            end
-        else
-            runtime.CurrentRotationSpeed=baseCycles
-            runtime.RotationProgress=0
-        end
-
-        if settings.SmoothSpin==true then
-            local response=1-math.exp(-dt*18)
-            runtime.Rotation=runtime.Rotation+shortestAngleDelta(runtime.Rotation,targetRotation)*response
-        else
-            runtime.Rotation=targetRotation
-        end
-
-        local pulseSpeed=math.max(tonumber(settings.PulseSpeed) or 2.5,0)
-        local pulse=pulseSpeed>0 and pulseCurve(runtime.PulseTime,pulseSpeed) or 1
-        local animatedLength=configuredLength*(0.42+0.58*pulse)
-        local glowEnabled=settings.LineGlow==true
-        local glowControl=math.clamp(tonumber(settings.GlowThickness) or 30,0,50)
-        local extraControl=math.clamp(tonumber(settings.GlowExtraLength) or 15,0,50)
-        local glowSpread=1+glowControl*0.16
-        local glowExtra=extraControl*0.15
-        local glowTransparency=math.clamp(tonumber(settings.GlowTransparency) or 0.43,0,1)
-        local useDrawing=runtime.DrawingReady==true and not guiOk
-
-        for i=1,12 do
-            local active=i<=armCount
-            local color=armColor(i,armCount,pulse)
-            local brightCore=color:Lerp(Color3.new(1,1,1),0.32)
-            local angle=runtime.Rotation+((i-1)*(360/armCount))
-            local rad=math.rad(angle)
-            local dirX=math.cos(rad)*squashX
-            local dirY=math.sin(rad)*squashY
-
-            if guiOk then
-                local line=runtime.Lines[i]
-                local innerGlow=runtime.InnerGlows[i]
-                local outerGlow=runtime.Glows[i]
-                local guiVisible=active and not useDrawing
-                line.Visible=guiVisible
-                innerGlow.Visible=guiVisible and glowEnabled
-                outerGlow.Visible=guiVisible and glowEnabled
-
-                if guiVisible then
-                    local midpoint=radius+animatedLength*0.5
-                    local offsetX=dirX*midpoint
-                    local offsetY=dirY*midpoint
-                    line.Position=UDim2.fromOffset(offsetX,offsetY)
-                    line.Size=UDim2.fromOffset(animatedLength,lineWidth)
-                    line.Rotation=angle
-                    line.BackgroundColor3=brightCore
-                    line.BackgroundTransparency=0
-
-                    if glowEnabled then
-                        innerGlow.Position=line.Position
-                        innerGlow.Size=UDim2.fromOffset(animatedLength+glowExtra,lineWidth+glowSpread*0.9)
-                        innerGlow.Rotation=angle
-                        innerGlow.BackgroundColor3=color
-                        innerGlow.BackgroundTransparency=math.clamp(0.48+glowTransparency*0.38,0.36,0.94)
-
-                        outerGlow.Position=line.Position
-                        outerGlow.Size=UDim2.fromOffset(animatedLength+glowExtra*2,lineWidth+glowSpread*2.15)
-                        outerGlow.Rotation=angle
-                        outerGlow.BackgroundColor3=color
-                        outerGlow.BackgroundTransparency=math.clamp(0.74+glowTransparency*0.22,0.68,0.98)
-                    end
-                end
-            end
-
-            if useDrawing then
-                local start=Vector2.new(center.X+dirX*radius,center.Y+dirY*radius)
-                local finish=Vector2.new(center.X+dirX*(radius+animatedLength),center.Y+dirY*(radius+animatedLength))
-                local glowStart=Vector2.new(center.X+dirX*math.max(0,radius-glowExtra*0.5),center.Y+dirY*math.max(0,radius-glowExtra*0.5))
-                local glowFinish=Vector2.new(center.X+dirX*(radius+animatedLength+glowExtra),center.Y+dirY*(radius+animatedLength+glowExtra))
-
-                setDrawingLine(runtime.DrawLines[i],active,start,finish,lineWidth,brightCore,1)
-                setDrawingLine(
-                    runtime.DrawInnerGlows[i],
-                    active and glowEnabled,
-                    glowStart,
-                    glowFinish,
-                    lineWidth+glowSpread*0.9,
-                    color,
-                    math.clamp(1-(0.48+glowTransparency*0.38),0.06,0.64)
-                )
-                setDrawingLine(
-                    runtime.DrawGlows[i],
-                    active and glowEnabled,
-                    glowStart,
-                    glowFinish,
-                    lineWidth+glowSpread*2.15,
-                    color,
-                    math.clamp(1-(0.74+glowTransparency*0.22),0.02,0.32)
-                )
-            end
-        end
-
-        local textEnabled=settings.TextEnabled~=false
-        local mainValue=tostring(settings.MainText or "devkage")
-        local secondValue=tostring(settings.SecondText or "None")
-        local outline=settings.TextOutline~=false
-        local textY=radius+configuredLength+math.max(8,lineWidth*2)
-        local textColor=armColor(1,armCount,pulse)
-
-        if guiOk then
-            runtime.MainText.Visible=textEnabled and mainValue~="None" and mainValue~=""
-            runtime.MainText.Text=mainValue
-            runtime.MainText.Font=Enum.Font.Arcade
-            runtime.MainText.TextColor3=textColor
-            runtime.MainText.TextSize=math.clamp(math.floor(tonumber(settings.MainTextSize) or 20),8,40)
-            runtime.MainText.TextStrokeColor3=Color3.new(0,0,0)
-            runtime.MainText.TextStrokeTransparency=outline and 0.15 or 1
-            runtime.MainText.Size=UDim2.fromOffset(240,runtime.MainText.TextSize+8)
-            runtime.MainText.Position=UDim2.fromOffset(0,textY)
-
-            runtime.SecondText.Visible=textEnabled and secondValue~="None" and secondValue~=""
-            runtime.SecondText.Text=secondValue
-            runtime.SecondText.Font=Enum.Font.Arcade
-            runtime.SecondText.TextColor3=textColor
-            runtime.SecondText.TextSize=math.clamp(math.floor(tonumber(settings.SecondTextSize) or 15),8,40)
-            runtime.SecondText.TextStrokeColor3=Color3.new(0,0,0)
-            runtime.SecondText.TextStrokeTransparency=outline and 0.15 or 1
-            runtime.SecondText.Size=UDim2.fromOffset(240,runtime.SecondText.TextSize+8)
-            runtime.SecondText.Position=UDim2.fromOffset(0,textY+runtime.MainText.TextSize+4)
-        end
-
-        if runtime.DrawingReady then
-            if runtime.DrawMainText then
-                pcall(function()
-                    runtime.DrawMainText.Visible=(not guiOk) and textEnabled and mainValue~="None" and mainValue~=""
-                    runtime.DrawMainText.Text=mainValue
-                    runtime.DrawMainText.Color=textColor
-                    runtime.DrawMainText.Size=math.clamp(math.floor(tonumber(settings.MainTextSize) or 20),8,40)
-                    runtime.DrawMainText.Outline=outline
-                    runtime.DrawMainText.Position=Vector2.new(center.X,center.Y+textY)
-                end)
-            end
-            if runtime.DrawSecondText then
-                pcall(function()
-                    runtime.DrawSecondText.Visible=(not guiOk) and textEnabled and secondValue~="None" and secondValue~=""
-                    runtime.DrawSecondText.Text=secondValue
-                    runtime.DrawSecondText.Color=textColor
-                    runtime.DrawSecondText.Size=math.clamp(math.floor(tonumber(settings.SecondTextSize) or 15),8,40)
-                    runtime.DrawSecondText.Outline=outline
-                    runtime.DrawSecondText.Position=Vector2.new(center.X,center.Y+textY+(tonumber(settings.MainTextSize) or 20)+4)
-                end)
-            end
-        end
-    end
-
-    function runtime:Destroy()
-        if self.Destroyed then return end
-        self.Destroyed=true
-        if self.Connection then pcall(function() self.Connection:Disconnect() end) end
-        if self.Supervisor then pcall(function() self.Supervisor:Disconnect() end) end
-        destroyGui()
-        for i=1,12 do
-            removeDrawing(self.DrawLines[i])
-            removeDrawing(self.DrawInnerGlows[i])
-            removeDrawing(self.DrawGlows[i])
-        end
-        removeDrawing(self.DrawMainText)
-        removeDrawing(self.DrawSecondText)
-        self.DrawingReady=false
-    end
-
-    runtime.Connection=RunService.RenderStepped:Connect(updateCursor)
-    runtime.Supervisor=RunService.Heartbeat:Connect(function()
-        if runtime.Destroyed then return end
-        refreshCursorSettings()
-
-        if window and window.CursorLayer and not window.CursorLayer.Parent then
-            pcall(function()
-                local host=window.ScreenGui and window.ScreenGui.Parent
-                if host then window.CursorLayer.Parent=host end
-            end)
-        end
-
-        if not guiHealthy() then
-            pcall(buildGui)
-        else
-            pcall(syncCursorHost)
-        end
-
-        if not runtime.DrawingReady then pcall(buildDrawingRenderer) end
-    end)
-
-    if type(MaskShard)=="table" and type(MaskShard.Connections)=="table" then
-        MaskShard.Connections[#MaskShard.Connections+1]=runtime.Connection
-        MaskShard.Connections[#MaskShard.Connections+1]=runtime.Supervisor
-    end
-
-    table.insert(library.CleanupCallbacks,function()
-        runtime:Destroy()
-    end)
+publishCursorSettings(true)
+
+local cursorBridgeConnection=RunService.Heartbeat:Connect(function()
+    publishCursorSettings(false)
+end)
+if type(MaskShard)=="table" and type(MaskShard.Connections)=="table" then
+    MaskShard.Connections[#MaskShard.Connections+1]=cursorBridgeConnection
 end
+
+table.insert(library.CleanupCallbacks,function()
+    pcall(function() cursorBridgeConnection:Disconnect() end)
+    cursorBridge.MainAttached=false
+    cursorBridge.MainHeartbeat=0
+end)
 
 local function addToggle(section,key,name)
     local control=section:CreateToggle({Name=name,State=VisualsState[key],Flag="visuals."..key,Callback=function(v) syncCursorSetting(key,v) end})
@@ -14079,6 +13945,14 @@ false,
 
 local luaStatus = luaControls:CreateLabel({Text="Status: Ready"})
 luaControls:CreateLabel({Text="Scripts run in the current client environment."})
+local luaAutoExecuteToggle = luaControls:CreateToggle({
+Name="Auto Execute Stored Lua",
+State=getgenv().__DevKageConfig.luaAutoExecute==true,
+Flag="lua.auto_execute",
+Callback=function(v)
+getgenv().__DevKageConfig.luaAutoExecute=v==true
+end
+})
 local luaExecutionThread = nil
 local luaExecutionToken = 0
 
@@ -14166,8 +14040,15 @@ UI.Lua = {
 getSource=function() return tostring(luaEditor.Text or "") end,
 setSource=function(value) luaEditor.Text=tostring(value or "") end,
 setStatus=setLuaStatus,
-stop=stopLuaExecution
+stop=stopLuaExecution,
+execute=executeLuaEditor,
+autoExecuteToggle=luaAutoExecuteToggle
 }
+
+if getgenv().__DevKageConfig.luaAutoExecute==true
+and tostring(getgenv().__DevKageConfig.luaCode or ""):match("%S") then
+task.defer(executeLuaEditor)
+end
 end)();
 
 (function()
@@ -14259,6 +14140,9 @@ getgenv().__DevKageConfig.wins    = tonumber(controls.winsInput:Get()) or 0
 getgenv().__DevKageConfig.elo     = tonumber(controls.eloInput:Get()) or 5000
 getgenv().__DevKageConfig.keys    = controls.keysInput:Get()
 getgenv().__DevKageConfig.luaCode = UI.Lua.getSource()
+if UI.Lua.autoExecuteToggle then
+getgenv().__DevKageConfig.luaAutoExecute = UI.Lua.autoExecuteToggle:Get()==true
+end
 end
 
 local function applyLoadedConfig(data)
@@ -14348,6 +14232,9 @@ controls.eloInput:Set(tostring(getgenv().__DevKageConfig.elo or 5000))
 controls.autoLoadSpooferToggle:Set(getgenv().__DevKageConfig.autoLoadSpoofer==true,true)
 controls.keysInput:Set(tostring(getgenv().__DevKageConfig.keys or ""))
 UI.Lua.setSource(getgenv().__DevKageConfig.luaCode or "")
+if UI.Lua.autoExecuteToggle then
+UI.Lua.autoExecuteToggle:Set(getgenv().__DevKageConfig.luaAutoExecute==true,true)
+end
 
 controls.chinaHatToggle:Set(getgenv().__DevKageConfig.chinaHatEnabled==true)
 controls.chinaHatColorPicker:Set(chinaHatColorFromConfig(getgenv().__DevKageConfig.chinaHatColor,Color3.fromRGB(255,105,180)),math.clamp(tonumber(getgenv().__DevKageConfig.chinaHatAlpha) or 0.2,0,1))
@@ -14365,6 +14252,25 @@ controls.rainbowAuraSpeedSlider:Set(tonumber(getgenv().__DevKageConfig.rainbowAu
 controls.rainbowAuraBrightnessSlider:Set(tonumber(getgenv().__DevKageConfig.rainbowAuraBrightness) or 2)
 controls.rainbowAuraAlphaSlider:Set(math.floor(math.clamp(tonumber(getgenv().__DevKageConfig.rainbowAuraAlpha) or 0.35,0,1)*100+0.5))
 controls.rainbowAuraToggle:Set(getgenv().__DevKageConfig.rainbowAuraEnabled==true)
+
+local avatarModTypes={"Angel Halo","Double Angel Halo","Angel Wings","Seraph Wings","Archangel Wings","Divine Halo + Wings","Seraph Halo + Wings","Angel Crown","Guardian Angel","Ascended Angel"}
+controls.avatarModsTypeDrop:Set(optionIndex(avatarModTypes,getgenv().__DevKageConfig.avatarModsType))
+controls.avatarModsColorPicker:Set(
+    auraColorFromConfig(getgenv().__DevKageConfig.avatarModsColor,Color3.fromRGB(190,95,255)),
+    math.clamp(tonumber(getgenv().__DevKageConfig.avatarModsAlpha) or 0.18,0,0.9)
+)
+controls.avatarModsRainbowToggle:Set(getgenv().__DevKageConfig.avatarModsRainbow==true)
+controls.avatarModsSpeedSlider:Set(tonumber(getgenv().__DevKageConfig.avatarModsSpeed) or 1)
+controls.avatarModsSizeSlider:Set(tonumber(getgenv().__DevKageConfig.avatarModsSize) or 1)
+controls.avatarModsBrightnessSlider:Set(tonumber(getgenv().__DevKageConfig.avatarModsBrightness) or 3)
+controls.avatarModsTransparencySlider:Set(math.floor(math.clamp(tonumber(getgenv().__DevKageConfig.avatarModsAlpha) or 0.18,0,0.9)*100+0.5))
+controls.avatarModsWingSpreadSlider:Set(tonumber(getgenv().__DevKageConfig.avatarModsWingSpread) or 1)
+controls.avatarModsWingHeightSlider:Set(tonumber(getgenv().__DevKageConfig.avatarModsWingHeight) or 0)
+controls.avatarModsAuraRadiusSlider:Set(tonumber(getgenv().__DevKageConfig.avatarModsAuraRadius) or 1)
+controls.avatarModsParticleDensitySlider:Set(tonumber(getgenv().__DevKageConfig.avatarModsParticleDensity) or 1)
+controls.avatarModsRainbowSaturationSlider:Set(tonumber(getgenv().__DevKageConfig.avatarModsRainbowSaturation) or 0.82)
+controls.avatarModsToggle:Set(getgenv().__DevKageConfig.avatarModsEnabled==true)
+
 controls.platformDrop:Set(optionIndex({"DESKTOP","MOBILE","CONSOLE","VR"},getgenv().__DevKageConfig.platform))
 controls.premiumToggle:Set(getgenv().__DevKageConfig.premium==true); controls.verifiedToggle:Set(getgenv().__DevKageConfig.verified==true); controls.unlockToggle:Set(getgenv().__DevKageConfig.unlockall==true)
 if UI.AimControls then
@@ -14408,6 +14314,9 @@ if avatarModsRuntime then avatarModsRuntime:SetEnabled(getgenv().__DevKageConfig
 end
 refresh_esp_highlights(); UI.rebuildESPObjects(); refreshChams(); library.ExtraVisualRuntime:RefreshViewmodel(); library.ExtraVisualRuntime:SetThirdPerson(VisualsState.third_person); library.ExtraVisualRuntime:RefreshWorldTools()
 UI.Lua.setStatus("Config applied")
+if getgenv().__DevKageConfig.luaAutoExecute==true and tostring(UI.Lua.getSource() or ""):match("%S") then
+task.defer(UI.Lua.execute)
+end
 return true
 end
 
