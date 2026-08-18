@@ -657,7 +657,7 @@ function library:CreateWindow(Properties)
                 uis.MouseBehavior = Enum.MouseBehavior.Default
             end)
             pcall(function()
-                uis.MouseIconEnabled = true
+                uis.MouseIconEnabled = false
             end)
             MenuInputRuntime.Guarding = false
         end
@@ -731,19 +731,20 @@ function library:CreateWindow(Properties)
         applyRequestedMouseState()
 
         local menuMouseBehaviorConnection = utility:CreateConnection(uis:GetPropertyChangedSignal("MouseBehavior"), function()
-            if not MenuInputRuntime.Guarding then
+            if not MenuInputRuntime.Guarding and (Window.Enabled or Window.CursorControlMode == "Cursor Lock") then
                 task.defer(applyRequestedMouseState)
             end
         end)
         local menuMouseIconConnection = utility:CreateConnection(uis:GetPropertyChangedSignal("MouseIconEnabled"), function()
-            if not MenuInputRuntime.Guarding then
-                task.defer(applyRequestedMouseState)
+            if not MenuInputRuntime.Guarding and Window.Enabled then
+                task.defer(applyMenuMouseState)
             end
         end)
         local menuMouseRenderConnection = utility:CreateConnection(MenuRunService.RenderStepped, function()
-            applyRequestedMouseState()
             if Window.Enabled then
-                task.defer(applyMenuMouseState)
+                applyMenuMouseState()
+            elseif Window.CursorControlMode == "Cursor Lock" then
+                applyGameplayMouseState()
             end
         end)
 
@@ -751,7 +752,13 @@ function library:CreateWindow(Properties)
             MenuRunService:BindToRenderStep(
                 MenuMouseBindName,
                 Enum.RenderPriority.Last.Value + 1000000,
-                applyRequestedMouseState
+                function()
+                    if Window.Enabled then
+                        applyMenuMouseState()
+                    elseif Window.CursorControlMode == "Cursor Lock" then
+                        applyGameplayMouseState()
+                    end
+                end
             )
         end)
 
@@ -1780,7 +1787,7 @@ function BindManager:EnsureUI(window)
     modAlert.Name = "ModAlert"
     modAlert.BackgroundColor3 = Color3.fromRGB(75, 10, 10)
     modAlert.BorderSizePixel = 0
-    modAlert.Size = UDim2.new(1, 0, 0, 20)
+    modAlert.Size = UDim2.new(1, 0, 0, 18)
     modAlert.LayoutOrder = -100000
     modAlert.Visible = false
     modAlert.ZIndex = 40004
@@ -1799,9 +1806,9 @@ function BindManager:EnsureUI(window)
     modAlertLabel.BackgroundTransparency = 1
     modAlertLabel.Size = UDim2.fromScale(1, 1)
     modAlertLabel.Font = Enum.Font.Code
-    modAlertLabel.Text = "!mod detected!"
+    modAlertLabel.Text = "enemy detected"
     modAlertLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
-    modAlertLabel.TextSize = 10
+    modAlertLabel.TextSize = 9
     modAlertLabel.TextStrokeColor3 = Color3.fromRGB(40, 0, 0)
     modAlertLabel.TextStrokeTransparency = 0.2
     modAlertLabel.TextXAlignment = Enum.TextXAlignment.Center
@@ -12849,9 +12856,9 @@ pcall(function()
 end)
 
 local ragePage = window:CreatePage({Icon="rbxassetid://8547258459",Glyph="R",Size=UDim2.new(0,36,0,36)})
+local modDetectorSection = ragePage:CreateSection({Name="Mod Detector",Side="Left",Size=120})
 local worldTextureSection = ragePage:CreateSection({Name="World Texture",Side="Left",Size=330})
 local accessoriesSection = ragePage:CreateSection({Name="Accessories",Side="Left",Size=300})
-local modDetectorSection = ragePage:CreateSection({Name="Mod Detector",Side="Left",Size=120})
 local avatarSection = ragePage:CreateSection({Name="Avatar",Side="Right",Size=330})
 local accessorySettingsSection = ragePage:CreateSection({Name="Accessory Settings",Side="Right",Size=760})
 
@@ -13088,6 +13095,9 @@ local function setModDetectorEnabled(enabled)
     VisualsState.mod_detector_enabled = enabled
     ModDetectorRuntime.Enabled = enabled
     ModDetectorRuntime.Token = ModDetectorRuntime.Token + 1
+    if enabled and library and library.KeybindManager and library.KeybindManager.EnsureUI then
+        library.KeybindManager:EnsureUI(window)
+    end
     modDetectorSetAlert(false)
 
     if not enabled then return end
@@ -13096,7 +13106,7 @@ local function setModDetectorEnabled(enabled)
     task.spawn(function()
         modDetectorScan(token)
         while token == ModDetectorRuntime.Token and ModDetectorRuntime.Enabled do
-            task.wait(30)
+            task.wait(15)
             if token == ModDetectorRuntime.Token and ModDetectorRuntime.Enabled then
                 modDetectorScan(token)
             end
@@ -13409,7 +13419,9 @@ do
 
     local function destroyGui()
         if runtime.Root then pcall(function() runtime.Root:Destroy() end) end
-        if runtime.Gui and runtime.Gui ~= window.CursorLayer then
+        if runtime.Gui
+        and runtime.Gui ~= window.CursorLayer
+        and runtime.Gui ~= window.ScreenGui then
             pcall(function() runtime.Gui:Destroy() end)
         end
         runtime.Gui=nil
@@ -13477,7 +13489,11 @@ do
     local function guiHealthy()
         local gui=runtime.Gui
         local root=runtime.Root
-        if not gui or not gui.Parent or not root or root.Parent~=gui then return false end
+        if not gui or not gui.Parent or not root or not root.Parent then return false end
+        local validHost = root.Parent==gui
+            or (window and window.ScreenGui and root.Parent==window.ScreenGui)
+            or (window and window.CursorLayer and root.Parent==window.CursorLayer)
+        if not validHost then return false end
         if not runtime.MainText or runtime.MainText.Parent~=root then return false end
         if not runtime.SecondText or runtime.SecondText.Parent~=root then return false end
         for i=1,12 do
@@ -13497,6 +13513,24 @@ do
         return Vector2.new(size.X*0.5,size.Y*0.5)
     end
 
+    local function syncCursorHost()
+        if not runtime.Root or not runtime.Root.Parent then return end
+        local uiOpen=window and window.Enabled==true
+        local desiredHost=nil
+
+        if uiOpen and window and window.ScreenGui and window.ScreenGui.Parent then
+            desiredHost=window.ScreenGui
+        elseif window and window.CursorLayer and window.CursorLayer.Parent then
+            desiredHost=window.CursorLayer
+        end
+
+        if desiredHost and runtime.Root.Parent~=desiredHost then
+            pcall(function()
+                runtime.Root.Parent=desiredHost
+            end)
+        end
+    end
+
     local function cursorCenter()
         local center=viewportCenter()
         local uiOpen=window and window.Enabled==true
@@ -13508,11 +13542,13 @@ do
 
         local ok,pos=pcall(function() return uis:GetMouseLocation() end)
         if not ok or not pos then return center end
+
         local camera=workspace.CurrentCamera
         local viewport=camera and camera.ViewportSize or Vector2.new(1920,1080)
-        if pos.X < -64 or pos.Y < -64 or pos.X > viewport.X+64 or pos.Y > viewport.Y+64 then
+        if pos.X < -32 or pos.Y < -32 or pos.X > viewport.X+32 or pos.Y > viewport.Y+32 then
             return center
         end
+
         return Vector2.new(pos.X,pos.Y)
     end
 
@@ -13608,11 +13644,14 @@ do
         if not runtime.DrawingReady then buildDrawingRenderer() end
 
         local enabled=settings.Enabled~=false
+        syncCursorHost()
         local guiOk=guiHealthy()
         if guiOk then
             pcall(function()
-                runtime.Gui.Enabled=enabled
-                runtime.Gui.DisplayOrder=2147483647
+                if runtime.Gui ~= window.ScreenGui then
+                    runtime.Gui.Enabled=true
+                    runtime.Gui.DisplayOrder=2147483647
+                end
                 runtime.Root.Visible=enabled
             end)
         end
@@ -13830,13 +13869,20 @@ do
     runtime.Supervisor=RunService.Heartbeat:Connect(function()
         if runtime.Destroyed then return end
         refreshCursorSettings()
+
         if window and window.CursorLayer and not window.CursorLayer.Parent then
             pcall(function()
                 local host=window.ScreenGui and window.ScreenGui.Parent
                 if host then window.CursorLayer.Parent=host end
             end)
         end
-        if not guiHealthy() then pcall(buildGui) end
+
+        if not guiHealthy() then
+            pcall(buildGui)
+        else
+            pcall(syncCursorHost)
+        end
+
         if not runtime.DrawingReady then pcall(buildDrawingRenderer) end
     end)
 
