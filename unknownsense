@@ -10271,22 +10271,35 @@ local CONFIG_SCHEMA_VERSION = 3
 local function ensure_folder()
 if type(isfolder) == "function" then
 local ok, exists = pcall(isfolder, CONFIG_FOLDER)
-if ok and exists then return true end
+if ok and exists == true then return true end
+end
+
+if type(listfiles) == "function" then
+local ok, files = pcall(listfiles, CONFIG_FOLDER)
+if ok and type(files) == "table" then return true end
+end
+
+if type(makefolder) == "function" then
+local made, err = pcall(makefolder, CONFIG_FOLDER)
+if made then
+if type(isfolder) == "function" then
+local checked, exists = pcall(isfolder, CONFIG_FOLDER)
+if checked and exists == true then return true end
+else
+return true
 end
 if type(listfiles) == "function" then
-local listed = pcall(listfiles, CONFIG_FOLDER)
-if listed then return true end
+local checked, files = pcall(listfiles, CONFIG_FOLDER)
+if checked and type(files) == "table" then return true end
 end
-if type(makefolder) ~= "function" then
-if type(writefile)=="function" then return true end
-return false,"This executor cannot create config folders"
-end
-local made, err = pcall(makefolder, CONFIG_FOLDER)
-if not made then
-if type(writefile)=="function" then return true end
+elseif type(writefile) ~= "function" then
 return false,tostring(err)
 end
-return true
+end
+
+-- Some executors create intermediate workspace folders on writefile().
+if type(writefile) == "function" then return true end
+return false,"This executor cannot create config folders"
 end
 
 local function list_configs()
@@ -10506,20 +10519,33 @@ end
 end
 end
 
-local function load_config_file(name)
+local function read_config_data(name)
 name = tostring(name or ""):gsub("[^%w_%-]", "")
 if name == "" then return false, "Invalid config name" end
 if name:sub(1,1)=="_" then return false,"Config names cannot start with an underscore" end
+
+local folderOk, folderError = ensure_folder()
+if not folderOk then return false, folderError end
+
 local path = CONFIG_FOLDER .. "/" .. name .. ".json"
 if type(readfile) ~= "function" then return false, "This executor does not provide file reading" end
 if type(isfile)=="function" then
 local existsOk, exists = pcall(isfile, path)
-if existsOk and not exists then return false, "Config not found" end
+if existsOk and exists == false then return false, "Config not found" end
 end
-local readOk,raw=pcall(readfile,path)
+
+local readOk, raw = pcall(readfile, path)
 if not readOk then return false,"Could not read config: "..tostring(raw) end
-local ok, data = pcall(function() return HttpService:JSONDecode(raw) end)
-if not ok or type(data) ~= "table" then return false, "Config contains invalid JSON" end
+if type(raw) ~= "string" or raw == "" then return false,"Config is empty" end
+
+local decodedOk, data = pcall(function() return HttpService:JSONDecode(raw) end)
+if not decodedOk or type(data) ~= "table" then return false, "Config contains invalid JSON" end
+return true, data
+end
+
+local function load_config_file(name)
+local readOk, data = read_config_data(name)
+if not readOk then return false, data end
 
 local profileData = type(data.profile) == "table" and data.profile or data
 for k, v in pairs(profileData) do
@@ -10808,9 +10834,19 @@ for _, folder in ipairs(folders) do
     if ok then wrote = true end
 end
 
-if #folders == 0 and type(isfolder) ~= "function" then
-    local ok = pcall(writefile, "autoexec/" .. SCRIPT_AUTOEXEC_NAME, stub)
-    if ok then wrote = true end
+-- A cleared executor workspace often removes the autoexec directory itself.
+-- Re-create one instead of silently requiring it to already exist.
+if not wrote then
+    for _, folder in ipairs({"autoexec","autoexecute"}) do
+        if type(makefolder) == "function" then
+            pcall(makefolder, folder)
+        end
+        local ok = pcall(writefile, folder .. "/" .. SCRIPT_AUTOEXEC_NAME, stub)
+        if ok then
+            wrote = true
+            break
+        end
+    end
 end
 
 return wrote
@@ -19546,29 +19582,29 @@ if modernAA.jitter_angle==nil and (modernAA.jitter==true or data.aa_jitter==true
 AntiAimState.jitter_angle=math.clamp(math.abs(tonumber(modernAA.jitter_range or data.aa_jitter_range) or 15),0,180)
 end
 
-controls.victimInput:Set(tostring(getgenv().__DevKageConfig.victim or ""))
-controls.helperInput:Set(tostring(getgenv().__DevKageConfig.helper or ""))
-controls.levelInput:Set(tostring(getgenv().__DevKageConfig.level or 999))
-controls.streakInput:Set(tostring(getgenv().__DevKageConfig.streak or 100))
-controls.winsInput:Set(tostring(getgenv().__DevKageConfig.wins or 0))
+controls.victimInput:Set(tostring(getgenv().__DevKageConfig.victim or ""),true)
+controls.helperInput:Set(tostring(getgenv().__DevKageConfig.helper or ""),true)
+controls.levelInput:Set(tostring(getgenv().__DevKageConfig.level or 999),true)
+controls.streakInput:Set(tostring(getgenv().__DevKageConfig.streak or 100),true)
+controls.winsInput:Set(tostring(getgenv().__DevKageConfig.wins or 0),true)
 controls.killsInput:Set(tostring(getgenv().__DevKageConfig.kills or 0),true)
 getgenv().__DevKageConfig.elo=normalizeSpoofELO(getgenv().__DevKageConfig.elo)
 controls.eloInput:Set(tostring(getgenv().__DevKageConfig.elo),true)
 if controls.eloLiveToggle then controls.eloLiveToggle:Set(getgenv().__DevKageConfig.eloLiveSync~=false,true) end
 controls.autoLoadSpooferToggle:Set(getgenv().__DevKageConfig.autoLoadSpoofer==true,true)
-controls.keysInput:Set(tostring(getgenv().__DevKageConfig.keys or ""))
+controls.keysInput:Set(tostring(getgenv().__DevKageConfig.keys or ""),true)
 UI.Lua.setSource(getgenv().__DevKageConfig.luaCode or "")
 if UI.Lua.autoExecuteToggle then
 UI.Lua.autoExecuteToggle:Set(getgenv().__DevKageConfig.luaAutoExecute==true,true)
 end
 
-controls.chinaHatToggle:Set(getgenv().__DevKageConfig.chinaHatEnabled==true)
-controls.chinaHatColorPicker:Set(chinaHatColorFromConfig(getgenv().__DevKageConfig.chinaHatColor,Color3.fromRGB(255,105,180)),math.clamp(tonumber(getgenv().__DevKageConfig.chinaHatAlpha) or 0.2,0,1))
-controls.chinaHatSecondaryPicker:Set(chinaHatColorFromConfig(getgenv().__DevKageConfig.chinaHatSecondaryColor,Color3.fromRGB(255,255,255)))
-controls.chinaHatPatternDrop:Set(optionIndex({"Static","Rainbow","Pulse","Gradient"},getgenv().__DevKageConfig.chinaHatPattern))
-controls.chinaHatSpeedSlider:Set(tonumber(getgenv().__DevKageConfig.chinaHatSpeed) or 1)
-controls.chinaHatBrightnessSlider:Set(tonumber(getgenv().__DevKageConfig.chinaHatBrightness) or 0)
-controls.chinaHatRangeSlider:Set(tonumber(getgenv().__DevKageConfig.chinaHatRange) or 12)
+controls.chinaHatToggle:Set(getgenv().__DevKageConfig.chinaHatEnabled==true,true)
+controls.chinaHatColorPicker:Set(chinaHatColorFromConfig(getgenv().__DevKageConfig.chinaHatColor,Color3.fromRGB(255,105,180)),math.clamp(tonumber(getgenv().__DevKageConfig.chinaHatAlpha) or 0.2,0,1),true)
+controls.chinaHatSecondaryPicker:Set(chinaHatColorFromConfig(getgenv().__DevKageConfig.chinaHatSecondaryColor,Color3.fromRGB(255,255,255)),nil,true)
+controls.chinaHatPatternDrop:Set(optionIndex({"Static","Rainbow","Pulse","Gradient"},getgenv().__DevKageConfig.chinaHatPattern),true)
+controls.chinaHatSpeedSlider:Set(tonumber(getgenv().__DevKageConfig.chinaHatSpeed) or 1,true)
+controls.chinaHatBrightnessSlider:Set(tonumber(getgenv().__DevKageConfig.chinaHatBrightness) or 0,true)
+controls.chinaHatRangeSlider:Set(tonumber(getgenv().__DevKageConfig.chinaHatRange) or 12,true)
 
 controls.avatarModsToggle:Set(getgenv().__DevKageConfig.avatarModsEnabled==true,true)
 controls.avatarModsTypeDrop:Set(optionIndex(controls.avatarModsTypeDrop.Options,getgenv().__DevKageConfig.avatarModsType),true)
@@ -20331,11 +20367,23 @@ end
 photoConfigButton({
 Name = "Load config",
 Callback = function()
-local target=configSelected or tostring(configNameBox:Get() or ""):gsub("[^%w_%-]","")
+local typed=tostring(configNameBox:Get() or ""):gsub("[^%w_%-]","")
+local target=(typed~="" and typed) or configSelected or ""
 if target=="" then library:Notify({Message="Select or enter a config first",Duration=3}); return end
-local ok, dataOrError = load_config_file(target)
-if ok then configSelected=target; configNameBox:Set(target); applyLoadedConfig(dataOrError); rebuildConfigList(); library:Notify({Message="Loaded config: "..target,Duration=3})
-else library:Notify({Message="Load failed: "..tostring(dataOrError),Duration=4}) end
+local ok, dataOrError = read_config_data(target)
+if ok then
+configSelected=target
+configNameBox:Set(target)
+local applied, applyError = pcall(applyLoadedConfig, dataOrError)
+if applied and applyError ~= false then
+rebuildConfigList()
+library:Notify({Message="Loaded config: "..target,Duration=3})
+else
+library:Notify({Message="Config apply failed: "..tostring(applyError),Duration=4})
+end
+else
+library:Notify({Message="Load failed: "..tostring(dataOrError),Duration=4})
+end
 end
 })
 
@@ -20456,7 +20504,8 @@ configActions:CreateButton({Name="Refresh lists",Callback=function() rebuildConf
 configActions:CreateButton({
 Name = "Delete selected",
 Callback = function()
-local target=configSelected or tostring(configNameBox:Get() or ""):gsub("[^%w_%-]","")
+local typed=tostring(configNameBox:Get() or ""):gsub("[^%w_%-]","")
+local target=(typed~="" and typed) or configSelected or ""
 if target=="" then library:Notify({Message="Select or enter a config first",Duration=3}); return end
 if target:sub(1,1)=="_" then library:Notify({Message="Reserved config files cannot be deleted here",Duration=4}); return end
 local path = CONFIG_FOLDER .. "/" .. target .. ".json"
