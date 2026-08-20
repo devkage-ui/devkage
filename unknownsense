@@ -937,7 +937,7 @@ function library:CreateWindow(Properties)
             local dragStart  = nil
             local startPos   = nil
 
-            local DragBar = utility:RenderObject("Frame", {
+            local DragBar = utility:RenderObject("TextButton", {
                 BackgroundColor3 = Color3.fromRGB(0, 0, 0),
                 BackgroundTransparency = 1,
                 BorderSizePixel = 0,
@@ -945,7 +945,11 @@ function library:CreateWindow(Properties)
                 Position = UDim2.new(0, 0, 0, 0),
                 Size = UDim2.new(1, 0, 0, 12),
                 ZIndex = 30000,
-                Active = true
+                Active = true,
+                AutoButtonColor = false,
+                Text = "",
+                TextTransparency = 1,
+                Modal = true
             })
 
             utility:CreateConnection(DragBar.InputBegan, function(input)
@@ -4640,8 +4644,10 @@ end
 controller.Get=bridge.Wrapper
 environment.__DevKagePlayerDataBridge=bridge
 elseif controller.Get~=bridge.Wrapper then
-bridge.Original=controller.Get
-controller.Get=bridge.Wrapper
+-- Another script currently owns the outer wrapper. Do not re-wrap it.
+-- If that script chained the previous function, DevKage remains inside
+-- the chain without creating a circular wrapper dependency.
+bridge.ExternalWrapper=controller.Get
 end
 bridge.Owner=SpooferState
 bridge.Active=true
@@ -4914,8 +4920,9 @@ end
 seasonLibrary.FormatSeasonRankCharm=bridge.Wrapper
 environment.__DevKageSeasonRankBridge=bridge
 elseif seasonLibrary.FormatSeasonRankCharm~=bridge.Wrapper then
-bridge.Original=seasonLibrary.FormatSeasonRankCharm
-seasonLibrary.FormatSeasonRankCharm=bridge.Wrapper
+-- Preserve the outer wrapper installed by another script. Reclaiming it
+-- after it captured bridge.Wrapper can form an infinite wrapper cycle.
+bridge.ExternalWrapper=seasonLibrary.FormatSeasonRankCharm
 end
 SpoofRankRuntime.BridgeOwner=SpoofRankRuntime.BridgeOwner or {}
 bridge.Owner=SpoofRankRuntime.BridgeOwner
@@ -5395,8 +5402,8 @@ local function createLocalSpoofVisual(player, userId)
 end
 
 local function updateStats(player, config)
-local level = tonumber(config.level) or 1
-local streak = tonumber(config.streak) or 0
+local level = math.max(0, math.floor((tonumber(config.level) or 1) + 0.5))
+local streak = math.max(0, math.floor((tonumber(config.streak) or 0) + 0.5))
 local wins = tonumber(config.wins) or 0
 local kills = tonumber(config.kills) or 0
 local elo = normalizeSpoofELO(config.elo)
@@ -5588,9 +5595,9 @@ local function installRecordingPrivacySpoof(player, data, config)
 
     local function patchStatsNear(anchor)
         if not anchor or not anchor.Parent then return end
-        local level = tonumber(config.level) or 1
+        local level = math.max(0, math.floor((tonumber(config.level) or 1) + 0.5))
         local elo = normalizeSpoofELO(config.elo)
-        local streak = tonumber(config.streak) or 0
+        local streak = math.max(0, math.floor((tonumber(config.streak) or 0) + 0.5))
         local wins = tonumber(config.wins) or 0
         local kills = tonumber(config.kills) or 0
 
@@ -6164,13 +6171,13 @@ local function installRecordingPrivacySpoof(player, data, config)
         if privacy.Active then observeCharacter(character) end
     end))
 
-    local liveStatElapsed=0
+    local liveEloElapsed=0
     addConnection(RunService.Heartbeat:Connect(function(dt)
-        if not privacy.Active or config.eloLiveSync==false then return end
-        liveStatElapsed=liveStatElapsed+(tonumber(dt) or 0)
-        if liveStatElapsed<0.75 then return end
-        liveStatElapsed=0
-        enforceStats()
+        if not privacy.Active or config.eloLiveSync==false or config.spoofELO==false then return end
+        liveEloElapsed=liveEloElapsed+(tonumber(dt) or 0)
+        if liveEloElapsed<0.75 then return end
+        liveEloElapsed=0
+        pcall(applySpoofELOValues, player, normalizeSpoofELO(config.elo))
     end))
 
     local playerGui = player:FindFirstChildOfClass("PlayerGui") or player:FindFirstChild("PlayerGui")
@@ -6457,7 +6464,8 @@ end
 task.defer(function()
     if getgenv().__DevKageConfig.autoLoadSpoofer == true then
         if not game:IsLoaded() then game.Loaded:Wait() end
-        task.wait(0.6)
+        local environment=(type(getgenv)=="function" and getgenv()) or _G
+        task.wait(environment.__DEVKAGE_AUTO_STARTED==true and 1.5 or 0.6)
         StartSpoofer(getgenv().__DevKageConfig)
     end
 end)
@@ -10716,7 +10724,41 @@ task.spawn(function()
         end
         env.__DEVKAGE_AUTO_STARTING_JOB = jobKey
 
-        task.wait(2.5)
+        -- Multi-inject startup gate. Other autoexec scripts commonly build
+        -- their UI and install their local runtime during the first seconds.
+        -- Wait for that startup activity to settle instead of executing both
+        -- large scripts in the same frame window.
+        local CoreGui = game:GetService("CoreGui")
+        local playerGui = Players.LocalPlayer and Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        local bootStarted = os.clock()
+        local lastUiActivity = bootStarted
+        local bootConnections = {}
+
+        local function markUiActivity()
+            lastUiActivity = os.clock()
+        end
+
+        pcall(function()
+            bootConnections[#bootConnections + 1] = CoreGui.DescendantAdded:Connect(markUiActivity)
+        end)
+        if playerGui then
+            pcall(function()
+                bootConnections[#bootConnections + 1] = playerGui.DescendantAdded:Connect(markUiActivity)
+            end)
+        end
+
+        while os.clock() - bootStarted < 12 do
+            local elapsed = os.clock() - bootStarted
+            local quietFor = os.clock() - lastUiActivity
+            if elapsed >= 4 and quietFor >= 1.35 then break end
+            task.wait(0.1)
+        end
+
+        for _, connection in ipairs(bootConnections) do
+            pcall(function() connection:Disconnect() end)
+        end
+
+        task.wait(0.25)
 
         local source = readfile(%q)
         if type(source) ~= "string" or source == "" then
@@ -12857,10 +12899,34 @@ end
 local spooferSection = spooferPage:CreateSection({ Name = "Spoofer Configuration", Side = "Left", Size = 505 })
 local spooferExtraControls={}
 spooferSection.Root.LayoutOrder=300
+local function refreshBasicLevelStreak()
+local config=getgenv().__DevKageConfig
+if type(config)~="table" or not SpooferState.IsActive() then return end
+local level=math.max(0,math.floor((tonumber(config.level) or 1)+0.5))
+local streak=math.max(0,math.floor((tonumber(config.streak) or 0)+0.5))
+
+local function apply(player)
+if not player then return end
+if config.spoofLevel~=false then pcall(function() player:SetAttribute("Level",level) end) end
+if config.spoofStreak~=false then pcall(function() player:SetAttribute("StatisticDuelsWinStreak",streak) end) end
+local leaderstats=player:FindFirstChild("CustomLeaderstats") or player:FindFirstChild("leaderstats")
+if leaderstats then
+local lvl=leaderstats:FindFirstChild("Level")
+local strk=leaderstats:FindFirstChild("Win Streak") or leaderstats:FindFirstChild("Winstreak")
+if lvl and config.spoofLevel~=false then pcall(function() lvl.Value=level end) end
+if strk and config.spoofStreak~=false then pcall(function() strk.Value=streak end) end
+end
+end
+
+apply(LocalPlayer)
+if SpooferState.targetPlayer and SpooferState.targetPlayer~=LocalPlayer then apply(SpooferState.targetPlayer) end
+local privacy=SpooferState.privacy
+if privacy and privacy.RefreshAnchors then pcall(privacy.RefreshAnchors) end
+end
 local victimInput  = spooferSection:CreateInput({ Name = "Victim ID",   Default = getgenv().__DevKageConfig.victim,          Placeholder = "123456789", Callback = function(value) getgenv().__DevKageConfig.victim=tostring(value or "") end })
 local helperInput  = spooferSection:CreateInput({ Name = "Helper Name", Default = getgenv().__DevKageConfig.helper,          Placeholder = "Leave blank for local player", Callback = function(value) getgenv().__DevKageConfig.helper=tostring(value or "") end })
-local levelInput   = spooferSection:CreateInput({ Name = "Level",       Default = tostring(getgenv().__DevKageConfig.level), Placeholder = "999",  Numeric = true, Callback = function(value) getgenv().__DevKageConfig.level=math.max(0,math.floor((tonumber(value) or 999)+0.5)) end })
-local streakInput  = spooferSection:CreateInput({ Name = "Win Streak",  Default = tostring(getgenv().__DevKageConfig.streak),Placeholder = "100",  Numeric = true, Callback = function(value) getgenv().__DevKageConfig.streak=math.max(0,math.floor((tonumber(value) or 100)+0.5)) end })
+local levelInput   = spooferSection:CreateInput({ Name = "Level",       Default = tostring(getgenv().__DevKageConfig.level), Placeholder = "999",  Numeric = true, Callback = function(value) getgenv().__DevKageConfig.level=math.max(0,math.floor((tonumber(value) or 999)+0.5)); task.defer(refreshBasicLevelStreak) end })
+local streakInput  = spooferSection:CreateInput({ Name = "Win Streak",  Default = tostring(getgenv().__DevKageConfig.streak),Placeholder = "100",  Numeric = true, Callback = function(value) getgenv().__DevKageConfig.streak=math.max(0,math.floor((tonumber(value) or 100)+0.5)); task.defer(refreshBasicLevelStreak) end })
 local winsInput    = spooferSection:CreateInput({ Name = "Wins",        Default = tostring(getgenv().__DevKageConfig.wins),  Placeholder = "999",  Numeric = true, Callback = function(value) getgenv().__DevKageConfig.wins=math.max(0,math.floor((tonumber(value) or 0)+0.5)) end })
 local killsInput   = spooferSection:CreateInput({ Name = "Eliminations",Default = tostring(getgenv().__DevKageConfig.kills), Placeholder = "999",  Numeric = true, Callback = function(value) getgenv().__DevKageConfig.kills=math.max(0,math.floor((tonumber(value) or 0)+0.5)) end })
 local eloInput     = spooferSection:CreateInput({
@@ -12997,10 +13063,10 @@ do
 local section=spooferPage:CreateSection({Name="Leaderboard Spoofs",Side="Right",Size=350})
 section.Root.LayoutOrder=-289
 spooferExtraControls.spoofELO=section:CreateToggle({Name="ELO",State=getgenv().__DevKageConfig.spoofELO~=false,Callback=function(value) getgenv().__DevKageConfig.spoofELO=value==true end})
-spooferExtraControls.spoofStreak=section:CreateToggle({Name="Win Streak",State=getgenv().__DevKageConfig.spoofStreak~=false,Callback=function(value) getgenv().__DevKageConfig.spoofStreak=value==true end})
+spooferExtraControls.spoofStreak=section:CreateToggle({Name="Win Streak",State=getgenv().__DevKageConfig.spoofStreak~=false,Callback=function(value) getgenv().__DevKageConfig.spoofStreak=value==true; if value then task.defer(refreshBasicLevelStreak) end end})
 spooferExtraControls.spoofKills=section:CreateToggle({Name="Eliminations",State=getgenv().__DevKageConfig.spoofKills~=false,Callback=function(value) getgenv().__DevKageConfig.spoofKills=value==true end})
 spooferExtraControls.spoofWins=section:CreateToggle({Name="Wins",State=getgenv().__DevKageConfig.spoofWins~=false,Callback=function(value) getgenv().__DevKageConfig.spoofWins=value==true end})
-spooferExtraControls.spoofLevel=section:CreateToggle({Name="Level",State=getgenv().__DevKageConfig.spoofLevel~=false,Callback=function(value) getgenv().__DevKageConfig.spoofLevel=value==true end})
+spooferExtraControls.spoofLevel=section:CreateToggle({Name="Level",State=getgenv().__DevKageConfig.spoofLevel~=false,Callback=function(value) getgenv().__DevKageConfig.spoofLevel=value==true; if value then task.defer(refreshBasicLevelStreak) end end})
 spooferExtraControls.leaderboardStatus=section:CreateLabel({Text="Independent local leaderboard values • no server writes"})
 section:CreateButton({Name="Apply Leaderboard Spoofs",Callback=function()
 local config=getgenv().__DevKageConfig
@@ -13779,7 +13845,7 @@ end
 task.defer(resize)
 end
 
-local ReferenceESPRuntime = {Gui=nil,AimCircle=nil,AimStroke=nil,Arrows=setmetatable({}, {__mode="k"}),Ragdolls=setmetatable({}, {__mode="k"}),Candidates=setmetatable({}, {__mode="k"}),Connection=nil,DescendantConnection=nil,ScanClock=0}
+local ReferenceESPRuntime = {Gui=nil,AimCircle=nil,AimStroke=nil,Arrows=setmetatable({}, {__mode="k"}),Ragdolls=setmetatable({}, {__mode="k"}),Candidates=setmetatable({}, {__mode="k"}),Connection=nil,DescendantConnection=nil,ScanClock=0,CandidatesInitialized=false,CandidateScanBusy=false}
 
 local function referenceESPHost()
 if type(gethui)=="function" then
@@ -13863,6 +13929,18 @@ if model and model~=LocalPlayer.Character then self.Candidates[model]=true end
 end
 
 function ReferenceESPRuntime:RefreshRagdolls()
+if VisualsState.ragdoll_esp and not self.CandidatesInitialized and not self.CandidateScanBusy then
+self.CandidateScanBusy=true
+task.spawn(function()
+local descendants=workspace:GetDescendants()
+for index,object in ipairs(descendants) do
+if object:IsA("Model") then self.Candidates[object]=true end
+if index%300==0 then task.wait() end
+end
+self.CandidatesInitialized=true
+self.CandidateScanBusy=false
+end)
+end
 for model,highlight in pairs(self.Ragdolls) do
 if not VisualsState.ragdoll_esp or not model.Parent or not self:IsRagdoll(model) then
 pcall(function() highlight:Destroy() end); self.Ragdolls[model]=nil
@@ -13894,7 +13972,15 @@ end
 end
 
 function ReferenceESPRuntime:Update(dt)
-if not self:EnsureGui() then return end
+local needAim=VisualsState.esp_enabled==true and VisualsState.visualize_aimbot==true
+local needArrows=VisualsState.esp_enabled==true and VisualsState.offscreen_arrow==true
+local needRagdolls=VisualsState.ragdoll_esp==true
+if not needAim and not needArrows and not needRagdolls then
+if self.AimCircle then self.AimCircle.Visible=false end
+for _,arrow in pairs(self.Arrows) do if arrow then arrow.Visible=false end end
+return
+end
+if (needAim or needArrows) and not self:EnsureGui() then return end
 local camera=workspace.CurrentCamera
 if not camera then return end
 local viewport=camera.ViewportSize
@@ -13914,7 +14000,7 @@ local activePlayers={}
 for _,player in ipairs(Players:GetPlayers()) do
 if player~=LocalPlayer then
 activePlayers[player]=true
-local arrow=self:GetArrow(player)
+local arrow=needArrows and self:GetArrow(player) or self.Arrows[player]
 local character=player.Character
 local humanoid=character and character:FindFirstChildOfClass("Humanoid")
 local root=character and character:FindFirstChild("HumanoidRootPart")
@@ -13958,9 +14044,6 @@ if self.Gui then pcall(function() self.Gui:Destroy() end) end
 self.Gui=nil; self.AimCircle=nil; self.AimStroke=nil
 end
 
-for _,object in ipairs(workspace:GetDescendants()) do
-if object:IsA("Model") then ReferenceESPRuntime.Candidates[object]=true end
-end
 ReferenceESPRuntime.DescendantConnection=workspace.DescendantAdded:Connect(function(object)
 ReferenceESPRuntime:TrackCandidate(object)
 end)
