@@ -652,46 +652,98 @@ function library:CreateWindow(Properties)
         local PreviousMouseIconEnabled = uis.MouseIconEnabled
         local PreviousMouseBehavior = uis.MouseBehavior
         local MenuInputRuntime = {
+            Guarding = false,
             SavedMouseIconEnabled = PreviousMouseIconEnabled,
             SavedMouseBehavior = PreviousMouseBehavior,
         }
         Window.CursorControlMode = "Free Cursor"
 
-        -- Cooperative cursor ownership. Apply cursor state only when DevKage
-        -- itself opens/closes or its Cursor Control option changes. This avoids
-        -- a property-change feedback loop with another UI/script.
+        local MenuRunService = game:GetService("RunService")
+        local MenuHttpService = game:GetService("HttpService")
+        local MenuMouseBindName = "DevKageMenuMouse_" .. MenuHttpService:GenerateGUID(false):gsub("%-", "")
+
+        local function externalCursorAlive()
+            local env = (type(getgenv) == "function" and getgenv()) or _G
+            local bridge = env.__DevKageCursorBridgeV1
+            return type(bridge) == "table"
+                and bridge.Protocol == "DevKage.MaskShard.Cursor/1"
+                and bridge.ExternalAttached == true
+                and (os.clock() - (tonumber(bridge.ExternalHeartbeat) or 0)) < 2
+        end
+
         local function captureGameplayMouseState()
+            if Window.Enabled then return end
             MenuInputRuntime.SavedMouseBehavior = uis.MouseBehavior
             MenuInputRuntime.SavedMouseIconEnabled = uis.MouseIconEnabled
         end
 
         local function applyMenuMouseState()
             if not Window.Enabled then return end
-            pcall(function() uis.MouseBehavior = Enum.MouseBehavior.Default end)
-            pcall(function() uis.MouseIconEnabled = true end)
+            MenuInputRuntime.Guarding = true
+
+            -- First-person/camera scripts can restore LockCenter every frame.
+            -- DevKage owns the cursor only while its own menu is visible.
+            pcall(function()
+                if uis.MouseBehavior ~= Enum.MouseBehavior.Default then
+                    uis.MouseBehavior = Enum.MouseBehavior.Default
+                end
+            end)
+
+            local wantedIcon = not externalCursorAlive()
+            pcall(function()
+                if uis.MouseIconEnabled ~= wantedIcon then
+                    uis.MouseIconEnabled = wantedIcon
+                end
+            end)
+
+            MenuInputRuntime.Guarding = false
         end
 
         local function restoreSavedMouseState()
-            pcall(function() uis.MouseBehavior = MenuInputRuntime.SavedMouseBehavior end)
-            pcall(function() uis.MouseIconEnabled = MenuInputRuntime.SavedMouseIconEnabled end)
+            MenuInputRuntime.Guarding = true
+            pcall(function()
+                uis.MouseBehavior = MenuInputRuntime.SavedMouseBehavior
+            end)
+            pcall(function()
+                uis.MouseIconEnabled = MenuInputRuntime.SavedMouseIconEnabled
+            end)
+            MenuInputRuntime.Guarding = false
         end
 
         local function applyGameplayMouseState()
             if Window.Enabled or Window.CursorControlMode ~= "Cursor Lock" then return end
-            pcall(function() uis.MouseBehavior = Enum.MouseBehavior.LockCenter end)
-            pcall(function() uis.MouseIconEnabled = false end)
+            MenuInputRuntime.Guarding = true
+            pcall(function()
+                if uis.MouseBehavior ~= Enum.MouseBehavior.LockCenter then
+                    uis.MouseBehavior = Enum.MouseBehavior.LockCenter
+                end
+            end)
+            pcall(function()
+                if uis.MouseIconEnabled ~= false then
+                    uis.MouseIconEnabled = false
+                end
+            end)
+            MenuInputRuntime.Guarding = false
         end
 
         local function restoreGameplayMouseState()
-            pcall(function() uis.MouseBehavior = PreviousMouseBehavior end)
-            pcall(function() uis.MouseIconEnabled = PreviousMouseIconEnabled end)
+            MenuInputRuntime.Guarding = true
+            pcall(function()
+                uis.MouseBehavior = PreviousMouseBehavior
+            end)
+            pcall(function()
+                uis.MouseIconEnabled = PreviousMouseIconEnabled
+            end)
+            MenuInputRuntime.Guarding = false
         end
 
         function Window:SetCursorControlMode(mode)
             mode = tostring(mode or "Free Cursor")
             if mode ~= "Cursor Lock" then mode = "Free Cursor" end
+
             local previousMode = Window.CursorControlMode
             Window.CursorControlMode = mode
+
             if Window.Enabled then
                 applyMenuMouseState()
             elseif mode == "Cursor Lock" then
@@ -699,6 +751,7 @@ function library:CreateWindow(Properties)
             elseif previousMode == "Cursor Lock" then
                 restoreSavedMouseState()
             end
+
             return mode
         end
 
@@ -706,8 +759,38 @@ function library:CreateWindow(Properties)
             return Window.CursorControlMode
         end
 
+        -- The important part from the supplied working cursor implementation:
+        -- run after normal camera/first-person updates so the menu cursor stays
+        -- free while DevKage is visible. One late binding is enough; avoid the
+        -- old property-change feedback loops and duplicate RenderStepped loop.
+        pcall(function()
+            MenuRunService:BindToRenderStep(
+                MenuMouseBindName,
+                Enum.RenderPriority.Last.Value + 1000000,
+                function()
+                    if Window.Enabled then
+                        applyMenuMouseState()
+                    elseif Window.CursorControlMode == "Cursor Lock" then
+                        applyGameplayMouseState()
+                    end
+                end
+            )
+        end)
+
+        local menuMouseLateBind = {
+            Disconnect = function()
+                pcall(function()
+                    MenuRunService:UnbindFromRenderStep(MenuMouseBindName)
+                end)
+            end
+        }
+        library.Connections[#library.Connections + 1] = menuMouseLateBind
+
+        if type(MaskShard) == "table" and type(MaskShard.Connections) == "table" then
+            MaskShard.Connections[#MaskShard.Connections + 1] = menuMouseLateBind
+        end
+
         if Window.Enabled then
-            captureGameplayMouseState()
             applyMenuMouseState()
         end
 
@@ -938,7 +1021,7 @@ function library:CreateWindow(Properties)
             local dragStart  = nil
             local startPos   = nil
 
-            local DragBar = utility:RenderObject("TextButton", {
+            local DragBar = utility:RenderObject("Frame", {
                 BackgroundColor3 = Color3.fromRGB(0, 0, 0),
                 BackgroundTransparency = 1,
                 BorderSizePixel = 0,
@@ -946,11 +1029,7 @@ function library:CreateWindow(Properties)
                 Position = UDim2.new(0, 0, 0, 0),
                 Size = UDim2.new(1, 0, 0, 12),
                 ZIndex = 30000,
-                Active = true,
-                AutoButtonColor = false,
-                Text = "",
-                TextTransparency = 1,
-                Modal = true
+                Active = true
             })
 
             utility:CreateConnection(DragBar.InputBegan, function(input)
