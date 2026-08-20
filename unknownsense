@@ -10805,14 +10805,40 @@ local ok, err = pcall(writefile, SCRIPT_SETTINGS_FILE, encoded)
 return ok, ok and nil or tostring(err)
 end
 
+local AUTOEXEC_FOLDERS = {"autoexec","Autoexec","autoexecute","AutoExecute","scripts/autoexec","scripts/Autoexec"}
+
 local function existing_autoexec_folders()
 local folders = {}
 if type(isfolder) ~= "function" then return folders end
-for _, folder in ipairs({"autoexec","Autoexec","autoexecute","AutoExecute","scripts/autoexec","scripts/Autoexec"}) do
+for _, folder in ipairs(AUTOEXEC_FOLDERS) do
 local ok, exists = pcall(isfolder, folder)
-if ok and exists then folders[#folders+1] = folder end
+if ok and exists == true then folders[#folders+1] = folder end
 end
 return folders
+end
+
+local function ensure_autoexec_folder(folder)
+if type(isfolder) == "function" then
+local ok, exists = pcall(isfolder, folder)
+if ok and exists == true then return true end
+end
+
+if type(makefolder) == "function" then
+if folder:sub(1,8) == "scripts/" then
+pcall(makefolder, "scripts")
+end
+pcall(makefolder, folder)
+
+if type(isfolder) == "function" then
+local ok, exists = pcall(isfolder, folder)
+if ok and exists == true then return true end
+else
+return true
+end
+end
+
+-- Some executors create the path automatically on writefile().
+return type(writefile) == "function"
 end
 
 local function build_script_autoload_stub()
@@ -10856,7 +10882,6 @@ task.spawn(function()
         end
 
         env.__DEVKAGE_AUTO_STARTED = true
-        env.__DEVKAGE_AUTO_STARTED_JOB = jobKey
         env.__DEVKAGE_EMBEDDED_SOURCE = source
         env.__DEVKAGE_MULTI_INJECT_BOOT = true
 
@@ -10864,13 +10889,25 @@ task.spawn(function()
         if type(compiler) ~= "function" then error("loadstring unavailable") end
         local fn, compileError = compiler(source)
         if not fn then error(compileError) end
-        fn()
+
+        local runOk, runError = pcall(fn)
+
         env.__DEVKAGE_MULTI_INJECT_BOOT = nil
         env.__DEVKAGE_AUTO_STARTING_JOB = nil
+
+        if not runOk then
+            env.__DEVKAGE_AUTO_STARTED = false
+            error(runError)
+        end
+
+        -- Only mark this Roblox server as completed after the payload
+        -- successfully finishes its startup path.
+        env.__DEVKAGE_AUTO_STARTED_JOB = jobKey
     end)
 
     if not ok then
         warn("[DevKage AutoLoad] " .. tostring(err))
+        env.__DEVKAGE_AUTO_STARTED = false
         env.__DEVKAGE_MULTI_INJECT_BOOT = nil
         env.__DEVKAGE_AUTO_STARTING_JOB = nil
     end
@@ -10904,36 +10941,47 @@ return ok, ok and nil or tostring(err)
 end
 
 local function write_autoexec_stubs(stub)
-if type(writefile) ~= "function" then return false end
-local wrote = false
+if type(writefile) ~= "function" then return false, {} end
 
-local folders = existing_autoexec_folders()
-for _, folder in ipairs(folders) do
-    local ok = pcall(writefile, folder .. "/" .. SCRIPT_AUTOEXEC_NAME, stub)
-    if ok then wrote = true end
+local installed = {}
+local seen = {}
+
+for _, folder in ipairs(AUTOEXEC_FOLDERS) do
+if ensure_autoexec_folder(folder) then
+local path = folder .. "/" .. SCRIPT_AUTOEXEC_NAME
+local writeOk = pcall(writefile, path, stub)
+
+if writeOk then
+local verified = true
+
+if type(isfile) == "function" then
+local ok, exists = pcall(isfile, path)
+if ok then verified = exists == true end
 end
 
--- A cleared executor workspace often removes the autoexec directory itself.
--- Re-create one instead of silently requiring it to already exist.
-if not wrote then
-    for _, folder in ipairs({"autoexec","autoexecute"}) do
-        if type(makefolder) == "function" then
-            pcall(makefolder, folder)
-        end
-        local ok = pcall(writefile, folder .. "/" .. SCRIPT_AUTOEXEC_NAME, stub)
-        if ok then
-            wrote = true
-            break
-        end
-    end
+if verified and type(readfile) == "function" then
+local ok, saved = pcall(readfile, path)
+if ok then
+verified = type(saved) == "string"
+and #saved == #stub
+and saved == stub
+end
 end
 
-return wrote
+if verified and not seen[path] then
+seen[path] = true
+installed[#installed+1] = path
+end
+end
+end
+end
+
+return #installed > 0, installed
 end
 
 local function remove_autoexec_stubs()
 if type(delfile) ~= "function" then return end
-for _, folder in ipairs({"autoexec","Autoexec","autoexecute","AutoExecute","scripts/autoexec","scripts/Autoexec"}) do
+for _, folder in ipairs(AUTOEXEC_FOLDERS) do
     local path = folder .. "/" .. SCRIPT_AUTOEXEC_NAME
     local shouldDelete = true
     if type(isfile) == "function" then
@@ -10949,6 +10997,17 @@ local settings = read_script_settings()
 settings.AutoLoad = enabled == true
 local saved, saveError = write_script_settings(settings)
 if not saved then return false, saveError end
+
+if type(readfile) == "function" then
+local verifyOk, raw = pcall(readfile, SCRIPT_SETTINGS_FILE)
+if not verifyOk or type(raw) ~= "string" or raw == "" then
+return false, "Auto Load settings could not be read back after saving"
+end
+local decodeOk, verifySettings = pcall(function() return HttpService:JSONDecode(raw) end)
+if not decodeOk or type(verifySettings) ~= "table" or verifySettings.AutoLoad ~= (enabled == true) then
+return false, "Auto Load settings verification failed"
+end
+end
 
 if not enabled then
     remove_autoexec_stubs()
@@ -10988,25 +11047,46 @@ if not payloadOk then
     return false, tostring(payloadErr)
 end
 
+if type(readfile) == "function" then
+local verifyOk, savedSource = pcall(readfile, SCRIPT_PAYLOAD_FILE)
+if not verifyOk
+or type(savedSource) ~= "string"
+or #savedSource ~= #source
+or savedSource ~= source then
+if not bootRefresh then
+settings.AutoLoad = false
+write_script_settings(settings)
+end
+return false, "Auto Load payload verification failed"
+end
+end
+
 local stub = build_script_autoload_stub()
 
 local queued, queueError = queue_script_autoload(stub)
-local autoexecWritten = write_autoexec_stubs(stub)
+local autoexecWritten, autoexecPaths = write_autoexec_stubs(stub)
 
 if not queued and not autoexecWritten then
     if not bootRefresh then
         settings.AutoLoad = false
         write_script_settings(settings)
     end
-    return false, "Executor exposes neither a working teleport queue nor an autoexec folder"
+    return false, "No verified executor autoexec path was writable and teleport queue is unavailable"
 end
 
+if autoexecWritten then
+local env = (type(getgenv) == "function" and getgenv()) or _G
+env.__DEVKAGE_AUTOEXEC_PATHS = autoexecPaths
+end
+
+local pathText = autoexecWritten and table.concat(autoexecPaths, ", ") or ""
+
 if queued and autoexecWritten then
-    return true, "Auto Load enabled (teleports + executor autoexec)"
+    return true, "Auto Load enabled | autoexec: " .. pathText
 elseif queued then
-    return true, "Auto Load enabled for teleports"
+    return true, "Auto Load enabled for teleports only"
 else
-    return true, "Auto Load installed in executor autoexec"
+    return true, "Auto Load installed: " .. pathText
 end
 end
 
