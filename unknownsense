@@ -651,79 +651,39 @@ function library:CreateWindow(Properties)
         local PreviousMouseIconEnabled = uis.MouseIconEnabled
         local PreviousMouseBehavior = uis.MouseBehavior
         local MenuInputRuntime = {
-            Guarding = false,
             SavedMouseIconEnabled = PreviousMouseIconEnabled,
             SavedMouseBehavior = PreviousMouseBehavior,
         }
         Window.CursorControlMode = "Free Cursor"
-        local MenuRunService = game:GetService("RunService")
 
-        local function externalCursorAlive()
-            local env = (type(getgenv) == "function" and getgenv()) or _G
-            local bridge = env.__DevKageCursorBridgeV1
-            return type(bridge) == "table"
-                and bridge.Protocol == "DevKage.MaskShard.Cursor/1"
-                and bridge.ExternalAttached == true
-                and (os.clock() - (tonumber(bridge.ExternalHeartbeat) or 0)) < 2
-        end
-
-        local function applyMenuMouseState()
-            if not Window.Enabled then return end
-            MenuInputRuntime.Guarding = true
-            pcall(function()
-                uis.MouseBehavior = Enum.MouseBehavior.Default
-            end)
-            pcall(function()
-                uis.MouseIconEnabled = not externalCursorAlive()
-            end)
-            MenuInputRuntime.Guarding = false
-        end
-
+        -- Cooperative cursor ownership. Apply cursor state only when DevKage
+        -- itself opens/closes or its Cursor Control option changes. This avoids
+        -- a property-change feedback loop with another UI/script.
         local function captureGameplayMouseState()
             MenuInputRuntime.SavedMouseBehavior = uis.MouseBehavior
             MenuInputRuntime.SavedMouseIconEnabled = uis.MouseIconEnabled
         end
 
+        local function applyMenuMouseState()
+            if not Window.Enabled then return end
+            pcall(function() uis.MouseBehavior = Enum.MouseBehavior.Default end)
+            pcall(function() uis.MouseIconEnabled = true end)
+        end
+
         local function restoreSavedMouseState()
-            MenuInputRuntime.Guarding = true
-            pcall(function()
-                uis.MouseBehavior = MenuInputRuntime.SavedMouseBehavior
-            end)
-            pcall(function()
-                uis.MouseIconEnabled = MenuInputRuntime.SavedMouseIconEnabled
-            end)
-            MenuInputRuntime.Guarding = false
+            pcall(function() uis.MouseBehavior = MenuInputRuntime.SavedMouseBehavior end)
+            pcall(function() uis.MouseIconEnabled = MenuInputRuntime.SavedMouseIconEnabled end)
         end
 
         local function applyGameplayMouseState()
             if Window.Enabled or Window.CursorControlMode ~= "Cursor Lock" then return end
-            MenuInputRuntime.Guarding = true
-            pcall(function()
-                uis.MouseBehavior = Enum.MouseBehavior.LockCenter
-            end)
-            pcall(function()
-                uis.MouseIconEnabled = false
-            end)
-            MenuInputRuntime.Guarding = false
-        end
-
-        local function applyRequestedMouseState()
-            if Window.Enabled then
-                applyMenuMouseState()
-            elseif Window.CursorControlMode == "Cursor Lock" then
-                applyGameplayMouseState()
-            end
+            pcall(function() uis.MouseBehavior = Enum.MouseBehavior.LockCenter end)
+            pcall(function() uis.MouseIconEnabled = false end)
         end
 
         local function restoreGameplayMouseState()
-            MenuInputRuntime.Guarding = true
-            pcall(function()
-                uis.MouseBehavior = PreviousMouseBehavior
-            end)
-            pcall(function()
-                uis.MouseIconEnabled = PreviousMouseIconEnabled
-            end)
-            MenuInputRuntime.Guarding = false
+            pcall(function() uis.MouseBehavior = PreviousMouseBehavior end)
+            pcall(function() uis.MouseIconEnabled = PreviousMouseIconEnabled end)
         end
 
         function Window:SetCursorControlMode(mode)
@@ -745,21 +705,9 @@ function library:CreateWindow(Properties)
             return Window.CursorControlMode
         end
 
-        applyRequestedMouseState()
-
-        local menuMouseBehaviorConnection = utility:CreateConnection(uis:GetPropertyChangedSignal("MouseBehavior"), function()
-            if not MenuInputRuntime.Guarding and (Window.Enabled or Window.CursorControlMode == "Cursor Lock") then
-                task.defer(applyRequestedMouseState)
-            end
-        end)
-        local menuMouseIconConnection = utility:CreateConnection(uis:GetPropertyChangedSignal("MouseIconEnabled"), function()
-            if not MenuInputRuntime.Guarding and Window.Enabled then
-                task.defer(applyMenuMouseState)
-            end
-        end)
-        if type(MaskShard) == "table" and type(MaskShard.Connections) == "table" then
-            MaskShard.Connections[#MaskShard.Connections + 1] = menuMouseBehaviorConnection
-            MaskShard.Connections[#MaskShard.Connections + 1] = menuMouseIconConnection
+        if Window.Enabled then
+            captureGameplayMouseState()
+            applyMenuMouseState()
         end
 
         local ScreenGui_MainFrame = utility:RenderObject("Frame", {
@@ -4754,7 +4702,9 @@ state.Premium=config.premium==true
 state.Verified=config.verified==true
 state.Influencer=config.influencer==true
 state.Admin=config.admin==true
-if type(hookmetamethod)=="function" and not environment.__DevKageSpooferMetaHookInstalled then
+if (config.premium==true or config.verified==true)
+and type(hookmetamethod)=="function"
+and not environment.__DevKageSpooferMetaHookInstalled then
 local oldIndex
 local ok=pcall(function()
 oldIndex=hookmetamethod(game,"__index",function(self,key)
