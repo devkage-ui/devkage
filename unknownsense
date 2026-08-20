@@ -10946,33 +10946,28 @@ if type(writefile) ~= "function" then return false, {} end
 local installed = {}
 local seen = {}
 
-for _, folder in ipairs(AUTOEXEC_FOLDERS) do
-if ensure_autoexec_folder(folder) then
+local function tryWrite(folder)
+if seen[folder] then return end
+seen[folder] = true
+
+if not ensure_autoexec_folder(folder) then return end
+
 local path = folder .. "/" .. SCRIPT_AUTOEXEC_NAME
-local writeOk = pcall(writefile, path, stub)
-
-if writeOk then
-local verified = true
-
-if type(isfile) == "function" then
-local ok, exists = pcall(isfile, path)
-if ok then verified = exists == true end
-end
-
-if verified and type(readfile) == "function" then
-local ok, saved = pcall(readfile, path)
+local ok = pcall(writefile, path, stub)
 if ok then
-verified = type(saved) == "string"
-and #saved == #stub
-and saved == stub
-end
-end
-
-if verified and not seen[path] then
-seen[path] = true
 installed[#installed+1] = path
 end
 end
+
+-- Prefer folders the executor already exposes.
+for _, folder in ipairs(existing_autoexec_folders()) do
+tryWrite(folder)
+end
+
+-- If the workspace was cleared, recreate the common autoexec locations.
+if #installed == 0 then
+for _, folder in ipairs(AUTOEXEC_FOLDERS) do
+tryWrite(folder)
 end
 end
 
@@ -10997,17 +10992,6 @@ local settings = read_script_settings()
 settings.AutoLoad = enabled == true
 local saved, saveError = write_script_settings(settings)
 if not saved then return false, saveError end
-
-if type(readfile) == "function" then
-local verifyOk, raw = pcall(readfile, SCRIPT_SETTINGS_FILE)
-if not verifyOk or type(raw) ~= "string" or raw == "" then
-return false, "Auto Load settings could not be read back after saving"
-end
-local decodeOk, verifySettings = pcall(function() return HttpService:JSONDecode(raw) end)
-if not decodeOk or type(verifySettings) ~= "table" or verifySettings.AutoLoad ~= (enabled == true) then
-return false, "Auto Load settings verification failed"
-end
-end
 
 if not enabled then
     remove_autoexec_stubs()
@@ -11047,31 +11031,13 @@ if not payloadOk then
     return false, tostring(payloadErr)
 end
 
-if type(readfile) == "function" then
-local verifyOk, savedSource = pcall(readfile, SCRIPT_PAYLOAD_FILE)
-if not verifyOk
-or type(savedSource) ~= "string"
-or #savedSource ~= #source
-or savedSource ~= source then
-if not bootRefresh then
-settings.AutoLoad = false
-write_script_settings(settings)
-end
-return false, "Auto Load payload verification failed"
-end
-end
-
 local stub = build_script_autoload_stub()
 
 local queued, queueError = queue_script_autoload(stub)
 local autoexecWritten, autoexecPaths = write_autoexec_stubs(stub)
 
 if not queued and not autoexecWritten then
-    if not bootRefresh then
-        settings.AutoLoad = false
-        write_script_settings(settings)
-    end
-    return false, "No verified executor autoexec path was writable and teleport queue is unavailable"
+    return false, "Auto Load is enabled in settings, but no writable executor autoexec path or teleport queue was found"
 end
 
 if autoexecWritten then
@@ -19973,11 +19939,14 @@ Flag = "script.auto_load",
 Callback = function(value)
 local ok, message = configure_script_autoload(value)
 if not ok and value then
-    task.defer(function()
-        if scriptAutoLoadToggle then scriptAutoLoadToggle:Set(false, true) end
-    end)
+    local persisted = read_script_settings().AutoLoad == true
+    if not persisted then
+        task.defer(function()
+            if scriptAutoLoadToggle then scriptAutoLoadToggle:Set(false, true) end
+        end)
+    end
 end
-library:Notify({Message=ok and tostring(message) or ("Auto Load failed: "..tostring(message)),Duration=4})
+library:Notify({Message=ok and tostring(message) or ("Auto Load: "..tostring(message)),Duration=4})
 end
 })
 
