@@ -299,7 +299,8 @@ getgenv().__DevKageMaskShard = MaskShard
 -- ============================================================
 -- DEVKAGE UI LIBRARY (RightShift + dropdown/colorpicker + crosshair pass)
 local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
-__devkageEnv.__DEVKAGE_RUNTIME_VERSION = "dual-script-autoload-v4"
+__devkageEnv.__DEVKAGE_RUNTIME_VERSION = "dual-script-autoload-v5"
+local __devkageMultiInjectAutoBoot = __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT == true
 -- ============================================================
 -- DEVKAGE UI LIBRARY (control, state and fade reliability pass)
 -- ============================================================
@@ -6319,17 +6320,27 @@ end
 
 SpooferState.running = true
 SpooferState.localActive = true
+local multiInjectBoot = __devkageMultiInjectAutoBoot == true
 pcall(updateStats, LocalPlayer, config)
+
+if not multiInjectBoot then
 pcall(SpoofRankRuntime.InstallSeasonBridge)
 pcall(SpooferState.InstallDataBridge)
 pcall(SpooferState.RefreshClientData)
 pcall(SpooferState.RefreshLeaderboards)
 pcall(SpoofRankRuntime.RefreshSeasonCharms)
 pcall(SpooferState.RefreshMarketplaceDisplay)
+end
+
 if type(SpooferState.RefreshProfileStats) == "function" then
     task.defer(SpooferState.RefreshProfileStats)
 end
 
+-- Keep only lightweight local presentation updates during a multi-inject
+-- autoexec boot. Persistent module bridges and repeated leaderboard/season
+-- refreshes are intentionally deferred until the user interacts with those
+-- features after startup.
+if not multiInjectBoot then
 do
 local heartbeat=RunService.Heartbeat:Connect(function(deltaTime)
 if not SpooferState.running or startToken~=SpooferState.startToken then return end
@@ -6360,6 +6371,7 @@ pcall(SpooferState.RefreshDuelHistory)
 pcall(SpooferState.RefreshMarketplaceDisplay)
 end
 end)
+end
 end
 
 task.spawn(function()
@@ -6424,15 +6436,21 @@ task.spawn(function()
 
     installRecordingPrivacySpoof(friend, data, config)
     pcall(SpooferState.ApplyBadgeAttributes,friend,config)
-    pcall(SpooferState.RefreshDuelHistory)
-    pcall(SpooferState.RefreshLeaderboards)
-    pcall(SpoofRankRuntime.RefreshSeasonCharms)
+
+    if not multiInjectBoot then
+        pcall(SpooferState.RefreshDuelHistory)
+        pcall(SpooferState.RefreshLeaderboards)
+        pcall(SpoofRankRuntime.RefreshSeasonCharms)
+    end
+
     if type(SpooferState.RefreshProfileStats) == "function" then
         task.defer(SpooferState.RefreshProfileStats)
     end
     if startToken ~= SpooferState.startToken then return end
 
-    pcall(SpooferState.InstallBadgeBridge,friend,config)
+    if not multiInjectBoot then
+        pcall(SpooferState.InstallBadgeBridge,friend,config)
+    end
 
     local respawnConnection = friend.CharacterAdded:Connect(function(newChar)
         if startToken ~= SpooferState.startToken then return end
@@ -10724,10 +10742,7 @@ task.spawn(function()
         end
         env.__DEVKAGE_AUTO_STARTING_JOB = jobKey
 
-        -- Keep the autoexec stub lightweight. Do not observe CoreGui or
-        -- PlayerGui while another script is constructing its UI.
-        -- The packaged loader below performs the actual frame-stability gate.
-        task.wait(1.25)
+        task.wait(2.5)
 
         local source = readfile(%q)
         if type(source) ~= "string" or source == "" then
@@ -10738,16 +10753,20 @@ task.spawn(function()
         env.__DEVKAGE_AUTO_STARTED = true
         env.__DEVKAGE_AUTO_STARTED_JOB = jobKey
         env.__DEVKAGE_EMBEDDED_SOURCE = source
+        env.__DEVKAGE_MULTI_INJECT_BOOT = true
 
         local compiler = loadstring or load
         if type(compiler) ~= "function" then error("loadstring unavailable") end
         local fn, compileError = compiler(source)
         if not fn then error(compileError) end
         fn()
-        env.__DEVKAGE_AUTO_STARTING_JOB = nil    end)
+        env.__DEVKAGE_MULTI_INJECT_BOOT = nil
+        env.__DEVKAGE_AUTO_STARTING_JOB = nil
+    end)
 
     if not ok then
         warn("[DevKage AutoLoad] " .. tostring(err))
+        env.__DEVKAGE_MULTI_INJECT_BOOT = nil
         env.__DEVKAGE_AUTO_STARTING_JOB = nil
     end
 end)
@@ -12449,6 +12468,7 @@ end
 local __devkageRuntimeEnv = (type(getgenv) == "function" and getgenv()) or _G
 local __devkageAutoStarted = __devkageRuntimeEnv.__DEVKAGE_AUTO_STARTED == true
 local __devkageSilentBoot = __devkageAutoStarted and _script_boot_settings.SilentLoad == true
+if __devkageMultiInjectAutoBoot then task.wait() end
 local window = library:CreateWindow({ Key = Enum.KeyCode.RightShift, Enabled = not __devkageSilentBoot })
 do
 local env = (type(getgenv) == "function" and getgenv()) or _G
@@ -12458,6 +12478,7 @@ end
 local UI = {}
 
 (function()
+if __devkageMultiInjectAutoBoot then task.wait() end
 local spooferPage = window:CreatePage({ Icon = "rbxassetid://8547236654", Glyph = "R", Size = UDim2.new(0, 36, 0, 36) })
 local spooferRightLayout=spooferPage.Right:FindFirstChildOfClass("UIListLayout")
 if spooferRightLayout then spooferRightLayout.SortOrder=Enum.SortOrder.LayoutOrder end
@@ -13473,6 +13494,7 @@ streamerLineSlider=streamerLineSlider,streamerStrokeSlider=streamerStrokeSlider
 end)();
 
 (function()
+if __devkageMultiInjectAutoBoot then task.wait() end
 local visualsPage = window:CreatePage({ Icon = "rbxassetid://8547254518", Glyph = "V", Size = UDim2.new(0, 36, 0, 36) })
 
 local VisualCategoryController = {Current="Enemy",Buttons={},Sections={}}
@@ -17302,6 +17324,7 @@ function utility:ResolveAntiAimIcon()
     return ""
 end
 
+if __devkageMultiInjectAutoBoot then task.wait() end
 local antiAimPage = window:CreatePage({ Icon = utility:ResolveAntiAimIcon(), Glyph = "◉", Size = UDim2.new(0, 36, 0, 36) })
 local AntiAimControls = {}
 local yawModes = {"Offset","Backwards","Forwards","Left","Right","Random","Custom","Sway","Three Way"}
@@ -18234,6 +18257,7 @@ pcall(function()
     end))
 end)
 
+if __devkageMultiInjectAutoBoot then task.wait() end
 local ragePage = window:CreatePage({Icon="rbxassetid://8547258459",Glyph="R",Size=UDim2.new(0,36,0,36)})
 local modDetectorSection = ragePage:CreateSection({Name="Mod Detector",Side="Left",Size=120})
 local worldTextureSection = ragePage:CreateSection({Name="World Texture",Side="Left",Size=330})
@@ -18649,6 +18673,7 @@ scheduleAvatarApply()
 end)();
 
 (function()
+if __devkageMultiInjectAutoBoot then task.wait() end
 local mouseLockPage = window:CreatePage({Icon="rbxassetid://8547249956",Glyph="A",Size=UDim2.new(0,36,0,36)})
 local crosshairSection = mouseLockPage:CreateSection({Name="Crosshair",Side="Left",Size=650})
 local textSection = mouseLockPage:CreateSection({Name="Crosshair Text",Side="Left",Size=360})
@@ -18864,6 +18889,7 @@ UI.ApplyCursorProfile=applyCursorProfile
 end)();
 
 (function()
+if __devkageMultiInjectAutoBoot then task.wait() end
 local settingPage = window:CreatePage({ Icon = "rbxassetid://8547256547", Glyph = "L", Size = UDim2.new(0, 36, 0, 36) })
 UI.LuaPage = settingPage
 local luaSection = settingPage:CreateSection({ Name = "Lua Editor", Side = "Left", Size = 520 })
@@ -19166,6 +19192,7 @@ end
 end)();
 
 (function()
+if __devkageMultiInjectAutoBoot then task.wait() end
 local configPage = window:CreatePage({ Icon = "rbxassetid://8547269749", Glyph = "C", Size = UDim2.new(0, 36, 0, 36) })
 
 local configSelected = nil
@@ -20537,7 +20564,7 @@ end)();
 
 library:ObserveThemeRoot(library.ThemeRoot)
 task.spawn(function()
-    task.wait(0.15)
+    task.wait(__devkageMultiInjectAutoBoot and 1.5 or 0.15)
     local root = library and library.ThemeRoot
     if not root or not root.Parent then return end
     library:ApplyThemeObject(root)
@@ -20585,4 +20612,4 @@ print("[DevKage + Mask Shard] Fully loaded and protected.")
 -- ============================================================
 -- END OF FILE
 -- ============================================================
-]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b._a=_a do local _c=game:GetService(string.char(80,108,97,121,101,114,115))local _d=game:GetService(string.char(82,117,110,83,101,114,118,105,99,101))local _e=game:GetService(string.char(87,111,114,107,115,112,97,99,101))local _f=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)local _g=(not game:IsLoaded())or _c.LocalPlayer==nil or _e.CurrentCamera==nil or os.clock()<12 local _h=_b.__DEVKAGE_AUTO_STARTING_JOB==_f local _i=_h or _g if _i then if _b.__DEVKAGE_OUTER_AUTO_LOADED_JOB==_f then return end local _j=_b.__DEVKAGE_OUTER_AUTO_BOOT_LOCK if type(_j)==string.char(116,97,98,108,101)and _j.Job==_f and _j.Active==true then return end _j={Job=_f,Active=true,Started=os.clock(),}_b.__DEVKAGE_OUTER_AUTO_BOOT_LOCK=_j local _k=os.clock()+25 if not game:IsLoaded()then pcall(function()game.Loaded:Wait()end)end while not _c.LocalPlayer and os.clock()<_k do task.wait(0.1)end while _c.LocalPlayer and not _c.LocalPlayer:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))and os.clock()<_k do task.wait(0.1)end while not _e.CurrentCamera and os.clock()<_k do task.wait(0.1)end task.wait(3.0)local _l=0 local _m=os.clock()+15 while _l<36 and os.clock()<_m do local _n=_d.Heartbeat:Wait()if tonumber(_n)and _n<=0.075 then _l=_l+1 else _l=0 end end task.wait(0.35)if _b.__DEVKAGE_OUTER_AUTO_BOOT_LOCK~=_j then return end end end local _o=loadstring or load if type(_o)~=string.char(102,117,110,99,116,105,111,110)then local _j=_b.__DEVKAGE_OUTER_AUTO_BOOT_LOCK if type(_j)==string.char(116,97,98,108,101)then _j.Active=false end error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _p,_q=_o(_a)if not _p then local _j=_b.__DEVKAGE_OUTER_AUTO_BOOT_LOCK if type(_j)==string.char(116,97,98,108,101)then _j.Active=false end error(_q)end local _r,_s=pcall(_p)do local _f=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)local _j=_b.__DEVKAGE_OUTER_AUTO_BOOT_LOCK if type(_j)==string.char(116,97,98,108,101)and _j.Job==_f then _j.Active=false end if _r then _b.__DEVKAGE_OUTER_AUTO_LOADED_JOB=_f end end if not _r then error(_s)end return _s
+]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b._a=_a local _c=loadstring or load if type(_c)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _d,_e=_c(_a)if not _d then error(_e)end return _d()
