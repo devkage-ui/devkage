@@ -4191,6 +4191,7 @@ wins     = 0,
 kills    = 0,
 elo      = 5000,
 eloLiveSync = true,
+eloLiveSyncAutoLoad = false,
 spoofLevel = true,
 spoofStreak = true,
 spoofWins = true,
@@ -4332,6 +4333,10 @@ rageBotTarget = "Head",
 rageBotTeamCheck = true,
 rageBotFOV = 180,
 rageBotSmooth = 0,
+rapidFireEnabled = false,
+rapidFireDefaultRate = 10,
+rapidFireSelectedWeapon = "",
+rapidFireRates = {},
 luaCode = "",
 luaAutoExecute = false
 }
@@ -4348,7 +4353,7 @@ getgenv().__DevKageConfig.avatarModsType = "Guardian Angel"
 end
 
 __DevKageSpooferConfigKeys={
-"victim","helper","level","streak","wins","kills","elo","eloLiveSync",
+"victim","helper","level","streak","wins","kills","elo","eloLiveSync","eloLiveSyncAutoLoad",
 "spoofLevel","spoofStreak","spoofWins","spoofKills","spoofELO",
 "rankDisplay","archNemesisCutoff","archRank","charmSpoofEnabled",
 "charmSeason0","charmSeason1","charmSeason2","charmSeason3",
@@ -6564,6 +6569,102 @@ task.defer(function()
         local environment=(type(getgenv)=="function" and getgenv()) or _G
         task.wait(environment.__DEVKAGE_AUTO_STARTED==true and 1.5 or 0.6)
         StartSpoofer(getgenv().__DevKageConfig)
+    end
+end)
+
+-- ============================================================
+-- LIVE ELO SYNC AUTO-LOAD
+-- Lightweight ELO-only runtime when full Spoofer Auto Load is off.
+-- ============================================================
+local ELOAutoLoadRuntime = {
+    Connection = nil,
+    Elapsed = 0,
+}
+
+function ELOAutoLoadRuntime:Stop()
+    if self.Connection then
+        pcall(function() self.Connection:Disconnect() end)
+        self.Connection = nil
+    end
+    self.Elapsed = 0
+end
+
+function ELOAutoLoadRuntime:ApplyOnce()
+    local config = getgenv().__DevKageConfig
+    if type(config) ~= "table" or config.eloLiveSyncAutoLoad ~= true then return false end
+
+    config.eloLiveSync = true
+    config.spoofELO = true
+    config.rankDisplay = "Use Spoofed ELO"
+    config.elo = normalizeSpoofELO(config.elo)
+    SpooferState.localActive = true
+
+    pcall(applySpoofELOValues, LocalPlayer, config.elo)
+    if SpooferState.targetPlayer then
+        pcall(applySpoofELOValues, SpooferState.targetPlayer, config.elo)
+    end
+
+    if type(SpooferState.RefreshProfileStats) == "function" then
+        task.defer(SpooferState.RefreshProfileStats)
+    end
+
+    return true
+end
+
+function ELOAutoLoadRuntime:SetEnabled(enabled)
+    local config = getgenv().__DevKageConfig
+    if type(config) ~= "table" then return false end
+
+    config.eloLiveSyncAutoLoad = enabled == true
+    self:Stop()
+
+    if not enabled then return true end
+
+    config.eloLiveSync = true
+    self:ApplyOnce()
+
+    -- Full Spoofer Auto Load already owns its own live-sync heartbeat.
+    if config.autoLoadSpoofer == true or SpooferState.running == true then
+        return true
+    end
+
+    self.Connection = RunService.Heartbeat:Connect(function(deltaTime)
+        local current = getgenv().__DevKageConfig
+        if type(current) ~= "table" or current.eloLiveSyncAutoLoad ~= true then
+            self:Stop()
+            return
+        end
+
+        if current.eloLiveSync == false then return end
+
+        self.Elapsed = self.Elapsed + (tonumber(deltaTime) or 0)
+        if self.Elapsed < 0.75 then return end
+        self.Elapsed = 0
+        self:ApplyOnce()
+    end)
+
+    if type(MaskShard) == "table" and type(MaskShard.Connections) == "table" then
+        MaskShard.Connections[#MaskShard.Connections + 1] = self.Connection
+    end
+
+    return true
+end
+
+SpooferState.SetELOAutoLoadRuntimeEnabled = function(enabled)
+    return ELOAutoLoadRuntime:SetEnabled(enabled)
+end
+
+table.insert(library.CleanupCallbacks, function()
+    ELOAutoLoadRuntime:Stop()
+end)
+
+task.defer(function()
+    local config = getgenv().__DevKageConfig
+    if type(config) == "table" and config.eloLiveSyncAutoLoad == true then
+        if not game:IsLoaded() then game.Loaded:Wait() end
+        local environment=(type(getgenv)=="function" and getgenv()) or _G
+        task.wait(environment.__DEVKAGE_AUTO_STARTED==true and 1.7 or 0.8)
+        ELOAutoLoadRuntime:SetEnabled(true)
     end
 end)
 
@@ -13094,6 +13195,26 @@ getgenv().__DevKageConfig.eloLiveSync=value==true
 if value and SpooferState.privacy and SpooferState.privacy.RefreshStats then pcall(SpooferState.privacy.RefreshStats) end
 end
 })
+
+local eloLiveAutoLoadToggle=spooferSection:CreateToggle({
+Name="Auto Load Live ELO Sync",State=getgenv().__DevKageConfig.eloLiveSyncAutoLoad==true,
+Callback=function(value)
+local config=getgenv().__DevKageConfig
+config.eloLiveSyncAutoLoad=value==true
+if value then
+config.eloLiveSync=true
+eloLiveToggle:Set(true,true)
+end
+if SpooferState.SetELOAutoLoadRuntimeEnabled then
+pcall(SpooferState.SetELOAutoLoadRuntimeEnabled,value==true)
+end
+local saved,err=SpooferState.SaveAutoLoad(config.autoLoadSpoofer==true)
+if not saved then
+library:Notify({Message="Live ELO auto-load save failed: "..tostring(err),Duration=4})
+end
+end
+})
+
 local eloStatusLabel=spooferSection:CreateLabel({Text="ELO ready • supports rating, MMR and ranked-point layouts"})
 local function applyConfiguredELO()
 local value=normalizeSpoofELO(eloInput:Get())
@@ -13618,7 +13739,7 @@ StreamerHUDRuntime:RefreshConfig()
 
 UI.Spoofer = {
 victimInput=victimInput, helperInput=helperInput, levelInput=levelInput,
-streakInput=streakInput, winsInput=winsInput, killsInput=killsInput, eloInput=eloInput, eloLiveToggle=eloLiveToggle, eloStatusLabel=eloStatusLabel, applyConfiguredELO=applyConfiguredELO, keysInput=keysInput,
+streakInput=streakInput, winsInput=winsInput, killsInput=killsInput, eloInput=eloInput, eloLiveToggle=eloLiveToggle, eloLiveAutoLoadToggle=eloLiveAutoLoadToggle, eloStatusLabel=eloStatusLabel, applyConfiguredELO=applyConfiguredELO, keysInput=keysInput,
 autoLoadSpooferToggle=autoLoadSpooferToggle,
 extra=spooferExtraControls,
 chinaHatToggle=chinaHatToggle, chinaHatColorPicker=chinaHatColorPicker,
@@ -18420,6 +18541,243 @@ end)
 
 if __devkageMultiInjectAutoBoot then task.wait() end
 local ragePage = window:CreatePage({Icon="rbxassetid://8547258459",Glyph="R",Size=UDim2.new(0,36,0,36)})
+
+-- ============================================================
+-- RIVALS RAPID FIRE
+-- Per-weapon activation rate. Uses Tool:Activate only.
+-- No remote rewriting, module patching or metatable hooks.
+-- ============================================================
+local RapidFireRuntime = {
+    Holding = false,
+    NextShotAt = 0,
+    WeaponOptions = {},
+    SelectedWeapon = tostring(getgenv().__DevKageConfig.rapidFireSelectedWeapon or ""),
+    LastRefresh = 0,
+}
+
+local function rapidFireIsRivals()
+    local modules = ReplicatedStorage:FindFirstChild("Modules")
+    local itemLibrary = modules and modules:FindFirstChild("ItemLibrary")
+    local playerScripts = LocalPlayer and LocalPlayer:FindFirstChild("PlayerScripts")
+    local controllers = playerScripts and playerScripts:FindFirstChild("Controllers")
+    local fighterController = controllers and controllers:FindFirstChild("FighterController")
+    return itemLibrary ~= nil and fighterController ~= nil
+end
+
+local function rapidFireGetEquippedTool()
+    local character = LocalPlayer and LocalPlayer.Character
+    if not character then return nil end
+    for _, object in ipairs(character:GetChildren()) do
+        if object:IsA("Tool") then return object end
+    end
+    return nil
+end
+
+local function rapidFireWeaponNames()
+    local found = {}
+
+    local function scan(container)
+        if not container then return end
+        for _, object in ipairs(container:GetChildren()) do
+            if object:IsA("Tool") then
+                found[tostring(object.Name)] = true
+            end
+        end
+    end
+
+    scan(LocalPlayer and LocalPlayer:FindFirstChildOfClass("Backpack"))
+    scan(LocalPlayer and LocalPlayer.Character)
+
+    local names = {}
+    for name in pairs(found) do names[#names+1] = name end
+    table.sort(names, function(a,b) return a:lower() < b:lower() end)
+
+    if #names == 0 then names[1] = "Equipped Weapon" end
+    return names
+end
+
+local function rapidFireRateFor(weaponName)
+    local config = getgenv().__DevKageConfig
+    if type(config.rapidFireRates) ~= "table" then config.rapidFireRates = {} end
+
+    local saved = config.rapidFireRates[tostring(weaponName or "")]
+    return math.clamp(
+        tonumber(saved) or tonumber(config.rapidFireDefaultRate) or 10,
+        1,
+        30
+    )
+end
+
+local rapidFireSection = ragePage:CreateSection({Name="Rapid Fire",Side="Right",Size=245})
+local rapidFireStatus = rapidFireSection:CreateLabel({Text=rapidFireIsRivals() and "RIVALS detected • ready" or "RIVALS client not detected"})
+
+local rapidFireToggle = rapidFireSection:CreateToggle({
+    Name="Rapid Fire",
+    State=getgenv().__DevKageConfig.rapidFireEnabled==true,
+    Callback=function(value)
+        getgenv().__DevKageConfig.rapidFireEnabled=value==true
+        RapidFireRuntime.NextShotAt=0
+    end
+})
+
+RapidFireRuntime.WeaponOptions = rapidFireWeaponNames()
+local initialWeaponIndex = 1
+for index, name in ipairs(RapidFireRuntime.WeaponOptions) do
+    if tostring(name) == RapidFireRuntime.SelectedWeapon then
+        initialWeaponIndex = index
+        break
+    end
+end
+
+local rapidFireRateSlider
+local rapidFireWeaponDrop = rapidFireSection:CreateDropdown({
+    Name="Weapon",
+    Options=RapidFireRuntime.WeaponOptions,
+    State=initialWeaponIndex,
+    Callback=function(_, weaponName)
+        weaponName=tostring(weaponName or "")
+        RapidFireRuntime.SelectedWeapon=weaponName
+        getgenv().__DevKageConfig.rapidFireSelectedWeapon=weaponName
+        if rapidFireRateSlider then
+            rapidFireRateSlider:Set(rapidFireRateFor(weaponName),true)
+        end
+    end
+})
+
+rapidFireRateSlider = rapidFireSection:CreateSlider({
+    Name="Fire Rate",
+    State=rapidFireRateFor(rapidFireWeaponDrop:GetValue()),
+    Min=1,
+    Max=30,
+    Decimals=1,
+    Suffix=" shots/s",
+    Callback=function(value)
+        local config=getgenv().__DevKageConfig
+        if type(config.rapidFireRates)~="table" then config.rapidFireRates={} end
+        local weapon=tostring(rapidFireWeaponDrop:GetValue() or RapidFireRuntime.SelectedWeapon or "")
+        local rate=math.clamp(tonumber(value) or 10,1,30)
+        config.rapidFireDefaultRate=rate
+        if weapon~="" and weapon~="Equipped Weapon" then
+            config.rapidFireRates[weapon]=rate
+        end
+    end
+})
+
+local function refreshRapidFireWeapons(preferEquipped)
+    local names=rapidFireWeaponNames()
+    RapidFireRuntime.WeaponOptions=names
+    rapidFireWeaponDrop.Options=names
+
+    local wanted=tostring(getgenv().__DevKageConfig.rapidFireSelectedWeapon or "")
+    local equipped=rapidFireGetEquippedTool()
+    if preferEquipped and equipped then wanted=tostring(equipped.Name) end
+
+    local index=1
+    for i,name in ipairs(names) do
+        if tostring(name)==wanted then index=i break end
+    end
+
+    rapidFireWeaponDrop:Set(index,true)
+    RapidFireRuntime.SelectedWeapon=tostring(rapidFireWeaponDrop:GetValue() or "")
+    getgenv().__DevKageConfig.rapidFireSelectedWeapon=RapidFireRuntime.SelectedWeapon
+    rapidFireRateSlider:Set(rapidFireRateFor(RapidFireRuntime.SelectedWeapon),true)
+
+    rapidFireStatus:SetText(
+        (rapidFireIsRivals() and "RIVALS • " or "Unsupported game • ")
+        ..RapidFireRuntime.SelectedWeapon
+        .." • "
+        ..string.format("%.1f shots/s",rapidFireRateFor(RapidFireRuntime.SelectedWeapon))
+    )
+end
+
+rapidFireSection:CreateButton({
+    Name="Use Equipped Weapon",
+    Callback=function() refreshRapidFireWeapons(true) end
+})
+
+rapidFireSection:CreateButton({
+    Name="Refresh Weapons",
+    Callback=function() refreshRapidFireWeapons(false) end
+})
+
+local function trackRapidFireConnection(connection)
+    if connection and type(MaskShard)=="table" and type(MaskShard.Connections)=="table" then
+        MaskShard.Connections[#MaskShard.Connections+1]=connection
+    end
+    return connection
+end
+
+trackRapidFireConnection(utility:CreateConnection(uis.InputBegan,function(input,processed)
+    if processed or window.Enabled then return end
+    if input.UserInputType==Enum.UserInputType.MouseButton1 or input.KeyCode==Enum.KeyCode.ButtonR2 then
+        RapidFireRuntime.Holding=true
+        RapidFireRuntime.NextShotAt=0
+    end
+end))
+
+trackRapidFireConnection(utility:CreateConnection(uis.InputEnded,function(input)
+    if input.UserInputType==Enum.UserInputType.MouseButton1 or input.KeyCode==Enum.KeyCode.ButtonR2 then
+        RapidFireRuntime.Holding=false
+        RapidFireRuntime.NextShotAt=0
+    end
+end))
+
+trackRapidFireConnection(utility:CreateConnection(RunService.Heartbeat,function()
+    local config=getgenv().__DevKageConfig
+    if type(config)~="table"
+        or config.rapidFireEnabled~=true
+        or not RapidFireRuntime.Holding
+        or window.Enabled
+        or not rapidFireIsRivals() then
+        return
+    end
+
+    local tool=rapidFireGetEquippedTool()
+    if not tool then return end
+
+    local now=os.clock()
+    local rate=rapidFireRateFor(tool.Name)
+    local interval=1/math.max(rate,1)
+
+    if now < RapidFireRuntime.NextShotAt then return end
+    RapidFireRuntime.NextShotAt=now+interval
+
+    pcall(function()
+        if tool.Enabled~=false and tool.Parent==LocalPlayer.Character then
+            tool:Activate()
+        end
+    end)
+end))
+
+local backpack=LocalPlayer:FindFirstChildOfClass("Backpack")
+if backpack then
+    trackRapidFireConnection(utility:CreateConnection(backpack.ChildAdded,function(child)
+        if child:IsA("Tool") then task.defer(refreshRapidFireWeapons,false) end
+    end))
+    trackRapidFireConnection(utility:CreateConnection(backpack.ChildRemoved,function(child)
+        if child:IsA("Tool") then task.defer(refreshRapidFireWeapons,false) end
+    end))
+end
+
+trackRapidFireConnection(utility:CreateConnection(LocalPlayer.CharacterAdded,function(character)
+    RapidFireRuntime.Holding=false
+    RapidFireRuntime.NextShotAt=0
+    task.defer(function()
+        task.wait(0.25)
+        refreshRapidFireWeapons(true)
+    end)
+end))
+
+UI.RapidFire={
+    Runtime=RapidFireRuntime,
+    Toggle=rapidFireToggle,
+    WeaponDrop=rapidFireWeaponDrop,
+    RateSlider=rapidFireRateSlider,
+    Refresh=refreshRapidFireWeapons,
+}
+
+refreshRapidFireWeapons(false)
+
 local modDetectorSection = ragePage:CreateSection({Name="Mod Detector",Side="Left",Size=120})
 local worldTextureSection = ragePage:CreateSection({Name="World Texture",Side="Left",Size=330})
 local accessoriesSection = ragePage:CreateSection({Name="Accessories",Side="Left",Size=300})
@@ -19553,6 +19911,8 @@ getgenv().__DevKageConfig.streak  = tonumber(controls.streakInput:Get()) or 100
 getgenv().__DevKageConfig.wins    = tonumber(controls.winsInput:Get()) or 0
 getgenv().__DevKageConfig.kills   = tonumber(controls.killsInput:Get()) or 0
 getgenv().__DevKageConfig.elo     = normalizeSpoofELO(controls.eloInput:Get())
+if controls.eloLiveToggle then getgenv().__DevKageConfig.eloLiveSync = controls.eloLiveToggle:Get()==true end
+if controls.eloLiveAutoLoadToggle then getgenv().__DevKageConfig.eloLiveSyncAutoLoad = controls.eloLiveAutoLoadToggle:Get()==true end
 getgenv().__DevKageConfig.keys    = controls.keysInput:Get()
 syncSupplementalSpooferControls(controls,getgenv().__DevKageConfig)
 getgenv().__DevKageConfig.luaCode = UI.Lua.getSource()
@@ -19716,8 +20076,16 @@ controls.killsInput:Set(tostring(getgenv().__DevKageConfig.kills or 0),true)
 getgenv().__DevKageConfig.elo=normalizeSpoofELO(getgenv().__DevKageConfig.elo)
 controls.eloInput:Set(tostring(getgenv().__DevKageConfig.elo),true)
 if controls.eloLiveToggle then controls.eloLiveToggle:Set(getgenv().__DevKageConfig.eloLiveSync~=false,true) end
+if controls.eloLiveAutoLoadToggle then controls.eloLiveAutoLoadToggle:Set(getgenv().__DevKageConfig.eloLiveSyncAutoLoad==true,true) end
 controls.autoLoadSpooferToggle:Set(getgenv().__DevKageConfig.autoLoadSpoofer==true,true)
 controls.keysInput:Set(tostring(getgenv().__DevKageConfig.keys or ""),true)
+
+if UI.RapidFire then
+local rapidConfig=getgenv().__DevKageConfig
+if type(rapidConfig.rapidFireRates)~="table" then rapidConfig.rapidFireRates={} end
+UI.RapidFire.Toggle:Set(rapidConfig.rapidFireEnabled==true,true)
+if type(UI.RapidFire.Refresh)=="function" then UI.RapidFire.Refresh(false) end
+end
 UI.Lua.setSource(getgenv().__DevKageConfig.luaCode or "")
 if UI.Lua.autoExecuteToggle then
 UI.Lua.autoExecuteToggle:Set(getgenv().__DevKageConfig.luaAutoExecute==true,true)
