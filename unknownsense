@@ -4701,14 +4701,18 @@ return copy,true
 end
 
 SpooferState.dataKeyMap={
--- Basic Level aliases are required by RIVALS match UI. Lobby/profile UI can
--- read Player attributes directly, while match HUD/scoreboard code can read
--- PlayerDataController:Get("Level") instead.
+-- RIVALS basic-stat aliases used by lobby/profile and duel/match UI.
 level={Toggle="spoofLevel",Value="level"},
 playerlevel={Toggle="spoofLevel",Value="level"},
 accountlevel={Toggle="spoofLevel",Value="level"},
 statisticlevel={Toggle="spoofLevel",Value="level"},
 highestlevel={Toggle="spoofLevel",Value="level"},
+
+statisticduelswinstreak={Toggle="spoofStreak",Value="streak"},
+winstreak={Toggle="spoofStreak",Value="streak"},
+streak={Toggle="spoofStreak",Value="streak"},
+highestwinstreak={Toggle="spoofStreak",Value="streak"},
+currenthighestwinstreak={Toggle="spoofStreak",Value="streak"},
 
 weaponkeys={Toggle="spoofWeaponKeys",Value="keys"},keys={Toggle="spoofWeaponKeys",Value="keys"},
 unlocktokens={Toggle="spoofUnlockTokens",Value="unlockTokens"},tokens={Toggle="spoofUnlockTokens",Value="unlockTokens"},
@@ -4784,8 +4788,52 @@ end
 function SpooferState.RefreshLevelData()
 if not SpooferState.InstallDataBridge() then return false end
 
+local config=getgenv().__DevKageConfig
+local level=math.max(0,math.floor((tonumber(config.level) or 1)+0.5))
+local streak=math.max(0,math.floor((tonumber(config.streak) or 0)+0.5))
 local controller=SpooferState.ResolveGameModule("PlayerDataController","Controller")
 local current=controller and controller.CurrentData
+
+-- Some RIVALS match widgets read a cached CurrentData table directly instead
+-- of calling PlayerDataController:Get. Update only matching existing fields.
+local function patchDataTable(candidate)
+if type(candidate)~="table" then return end
+for key,value in pairs(candidate) do
+local normalized=SpooferState.Key(key)
+if config.spoofLevel~=false and (
+normalized=="level"
+or normalized=="playerlevel"
+or normalized=="accountlevel"
+or normalized=="statisticlevel"
+or normalized=="highestlevel"
+) and type(value)=="number" then
+candidate[key]=level
+elseif config.spoofStreak~=false and (
+normalized=="statisticduelswinstreak"
+or normalized=="winstreak"
+or normalized=="streak"
+or normalized=="highestwinstreak"
+or normalized=="currenthighestwinstreak"
+) and type(value)=="number" then
+candidate[key]=streak
+end
+end
+end
+
+if type(current)=="table" then
+patchDataTable(current)
+patchDataTable(current.Data)
+patchDataTable(current.Values)
+patchDataTable(current.Cache)
+patchDataTable(current.State)
+patchDataTable(current.RawData)
+end
+
+if type(controller)=="table" then
+patchDataTable(controller.Data)
+patchDataTable(controller.Values)
+patchDataTable(controller.Cache)
+end
 
 if current and type(current.Replicate)=="function" then
 for _,key in ipairs({
@@ -4793,7 +4841,13 @@ for _,key in ipairs({
 "PlayerLevel",
 "AccountLevel",
 "StatisticLevel",
-"HighestLevel"
+"HighestLevel",
+"StatisticDuelsWinStreak",
+"WinStreak",
+"Winstreak",
+"Streak",
+"HighestWinStreak",
+"CurrentHighestWinStreak"
 }) do
 pcall(function() current:Replicate(key) end)
 end
@@ -5526,8 +5580,16 @@ local streak = math.max(0, math.floor((tonumber(config.streak) or 0) + 0.5))
 local wins = tonumber(config.wins) or 0
 local kills = tonumber(config.kills) or 0
 local elo = normalizeSpoofELO(config.elo)
-if config.spoofLevel~=false then pcall(function() player:SetAttribute("Level",level) end) end
-if config.spoofStreak~=false then pcall(function() player:SetAttribute("StatisticDuelsWinStreak",streak) end) end
+if config.spoofLevel~=false then
+for _,attribute in ipairs({"Level","PlayerLevel","AccountLevel","StatisticLevel"}) do
+pcall(function() player:SetAttribute(attribute,level) end)
+end
+end
+if config.spoofStreak~=false then
+for _,attribute in ipairs({"StatisticDuelsWinStreak","WinStreak","Winstreak","Streak"}) do
+pcall(function() player:SetAttribute(attribute,streak) end)
+end
+end
 if config.spoofWins~=false then
 for _,attribute in ipairs({"Wins","StatisticDuelsWins","DuelsWins"}) do pcall(function() player:SetAttribute(attribute,wins) end) end
 end
@@ -5538,8 +5600,11 @@ if config.spoofELO~=false then applySpoofELOValues(player,elo) else pcall(SpoofR
 SpooferState.ApplyBadgeAttributes(player,config)
 local leaderstats = player:FindFirstChild("CustomLeaderstats") or player:FindFirstChild("leaderstats")
 if leaderstats then
-local lvl  = leaderstats:FindFirstChild("Level")
-local strk = leaderstats:FindFirstChild("Win Streak") or leaderstats:FindFirstChild("Winstreak")
+local lvl  = leaderstats:FindFirstChild("Level") or leaderstats:FindFirstChild("PlayerLevel")
+local strk = leaderstats:FindFirstChild("Win Streak")
+or leaderstats:FindFirstChild("WinStreak")
+or leaderstats:FindFirstChild("Winstreak")
+or leaderstats:FindFirstChild("Streak")
 local winv = leaderstats:FindFirstChild("Wins") or leaderstats:FindFirstChild("Total Wins")
 local killv=leaderstats:FindFirstChild("Kills") or leaderstats:FindFirstChild("Eliminations") or leaderstats:FindFirstChild("KOs")
 if lvl and config.spoofLevel~=false then pcall(function() lvl.Value=level end) end
@@ -5550,201 +5615,318 @@ end
 end
 
 -- ============================================================
--- MATCH LEVEL SPOOFER SYNC
+-- MATCH LEVEL / STREAK SPOOFER SYNC
 --
--- Scoped register-safe version.
--- Only installMatchLevelSync survives outside this do-block; every helper
--- local below is released before the rest of DevKage (including aura code)
--- needs more local registers.
+-- Register-safe: only installMatchLevelSync survives this do/end scope.
+-- Includes the exact RIVALS duel UI paths from the previously supplied
+-- working Visual Stats Spoofer code.
 -- ============================================================
 
 local installMatchLevelSync
 
 do
-local MatchLevelSyncRuntime = {
-ObservedText = setmetatable({}, {__mode="k"}),
-ObservedValues = setmetatable({}, {__mode="k"}),
-MutingText = setmetatable({}, {__mode="k"}),
-Applying = false,
-Config = nil,
+local Runtime={
+ObservedText=setmetatable({}, {__mode="k"}),
+ObservedValues=setmetatable({}, {__mode="k"}),
+Muting=setmetatable({}, {__mode="k"}),
+Applying=false,
+Config=nil,
 }
 
-local function matchLevelDesired(config)
-return math.max(
-0,
-math.floor(
-(tonumber(config and config.level) or 1)
-+ 0.5
-)
-)
+local function desiredLevel(config)
+return math.max(0,math.floor((tonumber(config and config.level) or 1)+0.5))
 end
 
-local function matchLevelIsDevKageGui(object)
+local function desiredStreak(config)
+return math.max(0,math.floor((tonumber(config and config.streak) or 0)+0.5))
+end
+
+local function safeGet(root,...)
+local current=root
+for _,key in ipairs({...}) do
+if not current then return nil end
+current=current:FindFirstChild(key)
+end
+return current
+end
+
+local function isDevKageGui(object)
 if not object then return false end
 if window and window.ScreenGui then
-local ok, inside = pcall(function()
-return object:IsDescendantOf(window.ScreenGui)
-end)
+local ok,inside=pcall(function() return object:IsDescendantOf(window.ScreenGui) end)
 if ok and inside then return true end
 end
-
-local current = object
+local current=object
 for _=1,12 do
 if not current then break end
 if current:IsA("ScreenGui") then
 local name=tostring(current.Name or "")
-if name:find("DevKage",1,true)
+return name:find("DevKage",1,true)~=nil
 or name=="AimSightGUI"
-or name:find("DevKageIntegratedCursor",1,true) then
-return true
-end
-break
+or name:find("DevKageIntegratedCursor",1,true)~=nil
 end
 current=current.Parent
 end
 return false
 end
 
-local function matchLevelSiblingHint(object)
-local parent=object and object.Parent
-if not parent then return false end
+local function statHint(object)
+local current=object
+for _=1,6 do
+if not current then break end
+local context=(tostring(current.Name or "").." "..(
+(current:IsA("TextLabel") or current:IsA("TextButton") or current:IsA("TextBox"))
+and tostring(current.Text or "")
+or ""
+)):lower()
 
+if context:find("streak",1,true) then return "streak" end
+if context:find("level",1,true) or context:match("%f[%a]lvl%f[%A]") then return "level" end
+current=current.Parent
+end
+
+local parent=object and object.Parent
+if parent then
 for _,sibling in ipairs(parent:GetChildren()) do
 if sibling~=object
-and (sibling:IsA("TextLabel")
-or sibling:IsA("TextButton")
-or sibling:IsA("TextBox")) then
-local context=(
-tostring(sibling.Name or "")
-.." "
-..tostring(sibling.Text or "")
-):lower()
-
-if context:find("level",1,true)
-or context:match("%f[%a]lvl%f[%A]") then
-return true
+and (sibling:IsA("TextLabel") or sibling:IsA("TextButton") or sibling:IsA("TextBox")) then
+local context=(tostring(sibling.Name or "").." "..tostring(sibling.Text or "")):lower()
+if context:find("streak",1,true) then return "streak" end
+if context:find("level",1,true) or context:match("%f[%a]lvl%f[%A]") then return "level" end
 end
 end
 end
 
-return false
+return nil
 end
 
-local function matchLevelLabelCandidate(object)
-if not object
-or not object.Parent
-or matchLevelIsDevKageGui(object)
-or not (
-object:IsA("TextLabel")
-or object:IsA("TextButton")
-or object:IsA("TextBox")
-) then
-return false
-end
-
-local name=tostring(object.Name or ""):lower()
-local raw=tostring(object.Text or "")
-local lower=raw:lower()
-
-if name=="level"
-or name=="lvl"
-or name:find("level",1,true)
-or lower:find("level",1,true)
-or lower:match("%f[%a]lvl%f[%A]") then
-return true
-end
-
-if lower:match("^%s*%-?[%d,]+%s*$")
-and matchLevelSiblingHint(object) then
-return true
-end
-
-return false
-end
-
-local function matchLevelReplaceNumber(text,value)
+local function replaceFirstNumber(text,value)
 text=tostring(text or "")
-local replacement=tostring(value)
-local replaced,count=text:gsub("%-?%d[%d,]*",replacement,1)
+local replaced,count=text:gsub("%-?%d[%d,]*",tostring(value),1)
 if count>0 then return replaced end
 return text
 end
 
-local function matchLevelPatchText(object,config)
-if not matchLevelLabelCandidate(object)
-or MatchLevelSyncRuntime.MutingText[object] then
-return false
+local function patchText(object,config,forcedKind)
+if not object or not object.Parent or isDevKageGui(object) or Runtime.Muting[object] then return false end
+if not (object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox")) then return false end
+
+local kind=forcedKind or statHint(object)
+if kind~="level" and kind~="streak" then return false end
+
+if kind=="level" and config.spoofLevel==false then return false end
+if kind=="streak" and config.spoofStreak==false then return false end
+
+local value=kind=="level" and desiredLevel(config) or desiredStreak(config)
+local current=tostring(object.Text or "")
+local desired=replaceFirstNumber(current,value)
+
+-- Exact duel UI Level/Streak nodes can occasionally be blank during build.
+if desired==current and current:match("^%s*$") then
+desired=tostring(value)
 end
 
-local current=tostring(object.Text or "")
-local desired=matchLevelReplaceNumber(
-current,
-matchLevelDesired(config)
-)
-
 if desired==current then return false end
-
-MatchLevelSyncRuntime.MutingText[object]=true
+Runtime.Muting[object]=true
 pcall(function() object.Text=desired end)
-MatchLevelSyncRuntime.MutingText[object]=nil
+Runtime.Muting[object]=nil
 return true
 end
 
-local function matchLevelObserveText(object,config)
-if not matchLevelLabelCandidate(object) then return end
+local function observeText(object,config)
+if not object or Runtime.ObservedText[object] then return end
+if not (object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox")) then return end
+local kind=statHint(object)
+if kind~="level" and kind~="streak" then return end
 
-if not MatchLevelSyncRuntime.ObservedText[object] then
-MatchLevelSyncRuntime.ObservedText[object]=true
+Runtime.ObservedText[object]=true
+patchText(object,config,kind)
 
 local connection=object:GetPropertyChangedSignal("Text"):Connect(function()
-if SpooferState.running
-and config.spoofLevel~=false
-and not MatchLevelSyncRuntime.MutingText[object] then
-task.defer(matchLevelPatchText,object,config)
+if SpooferState.running and not Runtime.Muting[object] then
+task.defer(patchText,object,config,kind)
 end
 end)
-
 SpooferState.connections[#SpooferState.connections+1]=connection
 end
 
-matchLevelPatchText(object,config)
+local function patchNamedStat(parent,config)
+if not parent then return end
+
+if config.spoofLevel~=false then
+for _,name in ipairs({"Level","Lvl","PlayerLevel"}) do
+local object=parent:FindFirstChild(name)
+if object and (object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox")) then
+patchText(object,config,"level")
+end
+end
 end
 
-local function matchLevelObserveValue(object,config)
-if not object or not object.Parent then return end
-if MatchLevelSyncRuntime.ObservedValues[object] then return end
+if config.spoofStreak~=false then
+for _,name in ipairs({"Streak","WinStreak","Winstreak","Win Streak"}) do
+local object=parent:FindFirstChild(name)
+if object and (object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox")) then
+patchText(object,config,"streak")
+end
+end
+end
+end
 
-local parentName=object.Parent and tostring(object.Parent.Name or ""):lower() or ""
-local name=tostring(object.Name or ""):lower()
+-- Exact path from the previously supplied RIVALS Visual Stats Spoofer.
+local function patchDuelInterface(config)
+local mainFrame=safeGet(LocalPlayer,"PlayerGui","MainGui","MainFrame")
+if not mainFrame then return end
 
-local statContainer =
-parentName=="leaderstats"
-or parentName=="customleaderstats"
-or parentName=="stats"
-or parentName=="statistics"
+local duels=safeGet(mainFrame,"DuelInterfaces","DuelInterface")
+if not duels then return end
 
-if not statContainer
-or not (name=="level" or name=="highest level" or name=="highestlevel") then
+local scoreboard=safeGet(duels,"Scoreboard","Container")
+if scoreboard then
+for _,object in ipairs(scoreboard:GetDescendants()) do
+if object.Name=="Username"
+and (object:IsA("TextLabel") or object:IsA("TextButton"))
+and tostring(object.Text or ""):find("@"..LocalPlayer.Name,1,true) then
+patchNamedStat(object.Parent,config)
+end
+end
+end
+
+local topScores=safeGet(duels,"Top","Scores","Teams")
+if topScores then
+for _,object in ipairs(topScores:GetDescendants()) do
+if object.Name=="Headshot"
+and (object:IsA("ImageLabel") or object:IsA("ImageButton"))
+and tostring(object.Image or ""):find(tostring(LocalPlayer.UserId),1,true) then
+patchNamedStat(object.Parent,config)
+end
+end
+end
+
+local finalResults=safeGet(duels,"FinalResults","Winners","Players")
+if finalResults then
+for _,object in ipairs(finalResults:GetDescendants()) do
+if object.Name=="Username"
+and (object:IsA("TextLabel") or object:IsA("TextButton"))
+and tostring(object.Text or ""):find("@"..LocalPlayer.Name,1,true) then
+patchNamedStat(object.Parent,config)
+if object.Parent and object.Parent.Parent then
+patchNamedStat(object.Parent.Parent,config)
+end
+end
+end
+end
+end
+
+-- Exact local nametag structure from the previously supplied code.
+local function patchNametag(config)
+local character=LocalPlayer.Character
+local root=character and character:FindFirstChild("HumanoidRootPart")
+local nametag=root and root:FindFirstChild("Nametag")
+local frame=nametag and nametag:FindFirstChild("Frame")
+if not frame then return end
+
+if config.spoofLevel~=false then
+local levelLabel=frame:FindFirstChild("Level")
+or safeGet(frame,"Player","Level")
+if levelLabel then patchText(levelLabel,config,"level") end
+end
+
+if config.spoofStreak~=false then
+local streakLabel=frame:FindFirstChild("WinStreak")
+or frame:FindFirstChild("Winstreak")
+or frame:FindFirstChild("Streak")
+or safeGet(frame,"Player","WinStreak")
+or safeGet(frame,"Player","Streak")
+if streakLabel then patchText(streakLabel,config,"streak") end
+end
+end
+
+local function applyCore(config)
+if not SpooferState.running or Runtime.Applying then return end
+Runtime.Applying=true
+
+local level=desiredLevel(config)
+local streak=desiredStreak(config)
+
+if config.spoofLevel~=false then
+for _,attribute in ipairs({"Level","PlayerLevel","AccountLevel","StatisticLevel"}) do
+if LocalPlayer:GetAttribute(attribute)~=level then
+pcall(function() LocalPlayer:SetAttribute(attribute,level) end)
+end
+end
+end
+
+if config.spoofStreak~=false then
+for _,attribute in ipairs({"StatisticDuelsWinStreak","WinStreak","Winstreak","Streak"}) do
+if LocalPlayer:GetAttribute(attribute)~=streak then
+pcall(function() LocalPlayer:SetAttribute(attribute,streak) end)
+end
+end
+end
+
+for _,containerName in ipairs({"CustomLeaderstats","leaderstats","Stats","Statistics"}) do
+local container=LocalPlayer:FindFirstChild(containerName)
+if container then
+if config.spoofLevel~=false then
+for _,name in ipairs({"Level","PlayerLevel","Highest Level","HighestLevel"}) do
+local value=container:FindFirstChild(name)
+if value and value:IsA("ValueBase") then
+pcall(function() value.Value=level end)
+end
+end
+end
+if config.spoofStreak~=false then
+for _,name in ipairs({"Win Streak","WinStreak","Winstreak","Streak","Highest Win Streak","HighestWinStreak"}) do
+local value=container:FindFirstChild(name)
+if value and value:IsA("ValueBase") then
+pcall(function() value.Value=streak end)
+end
+end
+end
+end
+end
+
+Runtime.Applying=false
+end
+
+local function observeValue(object,config)
+if not object or not object.Parent or Runtime.ObservedValues[object] or not object:IsA("ValueBase") then return end
+
+local parentName=tostring(object.Parent.Name or ""):lower()
+if parentName~="leaderstats"
+and parentName~="customleaderstats"
+and parentName~="stats"
+and parentName~="statistics" then
 return
 end
 
-if not object:IsA("ValueBase") then return end
+local normalized=SpooferState.Key(object.Name)
+local kind
+if normalized=="level" or normalized=="playerlevel" or normalized=="highestlevel" then
+kind="level"
+elseif normalized=="winstreak"
+or normalized=="streak"
+or normalized=="highestwinstreak"
+or normalized=="statisticduelswinstreak" then
+kind="streak"
+else
+return
+end
 
-MatchLevelSyncRuntime.ObservedValues[object]=true
+Runtime.ObservedValues[object]=true
 
 local function enforce()
-if not SpooferState.running
-or config.spoofLevel==false
-or MatchLevelSyncRuntime.Applying then
+if not SpooferState.running or Runtime.Applying then return end
+local wanted=kind=="level" and desiredLevel(config) or desiredStreak(config)
+if (kind=="level" and config.spoofLevel==false)
+or (kind=="streak" and config.spoofStreak==false) then
 return
 end
-
-local wanted=matchLevelDesired(config)
 local ok,current=pcall(function() return object.Value end)
 if ok and tonumber(current)~=wanted then
-MatchLevelSyncRuntime.Applying=true
+Runtime.Applying=true
 pcall(function() object.Value=wanted end)
-MatchLevelSyncRuntime.Applying=false
+Runtime.Applying=false
 end
 end
 
@@ -5755,122 +5937,79 @@ SpooferState.connections[#SpooferState.connections+1]=connection
 enforce()
 end
 
-local function matchLevelApplyCore(config)
-if not SpooferState.running
-or config.spoofLevel==false
-or MatchLevelSyncRuntime.Applying then
-return
-end
-
-local level=matchLevelDesired(config)
-MatchLevelSyncRuntime.Applying=true
-
-if LocalPlayer:GetAttribute("Level")~=level then
-pcall(function()
-LocalPlayer:SetAttribute("Level",level)
-end)
-end
-
-for _,containerName in ipairs({
-"CustomLeaderstats",
-"leaderstats",
-"Stats",
-"Statistics"
-}) do
-local container=LocalPlayer:FindFirstChild(containerName)
-if container then
-for _,name in ipairs({"Level","Highest Level","HighestLevel"}) do
-local value=container:FindFirstChild(name)
-if value and value:IsA("ValueBase") then
-pcall(function()
-if tonumber(value.Value)~=level then
-value.Value=level
-end
-end)
-end
-end
-end
-end
-
-MatchLevelSyncRuntime.Applying=false
-end
-
-local function matchLevelScanGui(config)
-local playerGui =
-LocalPlayer:FindFirstChildOfClass("PlayerGui")
-or LocalPlayer:FindFirstChild("PlayerGui")
-
+local function scanGui(config)
+local playerGui=LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:FindFirstChild("PlayerGui")
 if not playerGui then return end
 
-local descendants=playerGui:GetDescendants()
-for index,object in ipairs(descendants) do
-if object:IsA("TextLabel")
-or object:IsA("TextButton")
-or object:IsA("TextBox") then
-matchLevelObserveText(object,config)
+for index,object in ipairs(playerGui:GetDescendants()) do
+if object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox") then
+observeText(object,config)
 end
 if index%180==0 then task.wait() end
 end
+
+patchDuelInterface(config)
+patchNametag(config)
 end
 
-installMatchLevelSync = function(config)
+installMatchLevelSync=function(config)
 if type(config)~="table" then return false end
 
-MatchLevelSyncRuntime.Config=config
-MatchLevelSyncRuntime.ObservedText=setmetatable({}, {__mode="k"})
-MatchLevelSyncRuntime.ObservedValues=setmetatable({}, {__mode="k"})
-MatchLevelSyncRuntime.MutingText=setmetatable({}, {__mode="k"})
-MatchLevelSyncRuntime.Applying=false
+Runtime.Config=config
+Runtime.ObservedText=setmetatable({}, {__mode="k"})
+Runtime.ObservedValues=setmetatable({}, {__mode="k"})
+Runtime.Muting=setmetatable({}, {__mode="k"})
+Runtime.Applying=false
 
-matchLevelApplyCore(config)
+applyCore(config)
+pcall(SpooferState.RefreshLevelData)
 
-local playerGui =
-LocalPlayer:FindFirstChildOfClass("PlayerGui")
-or LocalPlayer:FindFirstChild("PlayerGui")
-
+local playerGui=LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:FindFirstChild("PlayerGui")
 if playerGui then
 local guiConnection=playerGui.DescendantAdded:Connect(function(object)
-if not SpooferState.running or config.spoofLevel==false then return end
-
-if object:IsA("TextLabel")
-or object:IsA("TextButton")
-or object:IsA("TextBox") then
-task.defer(matchLevelObserveText,object,config)
+if not SpooferState.running then return end
+if object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox") then
+task.defer(observeText,object,config)
 end
+-- DuelInterface is constructed in pieces; re-run the exact path shortly
+-- after any UI subtree is added.
+task.delay(0.05,function()
+if SpooferState.running then
+patchDuelInterface(config)
+patchNametag(config)
+end
+end)
 end)
 SpooferState.connections[#SpooferState.connections+1]=guiConnection
-
-task.spawn(matchLevelScanGui,config)
+task.spawn(scanGui,config)
 end
 
-local attributeConnection =
-LocalPlayer:GetAttributeChangedSignal("Level"):Connect(function()
-if SpooferState.running and config.spoofLevel~=false then
-task.defer(matchLevelApplyCore,config)
-end
+for _,attribute in ipairs({
+"Level","PlayerLevel","AccountLevel","StatisticLevel",
+"StatisticDuelsWinStreak","WinStreak","Winstreak","Streak"
+}) do
+local connection=LocalPlayer:GetAttributeChangedSignal(attribute):Connect(function()
+if SpooferState.running then task.defer(applyCore,config) end
 end)
-SpooferState.connections[#SpooferState.connections+1]=attributeConnection
+SpooferState.connections[#SpooferState.connections+1]=connection
+end
 
-local descendantConnection =
-LocalPlayer.DescendantAdded:Connect(function(object)
-if not SpooferState.running or config.spoofLevel==false then return end
-task.defer(matchLevelObserveValue,object,config)
+local descendantConnection=LocalPlayer.DescendantAdded:Connect(function(object)
+if SpooferState.running then task.defer(observeValue,object,config) end
 end)
 SpooferState.connections[#SpooferState.connections+1]=descendantConnection
 
 for _,object in ipairs(LocalPlayer:GetDescendants()) do
-matchLevelObserveValue(object,config)
+observeValue(object,config)
 end
 
-local characterConnection =
-LocalPlayer.CharacterAdded:Connect(function()
+local characterConnection=LocalPlayer.CharacterAdded:Connect(function()
 task.delay(0.20,function()
 if not SpooferState.running then return end
-matchLevelApplyCore(config)
-if config.spoofLevel~=false then
+applyCore(config)
 pcall(SpooferState.RefreshLevelData)
-end
-task.spawn(matchLevelScanGui,config)
+patchNametag(config)
+task.spawn(scanGui,config)
 end)
 end)
 SpooferState.connections[#SpooferState.connections+1]=characterConnection
@@ -5879,30 +6018,36 @@ local elapsed=0
 local heartbeat=RunService.Heartbeat:Connect(function(dt)
 if not SpooferState.running then return end
 elapsed=elapsed+(tonumber(dt) or 0)
-if elapsed<0.75 then return end
+if elapsed<0.35 then return end
 elapsed=0
 
-if config.spoofLevel~=false then
-matchLevelApplyCore(config)
+applyCore(config)
+patchDuelInterface(config)
+patchNametag(config)
+
+-- Refresh cached PlayerDataController values less often than the UI.
+Runtime.DataElapsed=(tonumber(Runtime.DataElapsed) or 0)+0.35
+if Runtime.DataElapsed>=1.0 then
+Runtime.DataElapsed=0
+pcall(SpooferState.RefreshLevelData)
 end
 end)
 SpooferState.connections[#SpooferState.connections+1]=heartbeat
 
-SpooferState.MatchLevelSyncRuntime=MatchLevelSyncRuntime
+SpooferState.MatchLevelSyncRuntime=Runtime
 return true
 end
 
-function MatchLevelSyncRuntime:Refresh()
+function Runtime:Refresh()
 local config=self.Config or getgenv().__DevKageConfig
 if type(config)~="table" then return false end
-matchLevelApplyCore(config)
-if config.spoofLevel~=false then
+applyCore(config)
 pcall(SpooferState.RefreshLevelData)
-end
-task.spawn(matchLevelScanGui,config)
+patchDuelInterface(config)
+patchNametag(config)
+task.spawn(scanGui,config)
 return true
 end
-
 end
 
 local function installRecordingPrivacySpoof(player, data, config)
@@ -6551,11 +6696,19 @@ local function installRecordingPrivacySpoof(player, data, config)
         local wins = tonumber(config.wins) or 0
         local kills = tonumber(config.kills) or 0
 
-        if config.spoofLevel~=false and player:GetAttribute("Level") ~= level then
-            pcall(function() player:SetAttribute("Level", level) end)
+        if config.spoofLevel~=false then
+            for _,attribute in ipairs({"Level","PlayerLevel","AccountLevel","StatisticLevel"}) do
+                if player:GetAttribute(attribute) ~= level then
+                    pcall(function() player:SetAttribute(attribute, level) end)
+                end
+            end
         end
-        if config.spoofStreak~=false and player:GetAttribute("StatisticDuelsWinStreak") ~= streak then
-            pcall(function() player:SetAttribute("StatisticDuelsWinStreak", streak) end)
+        if config.spoofStreak~=false then
+            for _,attribute in ipairs({"StatisticDuelsWinStreak","WinStreak","Winstreak","Streak"}) do
+                if player:GetAttribute(attribute) ~= streak then
+                    pcall(function() player:SetAttribute(attribute, streak) end)
+                end
+            end
         end
         if config.spoofELO~=false then applySpoofELOValues(player,elo) else pcall(SpoofRankRuntime.Apply,player,config) end
         if config.spoofWins~=false and player:GetAttribute("Wins") ~= wins then
@@ -6576,8 +6729,11 @@ local function installRecordingPrivacySpoof(player, data, config)
 
         local leaderstats = player:FindFirstChild("CustomLeaderstats") or player:FindFirstChild("leaderstats")
         if leaderstats then
-            local lvl = leaderstats:FindFirstChild("Level")
-            local strk = leaderstats:FindFirstChild("Win Streak") or leaderstats:FindFirstChild("Winstreak")
+            local lvl = leaderstats:FindFirstChild("Level") or leaderstats:FindFirstChild("PlayerLevel")
+            local strk = leaderstats:FindFirstChild("Win Streak")
+                or leaderstats:FindFirstChild("WinStreak")
+                or leaderstats:FindFirstChild("Winstreak")
+                or leaderstats:FindFirstChild("Streak")
             local winv = leaderstats:FindFirstChild("Wins") or leaderstats:FindFirstChild("Total Wins")
             local killv=leaderstats:FindFirstChild("Kills") or leaderstats:FindFirstChild("Eliminations") or leaderstats:FindFirstChild("KOs")
             if config.spoofLevel~=false and lvl and lvl.Value ~= level then pcall(function() lvl.Value = level end) end
@@ -6616,7 +6772,12 @@ local function installRecordingPrivacySpoof(player, data, config)
         privacy.RefreshAnchors()
     end
 
-    local watchedStatAttributes={"Level","StatisticDuelsWinStreak","Wins","StatisticDuelsWins","DuelsWins","Kills","Eliminations","StatisticEliminations","StatisticKills"}
+    local watchedStatAttributes={
+        "Level","PlayerLevel","AccountLevel","StatisticLevel",
+        "StatisticDuelsWinStreak","WinStreak","Winstreak","Streak",
+        "Wins","StatisticDuelsWins","DuelsWins",
+        "Kills","Eliminations","StatisticEliminations","StatisticKills"
+    }
     for _,attribute in ipairs(SPOOF_ELO_ATTRIBUTES) do watchedStatAttributes[#watchedStatAttributes+1]=attribute end
     for _,attribute in ipairs(SpoofRankRuntime.RankAttributes) do watchedStatAttributes[#watchedStatAttributes+1]=attribute end
     for _,attribute in ipairs(SpoofRankRuntime.ArchAttributes) do watchedStatAttributes[#watchedStatAttributes+1]=attribute end
@@ -11417,33 +11578,63 @@ SCRIPT_PAYLOAD_FILE,
 SCRIPT_PAYLOAD_FILE)
 end
 
-local function find_teleport_queue()
-local env = (type(getgenv) == "function" and getgenv()) or _G
-local candidates = {
-rawget(env, "queue_on_teleport"),
-rawget(env, "queueonteleport"),
-rawget(env, "queue_on_tp"),
-type(queue_on_teleport) == "function" and queue_on_teleport or nil,
-type(queueonteleport) == "function" and queueonteleport or nil,
-type(queue_on_tp) == "function" and queue_on_tp or nil,
-}
-
-if type(syn) == "table" then candidates[#candidates+1] = syn.queue_on_teleport end
-if type(fluxus) == "table" then candidates[#candidates+1] = fluxus.queue_on_teleport end
-
-for _, candidate in ipairs(candidates) do
-if type(candidate) == "function" then return candidate end
-end
-
-return nil
-end
-
 local function queue_script_autoload(stub)
-local queue = find_teleport_queue()
-if not queue then return false, "teleport queue API unavailable" end
+local env = (type(getgenv) == "function" and getgenv()) or _G
+local attempts = {}
 
-local ok, err = pcall(queue, stub)
-return ok, ok and nil or tostring(err)
+local function add(name,fn,owner)
+if type(fn)=="function" then
+attempts[#attempts+1]={Name=name,Fn=fn,Owner=owner}
+end
+end
+
+add("getgenv.queue_on_teleport",rawget(env,"queue_on_teleport"))
+add("getgenv.queueonteleport",rawget(env,"queueonteleport"))
+add("getgenv.queue_on_tp",rawget(env,"queue_on_tp"))
+add("getgenv.queue_for_teleport",rawget(env,"queue_for_teleport"))
+add("getgenv.queueforteleport",rawget(env,"queueforteleport"))
+
+if type(queue_on_teleport)=="function" then add("queue_on_teleport",queue_on_teleport) end
+if type(queueonteleport)=="function" then add("queueonteleport",queueonteleport) end
+if type(queue_on_tp)=="function" then add("queue_on_tp",queue_on_tp) end
+if type(queue_for_teleport)=="function" then add("queue_for_teleport",queue_for_teleport) end
+if type(queueforteleport)=="function" then add("queueforteleport",queueforteleport) end
+
+if type(syn)=="table" then
+add("syn.queue_on_teleport",syn.queue_on_teleport,syn)
+end
+if type(fluxus)=="table" then
+add("fluxus.queue_on_teleport",fluxus.queue_on_teleport,fluxus)
+end
+
+if #attempts==0 then
+return false,"teleport queue API unavailable"
+end
+
+local errors={}
+for _,attempt in ipairs(attempts) do
+local ok,result=pcall(attempt.Fn,stub)
+
+-- A number of executors return false instead of throwing when the queue
+-- rejected the source. Do not report that as success.
+if ok and result~=false then
+env.__DEVKAGE_TELEPORT_QUEUE_API=attempt.Name
+return true,nil
+end
+
+-- A method-style implementation may require its table as self.
+if attempt.Owner then
+local methodOk,methodResult=pcall(attempt.Fn,attempt.Owner,stub)
+if methodOk and methodResult~=false then
+env.__DEVKAGE_TELEPORT_QUEUE_API=attempt.Name..":method"
+return true,nil
+end
+end
+
+errors[#errors+1]=attempt.Name
+end
+
+return false,"all detected teleport queue APIs rejected the DevKage loader: "..table.concat(errors,", ")
 end
 
 local function write_autoexec_stubs(stub)
@@ -11572,12 +11763,10 @@ local _script_boot_settings = read_script_settings()
 
 if _script_settings_were_missing
 or _script_boot_settings.AutoLoad == true then
-task.defer(function()
 local ok, err = configure_script_autoload(true, true)
 if not ok then
 warn("[DevKage AutoLoad] install/refresh failed: " .. tostring(err))
 end
-end)
 end
 
 local DEFAULT_VISUAL_STATE = serialiseRuntimeState(VisualsState)
@@ -13573,12 +13762,23 @@ local streak=math.max(0,math.floor((tonumber(config.streak) or 0)+0.5))
 
 local function apply(player)
 if not player then return end
-if config.spoofLevel~=false then pcall(function() player:SetAttribute("Level",level) end) end
-if config.spoofStreak~=false then pcall(function() player:SetAttribute("StatisticDuelsWinStreak",streak) end) end
+if config.spoofLevel~=false then
+for _,attribute in ipairs({"Level","PlayerLevel","AccountLevel","StatisticLevel"}) do
+pcall(function() player:SetAttribute(attribute,level) end)
+end
+end
+if config.spoofStreak~=false then
+for _,attribute in ipairs({"StatisticDuelsWinStreak","WinStreak","Winstreak","Streak"}) do
+pcall(function() player:SetAttribute(attribute,streak) end)
+end
+end
 local leaderstats=player:FindFirstChild("CustomLeaderstats") or player:FindFirstChild("leaderstats")
 if leaderstats then
-local lvl=leaderstats:FindFirstChild("Level")
-local strk=leaderstats:FindFirstChild("Win Streak") or leaderstats:FindFirstChild("Winstreak")
+local lvl=leaderstats:FindFirstChild("Level") or leaderstats:FindFirstChild("PlayerLevel")
+local strk=leaderstats:FindFirstChild("Win Streak")
+or leaderstats:FindFirstChild("WinStreak")
+or leaderstats:FindFirstChild("Winstreak")
+or leaderstats:FindFirstChild("Streak")
 if lvl and config.spoofLevel~=false then pcall(function() lvl.Value=level end) end
 if strk and config.spoofStreak~=false then pcall(function() strk.Value=streak end) end
 end
@@ -24096,4 +24296,4 @@ print("[DevKage + Mask Shard] Fully loaded and protected.")
 -- ============================================================
 -- END OF FILE
 -- ============================================================
-]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,49,57,45,114,101,102,101,114,101,110,99,101,45,97,117,116,111,101,120,101,99,45,108,101,118,101,108,45,109,97,116,99,104)_b._a=_a local _c=loadstring or load if type(_c)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _d,_e=_c(_a)if not _d then error(_e)end return _d()
+]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,50,48,45,109,97,116,99,104,115,116,97,116,115,45,116,101,108,101,112,111,114,116,113,117,101,117,101)_b._a=_a local _c=loadstring or load if type(_c)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _d,_e=_c(_a)if not _d then error(_e)end return _d()
