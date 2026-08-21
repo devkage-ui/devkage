@@ -19678,64 +19678,89 @@ end)
 -- ============================================================
 -- DEVKAGE INTEGRATED CURSOR RENDERER
 --
--- IMPORTANT:
--- The Crosshair UI, settings, profiles, text choices and animation controls
--- above/below this block are left exactly as they already existed.
--- This renderer only consumes the existing DevKage.MaskShard.Cursor/1 bridge.
+-- This renderer is based on the exact visual/animation model from the
+-- supplied DevKage cursor:
 --
--- Rendering is GUI-based instead of replacing the executor-wide Drawing
--- table. This keeps the cursor isolated from other ESP/cursor scripts and
--- preserves the compatibility-only Mask Shard behavior.
+--   * 25x25 default rotating aim container
+--   * four rectangular cardinal lines
+--   * one-pixel black line outlines
+--   * Arcade cursor text
+--   * TextScaled labels
+--   * squared sine pulse
+--   * per-rotation slowdown near the end of the cycle
+--   * original DevKage sine-wave rainbow
+--   * cursor text offset below the mouse
+--
+-- The existing Crosshair page remains the settings source. No controls,
+-- labels, profile tables, config names or callbacks are replaced here.
+--
+-- The only additions around the reference look are optional behaviors
+-- already exposed by the existing Cursor tab (profiles, extra arm counts,
+-- glow, secondary text, position mode, etc.). With the default DevKage
+-- cursor settings, the renderer follows the supplied cursor geometry and
+-- animation values exactly.
 -- ============================================================
 
-local IntegratedCursorRuntime = {
+local ReferenceCursorRuntime = {
     Protocol = "DevKage.MaskShard.Cursor/1",
-    InstanceId = tostring(
-        (game:GetService("HttpService"):GenerateGUID(false):gsub("%-", ""))
-    ),
+    InstanceId = game:GetService("HttpService"):GenerateGUID(false):gsub("%-", ""),
     Running = true,
-    Gui = nil,
-    Root = nil,
-    Arms = {},
+
+    ScreenGui = nil,
+    AimContainer = nil,
+
+    Lines = {},
     MainText = nil,
+    MainTextStroke = nil,
     SecondText = nil,
-    Revision = -1,
+    SecondTextStroke = nil,
+
     Settings = {},
-    SpinClock = 0,
-    DisplayRotation = 0,
-    LastRenderClock = os.clock(),
+    Revision = -1,
+
+    -- These are the same animation-state variables used by the supplied
+    -- cursor code.
+    time = 0,
+    rotationProgress = 0,
+    currentRotationSpeed = 0.8,
+    smoothedRotation = 5,
+
     LastGuiCheck = 0,
     PreviousMouseIconEnabled = uis.MouseIconEnabled,
     OwnsMouseIcon = false,
+
+    Host = nil,
 }
 
 do
-    local previousIntegrated = cursorBridgeEnv.__DevKageIntegratedCursorRuntime
-    if type(previousIntegrated) == "table"
-        and previousIntegrated ~= IntegratedCursorRuntime
-        and type(previousIntegrated.Stop) == "function" then
+    local previous = cursorBridgeEnv.__DevKageIntegratedCursorRuntime
+    if type(previous) == "table"
+        and previous ~= ReferenceCursorRuntime
+        and type(previous.Stop) == "function" then
 
         pcall(function()
-            previousIntegrated:Stop()
+            previous:Stop()
         end)
     end
 
-    -- If the standalone DevKage cursor from an older build is still running,
-    -- stop only that DevKage-owned cursor instance so two identical renderers
-    -- do not draw on top of each other.
-    local previousStandalone = cursorBridgeEnv.__DevKageCursorRuntimeV1
-    if type(previousStandalone) == "table"
-        and type(previousStandalone.Stop) == "function" then
+    local oldStandalone = cursorBridgeEnv.__DevKageCursorRuntimeV1
+    if type(oldStandalone) == "table"
+        and type(oldStandalone.Stop) == "function" then
 
         pcall(function()
-            previousStandalone:Stop()
+            oldStandalone:Stop()
         end)
     end
 
-    cursorBridgeEnv.__DevKageIntegratedCursorRuntime = IntegratedCursorRuntime
+    cursorBridgeEnv.__DevKageIntegratedCursorRuntime =
+        ReferenceCursorRuntime
 end
 
-local function cursorNumber(value, fallback, minimum, maximum)
+-- ============================================================
+-- SETTINGS
+-- ============================================================
+
+local function referenceCursorNumber(value, fallback, minimum, maximum)
     value = tonumber(value)
     if value == nil then value = fallback end
     if minimum ~= nil then value = math.max(minimum, value) end
@@ -19743,478 +19768,1208 @@ local function cursorNumber(value, fallback, minimum, maximum)
     return value
 end
 
-local function cursorColor(value, fallback)
+local function referenceCursorColor(value, fallback)
     if typeof(value) == "Color3" then return value end
     if typeof(fallback) == "Color3" then return fallback end
     return Color3.new(1, 1, 1)
 end
 
-local function cursorCopyBridgeSettings()
+local function referenceCursorReadSettings()
     local source = cursorBridge.Settings
     if type(source) ~= "table" then source = {} end
 
-    local target = IntegratedCursorRuntime.Settings
+    local target = ReferenceCursorRuntime.Settings
 
-    target.Enabled = source.Enabled ~= false
-    target.PositionMode = tostring(source.PositionMode or "Mouse")
-    target.ControlMode = tostring(source.ControlMode or "Free Cursor")
+    target.Enabled =
+        source.Enabled ~= false
 
-    target.Color = cursorColor(source.Color, Color3.new(1, 1, 1))
-    target.SecondaryColor = cursorColor(
-        source.SecondaryColor,
-        Color3.fromRGB(145, 85, 255)
-    )
-    target.ColorMode = tostring(source.ColorMode or "Legacy")
-    target.ColorSpeed = cursorNumber(source.ColorSpeed, 1, 0, 5)
-    target.ColorSpread = cursorNumber(source.ColorSpread, 0.18, 0, 1)
+    target.PositionMode =
+        tostring(source.PositionMode or "Mouse")
 
-    target.Rainbow = source.Rainbow == true
-    target.RainbowSpeed = cursorNumber(source.RainbowSpeed, 7.2, 0, 15)
+    target.ControlMode =
+        tostring(source.ControlMode or "Free Cursor")
 
-    target.LineWidth = cursorNumber(source.LineWidth, 3, 1, 10)
-    target.LineLength = cursorNumber(source.LineLength, 25, 1, 100)
-    target.CenterRadius = cursorNumber(source.CenterRadius, 12.5, 0, 60)
-    target.ArmCount = math.floor(cursorNumber(source.ArmCount, 4, 1, 12) + 0.5)
-    target.AngleOffset = cursorNumber(source.AngleOffset, 0, 0, 360)
+    target.Color =
+        referenceCursorColor(
+            source.Color,
+            Color3.new(1, 1, 1)
+        )
 
-    target.Spin = source.Spin == true
-    target.SpinStyle = tostring(source.SpinStyle or "Static")
-    target.SpinDirection = tostring(source.SpinDirection or "Clockwise")
-    target.SpinSpeed = cursorNumber(source.SpinSpeed, 288, 0, 360)
-    target.SpinRange = cursorNumber(source.SpinRange, 360, 1, 360)
-    target.SquashX = cursorNumber(source.SquashX, 1, 0.25, 2)
-    target.SquashY = cursorNumber(source.SquashY, 1, 0.25, 2)
-    target.SmoothSpin = source.SmoothSpin == true
-    target.PulseSpeed = cursorNumber(source.PulseSpeed, 2.5, 0, 8)
+    target.SecondaryColor =
+        referenceCursorColor(
+            source.SecondaryColor,
+            Color3.fromRGB(145, 85, 255)
+        )
 
-    target.LineGlow = source.LineGlow == true
-    target.GlowThickness = cursorNumber(source.GlowThickness, 30, 0, 50)
-    target.GlowExtraLength = cursorNumber(source.GlowExtraLength, 15, 0, 50)
-    target.GlowTransparency = cursorNumber(source.GlowTransparency, 0.43, 0, 1)
+    target.ColorMode =
+        tostring(source.ColorMode or "Legacy")
 
-    target.TextEnabled = source.TextEnabled == true
-    target.MainText = tostring(source.MainText or "devkage")
-    target.SecondText = tostring(source.SecondText or "None")
-    target.TextOutline = source.TextOutline ~= false
-    target.MainTextSize = math.floor(cursorNumber(source.MainTextSize, 20, 8, 40) + 0.5)
-    target.SecondTextSize = math.floor(cursorNumber(source.SecondTextSize, 15, 8, 40) + 0.5)
+    target.ColorSpeed =
+        referenceCursorNumber(
+            source.ColorSpeed,
+            1,
+            0,
+            5
+        )
+
+    target.ColorSpread =
+        referenceCursorNumber(
+            source.ColorSpread,
+            0.18,
+            0,
+            1
+        )
+
+    target.Rainbow =
+        source.Rainbow == true
+
+    target.RainbowSpeed =
+        referenceCursorNumber(
+            source.RainbowSpeed,
+            7.2,
+            0,
+            15
+        )
+
+    target.LineWidth =
+        referenceCursorNumber(
+            source.LineWidth,
+            3,
+            1,
+            10
+        )
+
+    target.LineLength =
+        referenceCursorNumber(
+            source.LineLength,
+            25,
+            1,
+            100
+        )
+
+    target.CenterRadius =
+        referenceCursorNumber(
+            source.CenterRadius,
+            12.5,
+            0,
+            60
+        )
+
+    target.ArmCount =
+        math.floor(
+            referenceCursorNumber(
+                source.ArmCount,
+                4,
+                1,
+                12
+            ) + 0.5
+        )
+
+    target.AngleOffset =
+        referenceCursorNumber(
+            source.AngleOffset,
+            0,
+            0,
+            360
+        )
+
+    target.Spin =
+        source.Spin == true
+
+    target.SpinStyle =
+        tostring(source.SpinStyle or "Static")
+
+    target.SpinDirection =
+        tostring(source.SpinDirection or "Clockwise")
+
+    target.SpinSpeed =
+        referenceCursorNumber(
+            source.SpinSpeed,
+            288,
+            0,
+            360
+        )
+
+    target.SpinRange =
+        referenceCursorNumber(
+            source.SpinRange,
+            360,
+            1,
+            360
+        )
+
+    target.SquashX =
+        referenceCursorNumber(
+            source.SquashX,
+            1,
+            0.25,
+            2
+        )
+
+    target.SquashY =
+        referenceCursorNumber(
+            source.SquashY,
+            1,
+            0.25,
+            2
+        )
+
+    target.SmoothSpin =
+        source.SmoothSpin == true
+
+    target.PulseSpeed =
+        referenceCursorNumber(
+            source.PulseSpeed,
+            2.5,
+            0,
+            8
+        )
+
+    target.LineGlow =
+        source.LineGlow == true
+
+    target.GlowThickness =
+        referenceCursorNumber(
+            source.GlowThickness,
+            30,
+            0,
+            50
+        )
+
+    target.GlowExtraLength =
+        referenceCursorNumber(
+            source.GlowExtraLength,
+            15,
+            0,
+            50
+        )
+
+    target.GlowTransparency =
+        referenceCursorNumber(
+            source.GlowTransparency,
+            0.43,
+            0,
+            1
+        )
+
+    target.TextEnabled =
+        source.TextEnabled == true
+
+    target.MainText =
+        tostring(source.MainText or "devkage")
+
+    target.SecondText =
+        tostring(source.SecondText or "None")
+
+    target.TextOutline =
+        source.TextOutline ~= false
+
+    target.MainTextSize =
+        math.floor(
+            referenceCursorNumber(
+                source.MainTextSize,
+                20,
+                8,
+                40
+            ) + 0.5
+        )
+
+    target.SecondTextSize =
+        math.floor(
+            referenceCursorNumber(
+                source.SecondTextSize,
+                15,
+                8,
+                40
+            ) + 0.5
+        )
 
     return target
 end
 
-local function cursorDestroyGui()
-    local runtime = IntegratedCursorRuntime
+-- ============================================================
+-- ORIGINAL CURSOR RAINBOW / ANIMATION MATH
+-- ============================================================
 
-    if runtime.Gui then
-        pcall(function()
-            runtime.Gui:Destroy()
-        end)
+local function referenceGetRainbowColor(t)
+    local r =
+        math.sin(t * 0.6) * 0.5 + 0.5
+
+    local g =
+        math.sin(t * 0.6 + 2) * 0.5 + 0.5
+
+    local b =
+        math.sin(t * 0.6 + 4) * 0.5 + 0.5
+
+    return Color3.new(r, g, b)
+end
+
+local function referenceCalculateRotationSpeed(progress, baseRotationSpeed)
+    local slowdownStart = 0.6
+    local slowdownDuration = 0.35
+    local minSlowdownSpeed = 0.3
+
+    if progress >= slowdownStart then
+        local slowdownProgress =
+            (progress - slowdownStart)
+            / slowdownDuration
+
+        local easedProgress =
+            slowdownProgress
+            * slowdownProgress
+
+        local slowdownFactor =
+            1
+            - (
+                easedProgress
+                * (1 - minSlowdownSpeed)
+            )
+
+        return
+            baseRotationSpeed
+            * math.max(
+                slowdownFactor,
+                minSlowdownSpeed
+            )
     end
 
-    runtime.Gui = nil
-    runtime.Root = nil
-    runtime.MainText = nil
-    runtime.SecondText = nil
-    runtime.Arms = {}
+    return baseRotationSpeed
 end
 
-local function cursorCreateRoundedFrame(parent, name, zindex)
-    local frame = Instance.new("Frame")
-    frame.Name = name
-    frame.AnchorPoint = Vector2.new(0.5, 0.5)
-    frame.BackgroundColor3 = Color3.new(1, 1, 1)
-    frame.BackgroundTransparency = 0
-    frame.BorderSizePixel = 0
-    frame.Size = UDim2.fromOffset(1, 1)
-    frame.Position = UDim2.fromOffset(0, 0)
-    frame.ZIndex = zindex
-    frame.Visible = false
-    frame.Parent = parent
-
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(1, 0)
-    corner.Parent = frame
-
-    return frame
+local function referenceSmoothRotation(currentRotation, targetRotation, smoothing)
+    return
+        currentRotation
+        + (
+            targetRotation
+            - currentRotation
+        ) * smoothing
 end
 
-local function cursorCreateArm(parent, index)
-    local arm = {
-        Index = index,
-        GlowOuter = cursorCreateRoundedFrame(
-            parent,
-            "GlowOuter_" .. tostring(index),
-            10000
-        ),
-        GlowInner = cursorCreateRoundedFrame(
-            parent,
-            "GlowInner_" .. tostring(index),
-            10001
-        ),
-        Line = cursorCreateRoundedFrame(
-            parent,
-            "Line_" .. tostring(index),
-            10003
-        ),
-    }
+local function referenceSmoothPulse(t, speed)
+    local rawPulse =
+        math.sin(t * speed) * 0.5 + 0.5
 
-    local outline = Instance.new("UIStroke")
-    outline.Name = "Outline"
-    outline.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    outline.Color = Color3.new(0, 0, 0)
-    outline.Thickness = 1
-    outline.Transparency = 0.18
-    outline.Parent = arm.Line
-    arm.Outline = outline
-
-    return arm
+    return
+        rawPulse
+        * rawPulse
 end
 
-local function cursorCreateText(parent, name)
-    local label = Instance.new("TextLabel")
-    label.Name = name
-    label.AnchorPoint = Vector2.new(0.5, 0.5)
-    label.BackgroundTransparency = 1
-    label.BorderSizePixel = 0
+-- ============================================================
+-- COLOR MODES
+-- ============================================================
 
-    -- Keep the DevKage cursor text font unchanged.
-    label.Font = Enum.Font.Code
-
-    label.Text = ""
-    label.TextColor3 = Color3.new(1, 1, 1)
-    label.TextStrokeColor3 = Color3.new(0, 0, 0)
-    label.TextStrokeTransparency = 0
-    label.TextTransparency = 0
-    label.TextXAlignment = Enum.TextXAlignment.Center
-    label.TextYAlignment = Enum.TextYAlignment.Center
-    label.ZIndex = 10006
-    label.Visible = false
-    label.Parent = parent
-
-    return label
+local function referenceColorLerp(a, b, alpha)
+    return
+        referenceCursorColor(
+            a,
+            Color3.new(1, 1, 1)
+        ):Lerp(
+            referenceCursorColor(
+                b,
+                a
+            ),
+            math.clamp(
+                tonumber(alpha) or 0,
+                0,
+                1
+            )
+        )
 end
 
-local function cursorEnsureArmCount(count)
-    local runtime = IntegratedCursorRuntime
-    count = math.floor(cursorNumber(count, 4, 1, 12) + 0.5)
+local function referenceResolveColor(settings, now, index, count)
+    local primary =
+        referenceCursorColor(
+            settings.Color,
+            Color3.new(1, 1, 1)
+        )
 
-    while #runtime.Arms < count do
-        runtime.Arms[#runtime.Arms + 1] =
-            cursorCreateArm(runtime.Root, #runtime.Arms + 1)
-    end
+    local secondary =
+        referenceCursorColor(
+            settings.SecondaryColor,
+            Color3.fromRGB(145, 85, 255)
+        )
 
-    for index, arm in ipairs(runtime.Arms) do
-        local visible = index <= count
-        arm.Line.Visible = visible
-        arm.GlowInner.Visible = false
-        arm.GlowOuter.Visible = false
-    end
-end
-
-local function cursorCreateGui()
-    local runtime = IntegratedCursorRuntime
-    cursorDestroyGui()
-
-    local playerGui = LocalPlayer and LocalPlayer:FindFirstChildOfClass("PlayerGui")
-    if not playerGui and LocalPlayer then
-        local ok, result = pcall(function()
-            return LocalPlayer:WaitForChild("PlayerGui", 8)
-        end)
-        if ok then playerGui = result end
-    end
-
-    if not playerGui then return false end
-
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "DevKageIntegratedCursor_" .. runtime.InstanceId
-    gui.ResetOnSpawn = false
-    gui.IgnoreGuiInset = true
-    gui.DisplayOrder = 2147483000
-    gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-
-    pcall(function()
-        gui:SetAttribute("DevKageCursorProtocol", runtime.Protocol)
-        gui:SetAttribute("DevKageCursorOwner", runtime.InstanceId)
-        gui:SetAttribute("DevKageMaskShardCompatibilityOnly", true)
-    end)
-
-    local parentOk = pcall(function()
-        gui.Parent = playerGui
-    end)
-
-    if not parentOk or gui.Parent == nil then
-        pcall(function() gui:Destroy() end)
-        return false
-    end
-
-    local root = Instance.new("Frame")
-    root.Name = "CursorRoot"
-    root.AnchorPoint = Vector2.new(0.5, 0.5)
-    root.BackgroundTransparency = 1
-    root.BorderSizePixel = 0
-    root.Size = UDim2.fromOffset(1, 1)
-    root.Position = UDim2.fromOffset(0, 0)
-    root.ZIndex = 10000
-    root.Parent = gui
-
-    runtime.Gui = gui
-    runtime.Root = root
-    runtime.Arms = {}
-
-    cursorEnsureArmCount(
-        runtime.Settings.ArmCount
-        or cursorBridge.Settings.ArmCount
-        or 4
-    )
-
-    runtime.MainText = cursorCreateText(gui, "MainText")
-    runtime.SecondText = cursorCreateText(gui, "SecondText")
-
-    return true
-end
-
-local function cursorLerpColor(a, b, alpha)
-    a = cursorColor(a, Color3.new(1, 1, 1))
-    b = cursorColor(b, a)
-    return a:Lerp(b, math.clamp(alpha, 0, 1))
-end
-
-local function cursorHSV(timeValue, speed, offset)
-    speed = cursorNumber(speed, 1, 0, 20)
-    offset = tonumber(offset) or 0
-    return Color3.fromHSV(
-        ((timeValue * speed * 0.08) + offset) % 1,
-        0.92,
-        1
-    )
-end
-
-local function cursorResolveColor(settings, now, index, count)
-    local main = cursorColor(
-        settings.Color,
-        Color3.new(1, 1, 1)
-    )
-
-    local secondary = cursorColor(
-        settings.SecondaryColor,
-        Color3.fromRGB(145, 85, 255)
-    )
-
-    local spread = cursorNumber(settings.ColorSpread, 0.18, 0, 1)
-    local speed = cursorNumber(settings.ColorSpeed, 1, 0, 5)
-    local armRatio = count <= 1 and 0 or ((index - 1) / (count - 1))
-    local phase = ((index - 1) / math.max(count, 1)) * spread
-    local mode = tostring(settings.ColorMode or "Legacy")
-
-    if settings.Rainbow == true then
-        local rainbowSpeed =
-            cursorNumber(settings.RainbowSpeed, 7.2, 0, 15)
-
-        return Color3.fromHSV(
-            ((now * rainbowSpeed * 0.045) + phase) % 1,
-            0.92,
+    local spread =
+        referenceCursorNumber(
+            settings.ColorSpread,
+            0.18,
+            0,
             1
         )
+
+    local speed =
+        referenceCursorNumber(
+            settings.ColorSpeed,
+            1,
+            0,
+            5
+        )
+
+    local armPhase =
+        (
+            (index - 1)
+            / math.max(count, 1)
+        ) * spread
+
+    -- The supplied cursor always used the sine-wave rainbow. The existing
+    -- Rainbow Speed setting scales time so the default 7.2 value reproduces
+    -- the source cursor's original rainbow timing exactly.
+    if settings.Rainbow == true then
+        local rainbowScale =
+            referenceCursorNumber(
+                settings.RainbowSpeed,
+                7.2,
+                0,
+                15
+            ) / 7.2
+
+        return
+            referenceGetRainbowColor(
+                now * rainbowScale
+                + armPhase
+            )
     end
 
+    local mode =
+        tostring(
+            settings.ColorMode
+            or "Legacy"
+        )
+
     if mode == "Solid" then
-        return main
+        return primary
     end
 
     if mode == "Two Tone" then
-        if index % 2 == 0 then return secondary end
-        return main
+        return
+            (index % 2 == 0)
+            and secondary
+            or primary
     end
 
     if mode == "Gradient" then
-        return cursorLerpColor(main, secondary, armRatio)
+        local alpha =
+            count <= 1
+            and 0
+            or (
+                (index - 1)
+                / (count - 1)
+            )
+
+        return
+            referenceColorLerp(
+                primary,
+                secondary,
+                alpha
+            )
     end
 
     if mode == "Color Wave" then
         local wave =
             math.sin(
-                (now * math.max(speed, 0.01) * 2)
-                + (phase * math.pi * 2)
+                (
+                    now
+                    * math.max(speed, 0.01)
+                    * 2
+                )
+                + armPhase
+                    * math.pi
+                    * 2
             ) * 0.5 + 0.5
 
-        return cursorLerpColor(main, secondary, wave)
+        return
+            referenceColorLerp(
+                primary,
+                secondary,
+                wave
+            )
     end
 
     if mode == "RGB Wave" then
-        return cursorHSV(
-            now,
-            math.max(speed, 0.1),
-            phase
-        )
+        return
+            Color3.fromHSV(
+                (
+                    now
+                    * math.max(speed, 0.01)
+                    * 0.08
+                    + armPhase
+                ) % 1,
+                0.92,
+                1
+            )
     end
 
     if mode == "Ice" then
         local wave =
             math.sin(
-                now * math.max(speed, 0.25) * 2
-                + phase * 6
+                now
+                * math.max(speed, 0.25)
+                * 2
+                + armPhase * 6
             ) * 0.5 + 0.5
 
-        return cursorLerpColor(
-            Color3.fromRGB(220, 250, 255),
-            Color3.fromRGB(65, 180, 255),
-            wave
-        )
+        return
+            referenceColorLerp(
+                Color3.fromRGB(220, 250, 255),
+                Color3.fromRGB(65, 180, 255),
+                wave
+            )
     end
 
     if mode == "Purple LED" then
         local wave =
             math.sin(
-                now * math.max(speed, 0.25) * 2.5
-                + phase * 7
+                now
+                * math.max(speed, 0.25)
+                * 2.5
+                + armPhase * 7
             ) * 0.5 + 0.5
 
-        return cursorLerpColor(
-            Color3.fromRGB(110, 35, 255),
-            Color3.fromRGB(240, 90, 255),
-            wave
-        )
+        return
+            referenceColorLerp(
+                Color3.fromRGB(110, 35, 255),
+                Color3.fromRGB(240, 90, 255),
+                wave
+            )
     end
 
     if mode == "Fire" then
         local wave =
             math.sin(
-                now * math.max(speed, 0.25) * 2.7
-                + phase * 5
+                now
+                * math.max(speed, 0.25)
+                * 2.7
+                + armPhase * 5
             ) * 0.5 + 0.5
 
-        return cursorLerpColor(
-            Color3.fromRGB(255, 55, 25),
-            Color3.fromRGB(255, 220, 45),
-            wave
-        )
+        return
+            referenceColorLerp(
+                Color3.fromRGB(255, 55, 25),
+                Color3.fromRGB(255, 220, 45),
+                wave
+            )
     end
 
     if mode == "Toxic" then
         local wave =
             math.sin(
-                now * math.max(speed, 0.25) * 2.2
-                + phase * 5
+                now
+                * math.max(speed, 0.25)
+                * 2.2
+                + armPhase * 5
             ) * 0.5 + 0.5
 
-        return cursorLerpColor(
-            Color3.fromRGB(40, 255, 65),
-            Color3.fromRGB(190, 255, 35),
-            wave
+        return
+            referenceColorLerp(
+                Color3.fromRGB(40, 255, 65),
+                Color3.fromRGB(190, 255, 35),
+                wave
+            )
+    end
+
+    -- Legacy = the exact sine-wave color from the supplied cursor.
+    return
+        referenceGetRainbowColor(
+            now
+            * math.max(speed, 0.01)
         )
-    end
-
-    -- "Legacy" keeps the original flowing RGB-style DevKage look.
-    local r = math.sin(now * 0.60) * 0.5 + 0.5
-    local g = math.sin(now * 0.60 + 2.00) * 0.5 + 0.5
-    local b = math.sin(now * 0.60 + 4.00) * 0.5 + 0.5
-
-    local legacy = Color3.new(r, g, b)
-    if speed <= 0 then
-        return main
-    end
-
-    return cursorLerpColor(
-        legacy,
-        main,
-        math.clamp(1 - speed * 0.12, 0, 0.85)
-    )
 end
 
-local function cursorShortestAngleDelta(fromAngle, toAngle)
-    local delta = (toAngle - fromAngle + 180) % 360 - 180
-    return delta
-end
+-- ============================================================
+-- GUI CREATION
+-- ============================================================
 
-local function cursorResolveRotation(settings, now, dt)
-    local runtime = IntegratedCursorRuntime
-    local baseOffset =
-        cursorNumber(settings.AngleOffset, 0, 0, 360)
+local function referenceDestroyCursorGui()
+    local runtime = ReferenceCursorRuntime
 
-    if settings.Spin ~= true then
-        runtime.SpinClock = 0
-        runtime.DisplayRotation = baseOffset
-        return baseOffset
+    if runtime.ScreenGui then
+        pcall(function()
+            runtime.ScreenGui:Destroy()
+        end)
     end
 
-    local direction =
-        tostring(settings.SpinDirection or "Clockwise")
-            == "Counter Clockwise"
-        and -1
-        or 1
+    runtime.ScreenGui = nil
+    runtime.AimContainer = nil
+    runtime.Lines = {}
+    runtime.MainText = nil
+    runtime.MainTextStroke = nil
+    runtime.SecondText = nil
+    runtime.SecondTextStroke = nil
+    runtime.Host = nil
+end
 
-    local speed =
-        cursorNumber(settings.SpinSpeed, 288, 0, 360)
+local function referenceCreateLine(parent, name)
+    local frame = Instance.new("Frame")
 
-    local range =
-        cursorNumber(settings.SpinRange, 360, 1, 360)
+    frame.Name = name
 
-    local style =
-        tostring(settings.SpinStyle or "Static")
+    -- These are the exact default source-cursor line values.
+    frame.Size =
+        UDim2.new(
+            0,
+            3,
+            0,
+            25
+        )
 
-    runtime.SpinClock =
-        runtime.SpinClock + (dt * speed * direction)
+    frame.Position =
+        UDim2.new(
+            0.5,
+            -1.5,
+            0,
+            0
+        )
 
-    local wanted
+    frame.BackgroundColor3 =
+        Color3.new(
+            1,
+            1,
+            1
+        )
 
-    if style == "Ping Pong" then
-        local phase =
-            math.sin(
-                math.rad(runtime.SpinClock)
+    frame.BorderSizePixel = 0
+    frame.ZIndex = 5
+    frame.Parent = parent
+
+    local stroke =
+        Instance.new("UIStroke")
+
+    stroke.Name = "Outline"
+    stroke.ApplyStrokeMode =
+        Enum.ApplyStrokeMode.Border
+
+    stroke.Color =
+        Color3.new(
+            0,
+            0,
+            0
+        )
+
+    stroke.Thickness = 1
+    stroke.Parent = frame
+
+    local glow =
+        Instance.new("Frame")
+
+    glow.Name =
+        name
+        .. "_Glow"
+
+    glow.BackgroundColor3 =
+        Color3.new(
+            1,
+            1,
+            1
+        )
+
+    glow.BackgroundTransparency = 1
+    glow.BorderSizePixel = 0
+    glow.ZIndex = 4
+    glow.Visible = false
+    glow.Parent = parent
+
+    local glowCorner =
+        Instance.new("UICorner")
+
+    glowCorner.CornerRadius =
+        UDim.new(
+            1,
+            0
+        )
+
+    glowCorner.Parent = glow
+
+    return {
+        Frame = frame,
+        Stroke = stroke,
+        Glow = glow,
+    }
+end
+
+local function referenceCreateTextLabel(parent, name)
+    local label =
+        Instance.new("TextLabel")
+
+    label.Name = name
+
+    label.Text =
+        name == "MainText"
+        and "devkage"
+        or ""
+
+    label.Position =
+        UDim2.new(
+            0,
+            0,
+            0,
+            0
+        )
+
+    label.TextColor3 =
+        Color3.new(
+            1,
+            1,
+            1
+        )
+
+    -- EXACT font from the supplied cursor.
+    label.Font =
+        Enum.Font.Arcade
+
+    -- EXACT scaling behavior from the supplied cursor.
+    label.TextScaled = true
+
+    label.BackgroundTransparency = 1
+
+    -- EXACT default source-cursor label dimensions.
+    label.Size =
+        UDim2.new(
+            0,
+            150,
+            0,
+            23
+        )
+
+    label.ZIndex = 10
+    label.Parent = parent
+
+    local stroke =
+        Instance.new("UIStroke")
+
+    stroke.Name = "TextOutline"
+
+    stroke.ApplyStrokeMode =
+        Enum.ApplyStrokeMode.Contextual
+
+    stroke.Color =
+        Color3.new(
+            0,
+            0,
+            0
+        )
+
+    stroke.Thickness = 1
+
+    stroke.LineJoinMode =
+        Enum.LineJoinMode.Round
+
+    stroke.Parent = label
+
+    return label, stroke
+end
+
+local function referenceResolveGuiHost()
+    -- The supplied cursor used PlayerGui. DevKage's menu is in CoreGui,
+    -- though, so to make this exact cursor remain visible ON TOP of the
+    -- DevKage menu we first use the same CoreGui host as the menu.
+    --
+    -- This changes only layering, not the cursor's geometry or animation.
+    if cre then
+        return cre
+    end
+
+    if LocalPlayer then
+        return
+            LocalPlayer:FindFirstChildOfClass("PlayerGui")
+            or LocalPlayer:WaitForChild("PlayerGui", 8)
+    end
+
+    return nil
+end
+
+local function referenceCreateCursorGui()
+    local runtime =
+        ReferenceCursorRuntime
+
+    referenceDestroyCursorGui()
+
+    local host =
+        referenceResolveGuiHost()
+
+    if not host then
+        return false
+    end
+
+    local screenGui =
+        Instance.new("ScreenGui")
+
+    -- Keep the original cursor GUI name.
+    screenGui.Name = "AimSightGUI"
+
+    screenGui.ResetOnSpawn = false
+
+    -- DevKage's menu ScreenGui uses DisplayOrder 9999. This higher order is
+    -- what makes the supplied cursor visible directly on the mouse while the
+    -- DevKage UI itself is open.
+    screenGui.DisplayOrder = 1000000
+
+    screenGui.IgnoreGuiInset = true
+
+    screenGui.ZIndexBehavior =
+        Enum.ZIndexBehavior.Global
+
+    pcall(function()
+        screenGui:SetAttribute(
+            "DevKageCursorProtocol",
+            runtime.Protocol
+        )
+
+        screenGui:SetAttribute(
+            "DevKageCursorOwner",
+            runtime.InstanceId
+        )
+
+        screenGui:SetAttribute(
+            "DevKageMaskShardCompatibilityOnly",
+            true
+        )
+    end)
+
+    local parentOk =
+        pcall(function()
+            screenGui.Parent = host
+        end)
+
+    if not parentOk
+        or screenGui.Parent == nil then
+
+        pcall(function()
+            screenGui:Destroy()
+        end)
+
+        return false
+    end
+
+    local aimContainer =
+        Instance.new("Frame")
+
+    aimContainer.Name = "AimContainer"
+
+    aimContainer.BackgroundTransparency = 1
+
+    -- EXACT source-cursor default container dimensions.
+    aimContainer.Size =
+        UDim2.new(
+            0,
+            25,
+            0,
+            25
+        )
+
+    aimContainer.AnchorPoint =
+        Vector2.new(
+            0.5,
+            0.5
+        )
+
+    aimContainer.ZIndex = 5
+    aimContainer.Parent = screenGui
+
+    runtime.ScreenGui = screenGui
+    runtime.AimContainer = aimContainer
+    runtime.Host = host
+
+    runtime.Lines = {
+        referenceCreateLine(
+            aimContainer,
+            "Top"
+        ),
+        referenceCreateLine(
+            aimContainer,
+            "Bottom"
+        ),
+        referenceCreateLine(
+            aimContainer,
+            "Left"
+        ),
+        referenceCreateLine(
+            aimContainer,
+            "Right"
+        ),
+    }
+
+    runtime.MainText,
+    runtime.MainTextStroke =
+        referenceCreateTextLabel(
+            screenGui,
+            "MainText"
+        )
+
+    runtime.SecondText,
+    runtime.SecondTextStroke =
+        referenceCreateTextLabel(
+            screenGui,
+            "SecondText"
+        )
+
+    runtime.SecondText.Visible = false
+
+    return true
+end
+
+-- ============================================================
+-- REFERENCE FOUR-ARM LAYOUT
+-- ============================================================
+
+local function referenceApplyFourArmLayout(
+    settings,
+    currentLength,
+    lineThickness
+)
+    local runtime =
+        ReferenceCursorRuntime
+
+    local lines =
+        runtime.Lines
+
+    if #lines < 4 then return end
+
+    local top =
+        lines[1].Frame
+
+    local bottom =
+        lines[2].Frame
+
+    local left =
+        lines[3].Frame
+
+    local right =
+        lines[4].Frame
+
+    for index = 1, 4 do
+        local line =
+            lines[index]
+
+        line.Frame.Visible = true
+
+        line.Frame.AnchorPoint =
+            Vector2.new(
+                0,
+                0
             )
 
-        wanted =
-            baseOffset
-            + phase * range
-    elseif style == "Stepped" then
-        local armCount =
-            math.max(
+        line.Frame.Rotation = 0
+
+        line.Stroke.Enabled = true
+        line.Stroke.Thickness = 1
+        line.Stroke.Color =
+            Color3.new(
+                0,
+                0,
+                0
+            )
+    end
+
+    -- These four formulas are the supplied cursor's original pulse layout.
+    top.Size =
+        UDim2.new(
+            0,
+            lineThickness,
+            0,
+            currentLength
+        )
+
+    bottom.Size =
+        UDim2.new(
+            0,
+            lineThickness,
+            0,
+            currentLength
+        )
+
+    left.Size =
+        UDim2.new(
+            0,
+            currentLength,
+            0,
+            lineThickness
+        )
+
+    right.Size =
+        UDim2.new(
+            0,
+            currentLength,
+            0,
+            lineThickness
+        )
+
+    top.Position =
+        UDim2.new(
+            0.5,
+            -lineThickness / 2,
+            0,
+            0
+        )
+
+    bottom.Position =
+        UDim2.new(
+            0.5,
+            -lineThickness / 2,
+            1,
+            -currentLength
+        )
+
+    left.Position =
+        UDim2.new(
+            0,
+            0,
+            0.5,
+            -lineThickness / 2
+        )
+
+    right.Position =
+        UDim2.new(
+            1,
+            -currentLength,
+            0.5,
+            -lineThickness / 2
+        )
+end
+
+-- ============================================================
+-- OPTIONAL EXTRA-ARM SUPPORT
+--
+-- The source cursor itself had four arms. The existing DevKage Cursor tab
+-- already exposes Arm Count, so counts other than four are supported without
+-- changing the exact four-arm default.
+-- ============================================================
+
+local function referenceEnsureExtraArmCount(count)
+    local runtime =
+        ReferenceCursorRuntime
+
+    count =
+        math.floor(
+            referenceCursorNumber(
+                count,
+                4,
                 1,
-                math.floor(
-                    cursorNumber(settings.ArmCount, 4, 1, 12)
-                    + 0.5
+                12
+            ) + 0.5
+        )
+
+    while #runtime.Lines < count do
+        runtime.Lines[
+            #runtime.Lines + 1
+        ] =
+            referenceCreateLine(
+                runtime.AimContainer,
+                "Arm_"
+                .. tostring(
+                    #runtime.Lines + 1
                 )
             )
-
-        local step =
-            math.max(
-                1,
-                range / armCount
-            )
-
-        wanted =
-            baseOffset
-            + math.floor(runtime.SpinClock / step) * step
-    else
-        -- Static = the normal continuous DevKage rotation.
-        wanted =
-            baseOffset
-            + runtime.SpinClock
     end
 
-    if settings.SmoothSpin == true then
-        local alpha =
-            1 - math.exp(-math.max(dt, 0) * 14)
-
-        local delta =
-            cursorShortestAngleDelta(
-                runtime.DisplayRotation,
-                wanted
-            )
-
-        runtime.DisplayRotation =
-            runtime.DisplayRotation
-            + delta * alpha
-    else
-        runtime.DisplayRotation = wanted
-    end
-
-    return runtime.DisplayRotation
+    return count
 end
 
-local function cursorResolvePosition(settings)
-    local camera = workspace.CurrentCamera
-    local mode = tostring(settings.PositionMode or "Mouse")
+local function referenceApplyRadialLayout(
+    settings,
+    currentLength,
+    lineThickness,
+    armCount
+)
+    local runtime =
+        ReferenceCursorRuntime
+
+    local length =
+        math.max(
+            1,
+            math.abs(currentLength)
+        )
+
+    local centerRadius =
+        referenceCursorNumber(
+            settings.CenterRadius,
+            12.5,
+            0,
+            60
+        )
+
+    local squashX =
+        referenceCursorNumber(
+            settings.SquashX,
+            1,
+            0.25,
+            2
+        )
+
+    local squashY =
+        referenceCursorNumber(
+            settings.SquashY,
+            1,
+            0.25,
+            2
+        )
+
+    for index, line in ipairs(runtime.Lines) do
+        local visible =
+            index <= armCount
+
+        line.Frame.Visible = visible
+
+        if visible then
+            local angle =
+                ((index - 1) / armCount)
+                * 360
+
+            local radians =
+                math.rad(angle)
+
+            local x =
+                math.sin(radians)
+                * centerRadius
+                * squashX
+
+            local y =
+                -math.cos(radians)
+                * centerRadius
+                * squashY
+
+            line.Frame.AnchorPoint =
+                Vector2.new(
+                    0.5,
+                    1
+                )
+
+            line.Frame.Size =
+                UDim2.fromOffset(
+                    lineThickness,
+                    length
+                )
+
+            line.Frame.Position =
+                UDim2.new(
+                    0.5,
+                    x,
+                    0.5,
+                    y
+                )
+
+            line.Frame.Rotation =
+                angle
+
+            line.Stroke.Enabled = true
+            line.Stroke.Thickness = 1
+        end
+    end
+end
+
+-- ============================================================
+-- GLOW
+-- ============================================================
+
+local function referenceCopyFrameGeometry(source, target)
+    target.AnchorPoint =
+        source.AnchorPoint
+
+    target.Position =
+        source.Position
+
+    target.Rotation =
+        source.Rotation
+end
+
+local function referenceApplyGlow(
+    settings,
+    line,
+    color,
+    isHorizontalOrVerticalReference
+)
+    local glow =
+        line.Glow
+
+    if settings.LineGlow ~= true
+        or not line.Frame.Visible then
+
+        glow.Visible = false
+        return
+    end
+
+    local glowThickness =
+        referenceCursorNumber(
+            settings.GlowThickness,
+            30,
+            0,
+            50
+        )
+
+    local glowExtraLength =
+        referenceCursorNumber(
+            settings.GlowExtraLength,
+            15,
+            0,
+            50
+        )
+
+    local glowTransparency =
+        referenceCursorNumber(
+            settings.GlowTransparency,
+            0.43,
+            0,
+            1
+        )
+
+    referenceCopyFrameGeometry(
+        line.Frame,
+        glow
+    )
+
+    local sourceSize =
+        line.Frame.AbsoluteSize
+
+    if sourceSize.X >= sourceSize.Y then
+        glow.Size =
+            UDim2.fromOffset(
+                math.max(
+                    1,
+                    sourceSize.X
+                    + glowExtraLength
+                ),
+                math.max(
+                    1,
+                    sourceSize.Y
+                    + glowThickness
+                )
+            )
+    else
+        glow.Size =
+            UDim2.fromOffset(
+                math.max(
+                    1,
+                    sourceSize.X
+                    + glowThickness
+                ),
+                math.max(
+                    1,
+                    sourceSize.Y
+                    + glowExtraLength
+                )
+            )
+    end
+
+    glow.BackgroundColor3 = color
+
+    glow.BackgroundTransparency =
+        glowTransparency
+
+    glow.Visible = true
+end
+
+-- ============================================================
+-- CURSOR POSITION
+-- ============================================================
+
+local function referenceCursorPosition(settings)
+    local camera =
+        workspace.CurrentCamera
+
+    local mode =
+        tostring(
+            settings.PositionMode
+            or "Mouse"
+        )
 
     if mode == "Center"
         or mode == "Screen Center"
@@ -20223,250 +20978,218 @@ local function cursorResolvePosition(settings)
         local viewport =
             camera
             and camera.ViewportSize
-            or Vector2.new(1920, 1080)
+            or Vector2.new(
+                1920,
+                1080
+            )
 
-        return Vector2.new(
-            viewport.X * 0.5,
-            viewport.Y * 0.5
-        )
-    end
-
-    return uis:GetMouseLocation()
-end
-
-local function cursorApplyArm(
-    arm,
-    positionX,
-    positionY,
-    displayAngle,
-    width,
-    length,
-    color,
-    glowEnabled,
-    glowThickness,
-    glowExtraLength,
-    glowTransparency
-)
-    arm.Line.Visible = true
-    arm.Line.Size =
-        UDim2.fromOffset(
-            math.max(1, width),
-            math.max(1, length)
-        )
-    arm.Line.Position =
-        UDim2.fromOffset(
-            positionX,
-            positionY
-        )
-    arm.Line.Rotation = displayAngle
-    arm.Line.BackgroundColor3 = color
-
-    if arm.Outline then
-        arm.Outline.Enabled = true
-        arm.Outline.Thickness =
-            math.max(
-                1,
-                math.min(width * 0.42, 2)
+        return
+            Vector2.new(
+                viewport.X * 0.5,
+                viewport.Y * 0.5
             )
     end
 
-    if not glowEnabled then
-        arm.GlowInner.Visible = false
-        arm.GlowOuter.Visible = false
+    -- The supplied cursor follows the player mouse. GetMouseLocation is used
+    -- here because the DevKage UI ignores the Roblox inset and this keeps the
+    -- custom cursor directly under the real pointer while the menu is open.
+    return
+        uis:GetMouseLocation()
+end
+
+-- ============================================================
+-- TEXT
+-- ============================================================
+
+local function referenceApplyText(
+    settings,
+    cursorPosition,
+    color
+)
+    local runtime =
+        ReferenceCursorRuntime
+
+    local main =
+        runtime.MainText
+
+    local second =
+        runtime.SecondText
+
+    if not main
+        or not second then
+
         return
     end
 
-    local innerWidth =
-        width
-        + math.max(0, glowThickness) * 0.42
-
-    local outerWidth =
-        width
-        + math.max(0, glowThickness)
-
-    local innerLength =
-        length
-        + math.max(0, glowExtraLength)
-
-    local outerLength =
-        length
-        + math.max(0, glowExtraLength) * 2
-
-    arm.GlowInner.Visible = true
-    arm.GlowInner.Size =
-        UDim2.fromOffset(
-            math.max(1, innerWidth),
-            math.max(1, innerLength)
-        )
-    arm.GlowInner.Position =
-        UDim2.fromOffset(
-            positionX,
-            positionY
-        )
-    arm.GlowInner.Rotation = displayAngle
-    arm.GlowInner.BackgroundColor3 = color
-    arm.GlowInner.BackgroundTransparency =
-        math.clamp(
-            glowTransparency + 0.18,
-            0,
-            1
-        )
-
-    arm.GlowOuter.Visible = true
-    arm.GlowOuter.Size =
-        UDim2.fromOffset(
-            math.max(1, outerWidth),
-            math.max(1, outerLength)
-        )
-    arm.GlowOuter.Position =
-        UDim2.fromOffset(
-            positionX,
-            positionY
-        )
-    arm.GlowOuter.Rotation = displayAngle
-    arm.GlowOuter.BackgroundColor3 = color
-    arm.GlowOuter.BackgroundTransparency =
-        math.clamp(
-            glowTransparency + 0.36,
-            0,
-            1
-        )
-end
-
-local function cursorApplyText(
-    settings,
-    cursorPosition,
-    color,
-    radius,
-    length
-)
-    local runtime = IntegratedCursorRuntime
-    local mainText = runtime.MainText
-    local secondText = runtime.SecondText
-
-    if not mainText or not secondText then return end
-
-    local enabled =
+    local textEnabled =
         settings.TextEnabled == true
         and settings.Enabled ~= false
 
     local mainValue =
-        tostring(settings.MainText or "devkage")
+        tostring(
+            settings.MainText
+            or "devkage"
+        )
 
     local secondValue =
-        tostring(settings.SecondText or "None")
+        tostring(
+            settings.SecondText
+            or "None"
+        )
 
-    mainText.Visible =
-        enabled
+    main.Visible =
+        textEnabled
         and mainValue ~= ""
         and mainValue ~= "None"
 
-    secondText.Visible =
-        enabled
+    second.Visible =
+        textEnabled
         and secondValue ~= ""
         and secondValue ~= "None"
 
+    -- Keep the supplied cursor's exact font every frame.
+    main.Font =
+        Enum.Font.Arcade
+
+    second.Font =
+        Enum.Font.Arcade
+
+    -- Keep TextScaled exactly like the supplied cursor.
+    main.TextScaled = true
+    second.TextScaled = true
+
     local mainSize =
-        math.floor(
-            cursorNumber(
-                settings.MainTextSize,
-                20,
-                8,
-                40
-            ) + 0.5
+        referenceCursorNumber(
+            settings.MainTextSize,
+            20,
+            8,
+            40
         )
 
     local secondSize =
-        math.floor(
-            cursorNumber(
-                settings.SecondTextSize,
-                15,
-                8,
-                40
-            ) + 0.5
+        referenceCursorNumber(
+            settings.SecondTextSize,
+            15,
+            8,
+            40
         )
 
-    local outline =
-        settings.TextOutline ~= false
+    local mainScale =
+        mainSize / 20
 
-    local baseY =
-        cursorPosition.Y
-        + radius
-        + length
-        + 20
+    local secondScale =
+        secondSize / 15
 
-    if mainText.Visible then
-        mainText.Text = mainValue
+    -- At the default Main Text Size (20), these are the exact source values:
+    -- Size = 150x23 and Position = mouse.X - 70, mouse.Y + 50.
+    main.Size =
+        UDim2.new(
+            0,
+            150 * mainScale,
+            0,
+            23 * mainScale
+        )
 
-        -- Keep cursor text font unchanged.
-        mainText.Font = Enum.Font.Code
+    main.Position =
+        UDim2.new(
+            0,
+            cursorPosition.X
+                - 70 * mainScale,
+            0,
+            cursorPosition.Y
+                + 50
+        )
 
-        mainText.TextColor3 = color
-        mainText.TextSize = mainSize
-        mainText.TextStrokeTransparency =
-            outline and 0 or 1
+    main.Text =
+        mainValue
 
-        mainText.Size =
-            UDim2.fromOffset(
-                math.max(
-                    130,
-                    (#mainValue + 2) * mainSize * 0.62
-                ),
-                mainSize + 8
+    main.TextColor3 =
+        color
+
+    if runtime.MainTextStroke then
+        runtime.MainTextStroke.Enabled =
+            settings.TextOutline ~= false
+
+        runtime.MainTextStroke.Thickness = 1
+
+        runtime.MainTextStroke.Color =
+            Color3.new(
+                0,
+                0,
+                0
             )
 
-        mainText.Position =
-            UDim2.fromOffset(
-                cursorPosition.X,
-                baseY
-            )
+        runtime.MainTextStroke.LineJoinMode =
+            Enum.LineJoinMode.Round
     end
 
-    if secondText.Visible then
-        secondText.Text = secondValue
+    second.Size =
+        UDim2.new(
+            0,
+            150 * secondScale,
+            0,
+            23 * secondScale
+        )
 
-        -- Keep cursor text font unchanged.
-        secondText.Font = Enum.Font.Code
+    second.Position =
+        UDim2.new(
+            0,
+            cursorPosition.X
+                - 70 * secondScale,
+            0,
+            cursorPosition.Y
+                + 50
+                + 24 * mainScale
+        )
 
-        secondText.TextColor3 = color
-        secondText.TextSize = secondSize
-        secondText.TextStrokeTransparency =
-            outline and 0 or 1
+    second.Text =
+        secondValue
 
-        secondText.Size =
-            UDim2.fromOffset(
-                math.max(
-                    130,
-                    (#secondValue + 2) * secondSize * 0.62
-                ),
-                secondSize + 8
+    second.TextColor3 =
+        color
+
+    if runtime.SecondTextStroke then
+        runtime.SecondTextStroke.Enabled =
+            settings.TextOutline ~= false
+
+        runtime.SecondTextStroke.Thickness = 1
+
+        runtime.SecondTextStroke.Color =
+            Color3.new(
+                0,
+                0,
+                0
             )
 
-        secondText.Position =
-            UDim2.fromOffset(
-                cursorPosition.X,
-                baseY + mainSize + 9
-            )
+        runtime.SecondTextStroke.LineJoinMode =
+            Enum.LineJoinMode.Round
     end
 end
 
-local function cursorSetBridgeOwnership(active)
-    local runtime = IntegratedCursorRuntime
+-- ============================================================
+-- BRIDGE / NATIVE MOUSE OWNERSHIP
+-- ============================================================
 
-    if active then
+local function referenceSetBridgeOwnership(enabled)
+    local runtime =
+        ReferenceCursorRuntime
+
+    if enabled then
         cursorBridge.ExternalAttached = true
-        cursorBridge.ExternalHeartbeat = os.clock()
-        cursorBridge.ExternalOwner =
-            "DevKageMain:" .. runtime.InstanceId
-    else
-        local owner =
-            tostring(
-                cursorBridge.ExternalOwner
-                or ""
-            )
 
-        if owner == ""
-            or owner == "DevKageMain:" .. runtime.InstanceId then
+        cursorBridge.ExternalHeartbeat =
+            os.clock()
+
+        cursorBridge.ExternalOwner =
+            "DevKageReferenceCursor:"
+            .. runtime.InstanceId
+    else
+        local expected =
+            "DevKageReferenceCursor:"
+            .. runtime.InstanceId
+
+        if cursorBridge.ExternalOwner == expected
+            or cursorBridge.ExternalOwner == nil then
 
             cursorBridge.ExternalAttached = false
             cursorBridge.ExternalHeartbeat = 0
@@ -20475,130 +21198,278 @@ local function cursorSetBridgeOwnership(active)
     end
 end
 
-local function cursorUpdateNativeMouse(settings)
-    local runtime = IntegratedCursorRuntime
+local function referenceApplyNativeMouseState(enabled)
+    local runtime =
+        ReferenceCursorRuntime
 
-    if settings.Enabled ~= false then
-        -- While the DevKage custom cursor is alive, the window's existing
-        -- mouse-control code also sees ExternalAttached and suppresses the
-        -- default Roblox icon while the menu is open.
-        if uis.MouseIconEnabled == true then
-            runtime.PreviousMouseIconEnabled = true
+    if enabled then
+        if not runtime.OwnsMouseIcon then
+            runtime.PreviousMouseIconEnabled =
+                uis.MouseIconEnabled
+
             runtime.OwnsMouseIcon = true
+        end
+
+        -- Keep the custom DevKage cursor as the visible mouse cursor.
+        if uis.MouseIconEnabled == true then
             pcall(function()
                 uis.MouseIconEnabled = false
             end)
         end
     elseif runtime.OwnsMouseIcon then
         runtime.OwnsMouseIcon = false
+
         pcall(function()
             uis.MouseIconEnabled =
-                runtime.PreviousMouseIconEnabled ~= false
+                runtime.PreviousMouseIconEnabled
         end)
     end
 end
 
-local function cursorRender(deltaTime)
-    local runtime = IntegratedCursorRuntime
+-- ============================================================
+-- SPIN
+-- ============================================================
+
+local function referenceUpdateRotation(settings, deltaTime)
+    local runtime =
+        ReferenceCursorRuntime
+
+    local angleOffset =
+        referenceCursorNumber(
+            settings.AngleOffset,
+            0,
+            0,
+            360
+        )
+
+    if settings.Spin ~= true then
+        runtime.currentRotationSpeed = 0
+
+        runtime.smoothedRotation =
+            angleOffset
+
+        return
+            angleOffset
+    end
+
+    -- Existing Cursor tab expresses speed in degrees/second.
+    -- The supplied source used progress-per-second and default 0.8:
+    --     288 deg/s / 360 = 0.8
+    -- so the default remains exactly the same animation speed.
+    local baseRotationSpeed =
+        referenceCursorNumber(
+            settings.SpinSpeed,
+            288,
+            0,
+            360
+        ) / 360
+
+    if runtime.currentRotationSpeed <= 0 then
+        runtime.currentRotationSpeed =
+            baseRotationSpeed
+    end
+
+    local direction =
+        tostring(
+            settings.SpinDirection
+            or "Clockwise"
+        ) == "Counter Clockwise"
+        and -1
+        or 1
+
+    -- Same ordering as the supplied cursor:
+    -- advance progress first, then calculate the slowed speed for next frame.
+    runtime.rotationProgress =
+        (
+            runtime.rotationProgress
+            + runtime.currentRotationSpeed
+                * deltaTime
+                * direction
+        ) % 1
+
+    runtime.currentRotationSpeed =
+        referenceCalculateRotationSpeed(
+            runtime.rotationProgress,
+            baseRotationSpeed
+        )
+
+    local spinRange =
+        referenceCursorNumber(
+            settings.SpinRange,
+            360,
+            1,
+            360
+        )
+
+    local style =
+        tostring(
+            settings.SpinStyle
+            or "Static"
+        )
+
+    local targetRotation
+
+    if style == "Ping Pong" then
+        targetRotation =
+            angleOffset
+            + math.sin(
+                runtime.rotationProgress
+                * math.pi
+                * 2
+            )
+            * (spinRange * 0.5)
+    elseif style == "Stepped" then
+        local arms =
+            math.max(
+                1,
+                math.floor(
+                    referenceCursorNumber(
+                        settings.ArmCount,
+                        4,
+                        1,
+                        12
+                    ) + 0.5
+                )
+            )
+
+        local step =
+            spinRange
+            / arms
+
+        targetRotation =
+            angleOffset
+            + math.floor(
+                (
+                    runtime.rotationProgress
+                    * spinRange
+                ) / step
+            ) * step
+    else
+        -- Static = the supplied cursor's normal continuous rotation.
+        targetRotation =
+            angleOffset
+            + runtime.rotationProgress
+                * spinRange
+    end
+
+    -- The source cursor used smoothing = 1, meaning no altered easing.
+    -- Keep that exact default. Existing Smooth Spin can deliberately soften
+    -- it when the user enables that Cursor-tab setting.
+    local smoothing =
+        settings.SmoothSpin == true
+        and math.clamp(
+            deltaTime * 12,
+            0,
+            1
+        )
+        or 1
+
+    runtime.smoothedRotation =
+        referenceSmoothRotation(
+            runtime.smoothedRotation,
+            targetRotation,
+            smoothing
+        )
+
+    return
+        runtime.smoothedRotation
+end
+
+-- ============================================================
+-- RENDER LOOP
+-- ============================================================
+
+local function referenceCursorRender(deltaTime)
+    local runtime =
+        ReferenceCursorRuntime
+
     if not runtime.Running then return end
 
-    local now = os.clock()
-    local dt = tonumber(deltaTime)
-        or math.max(0, now - runtime.LastRenderClock)
-
-    runtime.LastRenderClock = now
+    local dt =
+        math.max(
+            tonumber(deltaTime) or 0,
+            0
+        )
 
     local revision =
-        tonumber(cursorBridge.Revision) or 0
+        tonumber(
+            cursorBridge.Revision
+        ) or 0
 
     if runtime.Revision ~= revision then
         runtime.Revision = revision
-        cursorCopyBridgeSettings()
+        referenceCursorReadSettings()
     end
 
-    local settings = runtime.Settings
+    local settings =
+        runtime.Settings
+
     if next(settings) == nil then
-        cursorCopyBridgeSettings()
+        referenceCursorReadSettings()
         settings = runtime.Settings
     end
 
     runtime.LastGuiCheck =
-        runtime.LastGuiCheck + math.max(dt, 0)
+        runtime.LastGuiCheck
+        + dt
 
-    if not runtime.Gui
-        or runtime.Gui.Parent == nil
-        or not runtime.Root
-        or runtime.Root.Parent == nil then
+    if not runtime.ScreenGui
+        or runtime.ScreenGui.Parent == nil
+        or not runtime.AimContainer
+        or runtime.AimContainer.Parent == nil then
 
         if runtime.LastGuiCheck >= 0.10 then
             runtime.LastGuiCheck = 0
-            cursorCreateGui()
+            referenceCreateCursorGui()
         end
     elseif runtime.LastGuiCheck >= 1 then
         runtime.LastGuiCheck = 0
     end
 
-    local gui = runtime.Gui
-    local root = runtime.Root
+    if not runtime.ScreenGui
+        or not runtime.AimContainer then
 
-    if not gui or not root then
-        cursorSetBridgeOwnership(false)
+        referenceSetBridgeOwnership(false)
         return
     end
 
     local enabled =
         settings.Enabled ~= false
 
-    gui.Enabled = enabled
+    runtime.ScreenGui.Enabled =
+        enabled
 
-    cursorSetBridgeOwnership(enabled)
+    referenceSetBridgeOwnership(
+        enabled
+    )
+
+    referenceApplyNativeMouseState(
+        enabled
+    )
 
     if not enabled then
-        cursorUpdateNativeMouse(settings)
         return
     end
 
-    cursorUpdateNativeMouse(settings)
-
-    local armCount =
-        math.floor(
-            cursorNumber(
-                settings.ArmCount,
-                4,
-                1,
-                12
-            ) + 0.5
-        )
-
-    cursorEnsureArmCount(armCount)
+    runtime.time =
+        runtime.time
+        + dt
 
     local cursorPosition =
-        cursorResolvePosition(settings)
+        referenceCursorPosition(
+            settings
+        )
 
-    root.Position =
-        UDim2.fromOffset(
+    runtime.AimContainer.Position =
+        UDim2.new(
+            0,
             cursorPosition.X,
+            0,
             cursorPosition.Y
         )
 
-    local width =
-        cursorNumber(
-            settings.LineWidth,
-            3,
-            1,
-            10
-        )
-
-    local baseLength =
-        cursorNumber(
-            settings.LineLength,
-            25,
-            1,
-            100
-        )
-
-    local baseRadius =
-        cursorNumber(
+    local centerRadius =
+        referenceCursorNumber(
             settings.CenterRadius,
             12.5,
             0,
@@ -20606,7 +21477,7 @@ local function cursorRender(deltaTime)
         )
 
     local squashX =
-        cursorNumber(
+        referenceCursorNumber(
             settings.SquashX,
             1,
             0.25,
@@ -20614,184 +21485,169 @@ local function cursorRender(deltaTime)
         )
 
     local squashY =
-        cursorNumber(
+        referenceCursorNumber(
             settings.SquashY,
             1,
             0.25,
             2
         )
 
+    -- Default CenterRadius 12.5 gives the exact supplied 25x25 container.
+    runtime.AimContainer.Size =
+        UDim2.new(
+            0,
+            centerRadius
+                * 2
+                * squashX,
+            0,
+            centerRadius
+                * 2
+                * squashY
+        )
+
+    runtime.AimContainer.Rotation =
+        referenceUpdateRotation(
+            settings,
+            dt
+        )
+
+    local lineThickness =
+        referenceCursorNumber(
+            settings.LineWidth,
+            3,
+            1,
+            10
+        )
+
+    local lineLength =
+        referenceCursorNumber(
+            settings.LineLength,
+            25,
+            1,
+            100
+        )
+
     local pulseSpeed =
-        cursorNumber(
+        referenceCursorNumber(
             settings.PulseSpeed,
             2.5,
             0,
             8
         )
 
-    local pulseScale = 1
+    local pulse =
+        pulseSpeed > 0
+        and referenceSmoothPulse(
+            runtime.time,
+            pulseSpeed
+        )
+        or 0
 
-    if pulseSpeed > 0 then
-        local pulse =
-            math.sin(
-                now
-                * pulseSpeed
-                * math.pi
-            ) * 0.5 + 0.5
+    -- The source cursor used:
+    --     minLength = -10
+    --     maxLength = -30
+    -- with LineLength conceptually 25.
+    --
+    -- Scale those exact ratios so Line Length in the existing Cursor tab
+    -- changes the same shape without replacing the animation.
+    local minLength =
+        -(lineLength * 0.4)
 
-        pulseScale =
-            0.88
-            + pulse * 0.24
+    local maxLength =
+        -(lineLength * 1.2)
+
+    local currentLength =
+        minLength
+        + (
+            maxLength
+            - minLength
+        ) * pulse
+
+    local armCount =
+        referenceEnsureExtraArmCount(
+            settings.ArmCount
+        )
+
+    if armCount == 4 then
+        referenceApplyFourArmLayout(
+            settings,
+            currentLength,
+            lineThickness
+        )
+    else
+        referenceApplyRadialLayout(
+            settings,
+            currentLength,
+            lineThickness,
+            armCount
+        )
     end
 
-    local length =
-        math.max(
-            1,
-            baseLength * pulseScale
-        )
-
-    local radius =
-        math.max(
-            0,
-            baseRadius * (
-                0.94
-                + (pulseScale - 0.88) * 0.25
-            )
-        )
-
-    local rotation =
-        cursorResolveRotation(
-            settings,
-            now,
-            math.max(dt, 0)
-        )
-
-    local glowEnabled =
-        settings.LineGlow == true
-
-    local glowThickness =
-        cursorNumber(
-            settings.GlowThickness,
-            30,
-            0,
-            50
-        )
-
-    local glowExtraLength =
-        cursorNumber(
-            settings.GlowExtraLength,
-            15,
-            0,
-            50
-        )
-
-    local glowTransparency =
-        cursorNumber(
-            settings.GlowTransparency,
-            0.43,
-            0,
-            1
-        )
-
     local firstColor =
-        cursorResolveColor(
+        referenceResolveColor(
             settings,
-            now,
+            runtime.time,
             1,
             armCount
         )
 
-    for index, arm in ipairs(runtime.Arms) do
-        if index <= armCount then
-            local angle =
-                rotation
-                + ((index - 1) * (360 / armCount))
+    for index, line in ipairs(runtime.Lines) do
+        local visible =
+            index <= armCount
 
-            local radians =
-                math.rad(angle)
+        line.Frame.Visible =
+            visible
 
-            local rawX =
-                math.sin(radians)
-
-            local rawY =
-                -math.cos(radians)
-
-            local dx =
-                rawX * squashX
-
-            local dy =
-                rawY * squashY
-
-            local distance =
-                radius + (length * 0.5)
-
-            local positionX =
-                dx * distance
-
-            local positionY =
-                dy * distance
-
-            local displayAngle =
-                math.deg(
-                    math.atan2(
-                        dx,
-                        -dy
-                    )
-                )
-
+        if visible then
             local color =
-                cursorResolveColor(
+                referenceResolveColor(
                     settings,
-                    now,
+                    runtime.time,
                     index,
                     armCount
                 )
 
-            cursorApplyArm(
-                arm,
-                positionX,
-                positionY,
-                displayAngle,
-                width,
-                length,
+            line.Frame.BackgroundColor3 =
+                color
+
+            referenceApplyGlow(
+                settings,
+                line,
                 color,
-                glowEnabled,
-                glowThickness,
-                glowExtraLength,
-                glowTransparency
+                armCount == 4
             )
         else
-            arm.Line.Visible = false
-            arm.GlowInner.Visible = false
-            arm.GlowOuter.Visible = false
+            line.Glow.Visible = false
         end
     end
 
-    cursorApplyText(
+    referenceApplyText(
         settings,
         cursorPosition,
-        firstColor,
-        radius,
-        length
+        firstColor
     )
 end
 
-function IntegratedCursorRuntime:Stop()
-    if not self.Running then return true end
+-- ============================================================
+-- LIFECYCLE
+-- ============================================================
+
+function ReferenceCursorRuntime:Stop()
+    if not self.Running then
+        return true
+    end
 
     self.Running = false
 
-    cursorSetBridgeOwnership(false)
+    referenceSetBridgeOwnership(
+        false
+    )
 
-    if self.OwnsMouseIcon then
-        self.OwnsMouseIcon = false
-        pcall(function()
-            uis.MouseIconEnabled =
-                self.PreviousMouseIconEnabled ~= false
-        end)
-    end
+    referenceApplyNativeMouseState(
+        false
+    )
 
-    cursorDestroyGui()
+    referenceDestroyCursorGui()
 
     if cursorBridgeEnv.__DevKageIntegratedCursorRuntime == self then
         cursorBridgeEnv.__DevKageIntegratedCursorRuntime = nil
@@ -20807,35 +21663,76 @@ function IntegratedCursorRuntime:Stop()
     return true
 end
 
--- Snapshot the already-published settings before the first render.
-cursorCopyBridgeSettings()
+referenceCursorReadSettings()
+referenceCreateCursorGui()
 
--- Create immediately so the first visible frame uses the same settings the
--- Crosshair page already published.
-cursorCreateGui()
+-- Set ownership immediately so the DevKage menu's existing mouse code knows
+-- the custom cursor is attached before the first render.
+referenceSetBridgeOwnership(
+    ReferenceCursorRuntime.Settings.Enabled ~= false
+)
 
-local integratedCursorConnection =
+local referenceCursorRenderConnection =
     utility:CreateConnection(
         RunService.RenderStepped,
-        cursorRender
+        referenceCursorRender
+    )
+
+-- Recreate/validate the cursor after respawn, matching the supplied cursor's
+-- CharacterAdded lifecycle without starting another render loop.
+local referenceCursorCharacterConnection =
+    utility:CreateConnection(
+        LocalPlayer.CharacterAdded,
+        function()
+            task.defer(function()
+                if not ReferenceCursorRuntime.Running then
+                    return
+                end
+
+                task.wait(0.05)
+
+                if not ReferenceCursorRuntime.ScreenGui
+                    or ReferenceCursorRuntime.ScreenGui.Parent == nil then
+
+                    referenceCreateCursorGui()
+                end
+            end)
+        end
     )
 
 if type(MaskShard) == "table" then
     if type(MaskShard.RegisterConnection) == "function" then
-        MaskShard:RegisterConnection(integratedCursorConnection)
+        MaskShard:RegisterConnection(
+            referenceCursorRenderConnection
+        )
+
+        MaskShard:RegisterConnection(
+            referenceCursorCharacterConnection
+        )
     elseif type(MaskShard.Connections) == "table" then
         MaskShard.Connections[
             #MaskShard.Connections + 1
-        ] = integratedCursorConnection
+        ] =
+            referenceCursorRenderConnection
+
+        MaskShard.Connections[
+            #MaskShard.Connections + 1
+        ] =
+            referenceCursorCharacterConnection
     end
 
     if type(MaskShard.Runtime) == "table" then
         MaskShard.Runtime.CursorRenderer =
-            IntegratedCursorRuntime
+            ReferenceCursorRuntime
+
         MaskShard.Runtime.CursorProtocol =
-            IntegratedCursorRuntime.Protocol
+            ReferenceCursorRuntime.Protocol
+
         MaskShard.Runtime.CursorCompatibilityOnly =
             true
+
+        MaskShard.Runtime.CursorVisualModel =
+            "DevKageReferenceArcade"
     end
 end
 
@@ -20843,19 +21740,78 @@ table.insert(
     library.CleanupCallbacks,
     function()
         pcall(function()
-            integratedCursorConnection:Disconnect()
+            referenceCursorRenderConnection:Disconnect()
         end)
 
         pcall(function()
-            IntegratedCursorRuntime:Stop()
+            referenceCursorCharacterConnection:Disconnect()
+        end)
+
+        pcall(function()
+            ReferenceCursorRuntime:Stop()
         end)
     end
 )
 
--- Keep bridge ownership fresh before the menu's late mouse-state pass.
-cursorSetBridgeOwnership(
-    IntegratedCursorRuntime.Settings.Enabled ~= false
-)
+-- ============================================================
+-- REFERENCE CURSOR SELF-CHECK METADATA
+--
+-- These values are descriptive only. They are deliberately kept next to the
+-- renderer so future DevKage cursor work can validate the intended baseline
+-- without silently changing its look again.
+-- ============================================================
+
+ReferenceCursorRuntime.ReferenceVisual = {
+    GuiName = "AimSightGUI",
+
+    DefaultContainerWidth = 25,
+    DefaultContainerHeight = 25,
+
+    DefaultLineThickness = 3,
+    DefaultLineLengthSetting = 25,
+
+    OriginalMinimumPulseLength = -10,
+    OriginalMaximumPulseLength = -30,
+
+    OriginalRotationProgressSpeed = 0.8,
+    OriginalSpinSpeedDegrees = 288,
+
+    OriginalPulseSpeed = 2.5,
+
+    SlowdownStart = 0.6,
+    SlowdownDuration = 0.35,
+    SlowdownMinimumFactor = 0.3,
+
+    RainbowFrequency = 0.6,
+    RainbowGreenPhase = 2,
+    RainbowBluePhase = 4,
+
+    Text = "devkage",
+    TextFont = Enum.Font.Arcade,
+    TextScaled = true,
+
+    TextWidth = 150,
+    TextHeight = 23,
+    TextOffsetX = -70,
+    TextOffsetY = 50,
+
+    LineOutlineColor = Color3.new(0, 0, 0),
+    LineOutlineThickness = 1,
+
+    TextOutlineColor = Color3.new(0, 0, 0),
+    TextOutlineThickness = 1,
+    TextOutlineJoin = Enum.LineJoinMode.Round,
+
+    FollowsMouseWhileMenuOpen = true,
+    MenuOverlayDisplayOrder = 1000000,
+
+    BridgeProtocol = "DevKage.MaskShard.Cursor/1",
+    MaskShardCompatibilityOnly = true,
+}
+
+-- ============================================================
+-- END DEVKAGE REFERENCE CURSOR RENDERER
+-- ============================================================
 
 local function addToggle(section,key,name)
     local control=section:CreateToggle({Name=name,State=VisualsState[key],Flag="visuals."..key,Callback=function(v) syncCursorSetting(key,v) end})
