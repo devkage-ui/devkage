@@ -656,7 +656,7 @@ function library:CreateWindow(Properties)
             SavedMouseIconEnabled = PreviousMouseIconEnabled,
             SavedMouseBehavior = PreviousMouseBehavior,
         }
-        Window.CursorControlMode = "Free Cursor"
+        Window.CursorControlMode = "Mouse"
 
         local MenuRunService = game:GetService("RunService")
         local MenuHttpService = game:GetService("HttpService")
@@ -758,16 +758,16 @@ function library:CreateWindow(Properties)
         end
 
         function Window:SetCursorControlMode(mode)
-            mode = tostring(mode or "Free Cursor")
-            if mode ~= "Cursor Lock" then mode = "Free Cursor" end
-
+            -- DevKage cursor control is always the physical mouse.  Legacy
+            -- "Free Cursor"/"Cursor Lock" config values are intentionally
+            -- normalized to Mouse so the custom cursor never switches to a
+            -- screen-center control source.
             local previousMode = Window.CursorControlMode
+            mode = "Mouse"
             Window.CursorControlMode = mode
 
             if Window.Enabled then
                 applyMenuMouseState()
-            elseif mode == "Cursor Lock" then
-                applyGameplayMouseState()
             elseif previousMode == "Cursor Lock" then
                 restoreSavedMouseState()
             end
@@ -4760,6 +4760,9 @@ bridge.Resolve=function(key,originalValue)
 if not SpooferState.IsActive() then return false,originalValue end
 local config=getgenv().__DevKageConfig
 local normalized=SpooferState.Key(key)
+if config.eloLiveSync~=false and config.spoofELO~=false and spoofELOName(normalized) then
+return true,normalizeSpoofELO(config.elo)
+end
 if config.duelHistoryEnabled==true and (normalized=="duelhistory" or normalized=="matchhistory" or normalized=="recentmatches") then
 local value,handled=SpooferState.BuildDuelHistory(originalValue,config)
 return handled,value
@@ -4781,7 +4784,7 @@ if not SpooferState.InstallDataBridge() then return false end
 local controller=SpooferState.ResolveGameModule("PlayerDataController","Controller")
 local current=controller and controller.CurrentData
 if current and type(current.Replicate)=="function" then
-for _,key in ipairs({"WeaponKeys","UnlockTokens","EventCurrency","Glory","SkinTickets","DuelHistory","LoggedELOEvents"}) do
+for _,key in ipairs({"WeaponKeys","UnlockTokens","EventCurrency","Glory","SkinTickets","DuelHistory","LoggedELOEvents","ELO","DisplayELO","RankedELO","Rating","MMR","RankPoints","RankedPoints"}) do
 pcall(function() current:Replicate(key) end)
 end
 end
@@ -5178,6 +5181,55 @@ function SpooferState.AutoLoadSignature(config)
     return ok and encoded or nil
 end
 
+local ELO_AUTOLOAD_FILE = "devkage/live_elo_autoload.json"
+
+function SpooferState.SaveELOAutoLoad(enabled, elo)
+    if type(writefile) ~= "function" then return false, "file writing unavailable" end
+    if type(makefolder) == "function" then pcall(makefolder, "devkage") end
+
+    local payload = {
+        Enabled = enabled == true,
+        ELO = normalizeSpoofELO(elo),
+    }
+    local ok, encoded = pcall(function() return HttpService:JSONEncode(payload) end)
+    if not ok then return false, tostring(encoded) end
+    local wrote, err = pcall(writefile, ELO_AUTOLOAD_FILE, encoded)
+    if wrote then
+        SpooferState.savedELOAutoLoad = payload.Enabled
+        SpooferState.savedELO = payload.ELO
+    end
+    return wrote, wrote and nil or tostring(err)
+end
+
+function SpooferState.LoadELOAutoLoad()
+    if type(readfile) ~= "function" then return false end
+    if type(isfile) == "function" then
+        local checked, exists = pcall(isfile, ELO_AUTOLOAD_FILE)
+        if checked and not exists then return false end
+    end
+
+    local ok, raw = pcall(readfile, ELO_AUTOLOAD_FILE)
+    if not ok or type(raw) ~= "string" or raw == "" then return false end
+    local decodedOk, decoded = pcall(function() return HttpService:JSONDecode(raw) end)
+    if not decodedOk or type(decoded) ~= "table" then return false end
+
+    local config = getgenv().__DevKageConfig
+    local enabled = decoded.Enabled == true
+    local elo = normalizeSpoofELO(decoded.ELO)
+    SpooferState.savedELOAutoLoad = enabled
+    SpooferState.savedELO = elo
+    if type(config) == "table" then
+        config.eloLiveSyncAutoLoad = enabled
+        if enabled then
+            config.eloLiveSync = true
+            config.spoofELO = true
+            config.rankDisplay = "Use Spoofed ELO"
+            config.elo = elo
+        end
+    end
+    return true
+end
+
 function SpooferState.SaveAutoLoad(enabled)
     local config = getgenv().__DevKageConfig
     config.autoLoadSpoofer = enabled == true
@@ -5196,6 +5248,7 @@ function SpooferState.SaveAutoLoad(enabled)
     -- the persisted ELO auto-load choice later in this same startup.
     SpooferState.savedELOAutoLoad = savedConfig.eloLiveSyncAutoLoad == true
     SpooferState.savedELO = normalizeSpoofELO(savedConfig.elo)
+    pcall(SpooferState.SaveELOAutoLoad, SpooferState.savedELOAutoLoad, SpooferState.savedELO)
 
     local payload = {
         Enabled = config.autoLoadSpoofer,
@@ -5259,6 +5312,7 @@ function SpooferState.LoadAutoLoad()
 end
 
 SpooferState.LoadAutoLoad()
+SpooferState.LoadELOAutoLoad()
 
 do
     local environment=(type(getgenv)=="function" and getgenv()) or _G
@@ -5295,6 +5349,43 @@ do
         if watcher.Connection then pcall(function() watcher.Connection:Disconnect() end) end
         if environment.__DevKageSpooferAutoLoadWatcher==watcher then
             environment.__DevKageSpooferAutoLoadWatcher=nil
+        end
+    end)
+end
+
+do
+    local environment=(type(getgenv)=="function" and getgenv()) or _G
+    local previous=environment.__DevKageELOAutoLoadWatcher
+    if type(previous)=="table" and previous.Connection then
+        pcall(function() previous.Connection:Disconnect() end)
+    end
+
+    local watcher={Elapsed=0,LastSignature=nil}
+    environment.__DevKageELOAutoLoadWatcher=watcher
+    watcher.Connection=RunService.Heartbeat:Connect(function(deltaTime)
+        watcher.Elapsed=watcher.Elapsed+(tonumber(deltaTime) or 0)
+        if watcher.Elapsed<0.75 then return end
+        watcher.Elapsed=0
+
+        local config=getgenv().__DevKageConfig
+        if type(config)~="table" then return end
+        local enabled=config.eloLiveSyncAutoLoad==true or SpooferState.savedELOAutoLoad==true
+        if not enabled then
+            watcher.LastSignature="off"
+            return
+        end
+
+        local elo=normalizeSpoofELO(config.elo)
+        local signature="on:"..tostring(elo)
+        if watcher.LastSignature==signature then return end
+        local saved=SpooferState.SaveELOAutoLoad(true,elo)
+        if saved then watcher.LastSignature=signature end
+    end)
+
+    table.insert(library.CleanupCallbacks,function()
+        if watcher.Connection then pcall(function() watcher.Connection:Disconnect() end) end
+        if environment.__DevKageELOAutoLoadWatcher==watcher then
+            environment.__DevKageELOAutoLoadWatcher=nil
         end
     end)
 end
@@ -6634,9 +6725,6 @@ function ELOAutoLoadRuntime:ApplyOnce(forcePresentation)
     -- dedicated Live ELO auto-load fields that the user explicitly persisted.
     if persistedEnabled then
         config.eloLiveSyncAutoLoad = true
-        if SpooferState.savedELO ~= nil then
-            config.elo = normalizeSpoofELO(SpooferState.savedELO)
-        end
     end
 
     config.eloLiveSync = true
@@ -6644,6 +6732,11 @@ function ELOAutoLoadRuntime:ApplyOnce(forcePresentation)
     config.rankDisplay = "Use Spoofed ELO"
     config.elo = normalizeSpoofELO(config.elo)
     SpooferState.localActive = true
+
+    -- Keep the game's own PlayerDataController view of rating/MMR/ELO in the
+    -- same state as the visible player attributes/leaderstats.
+    pcall(SpooferState.InstallDataBridge)
+    pcall(SpooferState.RefreshClientData)
 
     pcall(applySpoofELOValues, LocalPlayer, config.elo)
     if SpooferState.targetPlayer then
@@ -6740,6 +6833,11 @@ task.defer(function()
     if shouldAutoLoad then
         if not game:IsLoaded() then game.Loaded:Wait() end
         while not Players.LocalPlayer do task.wait(0.05) end
+        local localPlayer=Players.LocalPlayer
+        local playerScripts=localPlayer:FindFirstChild("PlayerScripts") or localPlayer:WaitForChild("PlayerScripts",15)
+        if playerScripts then playerScripts:WaitForChild("Controllers",15) end
+        local playerGui=localPlayer:FindFirstChildOfClass("PlayerGui")
+        if not playerGui then playerGui=localPlayer:WaitForChild("PlayerGui",15) end
         local environment=(type(getgenv)=="function" and getgenv()) or _G
         task.wait(environment.__DEVKAGE_AUTO_STARTED==true and 1.7 or 0.8)
         ELOAutoLoadRuntime:SetEnabled(true)
@@ -6909,6 +7007,7 @@ viewmodel_weapon_chams        = false,
 viewmodel_weapon_color        = Color3.fromRGB(110, 185, 255),
 viewmodel_weapon_material     = "Neon",
 viewmodel_weapon_transparency = 0,
+viewmodel_weapon_glow         = 0.35,
 viewmodel_arm_chams           = false,
 viewmodel_arm_color           = Color3.fromRGB(255, 120, 205),
 viewmodel_arm_material        = "ForceField",
@@ -6983,7 +7082,7 @@ mod_detector_enabled          = false,
 devkage_cursor_enabled             = true,
 devkage_cursor_profile             = "Custom",
 devkage_cursor_position_mode       = "Mouse",
-devkage_cursor_control_mode        = "Free Cursor",
+devkage_cursor_control_mode        = "Mouse",
 devkage_cursor_color               = Color3.new(1, 1, 1),
 devkage_cursor_color_secondary     = Color3.fromRGB(145, 85, 255),
 devkage_cursor_color_mode          = "Legacy",
@@ -7544,6 +7643,7 @@ end
 
 library.ExtraVisualRuntime = library.ExtraVisualRuntime or {
     ViewOriginals = setmetatable({}, {__mode = "k"}),
+    ViewGlowHighlights = setmetatable({}, {__mode = "k"}),
     ToolHighlights = setmetatable({}, {__mode = "k"}),
     ThirdPersonSaved = nil,
     ThirdPersonBound = false,
@@ -7555,6 +7655,7 @@ library.ExtraVisualRuntime = library.ExtraVisualRuntime or {
 
 function library.ExtraVisualRuntime:MaterialFromName(name)
     name = tostring(name or "Neon")
+    if name == "Metallic" or name == "Metal" then return Enum.Material.Metal end
     if name == "ForceField" then return Enum.Material.ForceField end
     if name == "Glass" then return Enum.Material.Glass end
     if name == "SmoothPlastic" then return Enum.Material.SmoothPlastic end
@@ -7562,10 +7663,58 @@ function library.ExtraVisualRuntime:MaterialFromName(name)
     return Enum.Material.Neon
 end
 
-function library.ExtraVisualRuntime:IsArmPart(part)
+function library.ExtraVisualRuntime:IsArmModel(model)
+    if not model then return false end
+    local segments = {}
+    for segment in tostring(model.Name or ""):gmatch("[^%-]+") do
+        segments[#segments + 1] = segment:match("^%s*(.-)%s*$"):lower()
+    end
+    if #segments >= 2 then
+        local tag = segments[2]
+        if tag == "arms" or tag == "arm" then return true end
+        if tag:find("arm", 1, true)
+            and not tag:find("charm", 1, true)
+            and not tag:find("armor", 1, true) then
+            return true
+        end
+        if tag:find("glove", 1, true) then return true end
+        return false
+    end
+    local n = tostring(model.Name or ""):lower()
+    return n:find("arms", 1, true) ~= nil
+        or n:find("glove", 1, true) ~= nil
+end
+
+function library.ExtraVisualRuntime:IsArmPart(part, model)
     if not part or not part:IsA("BasePart") then return false end
-    local n = tostring(part.Name):lower():gsub("[%s_%-]", "")
-    if n:find("handguard", 1, true) then return false end
+
+    local n = tostring(part.Name or ""):lower():gsub("[%s_%-]", "")
+    for _, blocked in ipairs({"handguard","handle","foregrip","charm","armor","hitbox","collision","trigger","proxy"}) do
+        if n:find(blocked, 1, true) then return false end
+    end
+
+    if model and self:IsArmModel(model) then return true end
+
+    local current = part.Parent
+    while current and current ~= model do
+        local parentName = tostring(current.Name or ""):lower()
+        if parentName == "arms" or parentName == "leftarm" or parentName == "rightarm"
+            or parentName == "left arm" or parentName == "right arm"
+            or parentName == "hands" or parentName == "gloves"
+            or parentName:find("glove", 1, true)
+            or parentName:find("sleeve", 1, true) then
+            return true
+        end
+        if parentName:find("arm", 1, true)
+            and not parentName:find("armor", 1, true)
+            and not parentName:find("handguard", 1, true)
+            and not parentName:find("foregrip", 1, true)
+            and not parentName:find("charm", 1, true) then
+            return true
+        end
+        current = current.Parent
+    end
+
     return n:find("leftarm", 1, true) ~= nil
         or n:find("rightarm", 1, true) ~= nil
         or n:find("leftupperarm", 1, true) ~= nil
@@ -7574,17 +7723,101 @@ function library.ExtraVisualRuntime:IsArmPart(part)
         or n:find("rightlowerarm", 1, true) ~= nil
         or n:find("lefthand", 1, true) ~= nil
         or n:find("righthand", 1, true) ~= nil
+        or n:find("forearm", 1, true) ~= nil
+        or n:find("upperarm", 1, true) ~= nil
+        or n:find("lowerarm", 1, true) ~= nil
+        or n:find("glove", 1, true) ~= nil
+        or n:find("sleeve", 1, true) ~= nil
+        or n:find("finger", 1, true) ~= nil
+        or n:find("wrist", 1, true) ~= nil
+        or n:find("palm", 1, true) ~= nil
+        or n:find("thumb", 1, true) ~= nil
         or n == "arms" or n == "arm" or n == "hands" or n == "hand"
 end
 
 function library.ExtraVisualRuntime:RememberViewPart(part)
-    if self.ViewOriginals[part] then return end
-    self.ViewOriginals[part] = {
-        Color = part.Color,
-        Material = part.Material,
-        Transparency = part.Transparency,
-        Reflectance = part.Reflectance,
-    }
+    local saved = self.ViewOriginals[part]
+    if not saved then
+        saved = {
+            Color = part.Color,
+            Material = part.Material,
+            Transparency = part.Transparency,
+            Reflectance = part.Reflectance,
+            LocalTransparencyModifier = part.LocalTransparencyModifier,
+            MaterialVariant = part.MaterialVariant,
+            Visuals = {},
+        }
+        if part:IsA("MeshPart") then
+            saved.TextureID = part.TextureID
+        end
+        self.ViewOriginals[part] = saved
+    end
+
+    -- First-person weapons in this game use MeshPart textures,
+    -- SurfaceAppearance and decals.  Save each layer before hiding it so the
+    -- original viewmodel is restored exactly when appearance/chams are off.
+    for _, visual in ipairs(part:GetDescendants()) do
+        if saved.Visuals[visual] == nil then
+            if visual:IsA("Texture") or visual:IsA("Decal") then
+                saved.Visuals[visual] = {Kind = "Texture", Transparency = visual.Transparency}
+            elseif visual:IsA("SurfaceAppearance") then
+                local data = {Kind = "SurfaceAppearance"}
+                pcall(function() data.ColorMap = visual.ColorMap end)
+                pcall(function() data.MetalnessMap = visual.MetalnessMap end)
+                pcall(function() data.NormalMap = visual.NormalMap end)
+                pcall(function() data.RoughnessMap = visual.RoughnessMap end)
+                saved.Visuals[visual] = data
+            elseif visual:IsA("SpecialMesh") then
+                saved.Visuals[visual] = {
+                    Kind = "SpecialMesh",
+                    TextureId = visual.TextureId,
+                    VertexColor = visual.VertexColor,
+                }
+            elseif visual:IsA("WrapLayer") then
+                saved.Visuals[visual] = {Kind = "WrapLayer", Parent = visual.Parent}
+            end
+        end
+    end
+
+    return saved
+end
+
+function library.ExtraVisualRuntime:ClearViewGlow(part)
+    local highlight = self.ViewGlowHighlights[part]
+    if highlight then
+        pcall(function() highlight:Destroy() end)
+        self.ViewGlowHighlights[part] = nil
+    end
+end
+
+function library.ExtraVisualRuntime:UpdateViewGlow(part, arm, materialName, color)
+    local amount = math.clamp(tonumber(VisualsState.viewmodel_weapon_glow) or 0, 0, 1)
+    local shouldGlow = not arm
+        and VisualsState.viewmodel_weapon_chams == true
+        and tostring(materialName or "") == "Neon"
+        and amount > 0
+
+    if not shouldGlow then
+        self:ClearViewGlow(part)
+        return
+    end
+
+    local highlight = self.ViewGlowHighlights[part]
+    if not highlight or not highlight.Parent then
+        highlight = Instance.new("Highlight")
+        highlight.Name = "DevKageViewmodelNeonGlow"
+        highlight.Adornee = part
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Parent = part
+        self.ViewGlowHighlights[part] = highlight
+    end
+
+    pcall(function()
+        highlight.FillColor = color
+        highlight.OutlineColor = color
+        highlight.FillTransparency = math.clamp(1 - amount * 0.32, 0.68, 1)
+        highlight.OutlineTransparency = math.clamp(1 - amount * 0.82, 0.18, 1)
+    end)
 end
 
 function library.ExtraVisualRuntime:RestoreViewPart(part, saved)
@@ -7594,7 +7827,33 @@ function library.ExtraVisualRuntime:RestoreViewPart(part, saved)
         part.Material = saved.Material
         part.Transparency = saved.Transparency
         part.Reflectance = saved.Reflectance
+        part.LocalTransparencyModifier = saved.LocalTransparencyModifier or 0
+        part.MaterialVariant = saved.MaterialVariant or ""
+        if part:IsA("MeshPart") and saved.TextureID ~= nil then
+            part.TextureID = saved.TextureID
+        end
     end)
+
+    for visual, data in pairs(saved.Visuals or {}) do
+        if visual and type(data) == "table" then
+            pcall(function()
+                if data.Kind == "Texture" and visual.Parent then
+                    visual.Transparency = data.Transparency
+                elseif data.Kind == "SurfaceAppearance" and visual.Parent then
+                    if data.ColorMap ~= nil then visual.ColorMap = data.ColorMap end
+                    if data.MetalnessMap ~= nil then visual.MetalnessMap = data.MetalnessMap end
+                    if data.NormalMap ~= nil then visual.NormalMap = data.NormalMap end
+                    if data.RoughnessMap ~= nil then visual.RoughnessMap = data.RoughnessMap end
+                elseif data.Kind == "SpecialMesh" and visual.Parent then
+                    visual.TextureId = data.TextureId or ""
+                    if data.VertexColor ~= nil then visual.VertexColor = data.VertexColor end
+                elseif data.Kind == "WrapLayer" and not visual.Parent and data.Parent and data.Parent.Parent then
+                    visual.Parent = data.Parent
+                end
+            end)
+        end
+    end
+    self:ClearViewGlow(part)
 end
 
 function library.ExtraVisualRuntime:RestoreViewmodel()
@@ -7602,9 +7861,12 @@ function library.ExtraVisualRuntime:RestoreViewmodel()
         self:RestoreViewPart(part, saved)
         self.ViewOriginals[part] = nil
     end
+    for part in pairs(self.ViewGlowHighlights) do
+        self:ClearViewGlow(part)
+    end
 end
 
-function library.ExtraVisualRuntime:ApplyViewPart(part, arm)
+function library.ExtraVisualRuntime:ApplyViewPart(part, arm, model)
     if not part or not part:IsA("BasePart") or part.Transparency >= 0.999 then return end
     local enabled = arm and VisualsState.viewmodel_arm_chams or VisualsState.viewmodel_weapon_chams
     if not enabled then
@@ -7612,20 +7874,48 @@ function library.ExtraVisualRuntime:ApplyViewPart(part, arm)
         if saved then
             self:RestoreViewPart(part, saved)
             self.ViewOriginals[part] = nil
+        else
+            self:ClearViewGlow(part)
         end
         return
     end
 
-    self:RememberViewPart(part)
+    local saved = self:RememberViewPart(part)
     local color = arm and VisualsState.viewmodel_arm_color or VisualsState.viewmodel_weapon_color
     local materialName = arm and VisualsState.viewmodel_arm_material or VisualsState.viewmodel_weapon_material
     local transparency = arm and VisualsState.viewmodel_arm_transparency or VisualsState.viewmodel_weapon_transparency
+
     pcall(function()
         part.Color = color
         part.Material = self:MaterialFromName(materialName)
+        part.MaterialVariant = ""
         part.Transparency = math.clamp(tonumber(transparency) or 0, 0, 0.95)
-        part.Reflectance = 0
+        part.LocalTransparencyModifier = 0
+        part.Reflectance = (not arm and (materialName == "Metallic" or materialName == "Metal")) and 0.16 or 0
+        if part:IsA("MeshPart") then
+            part.TextureID = ""
+        end
+
+        for visual, data in pairs(saved.Visuals or {}) do
+            if visual then
+                if data.Kind == "Texture" and visual.Parent then
+                    visual.Transparency = 1
+                elseif data.Kind == "SurfaceAppearance" and visual.Parent then
+                    pcall(function() visual.ColorMap = "" end)
+                    pcall(function() visual.MetalnessMap = "" end)
+                    pcall(function() visual.NormalMap = "" end)
+                    pcall(function() visual.RoughnessMap = "" end)
+                elseif data.Kind == "SpecialMesh" and visual.Parent then
+                    visual.TextureId = ""
+                    visual.VertexColor = Vector3.new(color.R, color.G, color.B)
+                elseif data.Kind == "WrapLayer" and visual.Parent then
+                    visual.Parent = nil
+                end
+            end
+        end
     end)
+
+    self:UpdateViewGlow(part, arm, materialName, color)
 end
 
 function library.ExtraVisualRuntime:RefreshViewmodel()
@@ -7636,11 +7926,22 @@ function library.ExtraVisualRuntime:RefreshViewmodel()
 
     local camera = workspace.CurrentCamera
     local character = LocalPlayer.Character
-    if not camera then return end
+    local viewModels = workspace:FindFirstChild("ViewModels")
+    local firstPerson = viewModels and viewModels:FindFirstChild("FirstPerson")
+
+    local function firstPersonRoot(part)
+        if not firstPerson or not part or not part:IsDescendantOf(firstPerson) then return nil end
+        local current = part
+        while current and current.Parent and current.Parent ~= firstPerson do
+            current = current.Parent
+        end
+        return current and current.Parent == firstPerson and current or part:FindFirstAncestorOfClass("Model")
+    end
 
     local function relevant(part)
         if not part or not part.Parent then return false end
-        if part:IsDescendantOf(camera) then return true end
+        if firstPerson and part:IsDescendantOf(firstPerson) then return true end
+        if camera and part:IsDescendantOf(camera) then return true end
         if character and part:IsDescendantOf(character) then
             return self:IsArmPart(part) or part:FindFirstAncestorOfClass("Tool") ~= nil
         end
@@ -7654,19 +7955,35 @@ function library.ExtraVisualRuntime:RefreshViewmodel()
         end
     end
 
-    for _, object in ipairs(camera:GetDescendants()) do
-        if object:IsA("BasePart") and object.Name ~= "HumanoidRootPart" then
-            self:ApplyViewPart(object, self:IsArmPart(object))
+    -- RIVALS/this game's live first-person weapon models are under
+    -- workspace.ViewModels.FirstPerson.  Scan that hierarchy directly rather
+    -- than assuming the gun is parented to CurrentCamera.
+    if firstPerson then
+        for _, object in ipairs(firstPerson:GetDescendants()) do
+            if object:IsA("BasePart") and object.Name ~= "HumanoidRootPart" then
+                local model = firstPersonRoot(object)
+                self:ApplyViewPart(object, self:IsArmPart(object, model), model)
+            end
+        end
+    end
+
+    -- Keep the old camera path as a fallback for games/items that do parent
+    -- their viewmodel to CurrentCamera.
+    if camera then
+        for _, object in ipairs(camera:GetDescendants()) do
+            if object:IsA("BasePart") and object.Name ~= "HumanoidRootPart" then
+                self:ApplyViewPart(object, self:IsArmPart(object), object:FindFirstAncestorOfClass("Model"))
+            end
         end
     end
 
     if character then
         for _, object in ipairs(character:GetDescendants()) do
             if object:IsA("BasePart") then
-                local arm = self:IsArmPart(object)
                 local inTool = object:FindFirstAncestorOfClass("Tool") ~= nil
+                local arm = self:IsArmPart(object)
                 if arm or inTool then
-                    self:ApplyViewPart(object, arm and not inTool)
+                    self:ApplyViewPart(object, arm and not inTool, object:FindFirstAncestorOfClass("Model"))
                 end
             end
         end
@@ -13462,7 +13779,11 @@ local killsInput   = spooferSection:CreateInput({ Name = "Eliminations",Default 
 local eloInput     = spooferSection:CreateInput({
 Name = "ELO", Default = tostring(normalizeSpoofELO(getgenv().__DevKageConfig.elo)), Placeholder = "5000",
 Numeric = true, DigitsOnly = true, MaxLength = 7,
-Callback = function(value) getgenv().__DevKageConfig.elo=normalizeSpoofELO(value) end
+Callback = function(value)
+local config=getgenv().__DevKageConfig
+config.elo=normalizeSpoofELO(value)
+if config.eloLiveSyncAutoLoad==true then SpooferState.savedELO=config.elo end
+end
 })
 local keysInput    = spooferSection:CreateInput({ Name = "Keys",        Default = tostring(getgenv().__DevKageConfig.keys),  Placeholder = "9999", Numeric = false, Callback = function(value) getgenv().__DevKageConfig.keys=tostring(value or "") end })
 
@@ -13486,9 +13807,12 @@ end
 if SpooferState.SetELOAutoLoadRuntimeEnabled then
 pcall(SpooferState.SetELOAutoLoadRuntimeEnabled,value==true)
 end
+local eloSaved,eloErr=SpooferState.SaveELOAutoLoad(value==true,config.elo)
 local saved,err=SpooferState.SaveAutoLoad(config.autoLoadSpoofer==true)
-if not saved then
-library:Notify({Message="Live ELO auto-load save failed: "..tostring(err),Duration=4})
+if not eloSaved then
+library:Notify({Message="Live ELO auto-load save failed: "..tostring(eloErr),Duration=4})
+elseif not saved then
+library:Notify({Message="Spoofer auto-load mirror save failed: "..tostring(err),Duration=4})
 end
 end
 })
@@ -17006,11 +17330,12 @@ WorldWaypointRuntime:SetPosition(Vector3.new(tonumber(VisualsState.world_waypoin
 end)
 end
 
-local viewmodelSection = visualsPage:CreateSection({Name="Viewmodel Chams",Side="Left",Size=430})
+local viewmodelSection = visualsPage:CreateSection({Name="Viewmodel Appearance",Side="Left",Size=465})
 visualToggle(viewmodelSection,"viewmodel_weapon_chams","Weapon Chams",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
 visualColor(viewmodelSection,"viewmodel_weapon_color",nil,"Weapon Color",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
-visualDropdown(viewmodelSection,"viewmodel_weapon_material","Weapon Material",{"Neon","ForceField","Glass","SmoothPlastic","Plastic"},function() library.ExtraVisualRuntime:RefreshViewmodel() end)
+visualDropdown(viewmodelSection,"viewmodel_weapon_material","Weapon Material",{"Neon","Metallic","ForceField","Glass","SmoothPlastic","Plastic"},function() library.ExtraVisualRuntime:RefreshViewmodel() end)
 visualSlider(viewmodelSection,"viewmodel_weapon_transparency","Weapon Transparency",0,0.95,2,"",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
+visualSlider(viewmodelSection,"viewmodel_weapon_glow","Neon Glow",0,1,2,"",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
 visualToggle(viewmodelSection,"viewmodel_arm_chams","Arm Chams",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
 visualColor(viewmodelSection,"viewmodel_arm_color",nil,"Arm Color",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
 visualDropdown(viewmodelSection,"viewmodel_arm_material","Arm Material",{"Neon","ForceField","Glass","SmoothPlastic","Plastic"},function() library.ExtraVisualRuntime:RefreshViewmodel() end)
@@ -19918,7 +20243,7 @@ local function publishCursorSettings(force)
         end
     end
     cursorBridge.UIOpen=window and window.Enabled==true
-    cursorBridge.ControlMode=tostring(VisualsState.devkage_cursor_control_mode or "Free Cursor")
+    cursorBridge.ControlMode="Mouse"
     cursorBridge.MainHeartbeat=os.clock()
     if changed then
         cursorBridge.Revision=(tonumber(cursorBridge.Revision) or 0)+1
@@ -20061,11 +20386,11 @@ local function referenceCursorReadSettings()
     target.Enabled =
         source.Enabled ~= false
 
-    target.PositionMode =
-        tostring(source.PositionMode or "Mouse")
-
-    target.ControlMode =
-        tostring(source.ControlMode or "Free Cursor")
+    -- Mouse is the single source of truth for both cursor position and
+    -- cursor control.  This keeps the DevKage pointer on the real mouse even
+    -- when a first-person camera previously wrote LockCenter.
+    target.PositionMode = "Mouse"
+    target.ControlMode = "Mouse"
 
     target.Color =
         referenceCursorColor(
@@ -21240,39 +21565,10 @@ end
 -- ============================================================
 
 local function referenceCursorPosition(settings)
-    local camera =
-        workspace.CurrentCamera
-
-    local mode =
-        tostring(
-            settings.PositionMode
-            or "Mouse"
-        )
-
-    if mode == "Center"
-        or mode == "Screen Center"
-        or mode == "Crosshair" then
-
-        local viewport =
-            camera
-            and camera.ViewportSize
-            or Vector2.new(
-                1920,
-                1080
-            )
-
-        return
-            Vector2.new(
-                viewport.X * 0.5,
-                viewport.Y * 0.5
-            )
-    end
-
-    -- The supplied cursor follows the player mouse. GetMouseLocation is used
-    -- here because the DevKage UI ignores the Roblox inset and this keeps the
-    -- custom cursor directly under the real pointer while the menu is open.
-    return
-        uis:GetMouseLocation()
+    -- Always follow the real mouse.  Do not fall back to screen center or a
+    -- crosshair position: the DevKage cursor is the UI mouse pointer.
+    local mousePosition = uis:GetMouseLocation()
+    return Vector2.new(mousePosition.X, mousePosition.Y)
 end
 
 -- ============================================================
@@ -22125,7 +22421,7 @@ local function addColor(section,key,name)
 end
 
 addToggle(crosshairSection,"devkage_cursor_enabled","Enabled")
-addDropdown(crosshairSection,"devkage_cursor_control_mode","Cursor Control",{"Free Cursor","Cursor Lock"})
+addDropdown(crosshairSection,"devkage_cursor_control_mode","Cursor Control",{"Mouse"})
 if window and window.SetCursorControlMode then
     window:SetCursorControlMode(VisualsState.devkage_cursor_control_mode)
 end
@@ -22808,9 +23104,8 @@ if type(data.ua_favorites)=="table" then UA.favorites=data.ua_favorites end
 applyRuntimeState(VisualsState,data.visuals)
 applyRuntimeState(VisualsState,data)
 VisualsState.devkage_cursor_enabled = cursorEnabledBeforeLoad ~= false
-if VisualsState.devkage_cursor_control_mode ~= "Cursor Lock" then
-VisualsState.devkage_cursor_control_mode = "Free Cursor"
-end
+VisualsState.devkage_cursor_position_mode = "Mouse"
+VisualsState.devkage_cursor_control_mode = "Mouse"
 if window and window.SetCursorControlMode then
 window:SetCursorControlMode(VisualsState.devkage_cursor_control_mode)
 end
@@ -22821,6 +23116,7 @@ VisualsState.avatar_blue_horn = false
 VisualsState.avatar_red_horn = false
 VisualsState.fov_value=math.clamp(tonumber(VisualsState.fov_value) or 70,1,120)
 VisualsState.third_person_distance=math.clamp(tonumber(VisualsState.third_person_distance) or 5,5,90)
+VisualsState.viewmodel_weapon_glow=math.clamp(tonumber(VisualsState.viewmodel_weapon_glow) or 0.35,0,1)
 VisualsState.animation_id=tostring(VisualsState.animation_id or ""):match("%d+") or ""
 VisualsState.animation_start_percent=math.clamp(tonumber(VisualsState.animation_start_percent) or 0,0,99)
 VisualsState.animation_end_percent=math.clamp(tonumber(VisualsState.animation_end_percent) or 100,1,100)
