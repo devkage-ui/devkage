@@ -699,6 +699,26 @@ function library:CreateWindow(Properties)
             MenuInputRuntime.Guarding = false
         end
 
+        -- First-person games can write LockCenter again outside the normal
+        -- camera render priority. Keep the menu pointer released whenever the
+        -- DevKage UI is open, without changing gameplay mouse behavior while
+        -- the menu is closed.
+        local menuMouseBehaviorGuard = uis:GetPropertyChangedSignal("MouseBehavior"):Connect(function()
+            if MenuInputRuntime.Guarding or not Window.Enabled then return end
+            if uis.MouseBehavior ~= Enum.MouseBehavior.Default then
+                task.defer(function()
+                    if Window.Enabled then
+                        applyMenuMouseState()
+                    end
+                end)
+            end
+        end)
+        library.Connections[#library.Connections + 1] = menuMouseBehaviorGuard
+
+        if type(MaskShard) == "table" and type(MaskShard.Connections) == "table" then
+            MaskShard.Connections[#MaskShard.Connections + 1] = menuMouseBehaviorGuard
+        end
+
         local function restoreSavedMouseState()
             MenuInputRuntime.Guarding = true
             pcall(function()
@@ -5171,6 +5191,12 @@ function SpooferState.SaveAutoLoad(enabled)
 
     local savedConfig=SpooferState.BuildAutoLoadConfig(config)
 
+    -- Live ELO Auto Load is independent from full Spoofer Auto Load. Keep a
+    -- runtime copy so a normal named-config load cannot accidentally erase
+    -- the persisted ELO auto-load choice later in this same startup.
+    SpooferState.savedELOAutoLoad = savedConfig.eloLiveSyncAutoLoad == true
+    SpooferState.savedELO = normalizeSpoofELO(savedConfig.elo)
+
     local payload = {
         Enabled = config.autoLoadSpoofer,
         Config = savedConfig
@@ -5205,6 +5231,12 @@ function SpooferState.LoadAutoLoad()
         return HttpService:JSONDecode(raw)
     end)
     if not decodedOk or type(decoded) ~= "table" then return end
+
+    local persistedConfig = type(decoded.Config) == "table" and decoded.Config or nil
+    SpooferState.savedELOAutoLoad = persistedConfig ~= nil and persistedConfig.eloLiveSyncAutoLoad == true
+    if persistedConfig ~= nil and persistedConfig.elo ~= nil then
+        SpooferState.savedELO = normalizeSpoofELO(persistedConfig.elo)
+    end
 
     getgenv().__DevKageConfig.autoLoadSpoofer = decoded.Enabled == true
     if type(decoded.Config) == "table" then
@@ -6579,6 +6611,7 @@ end)
 local ELOAutoLoadRuntime = {
     Connection = nil,
     Elapsed = 0,
+    PresentationElapsed = 0,
 }
 
 function ELOAutoLoadRuntime:Stop()
@@ -6587,11 +6620,24 @@ function ELOAutoLoadRuntime:Stop()
         self.Connection = nil
     end
     self.Elapsed = 0
+    self.PresentationElapsed = 0
 end
 
-function ELOAutoLoadRuntime:ApplyOnce()
+function ELOAutoLoadRuntime:ApplyOnce(forcePresentation)
     local config = getgenv().__DevKageConfig
-    if type(config) ~= "table" or config.eloLiveSyncAutoLoad ~= true then return false end
+    if type(config) ~= "table" then return false end
+
+    local persistedEnabled = SpooferState.savedELOAutoLoad == true
+    if config.eloLiveSyncAutoLoad ~= true and not persistedEnabled then return false end
+
+    -- A named config can load after spoofer_autoload.json. Reassert only the
+    -- dedicated Live ELO auto-load fields that the user explicitly persisted.
+    if persistedEnabled then
+        config.eloLiveSyncAutoLoad = true
+        if SpooferState.savedELO ~= nil then
+            config.elo = normalizeSpoofELO(SpooferState.savedELO)
+        end
+    end
 
     config.eloLiveSync = true
     config.spoofELO = true
@@ -6604,8 +6650,17 @@ function ELOAutoLoadRuntime:ApplyOnce()
         pcall(applySpoofELOValues, SpooferState.targetPlayer, config.elo)
     end
 
+    -- Use the same existing presentation refreshers as manual Live ELO Sync.
+    -- Profile labels are lightweight enough to refresh every ELO pass; the
+    -- broader leaderboard/season refresh is throttled below.
     if type(SpooferState.RefreshProfileStats) == "function" then
         task.defer(SpooferState.RefreshProfileStats)
+    end
+
+    if forcePresentation == true then
+        pcall(SpoofRankRuntime.InstallSeasonBridge)
+        pcall(SpooferState.RefreshLeaderboards)
+        pcall(SpoofRankRuntime.RefreshSeasonCharms)
     end
 
     return true
@@ -6616,31 +6671,50 @@ function ELOAutoLoadRuntime:SetEnabled(enabled)
     if type(config) ~= "table" then return false end
 
     config.eloLiveSyncAutoLoad = enabled == true
+    if enabled then
+        SpooferState.savedELOAutoLoad = true
+        SpooferState.savedELO = normalizeSpoofELO(config.elo)
+    else
+        SpooferState.savedELOAutoLoad = false
+    end
+
     self:Stop()
 
     if not enabled then return true end
 
     config.eloLiveSync = true
-    self:ApplyOnce()
+    self:ApplyOnce(true)
 
-    -- Full Spoofer Auto Load already owns its own live-sync heartbeat.
-    if config.autoLoadSpoofer == true or SpooferState.running == true then
-        return true
-    end
-
+    -- Keep this runtime alive even when full Spoofer Auto Load is also enabled.
+    -- That makes the Live ELO autoload toggle independent and prevents an
+    -- auto-execute/multi-inject startup from skipping its heartbeat.
     self.Connection = RunService.Heartbeat:Connect(function(deltaTime)
         local current = getgenv().__DevKageConfig
-        if type(current) ~= "table" or current.eloLiveSyncAutoLoad ~= true then
+        if type(current) ~= "table" then return end
+
+        if current.eloLiveSyncAutoLoad ~= true and SpooferState.savedELOAutoLoad ~= true then
             self:Stop()
             return
         end
 
-        if current.eloLiveSync == false then return end
+        if SpooferState.savedELOAutoLoad == true then
+            current.eloLiveSyncAutoLoad = true
+        end
+        current.eloLiveSync = true
 
-        self.Elapsed = self.Elapsed + (tonumber(deltaTime) or 0)
-        if self.Elapsed < 0.75 then return end
-        self.Elapsed = 0
-        self:ApplyOnce()
+        local dt = tonumber(deltaTime) or 0
+        self.Elapsed = self.Elapsed + dt
+        self.PresentationElapsed = self.PresentationElapsed + dt
+
+        if self.Elapsed >= 0.75 then
+            self.Elapsed = 0
+            self:ApplyOnce(false)
+        end
+
+        if self.PresentationElapsed >= 2.5 then
+            self.PresentationElapsed = 0
+            self:ApplyOnce(true)
+        end
     end)
 
     if type(MaskShard) == "table" and type(MaskShard.Connections) == "table" then
@@ -6660,8 +6734,12 @@ end)
 
 task.defer(function()
     local config = getgenv().__DevKageConfig
-    if type(config) == "table" and config.eloLiveSyncAutoLoad == true then
+    local shouldAutoLoad = type(config) == "table"
+        and (config.eloLiveSyncAutoLoad == true or SpooferState.savedELOAutoLoad == true)
+
+    if shouldAutoLoad then
         if not game:IsLoaded() then game.Loaded:Wait() end
+        while not Players.LocalPlayer do task.wait(0.05) end
         local environment=(type(getgenv)=="function" and getgenv()) or _G
         task.wait(environment.__DEVKAGE_AUTO_STARTED==true and 1.7 or 0.8)
         ELOAutoLoadRuntime:SetEnabled(true)
@@ -11358,6 +11436,21 @@ local DEFAULT_LIGHTING_STATE = serialiseRuntimeState(AdvancedLighting)
 local _autoload_target = get_autoload()
 if _autoload_target and _autoload_target ~= "" then
 pcall(load_config_file, _autoload_target)
+end
+
+-- The named config system and Live ELO Auto Load are separate. If Live ELO
+-- was explicitly persisted, restore those ELO-only fields after the named
+-- config has finished loading and restart its dedicated sync runtime.
+if SpooferState.savedELOAutoLoad == true then
+local config = getgenv().__DevKageConfig
+if type(config) == "table" then
+config.eloLiveSyncAutoLoad = true
+config.eloLiveSync = true
+config.spoofELO = true
+config.rankDisplay = "Use Spoofed ELO"
+if SpooferState.savedELO ~= nil then config.elo = normalizeSpoofELO(SpooferState.savedELO) end
+task.defer(function() ELOAutoLoadRuntime:SetEnabled(true) end)
+end
 end
 
 local ChinaHatState = {
@@ -21620,6 +21713,18 @@ local function referenceCursorRender(deltaTime)
 
     local enabled =
         settings.Enabled ~= false
+
+    -- When DevKage is open in first person, the game camera may attempt to
+    -- restore LockCenter after the menu's normal input pass. Release it again
+    -- here in the cursor render path so the DevKage cursor can actually move
+    -- over and interact with the UI.
+    if window and window.Enabled == true then
+        pcall(function()
+            if uis.MouseBehavior ~= Enum.MouseBehavior.Default then
+                uis.MouseBehavior = Enum.MouseBehavior.Default
+            end
+        end)
+    end
 
     runtime.ScreenGui.Enabled =
         enabled
