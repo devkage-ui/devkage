@@ -11004,7 +11004,7 @@ local SCRIPT_PAYLOAD_ROOT_FILE = "DevKage_AutoLoad_Payload.lua"
 local SCRIPT_SESSION_FLAG_FILE = "DevKage_Teleport_Session.flag"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOEXEC_NAME = "DevKage_AutoLoad.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v21-session-teleport-chain"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v22-coexist-session-teleport"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -11489,248 +11489,106 @@ return folders
 end
 
 local function build_script_autoload_stub()
-local body = [==[
-local SELF = "local BODY=" .. string.format("%q", BODY) .. "\n" .. BODY
-local env = (type(getgenv) == "function" and getgenv()) or _G
-
-local FLAG_FILE = __FLAG_FILE__
-local PAYLOAD_ROOT = __PAYLOAD_ROOT__
-local PAYLOAD_CONFIG = __PAYLOAD_CONFIG__
-local BUILD = __BUILD__
-
-local function sessionEnabled()
-    if type(readfile) ~= "function" then return false end
-
-    if type(isfile) == "function" then
-        local ok, exists = pcall(isfile, FLAG_FILE)
-        if ok and exists ~= true then return false end
-    end
-
-    local ok, value = pcall(readfile, FLAG_FILE)
-    return ok and tostring(value or "") == BUILD
-end
-
-local function readPayload()
-    if type(readfile) ~= "function" then return nil end
-
-    for _, path in ipairs({PAYLOAD_ROOT, PAYLOAD_CONFIG}) do
-        if type(isfile) == "function" then
-            local checked, exists = pcall(isfile, path)
-            if checked and exists ~= true then
-                continue
-            end
-        end
-
-        local ok, source = pcall(readfile, path)
-        if ok and type(source) == "string" and source ~= "" then
-            return source, path
-        end
-    end
-
-    return nil
-end
-
-local function queueSelf()
-    local attempts = {}
-
-    local function add(name, fn, owner)
-        if type(fn) == "function" then
-            attempts[#attempts + 1] = {
-                Name = name,
-                Fn = fn,
-                Owner = owner
-            }
-        end
-    end
-
-    add("getgenv.queue_on_teleport", rawget(env, "queue_on_teleport"))
-    add("getgenv.queueonteleport", rawget(env, "queueonteleport"))
-    add("getgenv.queue_on_tp", rawget(env, "queue_on_tp"))
-    add("getgenv.queue_for_teleport", rawget(env, "queue_for_teleport"))
-    add("getgenv.queueforteleport", rawget(env, "queueforteleport"))
-
-    if type(queue_on_teleport) == "function" then
-        add("queue_on_teleport", queue_on_teleport)
-    end
-    if type(queueonteleport) == "function" then
-        add("queueonteleport", queueonteleport)
-    end
-    if type(queue_on_tp) == "function" then
-        add("queue_on_tp", queue_on_tp)
-    end
-    if type(queue_for_teleport) == "function" then
-        add("queue_for_teleport", queue_for_teleport)
-    end
-    if type(queueforteleport) == "function" then
-        add("queueforteleport", queueforteleport)
-    end
-
-    if type(syn) == "table" then
-        add("syn.queue_on_teleport", syn.queue_on_teleport, syn)
-    end
-
-    if type(fluxus) == "table" then
-        add("fluxus.queue_on_teleport", fluxus.queue_on_teleport, fluxus)
-    end
-
-    for _, attempt in ipairs(attempts) do
-        local ok, result = pcall(attempt.Fn, SELF)
-
-        if ok and result ~= false then
-            return true, attempt.Name
-        end
-
-        if attempt.Owner then
-            local methodOk, methodResult =
-                pcall(attempt.Fn, attempt.Owner, SELF)
-
-            if methodOk and methodResult ~= false then
-                return true, attempt.Name .. ":method"
-            end
-        end
-    end
-
-    return false, nil
-end
+return string.format([=[
+local env=(type(getgenv)=="function" and getgenv()) or _G
+local PAYLOAD_ROOT=%q
+local PAYLOAD_CONFIG=%q
+local BUILD=%q
 
 task.spawn(function()
-    local ok, err = pcall(function()
-        if not sessionEnabled() then return end
+local ok,err=pcall(function()
+local Players=game:GetService("Players")
+local Workspace=game:GetService("Workspace")
 
-        if not game:IsLoaded() then
-            game.Loaded:Wait()
-        end
+if not game:IsLoaded() then game.Loaded:Wait() end
 
-        local Players = game:GetService("Players")
-        local Workspace = game:GetService("Workspace")
+local deadline=os.clock()+25
+while tostring(game.JobId)=="" and os.clock()<deadline do task.wait(0.05) end
+while not Players.LocalPlayer and os.clock()<deadline do task.wait(0.05) end
+while not Workspace.CurrentCamera and os.clock()<deadline do task.wait(0.05) end
 
-        local deadline = os.clock() + 25
-
-        while tostring(game.JobId) == ""
-            and os.clock() < deadline do
-            task.wait(0.05)
-        end
-
-        while not Players.LocalPlayer
-            and os.clock() < deadline do
-            task.wait(0.05)
-        end
-
-        while not Workspace.CurrentCamera
-            and os.clock() < deadline do
-            task.wait(0.05)
-        end
-
-        local jobKey =
-            tostring(game.PlaceId)
-            .. ":"
-            .. tostring(game.JobId)
-
-        if env.__DEVKAGE_SESSION_STUB_JOB == jobKey then
-            return
-        end
-
-        env.__DEVKAGE_SESSION_STUB_JOB = jobKey
-
-        local source, payloadPath = readPayload()
-
-        if type(source) ~= "string"
-            or source == "" then
-            warn("[DevKage Teleport] current payload missing")
-            return
-        end
-
-        local requeued, queueName = queueSelf()
-
-        env.__DEVKAGE_SESSION_CHAIN_ACTIVE = requeued == true
-        env.__DEVKAGE_SESSION_CHAIN_JOB = jobKey
-        env.__DEVKAGE_SESSION_CHAIN_API = queueName
-        env.__DEVKAGE_SESSION_CHAIN_PAYLOAD = payloadPath
-
-        if not requeued then
-            warn("[DevKage Teleport] could not requeue next teleport")
-        end
-
-        if env.__DEVKAGE_AUTO_STARTING_JOB == jobKey
-            or env.__DEVKAGE_AUTO_STARTED_JOB == jobKey then
-            return
-        end
-
-        env.__DEVKAGE_AUTO_STARTING_JOB = jobKey
-        env.__DEVKAGE_AUTO_STARTED = true
-        env.__DEVKAGE_EMBEDDED_SOURCE = source
-        env.__DEVKAGE_MULTI_INJECT_BOOT = true
-
-        task.wait(1.25)
-
-        local compiler = loadstring or load
-
-        if type(compiler) ~= "function" then
-            error("loadstring unavailable")
-        end
-
-        local fn, compileError = compiler(source)
-
-        if not fn then
-            error(compileError)
-        end
-
-        local runOk, runError = pcall(fn)
-
-        env.__DEVKAGE_MULTI_INJECT_BOOT = nil
-        env.__DEVKAGE_AUTO_STARTING_JOB = nil
-
-        if not runOk then
-            env.__DEVKAGE_AUTO_STARTED = false
-            error(runError)
-        end
-
-        env.__DEVKAGE_AUTO_STARTED_JOB = jobKey
-    end)
-
-    if not ok then
-        warn("[DevKage Teleport] " .. tostring(err))
-        env.__DEVKAGE_AUTO_STARTED = false
-        env.__DEVKAGE_MULTI_INJECT_BOOT = nil
-        env.__DEVKAGE_AUTO_STARTING_JOB = nil
-    end
-end)
-]==]
-
-body = body:gsub(
-    "__FLAG_FILE__",
-    string.format("%q", SCRIPT_SESSION_FLAG_FILE),
-    1
-)
-
-body = body:gsub(
-    "__PAYLOAD_ROOT__",
-    string.format("%q", SCRIPT_PAYLOAD_ROOT_FILE),
-    1
-)
-
-body = body:gsub(
-    "__PAYLOAD_CONFIG__",
-    string.format("%q", SCRIPT_PAYLOAD_FILE),
-    1
-)
-
-body = body:gsub(
-    "__BUILD__",
-    string.format("%q", SCRIPT_AUTOLOAD_BUILD),
-    1
-)
-
+local jobKey=tostring(game.PlaceId)..":"..tostring(game.JobId)
+if env.__DEVKAGE_SESSION_LOADER_JOB==jobKey
+or env.__DEVKAGE_AUTO_STARTED_JOB==jobKey then
 return
-    "local BODY="
-    .. string.format("%q", body)
-    .. "\n"
-    .. body
+end
+
+env.__DEVKAGE_SESSION_LOADER_JOB=jobKey
+
+local source=nil
+local payloadPath=nil
+
+if type(readfile)=="function" then
+for _,path in ipairs({PAYLOAD_ROOT,PAYLOAD_CONFIG}) do
+local allowed=true
+
+if type(isfile)=="function" then
+local checked,exists=pcall(isfile,path)
+if checked and exists~=true then allowed=false end
+end
+
+if allowed then
+local readOk,raw=pcall(readfile,path)
+if readOk and type(raw)=="string" and raw~="" then
+source=raw
+payloadPath=path
+break
+end
+end
+end
+end
+
+if type(source)~="string" or source=="" then
+warn("[DevKage Teleport] payload missing")
+return
+end
+
+env.__DEVKAGE_SESSION_CHAIN_BOOT=true
+env.__DEVKAGE_SESSION_CHAIN_ACTIVE=true
+env.__DEVKAGE_SESSION_CHAIN_BUILD=BUILD
+env.__DEVKAGE_SESSION_CHAIN_PAYLOAD=payloadPath
+env.__DEVKAGE_AUTO_STARTED=true
+env.__DEVKAGE_EMBEDDED_SOURCE=source
+env.__DEVKAGE_MULTI_INJECT_BOOT=true
+env.__DEVKAGE_AUTO_STARTING_JOB=jobKey
+
+task.wait(1.25)
+
+local compiler=loadstring or load
+if type(compiler)~="function" then error("loadstring unavailable") end
+
+local fn,compileError=compiler(source)
+if not fn then error(compileError) end
+
+local runOk,runError=pcall(fn)
+
+env.__DEVKAGE_MULTI_INJECT_BOOT=nil
+env.__DEVKAGE_AUTO_STARTING_JOB=nil
+
+if not runOk then
+env.__DEVKAGE_AUTO_STARTED=false
+error(runError)
+end
+
+env.__DEVKAGE_AUTO_STARTED_JOB=jobKey
+end)
+
+if not ok then
+warn("[DevKage Teleport] "..tostring(err))
+env.__DEVKAGE_AUTO_STARTED=false
+env.__DEVKAGE_MULTI_INJECT_BOOT=nil
+env.__DEVKAGE_AUTO_STARTING_JOB=nil
+end
+end)
+]=],
+SCRIPT_PAYLOAD_ROOT_FILE,
+SCRIPT_PAYLOAD_FILE,
+SCRIPT_AUTOLOAD_BUILD)
 end
 
 local function queue_script_autoload(stub)
-local env = (type(getgenv) == "function" and getgenv()) or _G
-local attempts = {}
+local env=(type(getgenv)=="function" and getgenv()) or _G
+local attempts={}
 
 local function add(name,fn,owner)
 if type(fn)=="function" then
@@ -11749,34 +11607,42 @@ if type(queueonteleport)=="function" then add("queueonteleport",queueonteleport)
 if type(queue_on_tp)=="function" then add("queue_on_tp",queue_on_tp) end
 if type(queue_for_teleport)=="function" then add("queue_for_teleport",queue_for_teleport) end
 if type(queueforteleport)=="function" then add("queueforteleport",queueforteleport) end
-
-if type(syn)=="table" then
-add("syn.queue_on_teleport",syn.queue_on_teleport,syn)
-end
-
-if type(fluxus)=="table" then
-add("fluxus.queue_on_teleport",fluxus.queue_on_teleport,fluxus)
-end
+if type(syn)=="table" then add("syn.queue_on_teleport",syn.queue_on_teleport,syn) end
+if type(fluxus)=="table" then add("fluxus.queue_on_teleport",fluxus.queue_on_teleport,fluxus) end
 
 if #attempts==0 then
 return false,"teleport queue API unavailable"
 end
 
+local function accepted(ok,result)
+return ok and result~=false
+end
+
 local errors={}
 
 for _,attempt in ipairs(attempts) do
-local ok,result=pcall(attempt.Fn,stub)
+local ok1,result1=pcall(attempt.Fn,stub)
+if accepted(ok1,result1) then
+env.__DEVKAGE_TELEPORT_QUEUE_API=attempt.Name..":source"
+return true,nil
+end
 
-if ok and result~=false then
-env.__DEVKAGE_TELEPORT_QUEUE_API=attempt.Name
+local ok2,result2=pcall(attempt.Fn,"s",stub)
+if accepted(ok2,result2) then
+env.__DEVKAGE_TELEPORT_QUEUE_API=attempt.Name..":s-source"
 return true,nil
 end
 
 if attempt.Owner then
-local methodOk,methodResult=pcall(attempt.Fn,attempt.Owner,stub)
+local ok3,result3=pcall(attempt.Fn,attempt.Owner,stub)
+if accepted(ok3,result3) then
+env.__DEVKAGE_TELEPORT_QUEUE_API=attempt.Name..":method-source"
+return true,nil
+end
 
-if methodOk and methodResult~=false then
-env.__DEVKAGE_TELEPORT_QUEUE_API=attempt.Name..":method"
+local ok4,result4=pcall(attempt.Fn,attempt.Owner,"s",stub)
+if accepted(ok4,result4) then
+env.__DEVKAGE_TELEPORT_QUEUE_API=attempt.Name..":method-s-source"
 return true,nil
 end
 end
@@ -11785,8 +11651,8 @@ errors[#errors+1]=attempt.Name
 end
 
 return false,
-"all detected teleport queue APIs rejected the DevKage loader: "
-.. table.concat(errors,", ")
+"all detected teleport queue forms rejected DevKage: "
+..table.concat(errors,", ")
 end
 
 local function write_autoexec_stubs(stub)
@@ -11824,40 +11690,124 @@ if shouldDelete then pcall(delfile, path) end
 end
 end
 
-local function configure_script_autoload(enabled, bootRefresh)
-local settings = read_script_settings()
-settings.AutoLoad = enabled == true
+local SessionTeleportRuntime={
+Connection=nil,
+QueuedForTeleport=false,
+Enabled=false,
+LastState=nil,
+LastQueueError=nil,
+}
 
-local saved, saveError = write_script_settings(settings)
-if not saved then return false, saveError end
+local function stop_session_teleport_runtime()
+SessionTeleportRuntime.Enabled=false
+SessionTeleportRuntime.QueuedForTeleport=false
+
+if SessionTeleportRuntime.Connection then
+pcall(function() SessionTeleportRuntime.Connection:Disconnect() end)
+SessionTeleportRuntime.Connection=nil
+end
+
+local env=(type(getgenv)=="function" and getgenv()) or _G
+if env.__DevKageSessionTeleportRuntime==SessionTeleportRuntime then
+env.__DevKageSessionTeleportRuntime=nil
+end
+end
+
+local function install_session_teleport_runtime()
+local env=(type(getgenv)=="function" and getgenv()) or _G
+local previous=env.__DevKageSessionTeleportRuntime
+
+if type(previous)=="table"
+and previous~=SessionTeleportRuntime
+and type(previous.Stop)=="function" then
+pcall(function() previous:Stop() end)
+end
+
+SessionTeleportRuntime.Stop=stop_session_teleport_runtime
+SessionTeleportRuntime.Enabled=true
+SessionTeleportRuntime.QueuedForTeleport=false
+env.__DevKageSessionTeleportRuntime=SessionTeleportRuntime
+env.__DEVKAGE_SESSION_CHAIN_ACTIVE=true
+
+if SessionTeleportRuntime.Connection then
+pcall(function() SessionTeleportRuntime.Connection:Disconnect() end)
+SessionTeleportRuntime.Connection=nil
+end
+
+local stub=build_script_autoload_stub()
+
+SessionTeleportRuntime.Connection=LocalPlayer.OnTeleport:Connect(function(state)
+if not SessionTeleportRuntime.Enabled then return end
+
+local stateName=tostring(state)
+SessionTeleportRuntime.LastState=stateName
+
+local isStarting=
+stateName:find("RequestedFromServer",1,true)~=nil
+or stateName:find("Started",1,true)~=nil
+or stateName:find("WaitingForServer",1,true)~=nil
+or stateName:find("InProgress",1,true)~=nil
+
+if not isStarting then
+if stateName:find("Failed",1,true)~=nil
+or stateName:find("Cancelled",1,true)~=nil then
+SessionTeleportRuntime.QueuedForTeleport=false
+end
+return
+end
+
+if SessionTeleportRuntime.QueuedForTeleport then return end
+SessionTeleportRuntime.QueuedForTeleport=true
+
+local queued,queueError=queue_script_autoload(stub)
+
+if queued then
+SessionTeleportRuntime.LastQueueError=nil
+env.__DEVKAGE_SESSION_CHAIN_ACTIVE=true
+env.__DEVKAGE_SESSION_CHAIN_API=env.__DEVKAGE_TELEPORT_QUEUE_API
+env.__DEVKAGE_SESSION_CHAIN_LAST_STATE=stateName
+else
+SessionTeleportRuntime.LastQueueError=tostring(queueError or "unknown queue error")
+env.__DEVKAGE_SESSION_CHAIN_ACTIVE=false
+env.__DEVKAGE_SESSION_CHAIN_ERROR=SessionTeleportRuntime.LastQueueError
+warn("[DevKage Teleport] queue failed: "..SessionTeleportRuntime.LastQueueError)
+end
+end)
+
+if type(MaskShard)=="table" and type(MaskShard.Connections)=="table" then
+MaskShard.Connections[#MaskShard.Connections+1]=SessionTeleportRuntime.Connection
+end
+
+return true
+end
+
+local function configure_script_autoload(enabled,bootRefresh)
+local settings=read_script_settings()
+settings.AutoLoad=enabled==true
+
+local saved,saveError=write_script_settings(settings)
+if not saved then return false,saveError end
 
 if not enabled then
+stop_session_teleport_runtime()
 remove_autoexec_stubs()
 
-if type(delfile) == "function" then
+if type(delfile)=="function" then
 for _,path in ipairs({
 SCRIPT_PAYLOAD_FILE,
 SCRIPT_PAYLOAD_ROOT_FILE,
 SCRIPT_SESSION_FLAG_FILE
 }) do
 local shouldDelete=true
-
 if type(isfile)=="function" then
 local ok,exists=pcall(isfile,path)
 shouldDelete=not ok or exists==true
 end
-
-if shouldDelete then
-pcall(delfile,path)
-end
+if shouldDelete then pcall(delfile,path) end
 end
 end
 
-local env=(type(getgenv)=="function" and getgenv()) or _G
-env.__DEVKAGE_SESSION_CHAIN_ACTIVE=false
-env.__DEVKAGE_SESSION_CHAIN_API=nil
-
-return true,"Script auto-load disabled"
+return true,"DevKage session teleport auto-load disabled"
 end
 
 local env=(type(getgenv)=="function" and getgenv()) or _G
@@ -11876,16 +11826,13 @@ if not bootRefresh then
 settings.AutoLoad=false
 write_script_settings(settings)
 end
-return false,"This executor cannot write the teleport payload"
+return false,"This executor cannot write the DevKage teleport payload"
 end
 
-local rootPayloadOk =
-pcall(writefile,SCRIPT_PAYLOAD_ROOT_FILE,source)
+local rootOk=pcall(writefile,SCRIPT_PAYLOAD_ROOT_FILE,source)
+local configOk=pcall(writefile,SCRIPT_PAYLOAD_FILE,source)
 
-local configPayloadOk =
-pcall(writefile,SCRIPT_PAYLOAD_FILE,source)
-
-if not rootPayloadOk and not configPayloadOk then
+if not rootOk and not configOk then
 if not bootRefresh then
 settings.AutoLoad=false
 write_script_settings(settings)
@@ -11893,92 +11840,44 @@ end
 return false,"Could not write the DevKage teleport payload"
 end
 
-local flagOk,flagError =
-pcall(
-writefile,
-SCRIPT_SESSION_FLAG_FILE,
-SCRIPT_AUTOLOAD_BUILD
-)
+pcall(writefile,SCRIPT_SESSION_FLAG_FILE,SCRIPT_AUTOLOAD_BUILD)
 
-if not flagOk then
+if not install_session_teleport_runtime() then
 if not bootRefresh then
 settings.AutoLoad=false
 write_script_settings(settings)
 end
-return false,
-"Could not enable the DevKage teleport session: "
-.. tostring(flagError)
+return false,"Could not install DevKage's teleport listener"
 end
 
-local stub=build_script_autoload_stub()
-
-local queued,queueError =
-queue_script_autoload(stub)
-
-local autoexecWritten =
-write_autoexec_stubs(stub)
-
-if not queued and not autoexecWritten then
-if not bootRefresh then
-settings.AutoLoad=false
-write_script_settings(settings)
-end
-return false,
-"Teleport queue unavailable: "
-.. tostring(queueError or "executor rejected the loader")
+return true,"DevKage will follow this executor session on teleport"
 end
 
-env.__DEVKAGE_SESSION_CHAIN_ACTIVE=queued==true
-env.__DEVKAGE_SESSION_CHAIN_API=
-env.__DEVKAGE_TELEPORT_QUEUE_API
-
-if queued then
-return true,"DevKage queued for this executor session"
-elseif autoexecWritten then
-return true,
-"Executor autoexec installed, but same-session teleport queue is unavailable"
-end
-
-return false,"Auto Load installation failed"
-end
-
--- Fresh workspace behavior:
--- first manual execution after a full workspace reset installs Auto Load
--- automatically. Once the user explicitly disables Auto Load, the saved
--- false setting exists and is respected on later manual executions.
-local _script_settings_were_missing = false
-
-do
-if type(readfile) == "function" then
-if type(isfile) == "function" then
-local ok, exists = pcall(isfile, SCRIPT_SETTINGS_FILE)
-_script_settings_were_missing = ok and exists ~= true
-else
-local ok = pcall(readfile, SCRIPT_SETTINGS_FILE)
-_script_settings_were_missing = not ok
-end
-end
-end
-
-local _script_boot_settings = read_script_settings()
+-- Session-only Auto Load:
+-- manual execution starts the chain; queued destination execution reinstalls
+-- the OnTeleport listener for the next server transition.
+local _script_boot_settings=read_script_settings()
 
 do
 local env=(type(getgenv)=="function" and getgenv()) or _G
 
-if env.__DEVKAGE_SESSION_CHAIN_ACTIVE~=true
-and (
-_script_settings_were_missing
+local shouldChain=
+env.__DEVKAGE_SESSION_CHAIN_BOOT==true
 or _script_boot_settings.AutoLoad==true
-) then
-local ok,err=configure_script_autoload(true,true)
 
+if env.__DEVKAGE_SESSION_CHAIN_BOOT~=true
+and env.__DEVKAGE_EMBEDDED_SOURCE then
+shouldChain=true
+end
+
+if shouldChain then
+local ok,err=configure_script_autoload(true,true)
 if not ok then
-warn(
-"[DevKage AutoLoad] session queue install failed: "
-.. tostring(err)
-)
+warn("[DevKage AutoLoad] session listener install failed: "..tostring(err))
 end
 end
+
+env.__DEVKAGE_SESSION_CHAIN_BOOT=nil
 end
 
 local DEFAULT_VISUAL_STATE = serialiseRuntimeState(VisualsState)
@@ -24508,4 +24407,4 @@ print("[DevKage + Mask Shard] Fully loaded and protected.")
 -- ============================================================
 -- END OF FILE
 -- ============================================================
-]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,50,49,45,115,101,115,115,105,111,110,45,116,101,108,101,112,111,114,116,45,99,104,97,105,110)_b._a=_a local _c=loadstring or load if type(_c)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _d,_e=_c(_a)if not _d then error(_e)end return _d()
+]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,50,50,45,99,111,101,120,105,115,116,45,115,101,115,115,105,111,110,45,116,101,108,101,112,111,114,116)_b._a=_a local _c=loadstring or load if type(_c)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _d,_e=_c(_a)if not _d then error(_e)end return _d()
