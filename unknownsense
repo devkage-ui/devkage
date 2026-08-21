@@ -4334,7 +4334,7 @@ rageBotTeamCheck = true,
 rageBotFOV = 180,
 rageBotSmooth = 0,
 rapidFireEnabled = false,
-rapidFireDefaultRate = 10,
+rapidFireDefaultRate = 25,
 rapidFireSelectedWeapon = "",
 rapidFireRates = {},
 luaCode = "",
@@ -18544,24 +18544,71 @@ local ragePage = window:CreatePage({Icon="rbxassetid://8547258459",Glyph="R",Siz
 
 -- ============================================================
 -- RIVALS RAPID FIRE
--- Per-weapon activation rate. Uses Tool:Activate only.
--- No remote rewriting, module patching or metatable hooks.
+-- ItemLibrary-based cooldown scaling.
+--
+-- Fire Rate slider semantics:
+--     1%   = fastest  (1% of the weapon's original cooldown)
+--     100% = slowest  (the weapon's original cooldown)
+--
+-- This modifies only cooldown-like values in RIVALS ItemLibrary.Items.
+-- It does NOT change spread, recoil, accuracy, remotes or metatables.
 -- ============================================================
 local RapidFireRuntime = {
-    Holding = false,
-    NextShotAt = 0,
+    GameId = 6035872082,
+    Items = nil,
+    ItemLibrary = nil,
+    LoadAttempted = false,
+    Originals = {},
+    Applied = {},
     WeaponOptions = {},
     SelectedWeapon = tostring(getgenv().__DevKageConfig.rapidFireSelectedWeapon or ""),
-    LastRefresh = 0,
+    LastStatus = "",
+    MaskShardProtected = true,
+}
+
+local RAPID_FIRE_MELEE_FIELDS = {
+    "AttackCooldown",
+    "SwingCooldown",
+    "MeleeCooldown",
+    "Cooldown",
+    "RecoveryTime",
+    "ResetTime",
+}
+
+local RAPID_FIRE_GUN_FIELDS = {
+    "ShootCooldown",
+    "ShootBurstCooldown",
 }
 
 local function rapidFireIsRivals()
+    return tonumber(game.GameId) == RapidFireRuntime.GameId
+end
+
+local function rapidFireLoadItems()
+    if RapidFireRuntime.Items then
+        return RapidFireRuntime.Items
+    end
+    if RapidFireRuntime.LoadAttempted then
+        return nil
+    end
+
+    RapidFireRuntime.LoadAttempted = true
+    if not rapidFireIsRivals() then return nil end
+
     local modules = ReplicatedStorage:FindFirstChild("Modules")
-    local itemLibrary = modules and modules:FindFirstChild("ItemLibrary")
-    local playerScripts = LocalPlayer and LocalPlayer:FindFirstChild("PlayerScripts")
-    local controllers = playerScripts and playerScripts:FindFirstChild("Controllers")
-    local fighterController = controllers and controllers:FindFirstChild("FighterController")
-    return itemLibrary ~= nil and fighterController ~= nil
+    local itemModule = modules and modules:FindFirstChild("ItemLibrary")
+    if not itemModule or not itemModule:IsA("ModuleScript") then
+        return nil
+    end
+
+    local ok, libraryData = pcall(require, itemModule)
+    if not ok or type(libraryData) ~= "table" or type(libraryData.Items) ~= "table" then
+        return nil
+    end
+
+    RapidFireRuntime.ItemLibrary = libraryData
+    RapidFireRuntime.Items = libraryData.Items
+    return RapidFireRuntime.Items
 end
 
 local function rapidFireGetEquippedTool()
@@ -18573,8 +18620,235 @@ local function rapidFireGetEquippedTool()
     return nil
 end
 
-local function rapidFireWeaponNames()
+local function rapidFireHasNumericField(data, field)
+    return type(data) == "table"
+        and type(data[field]) == "number"
+        and data[field] > 0
+end
+
+local function rapidFireLooksMeleeData(data)
+    if type(data) ~= "table" then return false end
+    for _, field in ipairs(RAPID_FIRE_MELEE_FIELDS) do
+        if rapidFireHasNumericField(data, field) then
+            return true
+        end
+    end
+    return false
+end
+
+local function rapidFireLooksGunData(data)
+    if type(data) ~= "table" then return false end
+    for _, field in ipairs(RAPID_FIRE_GUN_FIELDS) do
+        if rapidFireHasNumericField(data, field) then
+            return true
+        end
+    end
+    return false
+end
+
+local function rapidFireRelevantFields(data)
+    local fields = {}
+
+    -- Melee fields first because this feature is primarily intended for melee.
+    for _, field in ipairs(RAPID_FIRE_MELEE_FIELDS) do
+        if rapidFireHasNumericField(data, field) then
+            fields[#fields + 1] = field
+        end
+    end
+
+    -- Gun cooldown support remains available without touching accuracy/recoil.
+    for _, field in ipairs(RAPID_FIRE_GUN_FIELDS) do
+        if rapidFireHasNumericField(data, field) then
+            fields[#fields + 1] = field
+        end
+    end
+
+    return fields
+end
+
+local function rapidFireDelayPercent(weaponName)
+    local config = getgenv().__DevKageConfig
+    if type(config.rapidFireRates) ~= "table" then
+        config.rapidFireRates = {}
+    end
+
+    local saved = tonumber(config.rapidFireRates[tostring(weaponName or "")])
+    local fallback = tonumber(config.rapidFireDefaultRate) or 25
+    return math.clamp(math.floor((saved or fallback) + 0.5), 1, 100)
+end
+
+local function rapidFireScaledCooldown(originalValue, percent)
+    originalValue = tonumber(originalValue)
+    if not originalValue or originalValue <= 0 then
+        return originalValue
+    end
+
+    percent = math.clamp(tonumber(percent) or 100, 1, 100)
+
+    -- 100% is exactly the game's original value.
+    if percent >= 100 then
+        return originalValue
+    end
+
+    -- Lower percentage = lower cooldown = faster.
+    -- Keep a tiny positive floor so code expecting a positive cooldown
+    -- does not receive zero.
+    return math.max(0.001, originalValue * (percent / 100))
+end
+
+local function rapidFireSnapshotWeapon(weaponName, data)
+    weaponName = tostring(weaponName or "")
+    if weaponName == "" or type(data) ~= "table" then return nil end
+
+    local snapshot = RapidFireRuntime.Originals[weaponName]
+    if type(snapshot) ~= "table" then
+        snapshot = {}
+        RapidFireRuntime.Originals[weaponName] = snapshot
+    end
+
+    for _, field in ipairs(rapidFireRelevantFields(data)) do
+        if snapshot[field] == nil then
+            snapshot[field] = data[field]
+        end
+    end
+
+    return snapshot
+end
+
+local function rapidFireRestoreWeapon(weaponName)
+    weaponName = tostring(weaponName or "")
+    local items = RapidFireRuntime.Items
+    local snapshot = RapidFireRuntime.Originals[weaponName]
+    local applied = RapidFireRuntime.Applied[weaponName]
+
+    if type(items) ~= "table"
+        or type(items[weaponName]) ~= "table"
+        or type(snapshot) ~= "table" then
+        RapidFireRuntime.Applied[weaponName] = nil
+        return false
+    end
+
+    local data = items[weaponName]
+
+    for field, originalValue in pairs(snapshot) do
+        local lastApplied = type(applied) == "table" and applied[field] or nil
+
+        -- Coexistence-safe restore:
+        -- only restore a value if it is still the exact value DevKage applied.
+        -- If another script changed it afterward, leave that external value alone.
+        if lastApplied == nil or data[field] == lastApplied then
+            data[field] = originalValue
+        end
+    end
+
+    RapidFireRuntime.Applied[weaponName] = nil
+    return true
+end
+
+local function rapidFireRestoreAll()
+    for weaponName in pairs(RapidFireRuntime.Originals) do
+        pcall(rapidFireRestoreWeapon, weaponName)
+    end
+end
+
+local function rapidFireApplyWeapon(weaponName, percent)
+    local items = rapidFireLoadItems()
+    weaponName = tostring(weaponName or "")
+
+    if type(items) ~= "table" or weaponName == "" then
+        return false, 0, "ItemLibrary unavailable"
+    end
+
+    local data = items[weaponName]
+    if type(data) ~= "table" then
+        return false, 0, "Weapon data not found"
+    end
+
+    local fields = rapidFireRelevantFields(data)
+    if #fields == 0 then
+        return false, 0, "No supported cooldown fields"
+    end
+
+    -- Always restore our previous patch before recalculating from the
+    -- original RIVALS values. This keeps slider changes deterministic.
+    rapidFireRestoreWeapon(weaponName)
+
+    local snapshot = rapidFireSnapshotWeapon(weaponName, data)
+    if type(snapshot) ~= "table" then
+        return false, 0, "Could not snapshot weapon"
+    end
+
+    percent = math.clamp(tonumber(percent) or 100, 1, 100)
+
+    local applied = {}
+    local changed = 0
+
+    for _, field in ipairs(fields) do
+        local originalValue = snapshot[field]
+        if type(originalValue) == "number" and originalValue > 0 then
+            local scaledValue = rapidFireScaledCooldown(originalValue, percent)
+            data[field] = scaledValue
+            applied[field] = scaledValue
+            changed = changed + 1
+        end
+    end
+
+    RapidFireRuntime.Applied[weaponName] = applied
+
+    local kind
+    if rapidFireLooksMeleeData(data) then
+        kind = "melee"
+    elseif rapidFireLooksGunData(data) then
+        kind = "gun"
+    else
+        kind = "weapon"
+    end
+
+    return changed > 0, changed, kind
+end
+
+local function rapidFireApplyConfigured()
+    local config = getgenv().__DevKageConfig
+    if type(config) ~= "table" or config.rapidFireEnabled ~= true then
+        rapidFireRestoreAll()
+        return
+    end
+
+    local items = rapidFireLoadItems()
+    if type(items) ~= "table" then return end
+
+    if type(config.rapidFireRates) ~= "table" then
+        config.rapidFireRates = {}
+    end
+
+    -- Re-apply every weapon that has its own saved percentage.
+    for weaponName, percent in pairs(config.rapidFireRates) do
+        if type(items[tostring(weaponName)]) == "table" then
+            pcall(rapidFireApplyWeapon, tostring(weaponName), percent)
+        end
+    end
+
+    -- Also apply the currently selected weapon, even if it has not yet
+    -- received an explicit entry in rapidFireRates.
+    local selected = tostring(config.rapidFireSelectedWeapon or "")
+    if selected ~= "" and selected ~= "Equipped Weapon" then
+        pcall(rapidFireApplyWeapon, selected, rapidFireDelayPercent(selected))
+    end
+end
+
+local function rapidFireWeaponNames(loadModule)
     local found = {}
+
+    if loadModule then
+        local items = rapidFireLoadItems()
+        if type(items) == "table" then
+            for name, data in pairs(items) do
+                if type(data) == "table" and #rapidFireRelevantFields(data) > 0 then
+                    found[tostring(name)] = true
+                end
+            end
+        end
+    end
 
     local function scan(container)
         if not container then return end
@@ -18589,38 +18863,133 @@ local function rapidFireWeaponNames()
     scan(LocalPlayer and LocalPlayer.Character)
 
     local names = {}
-    for name in pairs(found) do names[#names+1] = name end
-    table.sort(names, function(a,b) return a:lower() < b:lower() end)
+    for name in pairs(found) do
+        names[#names + 1] = name
+    end
 
-    if #names == 0 then names[1] = "Equipped Weapon" end
+    table.sort(names, function(a, b)
+        local items = RapidFireRuntime.Items
+        local aData = type(items) == "table" and items[a] or nil
+        local bData = type(items) == "table" and items[b] or nil
+        local aMelee = rapidFireLooksMeleeData(aData)
+        local bMelee = rapidFireLooksMeleeData(bData)
+
+        if aMelee ~= bMelee then
+            return aMelee
+        end
+        return a:lower() < b:lower()
+    end)
+
+    if #names == 0 then
+        names[1] = "Equipped Weapon"
+    end
+
     return names
 end
 
-local function rapidFireRateFor(weaponName)
-    local config = getgenv().__DevKageConfig
-    if type(config.rapidFireRates) ~= "table" then config.rapidFireRates = {} end
+local rapidFireSection = ragePage:CreateSection({
+    Name = "Rapid Fire",
+    Side = "Right",
+    Size = 265
+})
 
-    local saved = config.rapidFireRates[tostring(weaponName or "")]
-    return math.clamp(
-        tonumber(saved) or tonumber(config.rapidFireDefaultRate) or 10,
-        1,
-        30
-    )
+local rapidFireStatus = rapidFireSection:CreateLabel({
+    Text = rapidFireIsRivals()
+        and "RIVALS • melee cooldown scaler ready"
+        or "RIVALS client not detected"
+})
+
+local rapidFireRateSlider
+local rapidFireWeaponDrop
+
+local function rapidFireUpdateStatus(weaponName)
+    weaponName = tostring(weaponName or "")
+    local percent = rapidFireDelayPercent(weaponName)
+
+    local items = RapidFireRuntime.Items
+    local data = type(items) == "table" and items[weaponName] or nil
+    local kind = rapidFireLooksMeleeData(data) and "melee"
+        or (rapidFireLooksGunData(data) and "gun" or "weapon")
+
+    local text =
+        (rapidFireIsRivals() and "RIVALS • " or "Unsupported game • ")
+        .. kind
+        .. " • "
+        .. weaponName
+        .. " • "
+        .. tostring(percent)
+        .. "%"
+
+    RapidFireRuntime.LastStatus = text
+    rapidFireStatus:SetText(text)
 end
 
-local rapidFireSection = ragePage:CreateSection({Name="Rapid Fire",Side="Right",Size=245})
-local rapidFireStatus = rapidFireSection:CreateLabel({Text=rapidFireIsRivals() and "RIVALS detected • ready" or "RIVALS client not detected"})
+local function refreshRapidFireWeapons(preferEquipped, loadModule)
+    local names = rapidFireWeaponNames(loadModule == true)
+    RapidFireRuntime.WeaponOptions = names
+
+    if rapidFireWeaponDrop then
+        rapidFireWeaponDrop.Options = names
+    end
+
+    local config = getgenv().__DevKageConfig
+    local wanted = tostring(config.rapidFireSelectedWeapon or "")
+
+    local equipped = rapidFireGetEquippedTool()
+    if preferEquipped and equipped then
+        wanted = tostring(equipped.Name)
+    end
+
+    local index = 1
+    for i, name in ipairs(names) do
+        if tostring(name) == wanted then
+            index = i
+            break
+        end
+    end
+
+    if rapidFireWeaponDrop then
+        rapidFireWeaponDrop:Set(index, true)
+        RapidFireRuntime.SelectedWeapon =
+            tostring(rapidFireWeaponDrop:GetValue() or "")
+    else
+        RapidFireRuntime.SelectedWeapon = tostring(names[index] or "")
+    end
+
+    config.rapidFireSelectedWeapon = RapidFireRuntime.SelectedWeapon
+
+    if rapidFireRateSlider then
+        rapidFireRateSlider:Set(
+            rapidFireDelayPercent(RapidFireRuntime.SelectedWeapon),
+            true
+        )
+    end
+
+    rapidFireUpdateStatus(RapidFireRuntime.SelectedWeapon)
+end
 
 local rapidFireToggle = rapidFireSection:CreateToggle({
-    Name="Rapid Fire",
-    State=getgenv().__DevKageConfig.rapidFireEnabled==true,
-    Callback=function(value)
-        getgenv().__DevKageConfig.rapidFireEnabled=value==true
-        RapidFireRuntime.NextShotAt=0
+    Name = "Rapid Fire",
+    State = getgenv().__DevKageConfig.rapidFireEnabled == true,
+    Callback = function(value)
+        local config = getgenv().__DevKageConfig
+        config.rapidFireEnabled = value == true
+
+        if value then
+            -- ItemLibrary is loaded lazily when the feature is actually used,
+            -- which avoids adding another ModuleScript require to DevKage boot.
+            RapidFireRuntime.LoadAttempted = false
+            rapidFireLoadItems()
+            refreshRapidFireWeapons(false, true)
+            rapidFireApplyConfigured()
+        else
+            rapidFireRestoreAll()
+        end
     end
 })
 
-RapidFireRuntime.WeaponOptions = rapidFireWeaponNames()
+RapidFireRuntime.WeaponOptions = rapidFireWeaponNames(false)
+
 local initialWeaponIndex = 1
 for index, name in ipairs(RapidFireRuntime.WeaponOptions) do
     if tostring(name) == RapidFireRuntime.SelectedWeapon then
@@ -18629,154 +18998,161 @@ for index, name in ipairs(RapidFireRuntime.WeaponOptions) do
     end
 end
 
-local rapidFireRateSlider
-local rapidFireWeaponDrop = rapidFireSection:CreateDropdown({
-    Name="Weapon",
-    Options=RapidFireRuntime.WeaponOptions,
-    State=initialWeaponIndex,
-    Callback=function(_, weaponName)
-        weaponName=tostring(weaponName or "")
-        RapidFireRuntime.SelectedWeapon=weaponName
-        getgenv().__DevKageConfig.rapidFireSelectedWeapon=weaponName
+rapidFireWeaponDrop = rapidFireSection:CreateDropdown({
+    Name = "Weapon",
+    Options = RapidFireRuntime.WeaponOptions,
+    State = initialWeaponIndex,
+    Callback = function(_, weaponName)
+        weaponName = tostring(weaponName or "")
+        RapidFireRuntime.SelectedWeapon = weaponName
+
+        local config = getgenv().__DevKageConfig
+        config.rapidFireSelectedWeapon = weaponName
+
         if rapidFireRateSlider then
-            rapidFireRateSlider:Set(rapidFireRateFor(weaponName),true)
+            rapidFireRateSlider:Set(
+                rapidFireDelayPercent(weaponName),
+                true
+            )
         end
+
+        if config.rapidFireEnabled == true then
+            rapidFireApplyWeapon(
+                weaponName,
+                rapidFireDelayPercent(weaponName)
+            )
+        end
+
+        rapidFireUpdateStatus(weaponName)
     end
 })
 
 rapidFireRateSlider = rapidFireSection:CreateSlider({
-    Name="Fire Rate",
-    State=rapidFireRateFor(rapidFireWeaponDrop:GetValue()),
-    Min=1,
-    Max=30,
-    Decimals=1,
-    Suffix=" shots/s",
-    Callback=function(value)
-        local config=getgenv().__DevKageConfig
-        if type(config.rapidFireRates)~="table" then config.rapidFireRates={} end
-        local weapon=tostring(rapidFireWeaponDrop:GetValue() or RapidFireRuntime.SelectedWeapon or "")
-        local rate=math.clamp(tonumber(value) or 10,1,30)
-        config.rapidFireDefaultRate=rate
-        if weapon~="" and weapon~="Equipped Weapon" then
-            config.rapidFireRates[weapon]=rate
+    Name = "Fire Rate",
+    State = rapidFireDelayPercent(rapidFireWeaponDrop:GetValue()),
+    Min = 1,
+    Max = 100,
+    Decimals = 0,
+    Suffix = "%",
+    Callback = function(value)
+        local config = getgenv().__DevKageConfig
+        if type(config.rapidFireRates) ~= "table" then
+            config.rapidFireRates = {}
+        end
+
+        local weaponName = tostring(
+            rapidFireWeaponDrop:GetValue()
+            or RapidFireRuntime.SelectedWeapon
+            or ""
+        )
+
+        local percent = math.clamp(
+            math.floor((tonumber(value) or 25) + 0.5),
+            1,
+            100
+        )
+
+        config.rapidFireDefaultRate = percent
+
+        if weaponName ~= "" and weaponName ~= "Equipped Weapon" then
+            config.rapidFireRates[weaponName] = percent
+        end
+
+        if config.rapidFireEnabled == true
+            and weaponName ~= ""
+            and weaponName ~= "Equipped Weapon" then
+
+            local ok, changed, kind =
+                rapidFireApplyWeapon(weaponName, percent)
+
+            if ok then
+                rapidFireStatus:SetText(
+                    "RIVALS • "
+                    .. tostring(kind)
+                    .. " • "
+                    .. weaponName
+                    .. " • "
+                    .. tostring(percent)
+                    .. "% • "
+                    .. tostring(changed)
+                    .. " cooldown"
+                    .. (changed == 1 and "" or "s")
+                )
+            else
+                rapidFireUpdateStatus(weaponName)
+            end
+        else
+            rapidFireUpdateStatus(weaponName)
         end
     end
 })
 
-local function refreshRapidFireWeapons(preferEquipped)
-    local names=rapidFireWeaponNames()
-    RapidFireRuntime.WeaponOptions=names
-    rapidFireWeaponDrop.Options=names
-
-    local wanted=tostring(getgenv().__DevKageConfig.rapidFireSelectedWeapon or "")
-    local equipped=rapidFireGetEquippedTool()
-    if preferEquipped and equipped then wanted=tostring(equipped.Name) end
-
-    local index=1
-    for i,name in ipairs(names) do
-        if tostring(name)==wanted then index=i break end
-    end
-
-    rapidFireWeaponDrop:Set(index,true)
-    RapidFireRuntime.SelectedWeapon=tostring(rapidFireWeaponDrop:GetValue() or "")
-    getgenv().__DevKageConfig.rapidFireSelectedWeapon=RapidFireRuntime.SelectedWeapon
-    rapidFireRateSlider:Set(rapidFireRateFor(RapidFireRuntime.SelectedWeapon),true)
-
-    rapidFireStatus:SetText(
-        (rapidFireIsRivals() and "RIVALS • " or "Unsupported game • ")
-        ..RapidFireRuntime.SelectedWeapon
-        .." • "
-        ..string.format("%.1f shots/s",rapidFireRateFor(RapidFireRuntime.SelectedWeapon))
-    )
-end
-
 rapidFireSection:CreateButton({
-    Name="Use Equipped Weapon",
-    Callback=function() refreshRapidFireWeapons(true) end
-})
+    Name = "Use Equipped Weapon",
+    Callback = function()
+        refreshRapidFireWeapons(true, true)
 
-rapidFireSection:CreateButton({
-    Name="Refresh Weapons",
-    Callback=function() refreshRapidFireWeapons(false) end
-})
-
-local function trackRapidFireConnection(connection)
-    if connection and type(MaskShard)=="table" and type(MaskShard.Connections)=="table" then
-        MaskShard.Connections[#MaskShard.Connections+1]=connection
-    end
-    return connection
-end
-
-trackRapidFireConnection(utility:CreateConnection(uis.InputBegan,function(input,processed)
-    if processed or window.Enabled then return end
-    if input.UserInputType==Enum.UserInputType.MouseButton1 or input.KeyCode==Enum.KeyCode.ButtonR2 then
-        RapidFireRuntime.Holding=true
-        RapidFireRuntime.NextShotAt=0
-    end
-end))
-
-trackRapidFireConnection(utility:CreateConnection(uis.InputEnded,function(input)
-    if input.UserInputType==Enum.UserInputType.MouseButton1 or input.KeyCode==Enum.KeyCode.ButtonR2 then
-        RapidFireRuntime.Holding=false
-        RapidFireRuntime.NextShotAt=0
-    end
-end))
-
-trackRapidFireConnection(utility:CreateConnection(RunService.Heartbeat,function()
-    local config=getgenv().__DevKageConfig
-    if type(config)~="table"
-        or config.rapidFireEnabled~=true
-        or not RapidFireRuntime.Holding
-        or window.Enabled
-        or not rapidFireIsRivals() then
-        return
-    end
-
-    local tool=rapidFireGetEquippedTool()
-    if not tool then return end
-
-    local now=os.clock()
-    local rate=rapidFireRateFor(tool.Name)
-    local interval=1/math.max(rate,1)
-
-    if now < RapidFireRuntime.NextShotAt then return end
-    RapidFireRuntime.NextShotAt=now+interval
-
-    pcall(function()
-        if tool.Enabled~=false and tool.Parent==LocalPlayer.Character then
-            tool:Activate()
+        local config = getgenv().__DevKageConfig
+        if config.rapidFireEnabled == true then
+            rapidFireApplyConfigured()
         end
-    end)
-end))
+    end
+})
 
-local backpack=LocalPlayer:FindFirstChildOfClass("Backpack")
-if backpack then
-    trackRapidFireConnection(utility:CreateConnection(backpack.ChildAdded,function(child)
-        if child:IsA("Tool") then task.defer(refreshRapidFireWeapons,false) end
-    end))
-    trackRapidFireConnection(utility:CreateConnection(backpack.ChildRemoved,function(child)
-        if child:IsA("Tool") then task.defer(refreshRapidFireWeapons,false) end
-    end))
+rapidFireSection:CreateButton({
+    Name = "Refresh Weapons",
+    Callback = function()
+        refreshRapidFireWeapons(false, true)
+
+        local config = getgenv().__DevKageConfig
+        if config.rapidFireEnabled == true then
+            rapidFireApplyConfigured()
+        end
+    end
+})
+
+-- Restore every ItemLibrary value DevKage changed when the UI unloads.
+table.insert(library.CleanupCallbacks, function()
+    rapidFireRestoreAll()
+
+    if type(MaskShard) == "table"
+        and type(MaskShard.Runtime) == "table"
+        and MaskShard.Runtime.RapidFire == RapidFireRuntime then
+        MaskShard.Runtime.RapidFire = nil
+    end
+end)
+
+-- Expose only lifecycle/runtime ownership to the compatibility-safe
+-- Mask Shard. No global hook or anti-detection behavior is installed.
+if type(MaskShard) == "table" and type(MaskShard.Runtime) == "table" then
+    MaskShard.Runtime.RapidFire = RapidFireRuntime
 end
 
-trackRapidFireConnection(utility:CreateConnection(LocalPlayer.CharacterAdded,function(character)
-    RapidFireRuntime.Holding=false
-    RapidFireRuntime.NextShotAt=0
-    task.defer(function()
-        task.wait(0.25)
-        refreshRapidFireWeapons(true)
-    end)
-end))
-
-UI.RapidFire={
-    Runtime=RapidFireRuntime,
-    Toggle=rapidFireToggle,
-    WeaponDrop=rapidFireWeaponDrop,
-    RateSlider=rapidFireRateSlider,
-    Refresh=refreshRapidFireWeapons,
+UI.RapidFire = {
+    Runtime = RapidFireRuntime,
+    Toggle = rapidFireToggle,
+    WeaponDrop = rapidFireWeaponDrop,
+    RateSlider = rapidFireRateSlider,
+    Refresh = refreshRapidFireWeapons,
+    ApplyConfigured = rapidFireApplyConfigured,
+    RestoreAll = rapidFireRestoreAll,
 }
 
-refreshRapidFireWeapons(false)
+-- Do not require ItemLibrary during normal DevKage startup.
+-- Populate from equipped/backpack Tools first. If Rapid Fire was restored
+-- enabled from config, load/apply after the rest of the UI has yielded.
+refreshRapidFireWeapons(false, false)
+
+task.defer(function()
+    local config = getgenv().__DevKageConfig
+    if type(config) == "table" and config.rapidFireEnabled == true then
+        task.wait(0.25)
+        RapidFireRuntime.LoadAttempted = false
+        rapidFireLoadItems()
+        refreshRapidFireWeapons(false, true)
+        rapidFireApplyConfigured()
+    end
+end)
 
 local modDetectorSection = ragePage:CreateSection({Name="Mod Detector",Side="Left",Size=120})
 local worldTextureSection = ragePage:CreateSection({Name="World Texture",Side="Left",Size=330})
@@ -19298,6 +19674,1188 @@ table.insert(library.CleanupCallbacks,function()
     cursorBridge.MainAttached=false
     cursorBridge.MainHeartbeat=0
 end)
+
+-- ============================================================
+-- DEVKAGE INTEGRATED CURSOR RENDERER
+--
+-- IMPORTANT:
+-- The Crosshair UI, settings, profiles, text choices and animation controls
+-- above/below this block are left exactly as they already existed.
+-- This renderer only consumes the existing DevKage.MaskShard.Cursor/1 bridge.
+--
+-- Rendering is GUI-based instead of replacing the executor-wide Drawing
+-- table. This keeps the cursor isolated from other ESP/cursor scripts and
+-- preserves the compatibility-only Mask Shard behavior.
+-- ============================================================
+
+local IntegratedCursorRuntime = {
+    Protocol = "DevKage.MaskShard.Cursor/1",
+    InstanceId = tostring(
+        (game:GetService("HttpService"):GenerateGUID(false):gsub("%-", ""))
+    ),
+    Running = true,
+    Gui = nil,
+    Root = nil,
+    Arms = {},
+    MainText = nil,
+    SecondText = nil,
+    Revision = -1,
+    Settings = {},
+    SpinClock = 0,
+    DisplayRotation = 0,
+    LastRenderClock = os.clock(),
+    LastGuiCheck = 0,
+    PreviousMouseIconEnabled = uis.MouseIconEnabled,
+    OwnsMouseIcon = false,
+}
+
+do
+    local previousIntegrated = cursorBridgeEnv.__DevKageIntegratedCursorRuntime
+    if type(previousIntegrated) == "table"
+        and previousIntegrated ~= IntegratedCursorRuntime
+        and type(previousIntegrated.Stop) == "function" then
+
+        pcall(function()
+            previousIntegrated:Stop()
+        end)
+    end
+
+    -- If the standalone DevKage cursor from an older build is still running,
+    -- stop only that DevKage-owned cursor instance so two identical renderers
+    -- do not draw on top of each other.
+    local previousStandalone = cursorBridgeEnv.__DevKageCursorRuntimeV1
+    if type(previousStandalone) == "table"
+        and type(previousStandalone.Stop) == "function" then
+
+        pcall(function()
+            previousStandalone:Stop()
+        end)
+    end
+
+    cursorBridgeEnv.__DevKageIntegratedCursorRuntime = IntegratedCursorRuntime
+end
+
+local function cursorNumber(value, fallback, minimum, maximum)
+    value = tonumber(value)
+    if value == nil then value = fallback end
+    if minimum ~= nil then value = math.max(minimum, value) end
+    if maximum ~= nil then value = math.min(maximum, value) end
+    return value
+end
+
+local function cursorColor(value, fallback)
+    if typeof(value) == "Color3" then return value end
+    if typeof(fallback) == "Color3" then return fallback end
+    return Color3.new(1, 1, 1)
+end
+
+local function cursorCopyBridgeSettings()
+    local source = cursorBridge.Settings
+    if type(source) ~= "table" then source = {} end
+
+    local target = IntegratedCursorRuntime.Settings
+
+    target.Enabled = source.Enabled ~= false
+    target.PositionMode = tostring(source.PositionMode or "Mouse")
+    target.ControlMode = tostring(source.ControlMode or "Free Cursor")
+
+    target.Color = cursorColor(source.Color, Color3.new(1, 1, 1))
+    target.SecondaryColor = cursorColor(
+        source.SecondaryColor,
+        Color3.fromRGB(145, 85, 255)
+    )
+    target.ColorMode = tostring(source.ColorMode or "Legacy")
+    target.ColorSpeed = cursorNumber(source.ColorSpeed, 1, 0, 5)
+    target.ColorSpread = cursorNumber(source.ColorSpread, 0.18, 0, 1)
+
+    target.Rainbow = source.Rainbow == true
+    target.RainbowSpeed = cursorNumber(source.RainbowSpeed, 7.2, 0, 15)
+
+    target.LineWidth = cursorNumber(source.LineWidth, 3, 1, 10)
+    target.LineLength = cursorNumber(source.LineLength, 25, 1, 100)
+    target.CenterRadius = cursorNumber(source.CenterRadius, 12.5, 0, 60)
+    target.ArmCount = math.floor(cursorNumber(source.ArmCount, 4, 1, 12) + 0.5)
+    target.AngleOffset = cursorNumber(source.AngleOffset, 0, 0, 360)
+
+    target.Spin = source.Spin == true
+    target.SpinStyle = tostring(source.SpinStyle or "Static")
+    target.SpinDirection = tostring(source.SpinDirection or "Clockwise")
+    target.SpinSpeed = cursorNumber(source.SpinSpeed, 288, 0, 360)
+    target.SpinRange = cursorNumber(source.SpinRange, 360, 1, 360)
+    target.SquashX = cursorNumber(source.SquashX, 1, 0.25, 2)
+    target.SquashY = cursorNumber(source.SquashY, 1, 0.25, 2)
+    target.SmoothSpin = source.SmoothSpin == true
+    target.PulseSpeed = cursorNumber(source.PulseSpeed, 2.5, 0, 8)
+
+    target.LineGlow = source.LineGlow == true
+    target.GlowThickness = cursorNumber(source.GlowThickness, 30, 0, 50)
+    target.GlowExtraLength = cursorNumber(source.GlowExtraLength, 15, 0, 50)
+    target.GlowTransparency = cursorNumber(source.GlowTransparency, 0.43, 0, 1)
+
+    target.TextEnabled = source.TextEnabled == true
+    target.MainText = tostring(source.MainText or "devkage")
+    target.SecondText = tostring(source.SecondText or "None")
+    target.TextOutline = source.TextOutline ~= false
+    target.MainTextSize = math.floor(cursorNumber(source.MainTextSize, 20, 8, 40) + 0.5)
+    target.SecondTextSize = math.floor(cursorNumber(source.SecondTextSize, 15, 8, 40) + 0.5)
+
+    return target
+end
+
+local function cursorDestroyGui()
+    local runtime = IntegratedCursorRuntime
+
+    if runtime.Gui then
+        pcall(function()
+            runtime.Gui:Destroy()
+        end)
+    end
+
+    runtime.Gui = nil
+    runtime.Root = nil
+    runtime.MainText = nil
+    runtime.SecondText = nil
+    runtime.Arms = {}
+end
+
+local function cursorCreateRoundedFrame(parent, name, zindex)
+    local frame = Instance.new("Frame")
+    frame.Name = name
+    frame.AnchorPoint = Vector2.new(0.5, 0.5)
+    frame.BackgroundColor3 = Color3.new(1, 1, 1)
+    frame.BackgroundTransparency = 0
+    frame.BorderSizePixel = 0
+    frame.Size = UDim2.fromOffset(1, 1)
+    frame.Position = UDim2.fromOffset(0, 0)
+    frame.ZIndex = zindex
+    frame.Visible = false
+    frame.Parent = parent
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0)
+    corner.Parent = frame
+
+    return frame
+end
+
+local function cursorCreateArm(parent, index)
+    local arm = {
+        Index = index,
+        GlowOuter = cursorCreateRoundedFrame(
+            parent,
+            "GlowOuter_" .. tostring(index),
+            10000
+        ),
+        GlowInner = cursorCreateRoundedFrame(
+            parent,
+            "GlowInner_" .. tostring(index),
+            10001
+        ),
+        Line = cursorCreateRoundedFrame(
+            parent,
+            "Line_" .. tostring(index),
+            10003
+        ),
+    }
+
+    local outline = Instance.new("UIStroke")
+    outline.Name = "Outline"
+    outline.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    outline.Color = Color3.new(0, 0, 0)
+    outline.Thickness = 1
+    outline.Transparency = 0.18
+    outline.Parent = arm.Line
+    arm.Outline = outline
+
+    return arm
+end
+
+local function cursorCreateText(parent, name)
+    local label = Instance.new("TextLabel")
+    label.Name = name
+    label.AnchorPoint = Vector2.new(0.5, 0.5)
+    label.BackgroundTransparency = 1
+    label.BorderSizePixel = 0
+
+    -- Keep the DevKage cursor text font unchanged.
+    label.Font = Enum.Font.Code
+
+    label.Text = ""
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.TextStrokeColor3 = Color3.new(0, 0, 0)
+    label.TextStrokeTransparency = 0
+    label.TextTransparency = 0
+    label.TextXAlignment = Enum.TextXAlignment.Center
+    label.TextYAlignment = Enum.TextYAlignment.Center
+    label.ZIndex = 10006
+    label.Visible = false
+    label.Parent = parent
+
+    return label
+end
+
+local function cursorEnsureArmCount(count)
+    local runtime = IntegratedCursorRuntime
+    count = math.floor(cursorNumber(count, 4, 1, 12) + 0.5)
+
+    while #runtime.Arms < count do
+        runtime.Arms[#runtime.Arms + 1] =
+            cursorCreateArm(runtime.Root, #runtime.Arms + 1)
+    end
+
+    for index, arm in ipairs(runtime.Arms) do
+        local visible = index <= count
+        arm.Line.Visible = visible
+        arm.GlowInner.Visible = false
+        arm.GlowOuter.Visible = false
+    end
+end
+
+local function cursorCreateGui()
+    local runtime = IntegratedCursorRuntime
+    cursorDestroyGui()
+
+    local playerGui = LocalPlayer and LocalPlayer:FindFirstChildOfClass("PlayerGui")
+    if not playerGui and LocalPlayer then
+        local ok, result = pcall(function()
+            return LocalPlayer:WaitForChild("PlayerGui", 8)
+        end)
+        if ok then playerGui = result end
+    end
+
+    if not playerGui then return false end
+
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "DevKageIntegratedCursor_" .. runtime.InstanceId
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.DisplayOrder = 2147483000
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+
+    pcall(function()
+        gui:SetAttribute("DevKageCursorProtocol", runtime.Protocol)
+        gui:SetAttribute("DevKageCursorOwner", runtime.InstanceId)
+        gui:SetAttribute("DevKageMaskShardCompatibilityOnly", true)
+    end)
+
+    local parentOk = pcall(function()
+        gui.Parent = playerGui
+    end)
+
+    if not parentOk or gui.Parent == nil then
+        pcall(function() gui:Destroy() end)
+        return false
+    end
+
+    local root = Instance.new("Frame")
+    root.Name = "CursorRoot"
+    root.AnchorPoint = Vector2.new(0.5, 0.5)
+    root.BackgroundTransparency = 1
+    root.BorderSizePixel = 0
+    root.Size = UDim2.fromOffset(1, 1)
+    root.Position = UDim2.fromOffset(0, 0)
+    root.ZIndex = 10000
+    root.Parent = gui
+
+    runtime.Gui = gui
+    runtime.Root = root
+    runtime.Arms = {}
+
+    cursorEnsureArmCount(
+        runtime.Settings.ArmCount
+        or cursorBridge.Settings.ArmCount
+        or 4
+    )
+
+    runtime.MainText = cursorCreateText(gui, "MainText")
+    runtime.SecondText = cursorCreateText(gui, "SecondText")
+
+    return true
+end
+
+local function cursorLerpColor(a, b, alpha)
+    a = cursorColor(a, Color3.new(1, 1, 1))
+    b = cursorColor(b, a)
+    return a:Lerp(b, math.clamp(alpha, 0, 1))
+end
+
+local function cursorHSV(timeValue, speed, offset)
+    speed = cursorNumber(speed, 1, 0, 20)
+    offset = tonumber(offset) or 0
+    return Color3.fromHSV(
+        ((timeValue * speed * 0.08) + offset) % 1,
+        0.92,
+        1
+    )
+end
+
+local function cursorResolveColor(settings, now, index, count)
+    local main = cursorColor(
+        settings.Color,
+        Color3.new(1, 1, 1)
+    )
+
+    local secondary = cursorColor(
+        settings.SecondaryColor,
+        Color3.fromRGB(145, 85, 255)
+    )
+
+    local spread = cursorNumber(settings.ColorSpread, 0.18, 0, 1)
+    local speed = cursorNumber(settings.ColorSpeed, 1, 0, 5)
+    local armRatio = count <= 1 and 0 or ((index - 1) / (count - 1))
+    local phase = ((index - 1) / math.max(count, 1)) * spread
+    local mode = tostring(settings.ColorMode or "Legacy")
+
+    if settings.Rainbow == true then
+        local rainbowSpeed =
+            cursorNumber(settings.RainbowSpeed, 7.2, 0, 15)
+
+        return Color3.fromHSV(
+            ((now * rainbowSpeed * 0.045) + phase) % 1,
+            0.92,
+            1
+        )
+    end
+
+    if mode == "Solid" then
+        return main
+    end
+
+    if mode == "Two Tone" then
+        if index % 2 == 0 then return secondary end
+        return main
+    end
+
+    if mode == "Gradient" then
+        return cursorLerpColor(main, secondary, armRatio)
+    end
+
+    if mode == "Color Wave" then
+        local wave =
+            math.sin(
+                (now * math.max(speed, 0.01) * 2)
+                + (phase * math.pi * 2)
+            ) * 0.5 + 0.5
+
+        return cursorLerpColor(main, secondary, wave)
+    end
+
+    if mode == "RGB Wave" then
+        return cursorHSV(
+            now,
+            math.max(speed, 0.1),
+            phase
+        )
+    end
+
+    if mode == "Ice" then
+        local wave =
+            math.sin(
+                now * math.max(speed, 0.25) * 2
+                + phase * 6
+            ) * 0.5 + 0.5
+
+        return cursorLerpColor(
+            Color3.fromRGB(220, 250, 255),
+            Color3.fromRGB(65, 180, 255),
+            wave
+        )
+    end
+
+    if mode == "Purple LED" then
+        local wave =
+            math.sin(
+                now * math.max(speed, 0.25) * 2.5
+                + phase * 7
+            ) * 0.5 + 0.5
+
+        return cursorLerpColor(
+            Color3.fromRGB(110, 35, 255),
+            Color3.fromRGB(240, 90, 255),
+            wave
+        )
+    end
+
+    if mode == "Fire" then
+        local wave =
+            math.sin(
+                now * math.max(speed, 0.25) * 2.7
+                + phase * 5
+            ) * 0.5 + 0.5
+
+        return cursorLerpColor(
+            Color3.fromRGB(255, 55, 25),
+            Color3.fromRGB(255, 220, 45),
+            wave
+        )
+    end
+
+    if mode == "Toxic" then
+        local wave =
+            math.sin(
+                now * math.max(speed, 0.25) * 2.2
+                + phase * 5
+            ) * 0.5 + 0.5
+
+        return cursorLerpColor(
+            Color3.fromRGB(40, 255, 65),
+            Color3.fromRGB(190, 255, 35),
+            wave
+        )
+    end
+
+    -- "Legacy" keeps the original flowing RGB-style DevKage look.
+    local r = math.sin(now * 0.60) * 0.5 + 0.5
+    local g = math.sin(now * 0.60 + 2.00) * 0.5 + 0.5
+    local b = math.sin(now * 0.60 + 4.00) * 0.5 + 0.5
+
+    local legacy = Color3.new(r, g, b)
+    if speed <= 0 then
+        return main
+    end
+
+    return cursorLerpColor(
+        legacy,
+        main,
+        math.clamp(1 - speed * 0.12, 0, 0.85)
+    )
+end
+
+local function cursorShortestAngleDelta(fromAngle, toAngle)
+    local delta = (toAngle - fromAngle + 180) % 360 - 180
+    return delta
+end
+
+local function cursorResolveRotation(settings, now, dt)
+    local runtime = IntegratedCursorRuntime
+    local baseOffset =
+        cursorNumber(settings.AngleOffset, 0, 0, 360)
+
+    if settings.Spin ~= true then
+        runtime.SpinClock = 0
+        runtime.DisplayRotation = baseOffset
+        return baseOffset
+    end
+
+    local direction =
+        tostring(settings.SpinDirection or "Clockwise")
+            == "Counter Clockwise"
+        and -1
+        or 1
+
+    local speed =
+        cursorNumber(settings.SpinSpeed, 288, 0, 360)
+
+    local range =
+        cursorNumber(settings.SpinRange, 360, 1, 360)
+
+    local style =
+        tostring(settings.SpinStyle or "Static")
+
+    runtime.SpinClock =
+        runtime.SpinClock + (dt * speed * direction)
+
+    local wanted
+
+    if style == "Ping Pong" then
+        local phase =
+            math.sin(
+                math.rad(runtime.SpinClock)
+            )
+
+        wanted =
+            baseOffset
+            + phase * range
+    elseif style == "Stepped" then
+        local armCount =
+            math.max(
+                1,
+                math.floor(
+                    cursorNumber(settings.ArmCount, 4, 1, 12)
+                    + 0.5
+                )
+            )
+
+        local step =
+            math.max(
+                1,
+                range / armCount
+            )
+
+        wanted =
+            baseOffset
+            + math.floor(runtime.SpinClock / step) * step
+    else
+        -- Static = the normal continuous DevKage rotation.
+        wanted =
+            baseOffset
+            + runtime.SpinClock
+    end
+
+    if settings.SmoothSpin == true then
+        local alpha =
+            1 - math.exp(-math.max(dt, 0) * 14)
+
+        local delta =
+            cursorShortestAngleDelta(
+                runtime.DisplayRotation,
+                wanted
+            )
+
+        runtime.DisplayRotation =
+            runtime.DisplayRotation
+            + delta * alpha
+    else
+        runtime.DisplayRotation = wanted
+    end
+
+    return runtime.DisplayRotation
+end
+
+local function cursorResolvePosition(settings)
+    local camera = workspace.CurrentCamera
+    local mode = tostring(settings.PositionMode or "Mouse")
+
+    if mode == "Center"
+        or mode == "Screen Center"
+        or mode == "Crosshair" then
+
+        local viewport =
+            camera
+            and camera.ViewportSize
+            or Vector2.new(1920, 1080)
+
+        return Vector2.new(
+            viewport.X * 0.5,
+            viewport.Y * 0.5
+        )
+    end
+
+    return uis:GetMouseLocation()
+end
+
+local function cursorApplyArm(
+    arm,
+    positionX,
+    positionY,
+    displayAngle,
+    width,
+    length,
+    color,
+    glowEnabled,
+    glowThickness,
+    glowExtraLength,
+    glowTransparency
+)
+    arm.Line.Visible = true
+    arm.Line.Size =
+        UDim2.fromOffset(
+            math.max(1, width),
+            math.max(1, length)
+        )
+    arm.Line.Position =
+        UDim2.fromOffset(
+            positionX,
+            positionY
+        )
+    arm.Line.Rotation = displayAngle
+    arm.Line.BackgroundColor3 = color
+
+    if arm.Outline then
+        arm.Outline.Enabled = true
+        arm.Outline.Thickness =
+            math.max(
+                1,
+                math.min(width * 0.42, 2)
+            )
+    end
+
+    if not glowEnabled then
+        arm.GlowInner.Visible = false
+        arm.GlowOuter.Visible = false
+        return
+    end
+
+    local innerWidth =
+        width
+        + math.max(0, glowThickness) * 0.42
+
+    local outerWidth =
+        width
+        + math.max(0, glowThickness)
+
+    local innerLength =
+        length
+        + math.max(0, glowExtraLength)
+
+    local outerLength =
+        length
+        + math.max(0, glowExtraLength) * 2
+
+    arm.GlowInner.Visible = true
+    arm.GlowInner.Size =
+        UDim2.fromOffset(
+            math.max(1, innerWidth),
+            math.max(1, innerLength)
+        )
+    arm.GlowInner.Position =
+        UDim2.fromOffset(
+            positionX,
+            positionY
+        )
+    arm.GlowInner.Rotation = displayAngle
+    arm.GlowInner.BackgroundColor3 = color
+    arm.GlowInner.BackgroundTransparency =
+        math.clamp(
+            glowTransparency + 0.18,
+            0,
+            1
+        )
+
+    arm.GlowOuter.Visible = true
+    arm.GlowOuter.Size =
+        UDim2.fromOffset(
+            math.max(1, outerWidth),
+            math.max(1, outerLength)
+        )
+    arm.GlowOuter.Position =
+        UDim2.fromOffset(
+            positionX,
+            positionY
+        )
+    arm.GlowOuter.Rotation = displayAngle
+    arm.GlowOuter.BackgroundColor3 = color
+    arm.GlowOuter.BackgroundTransparency =
+        math.clamp(
+            glowTransparency + 0.36,
+            0,
+            1
+        )
+end
+
+local function cursorApplyText(
+    settings,
+    cursorPosition,
+    color,
+    radius,
+    length
+)
+    local runtime = IntegratedCursorRuntime
+    local mainText = runtime.MainText
+    local secondText = runtime.SecondText
+
+    if not mainText or not secondText then return end
+
+    local enabled =
+        settings.TextEnabled == true
+        and settings.Enabled ~= false
+
+    local mainValue =
+        tostring(settings.MainText or "devkage")
+
+    local secondValue =
+        tostring(settings.SecondText or "None")
+
+    mainText.Visible =
+        enabled
+        and mainValue ~= ""
+        and mainValue ~= "None"
+
+    secondText.Visible =
+        enabled
+        and secondValue ~= ""
+        and secondValue ~= "None"
+
+    local mainSize =
+        math.floor(
+            cursorNumber(
+                settings.MainTextSize,
+                20,
+                8,
+                40
+            ) + 0.5
+        )
+
+    local secondSize =
+        math.floor(
+            cursorNumber(
+                settings.SecondTextSize,
+                15,
+                8,
+                40
+            ) + 0.5
+        )
+
+    local outline =
+        settings.TextOutline ~= false
+
+    local baseY =
+        cursorPosition.Y
+        + radius
+        + length
+        + 20
+
+    if mainText.Visible then
+        mainText.Text = mainValue
+
+        -- Keep cursor text font unchanged.
+        mainText.Font = Enum.Font.Code
+
+        mainText.TextColor3 = color
+        mainText.TextSize = mainSize
+        mainText.TextStrokeTransparency =
+            outline and 0 or 1
+
+        mainText.Size =
+            UDim2.fromOffset(
+                math.max(
+                    130,
+                    (#mainValue + 2) * mainSize * 0.62
+                ),
+                mainSize + 8
+            )
+
+        mainText.Position =
+            UDim2.fromOffset(
+                cursorPosition.X,
+                baseY
+            )
+    end
+
+    if secondText.Visible then
+        secondText.Text = secondValue
+
+        -- Keep cursor text font unchanged.
+        secondText.Font = Enum.Font.Code
+
+        secondText.TextColor3 = color
+        secondText.TextSize = secondSize
+        secondText.TextStrokeTransparency =
+            outline and 0 or 1
+
+        secondText.Size =
+            UDim2.fromOffset(
+                math.max(
+                    130,
+                    (#secondValue + 2) * secondSize * 0.62
+                ),
+                secondSize + 8
+            )
+
+        secondText.Position =
+            UDim2.fromOffset(
+                cursorPosition.X,
+                baseY + mainSize + 9
+            )
+    end
+end
+
+local function cursorSetBridgeOwnership(active)
+    local runtime = IntegratedCursorRuntime
+
+    if active then
+        cursorBridge.ExternalAttached = true
+        cursorBridge.ExternalHeartbeat = os.clock()
+        cursorBridge.ExternalOwner =
+            "DevKageMain:" .. runtime.InstanceId
+    else
+        local owner =
+            tostring(
+                cursorBridge.ExternalOwner
+                or ""
+            )
+
+        if owner == ""
+            or owner == "DevKageMain:" .. runtime.InstanceId then
+
+            cursorBridge.ExternalAttached = false
+            cursorBridge.ExternalHeartbeat = 0
+            cursorBridge.ExternalOwner = nil
+        end
+    end
+end
+
+local function cursorUpdateNativeMouse(settings)
+    local runtime = IntegratedCursorRuntime
+
+    if settings.Enabled ~= false then
+        -- While the DevKage custom cursor is alive, the window's existing
+        -- mouse-control code also sees ExternalAttached and suppresses the
+        -- default Roblox icon while the menu is open.
+        if uis.MouseIconEnabled == true then
+            runtime.PreviousMouseIconEnabled = true
+            runtime.OwnsMouseIcon = true
+            pcall(function()
+                uis.MouseIconEnabled = false
+            end)
+        end
+    elseif runtime.OwnsMouseIcon then
+        runtime.OwnsMouseIcon = false
+        pcall(function()
+            uis.MouseIconEnabled =
+                runtime.PreviousMouseIconEnabled ~= false
+        end)
+    end
+end
+
+local function cursorRender(deltaTime)
+    local runtime = IntegratedCursorRuntime
+    if not runtime.Running then return end
+
+    local now = os.clock()
+    local dt = tonumber(deltaTime)
+        or math.max(0, now - runtime.LastRenderClock)
+
+    runtime.LastRenderClock = now
+
+    local revision =
+        tonumber(cursorBridge.Revision) or 0
+
+    if runtime.Revision ~= revision then
+        runtime.Revision = revision
+        cursorCopyBridgeSettings()
+    end
+
+    local settings = runtime.Settings
+    if next(settings) == nil then
+        cursorCopyBridgeSettings()
+        settings = runtime.Settings
+    end
+
+    runtime.LastGuiCheck =
+        runtime.LastGuiCheck + math.max(dt, 0)
+
+    if not runtime.Gui
+        or runtime.Gui.Parent == nil
+        or not runtime.Root
+        or runtime.Root.Parent == nil then
+
+        if runtime.LastGuiCheck >= 0.10 then
+            runtime.LastGuiCheck = 0
+            cursorCreateGui()
+        end
+    elseif runtime.LastGuiCheck >= 1 then
+        runtime.LastGuiCheck = 0
+    end
+
+    local gui = runtime.Gui
+    local root = runtime.Root
+
+    if not gui or not root then
+        cursorSetBridgeOwnership(false)
+        return
+    end
+
+    local enabled =
+        settings.Enabled ~= false
+
+    gui.Enabled = enabled
+
+    cursorSetBridgeOwnership(enabled)
+
+    if not enabled then
+        cursorUpdateNativeMouse(settings)
+        return
+    end
+
+    cursorUpdateNativeMouse(settings)
+
+    local armCount =
+        math.floor(
+            cursorNumber(
+                settings.ArmCount,
+                4,
+                1,
+                12
+            ) + 0.5
+        )
+
+    cursorEnsureArmCount(armCount)
+
+    local cursorPosition =
+        cursorResolvePosition(settings)
+
+    root.Position =
+        UDim2.fromOffset(
+            cursorPosition.X,
+            cursorPosition.Y
+        )
+
+    local width =
+        cursorNumber(
+            settings.LineWidth,
+            3,
+            1,
+            10
+        )
+
+    local baseLength =
+        cursorNumber(
+            settings.LineLength,
+            25,
+            1,
+            100
+        )
+
+    local baseRadius =
+        cursorNumber(
+            settings.CenterRadius,
+            12.5,
+            0,
+            60
+        )
+
+    local squashX =
+        cursorNumber(
+            settings.SquashX,
+            1,
+            0.25,
+            2
+        )
+
+    local squashY =
+        cursorNumber(
+            settings.SquashY,
+            1,
+            0.25,
+            2
+        )
+
+    local pulseSpeed =
+        cursorNumber(
+            settings.PulseSpeed,
+            2.5,
+            0,
+            8
+        )
+
+    local pulseScale = 1
+
+    if pulseSpeed > 0 then
+        local pulse =
+            math.sin(
+                now
+                * pulseSpeed
+                * math.pi
+            ) * 0.5 + 0.5
+
+        pulseScale =
+            0.88
+            + pulse * 0.24
+    end
+
+    local length =
+        math.max(
+            1,
+            baseLength * pulseScale
+        )
+
+    local radius =
+        math.max(
+            0,
+            baseRadius * (
+                0.94
+                + (pulseScale - 0.88) * 0.25
+            )
+        )
+
+    local rotation =
+        cursorResolveRotation(
+            settings,
+            now,
+            math.max(dt, 0)
+        )
+
+    local glowEnabled =
+        settings.LineGlow == true
+
+    local glowThickness =
+        cursorNumber(
+            settings.GlowThickness,
+            30,
+            0,
+            50
+        )
+
+    local glowExtraLength =
+        cursorNumber(
+            settings.GlowExtraLength,
+            15,
+            0,
+            50
+        )
+
+    local glowTransparency =
+        cursorNumber(
+            settings.GlowTransparency,
+            0.43,
+            0,
+            1
+        )
+
+    local firstColor =
+        cursorResolveColor(
+            settings,
+            now,
+            1,
+            armCount
+        )
+
+    for index, arm in ipairs(runtime.Arms) do
+        if index <= armCount then
+            local angle =
+                rotation
+                + ((index - 1) * (360 / armCount))
+
+            local radians =
+                math.rad(angle)
+
+            local rawX =
+                math.sin(radians)
+
+            local rawY =
+                -math.cos(radians)
+
+            local dx =
+                rawX * squashX
+
+            local dy =
+                rawY * squashY
+
+            local distance =
+                radius + (length * 0.5)
+
+            local positionX =
+                dx * distance
+
+            local positionY =
+                dy * distance
+
+            local displayAngle =
+                math.deg(
+                    math.atan2(
+                        dx,
+                        -dy
+                    )
+                )
+
+            local color =
+                cursorResolveColor(
+                    settings,
+                    now,
+                    index,
+                    armCount
+                )
+
+            cursorApplyArm(
+                arm,
+                positionX,
+                positionY,
+                displayAngle,
+                width,
+                length,
+                color,
+                glowEnabled,
+                glowThickness,
+                glowExtraLength,
+                glowTransparency
+            )
+        else
+            arm.Line.Visible = false
+            arm.GlowInner.Visible = false
+            arm.GlowOuter.Visible = false
+        end
+    end
+
+    cursorApplyText(
+        settings,
+        cursorPosition,
+        firstColor,
+        radius,
+        length
+    )
+end
+
+function IntegratedCursorRuntime:Stop()
+    if not self.Running then return true end
+
+    self.Running = false
+
+    cursorSetBridgeOwnership(false)
+
+    if self.OwnsMouseIcon then
+        self.OwnsMouseIcon = false
+        pcall(function()
+            uis.MouseIconEnabled =
+                self.PreviousMouseIconEnabled ~= false
+        end)
+    end
+
+    cursorDestroyGui()
+
+    if cursorBridgeEnv.__DevKageIntegratedCursorRuntime == self then
+        cursorBridgeEnv.__DevKageIntegratedCursorRuntime = nil
+    end
+
+    if type(MaskShard) == "table"
+        and type(MaskShard.Runtime) == "table"
+        and MaskShard.Runtime.CursorRenderer == self then
+
+        MaskShard.Runtime.CursorRenderer = nil
+    end
+
+    return true
+end
+
+-- Snapshot the already-published settings before the first render.
+cursorCopyBridgeSettings()
+
+-- Create immediately so the first visible frame uses the same settings the
+-- Crosshair page already published.
+cursorCreateGui()
+
+local integratedCursorConnection =
+    utility:CreateConnection(
+        RunService.RenderStepped,
+        cursorRender
+    )
+
+if type(MaskShard) == "table" then
+    if type(MaskShard.RegisterConnection) == "function" then
+        MaskShard:RegisterConnection(integratedCursorConnection)
+    elseif type(MaskShard.Connections) == "table" then
+        MaskShard.Connections[
+            #MaskShard.Connections + 1
+        ] = integratedCursorConnection
+    end
+
+    if type(MaskShard.Runtime) == "table" then
+        MaskShard.Runtime.CursorRenderer =
+            IntegratedCursorRuntime
+        MaskShard.Runtime.CursorProtocol =
+            IntegratedCursorRuntime.Protocol
+        MaskShard.Runtime.CursorCompatibilityOnly =
+            true
+    end
+end
+
+table.insert(
+    library.CleanupCallbacks,
+    function()
+        pcall(function()
+            integratedCursorConnection:Disconnect()
+        end)
+
+        pcall(function()
+            IntegratedCursorRuntime:Stop()
+        end)
+    end
+)
+
+-- Keep bridge ownership fresh before the menu's late mouse-state pass.
+cursorSetBridgeOwnership(
+    IntegratedCursorRuntime.Settings.Enabled ~= false
+)
 
 local function addToggle(section,key,name)
     local control=section:CreateToggle({Name=name,State=VisualsState[key],Flag="visuals."..key,Callback=function(v) syncCursorSetting(key,v) end})
