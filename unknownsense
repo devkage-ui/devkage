@@ -10445,7 +10445,9 @@ local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
 local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload.lua"
+local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOEXEC_NAME = "DevKage_AutoLoad.lua"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v15-reference-cursor-rapidfire-current"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -10945,6 +10947,10 @@ end
 local function build_script_autoload_stub()
 return string.format([=[
 local env = (type(getgenv) == "function" and getgenv()) or _G
+local EXPECTED_BUILD = %q
+local SETTINGS_FILE = %q
+local BUILD_FILE = %q
+local PAYLOAD_FILE = %q
 
 task.spawn(function()
     local ok, err = pcall(function()
@@ -10953,41 +10959,93 @@ task.spawn(function()
         local Workspace = game:GetService("Workspace")
 
         if type(readfile) ~= "function" then return end
-        if type(isfile) == "function" and not isfile(%q) then return end
 
-        local raw = readfile(%q)
-        local decodedOk, settings = pcall(HttpService.JSONDecode, HttpService, raw)
-        if not decodedOk or type(settings) ~= "table" or settings.AutoLoad ~= true then return end
-        if type(isfile) == "function" and not isfile(%q) then return end
+        if type(isfile) == "function" then
+            local settingsExists = pcall(isfile, SETTINGS_FILE)
+            if settingsExists then
+                local checked, exists = pcall(isfile, SETTINGS_FILE)
+                if checked and not exists then return end
+            end
+        end
+
+        local rawSettings = readfile(SETTINGS_FILE)
+        local decodedOk, settings = pcall(HttpService.JSONDecode, HttpService, rawSettings)
+        if not decodedOk or type(settings) ~= "table" or settings.AutoLoad ~= true then
+            return
+        end
+
+        -- A stale autoexec stub must never resurrect an old DevKage payload.
+        -- The build marker and the payload's first-line marker must both match.
+        local buildOk, savedBuild = pcall(readfile, BUILD_FILE)
+        if not buildOk or tostring(savedBuild or "") ~= EXPECTED_BUILD then
+            warn("[DevKage AutoLoad] stale/mismatched build marker; skipping old payload")
+            return
+        end
+
+        local payloadOk, source = pcall(readfile, PAYLOAD_FILE)
+        if not payloadOk or type(source) ~= "string" or source == "" then
+            return
+        end
+
+        local expectedPrefix = "-- DEVKAGE_AUTOLOAD_BUILD:" .. EXPECTED_BUILD
+        if source:sub(1, #expectedPrefix) ~= expectedPrefix then
+            warn("[DevKage AutoLoad] stale/mismatched payload; skipping")
+            return
+        end
 
         if not game:IsLoaded() then game.Loaded:Wait() end
 
         local deadline = os.clock() + 20
         while tostring(game.JobId) == "" and os.clock() < deadline do task.wait(0.1) end
         while not Players.LocalPlayer and os.clock() < deadline do task.wait(0.1) end
-        while Players.LocalPlayer and not Players.LocalPlayer:FindFirstChildOfClass("PlayerGui") and os.clock() < deadline do task.wait(0.1) end
+        while Players.LocalPlayer
+            and not Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
+            and os.clock() < deadline do
+            task.wait(0.1)
+        end
         while not Workspace.CurrentCamera and os.clock() < deadline do task.wait(0.1) end
 
         local jobKey = tostring(game.PlaceId) .. ":" .. tostring(game.JobId)
-        if env.__DEVKAGE_AUTO_STARTING_JOB == jobKey or env.__DEVKAGE_AUTO_STARTED_JOB == jobKey then
+        if env.__DEVKAGE_AUTO_STARTING_JOB == jobKey
+            or env.__DEVKAGE_AUTO_STARTED_JOB == jobKey then
             return
         end
+
         env.__DEVKAGE_AUTO_STARTING_JOB = jobKey
+        env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = EXPECTED_BUILD
 
         task.wait(2.5)
 
-        local source = readfile(%q)
-        if type(source) ~= "string" or source == "" then
+        -- Read again after the startup delay so a just-refreshed current
+        -- build wins over any file that was present when autoexec began.
+        local secondBuildOk, secondBuild = pcall(readfile, BUILD_FILE)
+        local secondPayloadOk, secondSource = pcall(readfile, PAYLOAD_FILE)
+
+        if not secondBuildOk
+            or tostring(secondBuild or "") ~= EXPECTED_BUILD
+            or not secondPayloadOk
+            or type(secondSource) ~= "string"
+            or secondSource == ""
+            or secondSource:sub(1, #expectedPrefix) ~= expectedPrefix then
+
             env.__DEVKAGE_AUTO_STARTING_JOB = nil
+            env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
             return
         end
 
+        source = secondSource
+
         env.__DEVKAGE_AUTO_STARTED = true
-        env.__DEVKAGE_EMBEDDED_SOURCE = source
+        env.__DEVKAGE_EMBEDDED_SOURCE =
+            source:sub(#expectedPrefix + 2)
+
         env.__DEVKAGE_MULTI_INJECT_BOOT = true
 
         local compiler = loadstring or load
-        if type(compiler) ~= "function" then error("loadstring unavailable") end
+        if type(compiler) ~= "function" then
+            error("loadstring unavailable")
+        end
+
         local fn, compileError = compiler(source)
         if not fn then error(compileError) end
 
@@ -10998,12 +11056,12 @@ task.spawn(function()
 
         if not runOk then
             env.__DEVKAGE_AUTO_STARTED = false
+            env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
             error(runError)
         end
 
-        -- Only mark this Roblox server as completed after the payload
-        -- successfully finishes its startup path.
         env.__DEVKAGE_AUTO_STARTED_JOB = jobKey
+        env.__DEVKAGE_AUTOLOADED_BUILD = EXPECTED_BUILD
     end)
 
     if not ok then
@@ -11011,9 +11069,14 @@ task.spawn(function()
         env.__DEVKAGE_AUTO_STARTED = false
         env.__DEVKAGE_MULTI_INJECT_BOOT = nil
         env.__DEVKAGE_AUTO_STARTING_JOB = nil
+        env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
     end
 end)
-]=], SCRIPT_SETTINGS_FILE, SCRIPT_SETTINGS_FILE, SCRIPT_PAYLOAD_FILE, SCRIPT_PAYLOAD_FILE)
+]=],
+SCRIPT_AUTOLOAD_BUILD,
+SCRIPT_SETTINGS_FILE,
+SCRIPT_BUILD_FILE,
+SCRIPT_PAYLOAD_FILE)
 end
 
 local function find_teleport_queue()
@@ -11090,46 +11153,67 @@ end
 
 local function configure_script_autoload(enabled, bootRefresh)
 local settings = read_script_settings()
-settings.AutoLoad = enabled == true
-local saved, saveError = write_script_settings(settings)
-if not saved then return false, saveError end
+enabled = enabled == true
 
 if not enabled then
+    settings.AutoLoad = false
+    local saved, saveError = write_script_settings(settings)
+    if not saved then return false, saveError end
+
     remove_autoexec_stubs()
-    if type(delfile) == "function" and type(isfile) == "function" then
-        local ok, exists = pcall(isfile, SCRIPT_PAYLOAD_FILE)
-        if ok and exists then pcall(delfile, SCRIPT_PAYLOAD_FILE) end
+
+    if type(delfile) == "function" then
+        for _, path in ipairs({SCRIPT_PAYLOAD_FILE, SCRIPT_BUILD_FILE}) do
+            local shouldDelete = true
+            if type(isfile) == "function" then
+                local ok, exists = pcall(isfile, path)
+                shouldDelete = not ok or exists == true
+            end
+            if shouldDelete then pcall(delfile, path) end
+        end
     end
+
+    local env = (type(getgenv) == "function" and getgenv()) or _G
+    env.__DEVKAGE_AUTOLOAD_BUILD = nil
     return true, "Script auto-load disabled"
 end
 
-local source = type(getgenv) == "function" and getgenv().__DEVKAGE_EMBEDDED_SOURCE or nil
-if (type(source) ~= "string" or source == "") and type(readfile) == "function" then
-    local ok, existing = pcall(readfile, SCRIPT_PAYLOAD_FILE)
-    if ok then source = existing end
-end
+-- IMPORTANT: only the currently executing packaged DevKage source may become
+-- the next auto-load payload. Never resurrect an old payload from disk.
+local env = (type(getgenv) == "function" and getgenv()) or _G
+local source = env.__DEVKAGE_EMBEDDED_SOURCE
+
 if type(source) ~= "string" or source == "" then
-    if not bootRefresh then
-        settings.AutoLoad = false
-        write_script_settings(settings)
-    end
-    return false, "Packaged source is unavailable"
+    return false, "Current packaged DevKage source is unavailable; refusing to reuse an old auto-load payload"
 end
+
 if type(writefile) ~= "function" then
-    if not bootRefresh then
-        settings.AutoLoad = false
-        write_script_settings(settings)
-    end
     return false, "This executor cannot write the auto-load payload"
 end
 
-local payloadOk, payloadErr = pcall(writefile, SCRIPT_PAYLOAD_FILE, source)
+local folderOk, folderError = ensure_folder()
+if not folderOk then return false, folderError end
+
+local payload =
+    "-- DEVKAGE_AUTOLOAD_BUILD:"
+    .. SCRIPT_AUTOLOAD_BUILD
+    .. "\n"
+    .. source
+
+-- Write the current source first.
+local payloadOk, payloadErr =
+    pcall(writefile, SCRIPT_PAYLOAD_FILE, payload)
+
 if not payloadOk then
-    if not bootRefresh then
-        settings.AutoLoad = false
-        write_script_settings(settings)
-    end
     return false, tostring(payloadErr)
+end
+
+-- Then atomically identify which build that payload belongs to.
+local buildOk, buildErr =
+    pcall(writefile, SCRIPT_BUILD_FILE, SCRIPT_AUTOLOAD_BUILD)
+
+if not buildOk then
+    return false, "Could not save current Auto Load build marker: " .. tostring(buildErr)
 end
 
 local stub = build_script_autoload_stub()
@@ -11138,32 +11222,52 @@ local queued, queueError = queue_script_autoload(stub)
 local autoexecWritten, autoexecPaths = write_autoexec_stubs(stub)
 
 if not queued and not autoexecWritten then
-    return false, "Auto Load is enabled in settings, but no writable executor autoexec path or teleport queue was found"
+    return false, "Current build was saved, but no writable executor autoexec path or teleport queue was found"
 end
 
-if autoexecWritten then
-local env = (type(getgenv) == "function" and getgenv()) or _G
+-- AutoLoad=true is committed LAST. This prevents a half-updated install from
+-- booting an older payload if Roblox/executor closes during the refresh.
+settings.AutoLoad = true
+local saved, saveError = write_script_settings(settings)
+if not saved then
+    return false, saveError
+end
+
 env.__DEVKAGE_AUTOEXEC_PATHS = autoexecPaths
-end
+env.__DEVKAGE_AUTOLOAD_BUILD = SCRIPT_AUTOLOAD_BUILD
+env.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT = os.clock()
 
-local pathText = autoexecWritten and table.concat(autoexecPaths, ", ") or ""
+local pathText =
+    autoexecWritten
+    and table.concat(autoexecPaths, ", ")
+    or ""
 
 if queued and autoexecWritten then
-    return true, "Auto Load enabled | autoexec: " .. pathText
+    return true,
+        "Auto Load refreshed to current build | "
+        .. SCRIPT_AUTOLOAD_BUILD
+        .. " | autoexec: "
+        .. pathText
 elseif queued then
-    return true, "Auto Load enabled for teleports only"
+    return true,
+        "Auto Load refreshed to current build for teleports | "
+        .. SCRIPT_AUTOLOAD_BUILD
 else
-    return true, "Auto Load installed: " .. pathText
+    return true,
+        "Auto Load refreshed to current build | "
+        .. SCRIPT_AUTOLOAD_BUILD
+        .. " | "
+        .. pathText
 end
 end
 
 local _script_boot_settings = read_script_settings()
 
 if _script_boot_settings.AutoLoad == true then
-task.defer(function()
     local ok, err = configure_script_autoload(true, true)
-    if not ok then warn("[DevKage AutoLoad] refresh failed: " .. tostring(err)) end
-end)
+    if not ok then
+        warn("[DevKage AutoLoad] current-build refresh failed: " .. tostring(err))
+    end
 end
 
 local DEFAULT_VISUAL_STATE = serialiseRuntimeState(VisualsState)
@@ -23671,4 +23775,4 @@ print("[DevKage + Mask Shard] Fully loaded and protected.")
 -- ============================================================
 -- END OF FILE
 -- ============================================================
-]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b._a=_a local _c=loadstring or load if type(_c)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _d,_e=_c(_a)if not _d then error(_e)end return _d()
+]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,49,53,45,114,101,102,101,114,101,110,99,101,45,99,117,114,115,111,114,45,114,97,112,105,100,102,105,114,101,45,99,117,114,114,101,110,116)_b._a=_a local _c=loadstring or load if type(_c)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _d,_e=_c(_a)if not _d then error(_e)end return _d()
