@@ -5518,19 +5518,15 @@ end
 -- ============================================================
 -- MATCH LEVEL SPOOFER SYNC
 --
--- RIVALS replaces/rebuilds parts of PlayerGui and local stat presentation
--- when a match starts. The older spoofer updated the lobby/profile UI and
--- Level attribute once, but match HUD/scoreboard labels could be created
--- afterward or the client could write the original Level back.
---
--- This runtime is local-presentation-only:
---   * keeps LocalPlayer.Level synchronized while the spoofer is active
---   * keeps local Level Value objects synchronized
---   * observes all PlayerGui roots, not only MainGui
---   * patches only labels that are explicitly Level/Lvl related
---   * survives character/match GUI rebuilds
+-- Scoped register-safe version.
+-- Only installMatchLevelSync survives outside this do-block; every helper
+-- local below is released before the rest of DevKage (including aura code)
+-- needs more local registers.
 -- ============================================================
 
+local installMatchLevelSync
+
+do
 local MatchLevelSyncRuntime = {
 ObservedText = setmetatable({}, {__mode="k"}),
 ObservedValues = setmetatable({}, {__mode="k"}),
@@ -5575,17 +5571,6 @@ end
 return false
 end
 
-local function matchLevelContextName(object)
-local pieces={}
-local current=object
-for _=1,5 do
-if not current then break end
-pieces[#pieces+1]=tostring(current.Name or "")
-current=current.Parent
-end
-return table.concat(pieces," "):lower()
-end
-
 local function matchLevelSiblingHint(object)
 local parent=object and object.Parent
 if not parent then return false end
@@ -5627,8 +5612,6 @@ local name=tostring(object.Name or ""):lower()
 local raw=tostring(object.Text or "")
 local lower=raw:lower()
 
--- Strong explicit identifiers work in lobby, match HUD, scoreboard, results,
--- and player-card layouts without depending on the top-level GUI name.
 if name=="level"
 or name=="lvl"
 or name:find("level",1,true)
@@ -5637,8 +5620,6 @@ or lower:match("%f[%a]lvl%f[%A]") then
 return true
 end
 
--- Numeric-only values are accepted only when an adjacent label identifies
--- the row/column as Level.
 if lower:match("^%s*%-?[%d,]+%s*$")
 and matchLevelSiblingHint(object) then
 return true
@@ -5798,7 +5779,7 @@ if index%180==0 then task.wait() end
 end
 end
 
-local function installMatchLevelSync(config)
+installMatchLevelSync = function(config)
 if type(config)~="table" then return false end
 
 MatchLevelSyncRuntime.Config=config
@@ -5857,8 +5838,6 @@ end)
 end)
 SpooferState.connections[#SpooferState.connections+1]=characterConnection
 
--- Lightweight fallback for match transitions where RIVALS rewrites Level
--- without replacing the GUI object.
 local elapsed=0
 local heartbeat=RunService.Heartbeat:Connect(function(dt)
 if not SpooferState.running then return end
@@ -5882,6 +5861,8 @@ if type(config)~="table" then return false end
 matchLevelApplyCore(config)
 task.spawn(matchLevelScanGui,config)
 return true
+end
+
 end
 
 local function installRecordingPrivacySpoof(player, data, config)
