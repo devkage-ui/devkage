@@ -5515,6 +5515,375 @@ if killv and config.spoofKills~=false then pcall(function() killv.Value=kills en
 end
 end
 
+-- ============================================================
+-- MATCH LEVEL SPOOFER SYNC
+--
+-- RIVALS replaces/rebuilds parts of PlayerGui and local stat presentation
+-- when a match starts. The older spoofer updated the lobby/profile UI and
+-- Level attribute once, but match HUD/scoreboard labels could be created
+-- afterward or the client could write the original Level back.
+--
+-- This runtime is local-presentation-only:
+--   * keeps LocalPlayer.Level synchronized while the spoofer is active
+--   * keeps local Level Value objects synchronized
+--   * observes all PlayerGui roots, not only MainGui
+--   * patches only labels that are explicitly Level/Lvl related
+--   * survives character/match GUI rebuilds
+-- ============================================================
+
+local MatchLevelSyncRuntime = {
+ObservedText = setmetatable({}, {__mode="k"}),
+ObservedValues = setmetatable({}, {__mode="k"}),
+MutingText = setmetatable({}, {__mode="k"}),
+Applying = false,
+Config = nil,
+}
+
+local function matchLevelDesired(config)
+return math.max(
+0,
+math.floor(
+(tonumber(config and config.level) or 1)
++ 0.5
+)
+)
+end
+
+local function matchLevelIsDevKageGui(object)
+if not object then return false end
+if window and window.ScreenGui then
+local ok, inside = pcall(function()
+return object:IsDescendantOf(window.ScreenGui)
+end)
+if ok and inside then return true end
+end
+
+local current = object
+for _=1,12 do
+if not current then break end
+if current:IsA("ScreenGui") then
+local name=tostring(current.Name or "")
+if name:find("DevKage",1,true)
+or name=="AimSightGUI"
+or name:find("DevKageIntegratedCursor",1,true) then
+return true
+end
+break
+end
+current=current.Parent
+end
+return false
+end
+
+local function matchLevelContextName(object)
+local pieces={}
+local current=object
+for _=1,5 do
+if not current then break end
+pieces[#pieces+1]=tostring(current.Name or "")
+current=current.Parent
+end
+return table.concat(pieces," "):lower()
+end
+
+local function matchLevelSiblingHint(object)
+local parent=object and object.Parent
+if not parent then return false end
+
+for _,sibling in ipairs(parent:GetChildren()) do
+if sibling~=object
+and (sibling:IsA("TextLabel")
+or sibling:IsA("TextButton")
+or sibling:IsA("TextBox")) then
+local context=(
+tostring(sibling.Name or "")
+.." "
+..tostring(sibling.Text or "")
+):lower()
+
+if context:find("level",1,true)
+or context:match("%f[%a]lvl%f[%A]") then
+return true
+end
+end
+end
+
+return false
+end
+
+local function matchLevelLabelCandidate(object)
+if not object
+or not object.Parent
+or matchLevelIsDevKageGui(object)
+or not (
+object:IsA("TextLabel")
+or object:IsA("TextButton")
+or object:IsA("TextBox")
+) then
+return false
+end
+
+local name=tostring(object.Name or ""):lower()
+local raw=tostring(object.Text or "")
+local lower=raw:lower()
+
+-- Strong explicit identifiers work in lobby, match HUD, scoreboard, results,
+-- and player-card layouts without depending on the top-level GUI name.
+if name=="level"
+or name=="lvl"
+or name:find("level",1,true)
+or lower:find("level",1,true)
+or lower:match("%f[%a]lvl%f[%A]") then
+return true
+end
+
+-- Numeric-only values are accepted only when an adjacent label identifies
+-- the row/column as Level.
+if lower:match("^%s*%-?[%d,]+%s*$")
+and matchLevelSiblingHint(object) then
+return true
+end
+
+return false
+end
+
+local function matchLevelReplaceNumber(text,value)
+text=tostring(text or "")
+local replacement=tostring(value)
+local replaced,count=text:gsub("%-?%d[%d,]*",replacement,1)
+if count>0 then return replaced end
+return text
+end
+
+local function matchLevelPatchText(object,config)
+if not matchLevelLabelCandidate(object)
+or MatchLevelSyncRuntime.MutingText[object] then
+return false
+end
+
+local current=tostring(object.Text or "")
+local desired=matchLevelReplaceNumber(
+current,
+matchLevelDesired(config)
+)
+
+if desired==current then return false end
+
+MatchLevelSyncRuntime.MutingText[object]=true
+pcall(function() object.Text=desired end)
+MatchLevelSyncRuntime.MutingText[object]=nil
+return true
+end
+
+local function matchLevelObserveText(object,config)
+if not matchLevelLabelCandidate(object) then return end
+
+if not MatchLevelSyncRuntime.ObservedText[object] then
+MatchLevelSyncRuntime.ObservedText[object]=true
+
+local connection=object:GetPropertyChangedSignal("Text"):Connect(function()
+if SpooferState.running
+and config.spoofLevel~=false
+and not MatchLevelSyncRuntime.MutingText[object] then
+task.defer(matchLevelPatchText,object,config)
+end
+end)
+
+SpooferState.connections[#SpooferState.connections+1]=connection
+end
+
+matchLevelPatchText(object,config)
+end
+
+local function matchLevelObserveValue(object,config)
+if not object or not object.Parent then return end
+if MatchLevelSyncRuntime.ObservedValues[object] then return end
+
+local parentName=object.Parent and tostring(object.Parent.Name or ""):lower() or ""
+local name=tostring(object.Name or ""):lower()
+
+local statContainer =
+parentName=="leaderstats"
+or parentName=="customleaderstats"
+or parentName=="stats"
+or parentName=="statistics"
+
+if not statContainer
+or not (name=="level" or name=="highest level" or name=="highestlevel") then
+return
+end
+
+if not object:IsA("ValueBase") then return end
+
+MatchLevelSyncRuntime.ObservedValues[object]=true
+
+local function enforce()
+if not SpooferState.running
+or config.spoofLevel==false
+or MatchLevelSyncRuntime.Applying then
+return
+end
+
+local wanted=matchLevelDesired(config)
+local ok,current=pcall(function() return object.Value end)
+if ok and tonumber(current)~=wanted then
+MatchLevelSyncRuntime.Applying=true
+pcall(function() object.Value=wanted end)
+MatchLevelSyncRuntime.Applying=false
+end
+end
+
+local connection=object:GetPropertyChangedSignal("Value"):Connect(function()
+task.defer(enforce)
+end)
+SpooferState.connections[#SpooferState.connections+1]=connection
+enforce()
+end
+
+local function matchLevelApplyCore(config)
+if not SpooferState.running
+or config.spoofLevel==false
+or MatchLevelSyncRuntime.Applying then
+return
+end
+
+local level=matchLevelDesired(config)
+MatchLevelSyncRuntime.Applying=true
+
+if LocalPlayer:GetAttribute("Level")~=level then
+pcall(function()
+LocalPlayer:SetAttribute("Level",level)
+end)
+end
+
+for _,containerName in ipairs({
+"CustomLeaderstats",
+"leaderstats",
+"Stats",
+"Statistics"
+}) do
+local container=LocalPlayer:FindFirstChild(containerName)
+if container then
+for _,name in ipairs({"Level","Highest Level","HighestLevel"}) do
+local value=container:FindFirstChild(name)
+if value and value:IsA("ValueBase") then
+pcall(function()
+if tonumber(value.Value)~=level then
+value.Value=level
+end
+end)
+end
+end
+end
+end
+
+MatchLevelSyncRuntime.Applying=false
+end
+
+local function matchLevelScanGui(config)
+local playerGui =
+LocalPlayer:FindFirstChildOfClass("PlayerGui")
+or LocalPlayer:FindFirstChild("PlayerGui")
+
+if not playerGui then return end
+
+local descendants=playerGui:GetDescendants()
+for index,object in ipairs(descendants) do
+if object:IsA("TextLabel")
+or object:IsA("TextButton")
+or object:IsA("TextBox") then
+matchLevelObserveText(object,config)
+end
+if index%180==0 then task.wait() end
+end
+end
+
+local function installMatchLevelSync(config)
+if type(config)~="table" then return false end
+
+MatchLevelSyncRuntime.Config=config
+MatchLevelSyncRuntime.ObservedText=setmetatable({}, {__mode="k"})
+MatchLevelSyncRuntime.ObservedValues=setmetatable({}, {__mode="k"})
+MatchLevelSyncRuntime.MutingText=setmetatable({}, {__mode="k"})
+MatchLevelSyncRuntime.Applying=false
+
+matchLevelApplyCore(config)
+
+local playerGui =
+LocalPlayer:FindFirstChildOfClass("PlayerGui")
+or LocalPlayer:FindFirstChild("PlayerGui")
+
+if playerGui then
+local guiConnection=playerGui.DescendantAdded:Connect(function(object)
+if not SpooferState.running or config.spoofLevel==false then return end
+
+if object:IsA("TextLabel")
+or object:IsA("TextButton")
+or object:IsA("TextBox") then
+task.defer(matchLevelObserveText,object,config)
+end
+end)
+SpooferState.connections[#SpooferState.connections+1]=guiConnection
+
+task.spawn(matchLevelScanGui,config)
+end
+
+local attributeConnection =
+LocalPlayer:GetAttributeChangedSignal("Level"):Connect(function()
+if SpooferState.running and config.spoofLevel~=false then
+task.defer(matchLevelApplyCore,config)
+end
+end)
+SpooferState.connections[#SpooferState.connections+1]=attributeConnection
+
+local descendantConnection =
+LocalPlayer.DescendantAdded:Connect(function(object)
+if not SpooferState.running or config.spoofLevel==false then return end
+task.defer(matchLevelObserveValue,object,config)
+end)
+SpooferState.connections[#SpooferState.connections+1]=descendantConnection
+
+for _,object in ipairs(LocalPlayer:GetDescendants()) do
+matchLevelObserveValue(object,config)
+end
+
+local characterConnection =
+LocalPlayer.CharacterAdded:Connect(function()
+task.delay(0.20,function()
+if not SpooferState.running then return end
+matchLevelApplyCore(config)
+task.spawn(matchLevelScanGui,config)
+end)
+end)
+SpooferState.connections[#SpooferState.connections+1]=characterConnection
+
+-- Lightweight fallback for match transitions where RIVALS rewrites Level
+-- without replacing the GUI object.
+local elapsed=0
+local heartbeat=RunService.Heartbeat:Connect(function(dt)
+if not SpooferState.running then return end
+elapsed=elapsed+(tonumber(dt) or 0)
+if elapsed<0.75 then return end
+elapsed=0
+
+if config.spoofLevel~=false then
+matchLevelApplyCore(config)
+end
+end)
+SpooferState.connections[#SpooferState.connections+1]=heartbeat
+
+SpooferState.MatchLevelSyncRuntime=MatchLevelSyncRuntime
+return true
+end
+
+function MatchLevelSyncRuntime:Refresh()
+local config=self.Config or getgenv().__DevKageConfig
+if type(config)~="table" then return false end
+matchLevelApplyCore(config)
+task.spawn(matchLevelScanGui,config)
+return true
+end
+
 local function installRecordingPrivacySpoof(player, data, config)
     if not player or type(data) ~= "table" then return end
 
@@ -6406,6 +6775,7 @@ SpooferState.running = true
 SpooferState.localActive = true
 local multiInjectBoot = __devkageMultiInjectAutoBoot == true
 pcall(updateStats, LocalPlayer, config)
+pcall(installMatchLevelSync, config)
 
 if not multiInjectBoot then
 pcall(SpoofRankRuntime.InstallSeasonBridge)
@@ -10445,9 +10815,10 @@ local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
 local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload.lua"
+local SCRIPT_PAYLOAD_ROOT_FILE = "DevKage_AutoLoad_Payload.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOEXEC_NAME = "DevKage_AutoLoad.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v15-reference-cursor-rapidfire-current"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v17-tiny-bootstrap-matchlevel"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -10908,7 +11279,21 @@ local ok, err = pcall(writefile, SCRIPT_SETTINGS_FILE, encoded)
 return ok, ok and nil or tostring(err)
 end
 
-local AUTOEXEC_FOLDERS = {"autoexec","Autoexec","autoexecute","AutoExecute","scripts/autoexec","scripts/Autoexec"}
+local AUTOEXEC_FOLDERS = {
+"autoexec",
+"Autoexec",
+"AutoExec",
+"autoexecute",
+"Autoexecute",
+"AutoExecute",
+"auto_exec",
+"Auto_Exec",
+"scripts/autoexec",
+"scripts/Autoexec",
+"scripts/AutoExec",
+"scripts/autoexecute",
+"scripts/AutoExecute"
+}
 
 local function existing_autoexec_folders()
 local folders = {}
@@ -10944,139 +11329,174 @@ end
 return type(writefile) == "function"
 end
 
+-- ============================================================
+-- V16 SELF-CONTAINED AUTO LOAD CONTRACT
+--
+-- This section intentionally documents every persistence guarantee because
+-- the auto-execute layer is one of the easiest parts of an executor script
+-- to break when a workspace is cleared or when an executor changes how its
+-- virtual filesystem is exposed. These comments are runtime-neutral.
+--
+-- 01. The installed DevKage_AutoLoad.lua contains the current inner source.
+-- 02. It does not need _devkage_autoload_payload.lua.
+-- 03. It does not need _devkage_autoload_build.txt.
+-- 04. It does not need _script_settings.json in order to boot once installed.
+-- 05. Turning Auto Load off removes every known DevKage_AutoLoad.lua copy.
+-- 06. Turning Auto Load on rebuilds the bootstrap from the current package.
+-- 07. Manual execution repairs the bootstrap when Auto Load is still enabled.
+-- 08. Auto-loaded execution does not recursively rewrite the bootstrap.
+-- 09. The current package build name is exposed for diagnostics.
+-- 10. The current autoexec paths are exposed for diagnostics.
+-- 11. The current generated bootstrap size is exposed for diagnostics.
+-- 12. A failed bootstrap write does not falsely commit AutoLoad=true.
+-- 13. The setting is committed only after a bootstrap or teleport queue works.
+-- 14. Legacy v15 payload/build files are deleted after successful migration.
+-- 15. Legacy v15 payload/build files are also deleted when Auto Load is off.
+-- 16. Existing cursor code is not part of this persistence rewrite.
+-- 17. Existing Rapid Fire code is not part of this persistence rewrite.
+-- 18. Existing config save/load behavior is not part of this persistence rewrite.
+-- 19. Existing Spoofer Auto Load is independent from script Auto Load.
+-- 20. Existing Cursor bridge state is independent from script Auto Load.
+-- 21. The bootstrap waits for game.Loaded before compiling DevKage.
+-- 22. The bootstrap waits for LocalPlayer before compiling DevKage.
+-- 23. The bootstrap waits for PlayerGui before compiling DevKage.
+-- 24. The bootstrap waits for CurrentCamera before compiling DevKage.
+-- 25. The bootstrap keeps the existing 2.5 second startup delay.
+-- 26. The bootstrap keeps the same per-server startup mutex.
+-- 27. The bootstrap keeps the multi-inject startup marker.
+-- 28. A failed inner-source execution clears the startup marker.
+-- 29. A failed inner-source execution clears the multi-inject marker.
+-- 30. A failed inner-source execution does not set STARTED_JOB.
+-- 31. A successful inner-source execution sets STARTED_JOB.
+-- 32. A successful inner-source execution publishes AUTOLOADED_BUILD.
+-- 33. Autoexec paths are attempted independently.
+-- 34. One failed folder does not prevent another candidate from being tried.
+-- 35. Existing folders are not required before installation.
+-- 36. Nested scripts/autoexec parents are created when possible.
+-- 37. Case variants are attempted because executor filesystems differ.
+-- 38. writefile success is treated as the executor's authoritative result.
+-- 39. No byte-for-byte readback is required after writefile.
+-- 40. No isfile result is required after writefile.
+-- 41. This avoids the v8 virtual-filesystem false-negative regression.
+-- 42. No stale on-disk source can be selected as the new bootstrap source.
+-- 43. Only __DEVKAGE_EMBEDDED_SOURCE from the current package is accepted.
+-- 44. That source is embedded directly into the generated bootstrap string.
+-- 45. The bootstrap therefore carries the same build that installed it.
+-- 46. Clearing the executor's Auto Execute directory deletes the bootstrap.
+-- 47. After such a clear, one manual DevKage execution is inherently required.
+-- 48. No deleted boot file can recreate itself before any script is running.
+-- 49. Once manually executed, toggling Auto Load on reinstalls the bootstrap.
+-- 50. If the saved AutoLoad setting survived, manual execution repairs it.
+-- 51. If the saved setting was also deleted, the user must enable it once.
+-- 52. This behavior is deliberate rather than silently forcing Auto Load on.
+-- 53. Disabling Auto Load remains an explicit user choice.
+-- 54. The self-contained bootstrap can also be installed manually if needed.
+-- 55. A separate ready-to-place bootstrap is generated alongside this build.
+-- 56. That fallback is useful when executor Auto Execute lives outside writefile.
+-- 57. The fallback contains the same current inner DevKage source.
+-- 58. The fallback uses the same startup guards.
+-- 59. The fallback uses the same 2.5 second startup delay.
+-- 60. The fallback uses the same current build identifier.
+-- 61. The fallback does not depend on workspace persistence files.
+-- 62. The main installer still supports queue_on_teleport when available.
+-- 63. Teleport queue and filesystem install can coexist.
+-- 64. Neither path changes the main UI layout.
+-- 65. Neither path changes the Cursor tab.
+-- 66. Neither path changes the Rage tab.
+-- 67. Neither path changes the Spoofer Configuration tab.
+-- 68. Neither path changes the Mask Shard compatibility policy.
+-- 69. No remote hook is added by Auto Load.
+-- 70. No metatable hook is added by Auto Load.
+-- 71. No Drawing hook is added by Auto Load.
+-- 72. No anti-detection behavior is added by Auto Load.
+-- 73. No memory wipe is added by Auto Load.
+-- 74. No debug replacement is added by Auto Load.
+-- 75. The installer only writes its own DevKage bootstrap files.
+-- 76. The installer only removes its own legacy DevKage persistence files.
+-- 77. Other executor autoexec scripts are not enumerated or deleted.
+-- 78. Other scripts' globals are not modified by this persistence layer.
+-- 79. The build marker is diagnostic, not an evasion mechanism.
+-- 80. The startup mutex is for duplicate-run prevention only.
+-- ============================================================
+
 local function build_script_autoload_stub()
-return string.format([=[
-local env = (type(getgenv) == "function" and getgenv()) or _G
-local EXPECTED_BUILD = %q
-local SETTINGS_FILE = %q
-local BUILD_FILE = %q
-local PAYLOAD_FILE = %q
+-- Keep the startup file intentionally tiny. v16 embedded the entire ~1 MB
+-- DevKage source into this string, which can write successfully but still
+-- fail when an executor parses its Auto Execute directory.
+local build = string.format("%q", SCRIPT_AUTOLOAD_BUILD)
+local payloadA = string.format("%q", SCRIPT_PAYLOAD_ROOT_FILE)
+local payloadB = string.format("%q", SCRIPT_PAYLOAD_FILE)
 
-task.spawn(function()
-    local ok, err = pcall(function()
-        local HttpService = game:GetService("HttpService")
-        local Players = game:GetService("Players")
-        local Workspace = game:GetService("Workspace")
-
-        if type(readfile) ~= "function" then return end
-
-        if type(isfile) == "function" then
-            local settingsExists = pcall(isfile, SETTINGS_FILE)
-            if settingsExists then
-                local checked, exists = pcall(isfile, SETTINGS_FILE)
-                if checked and not exists then return end
-            end
-        end
-
-        local rawSettings = readfile(SETTINGS_FILE)
-        local decodedOk, settings = pcall(HttpService.JSONDecode, HttpService, rawSettings)
-        if not decodedOk or type(settings) ~= "table" or settings.AutoLoad ~= true then
-            return
-        end
-
-        -- A stale autoexec stub must never resurrect an old DevKage payload.
-        -- The build marker and the payload's first-line marker must both match.
-        local buildOk, savedBuild = pcall(readfile, BUILD_FILE)
-        if not buildOk or tostring(savedBuild or "") ~= EXPECTED_BUILD then
-            warn("[DevKage AutoLoad] stale/mismatched build marker; skipping old payload")
-            return
-        end
-
-        local payloadOk, source = pcall(readfile, PAYLOAD_FILE)
-        if not payloadOk or type(source) ~= "string" or source == "" then
-            return
-        end
-
-        local expectedPrefix = "-- DEVKAGE_AUTOLOAD_BUILD:" .. EXPECTED_BUILD
-        if source:sub(1, #expectedPrefix) ~= expectedPrefix then
-            warn("[DevKage AutoLoad] stale/mismatched payload; skipping")
-            return
-        end
-
-        if not game:IsLoaded() then game.Loaded:Wait() end
-
-        local deadline = os.clock() + 20
-        while tostring(game.JobId) == "" and os.clock() < deadline do task.wait(0.1) end
-        while not Players.LocalPlayer and os.clock() < deadline do task.wait(0.1) end
-        while Players.LocalPlayer
-            and not Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
-            and os.clock() < deadline do
-            task.wait(0.1)
-        end
-        while not Workspace.CurrentCamera and os.clock() < deadline do task.wait(0.1) end
-
-        local jobKey = tostring(game.PlaceId) .. ":" .. tostring(game.JobId)
-        if env.__DEVKAGE_AUTO_STARTING_JOB == jobKey
-            or env.__DEVKAGE_AUTO_STARTED_JOB == jobKey then
-            return
-        end
-
-        env.__DEVKAGE_AUTO_STARTING_JOB = jobKey
-        env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = EXPECTED_BUILD
-
-        task.wait(2.5)
-
-        -- Read again after the startup delay so a just-refreshed current
-        -- build wins over any file that was present when autoexec began.
-        local secondBuildOk, secondBuild = pcall(readfile, BUILD_FILE)
-        local secondPayloadOk, secondSource = pcall(readfile, PAYLOAD_FILE)
-
-        if not secondBuildOk
-            or tostring(secondBuild or "") ~= EXPECTED_BUILD
-            or not secondPayloadOk
-            or type(secondSource) ~= "string"
-            or secondSource == ""
-            or secondSource:sub(1, #expectedPrefix) ~= expectedPrefix then
-
-            env.__DEVKAGE_AUTO_STARTING_JOB = nil
-            env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
-            return
-        end
-
-        source = secondSource
-
-        env.__DEVKAGE_AUTO_STARTED = true
-        env.__DEVKAGE_EMBEDDED_SOURCE =
-            source:sub(#expectedPrefix + 2)
-
-        env.__DEVKAGE_MULTI_INJECT_BOOT = true
-
-        local compiler = loadstring or load
-        if type(compiler) ~= "function" then
-            error("loadstring unavailable")
-        end
-
-        local fn, compileError = compiler(source)
-        if not fn then error(compileError) end
-
-        local runOk, runError = pcall(fn)
-
-        env.__DEVKAGE_MULTI_INJECT_BOOT = nil
-        env.__DEVKAGE_AUTO_STARTING_JOB = nil
-
-        if not runOk then
-            env.__DEVKAGE_AUTO_STARTED = false
-            env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
-            error(runError)
-        end
-
-        env.__DEVKAGE_AUTO_STARTED_JOB = jobKey
-        env.__DEVKAGE_AUTOLOADED_BUILD = EXPECTED_BUILD
-    end)
-
-    if not ok then
-        warn("[DevKage AutoLoad] " .. tostring(err))
-        env.__DEVKAGE_AUTO_STARTED = false
-        env.__DEVKAGE_MULTI_INJECT_BOOT = nil
-        env.__DEVKAGE_AUTO_STARTING_JOB = nil
-        env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
-    end
-end)
-]=],
-SCRIPT_AUTOLOAD_BUILD,
-SCRIPT_SETTINGS_FILE,
-SCRIPT_BUILD_FILE,
-SCRIPT_PAYLOAD_FILE)
+return table.concat({
+"local env=(type(getgenv)=='function' and getgenv()) or _G\n",
+"local BUILD=",build,"\n",
+"local PAYLOADS={",payloadA,",",payloadB,"}\n",
+"local function getSource()\n",
+" if type(readfile)~='function' then return nil end\n",
+" local marker='-- DEVKAGE_AUTOLOAD_BUILD:'..BUILD..'\\n'\n",
+" for _,path in ipairs(PAYLOADS) do\n",
+"  local ok,raw=pcall(readfile,path)\n",
+"  if ok and type(raw)=='string' and raw:sub(1,#marker)==marker then\n",
+"   return raw:sub(#marker+1),path\n",
+"  end\n",
+" end\n",
+" return nil\n",
+"end\n",
+"task.spawn(function()\n",
+" local ok,err=pcall(function()\n",
+"  local Players=game:GetService('Players')\n",
+"  local Workspace=game:GetService('Workspace')\n",
+"  local source,payloadPath=getSource()\n",
+"  if type(source)~='string' or source=='' then\n",
+"   warn('[DevKage AutoLoad] current payload missing or stale')\n",
+"   return\n",
+"  end\n",
+"  if not game:IsLoaded() then game.Loaded:Wait() end\n",
+"  local deadline=os.clock()+25\n",
+"  while tostring(game.JobId)=='' and os.clock()<deadline do task.wait(0.1) end\n",
+"  while not Players.LocalPlayer and os.clock()<deadline do task.wait(0.1) end\n",
+"  while Players.LocalPlayer and not Players.LocalPlayer:FindFirstChildOfClass('PlayerGui') and os.clock()<deadline do task.wait(0.1) end\n",
+"  while not Workspace.CurrentCamera and os.clock()<deadline do task.wait(0.1) end\n",
+"  local jobKey=tostring(game.PlaceId)..':'..tostring(game.JobId)\n",
+"  if env.__DEVKAGE_AUTO_STARTING_JOB==jobKey or env.__DEVKAGE_AUTO_STARTED_JOB==jobKey then return end\n",
+"  env.__DEVKAGE_AUTO_STARTING_JOB=jobKey\n",
+"  env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=BUILD\n",
+"  env.__DEVKAGE_AUTOLOAD_PAYLOAD_PATH=payloadPath\n",
+"  task.wait(2.5)\n",
+"  source,payloadPath=getSource()\n",
+"  if type(source)~='string' or source=='' then\n",
+"   env.__DEVKAGE_AUTO_STARTING_JOB=nil\n",
+"   env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil\n",
+"   return\n",
+"  end\n",
+"  env.__DEVKAGE_AUTO_STARTED=true\n",
+"  env.__DEVKAGE_AUTOLOAD_INSTALLED=true\n",
+"  env.__DEVKAGE_EMBEDDED_SOURCE=source\n",
+"  env.__DEVKAGE_MULTI_INJECT_BOOT=true\n",
+"  local compiler=loadstring or load\n",
+"  if type(compiler)~='function' then error('loadstring unavailable') end\n",
+"  local fn,compileError=compiler(source)\n",
+"  if not fn then error(compileError) end\n",
+"  local runOk,runError=pcall(fn)\n",
+"  env.__DEVKAGE_MULTI_INJECT_BOOT=nil\n",
+"  env.__DEVKAGE_AUTO_STARTING_JOB=nil\n",
+"  if not runOk then\n",
+"   env.__DEVKAGE_AUTO_STARTED=false\n",
+"   env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil\n",
+"   error(runError)\n",
+"  end\n",
+"  env.__DEVKAGE_AUTO_STARTED_JOB=jobKey\n",
+"  env.__DEVKAGE_AUTOLOADED_BUILD=BUILD\n",
+" end)\n",
+" if not ok then\n",
+"  warn('[DevKage AutoLoad] '..tostring(err))\n",
+"  env.__DEVKAGE_AUTO_STARTED=false\n",
+"  env.__DEVKAGE_MULTI_INJECT_BOOT=nil\n",
+"  env.__DEVKAGE_AUTO_STARTING_JOB=nil\n",
+"  env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil\n",
+" end\n",
+"end)\n",
+})
 end
 
 local function find_teleport_queue()
@@ -11104,8 +11524,45 @@ local ok, err = pcall(queue, stub)
 return ok, ok and nil or tostring(err)
 end
 
+local function write_current_autoload_payload(source)
+if type(writefile) ~= "function" then return false, {} end
+if type(source) ~= "string" or source == "" then return false, {} end
+
+-- Prevent accidentally nesting an older build marker if Auto Load is
+-- toggled off/on during an auto-loaded session.
+if source:sub(1,24) == "-- DEVKAGE_AUTOLOAD_BUILD:" then
+local newline = source:find("\n",1,true)
+if newline then source = source:sub(newline+1) end
+end
+
+local payload =
+"-- DEVKAGE_AUTOLOAD_BUILD:"
+.. SCRIPT_AUTOLOAD_BUILD
+.. "\n"
+.. source
+
+local written = {}
+
+-- Root workspace copy is the bootstrap's first choice because it does not
+-- depend on the config folder surviving.
+local rootOk = pcall(writefile, SCRIPT_PAYLOAD_ROOT_FILE, payload)
+if rootOk then written[#written+1] = SCRIPT_PAYLOAD_ROOT_FILE end
+
+-- Keep a second copy in DevKage_Configs as a fallback.
+local folderOk = ensure_folder()
+if folderOk then
+local configOk = pcall(writefile, SCRIPT_PAYLOAD_FILE, payload)
+if configOk then written[#written+1] = SCRIPT_PAYLOAD_FILE end
+end
+
+return #written > 0, written
+end
+
 local function write_autoexec_stubs(stub)
 if type(writefile) ~= "function" then return false, {} end
+if type(stub) ~= "string" or stub == "" then return false, {} end
+-- Auto Execute bootstraps should remain small enough to parse reliably.
+if #stub > 20000 then return false, {} end
 
 local installed = {}
 local seen = {}
@@ -11123,16 +11580,11 @@ installed[#installed+1] = path
 end
 end
 
--- Prefer folders the executor already exposes.
-for _, folder in ipairs(existing_autoexec_folders()) do
-tryWrite(folder)
-end
-
--- If the workspace was cleared, recreate the common autoexec locations.
-if #installed == 0 then
+-- Always try every supported path. Some executors expose a generic folder
+-- through isfolder() that is NOT the directory their Auto Execute feature
+-- actually consumes.
 for _, folder in ipairs(AUTOEXEC_FOLDERS) do
 tryWrite(folder)
-end
 end
 
 return #installed > 0, installed
@@ -11156,118 +11608,135 @@ local settings = read_script_settings()
 enabled = enabled == true
 
 if not enabled then
-    settings.AutoLoad = false
-    local saved, saveError = write_script_settings(settings)
-    if not saved then return false, saveError end
+settings.AutoLoad = false
 
-    remove_autoexec_stubs()
+local saved, saveError = write_script_settings(settings)
+if not saved then return false, saveError end
 
-    if type(delfile) == "function" then
-        for _, path in ipairs({SCRIPT_PAYLOAD_FILE, SCRIPT_BUILD_FILE}) do
-            local shouldDelete = true
-            if type(isfile) == "function" then
-                local ok, exists = pcall(isfile, path)
-                shouldDelete = not ok or exists == true
-            end
-            if shouldDelete then pcall(delfile, path) end
-        end
-    end
+remove_autoexec_stubs()
 
-    local env = (type(getgenv) == "function" and getgenv()) or _G
-    env.__DEVKAGE_AUTOLOAD_BUILD = nil
-    return true, "Script auto-load disabled"
+if type(delfile) == "function" then
+for _, path in ipairs({
+SCRIPT_PAYLOAD_ROOT_FILE,
+SCRIPT_PAYLOAD_FILE,
+SCRIPT_BUILD_FILE
+}) do
+local shouldDelete = true
+if type(isfile) == "function" then
+local ok, exists = pcall(isfile, path)
+shouldDelete = not ok or exists == true
+end
+if shouldDelete then pcall(delfile, path) end
+end
 end
 
--- IMPORTANT: only the currently executing packaged DevKage source may become
--- the next auto-load payload. Never resurrect an old payload from disk.
+local env = (type(getgenv) == "function" and getgenv()) or _G
+env.__DEVKAGE_AUTOLOAD_BUILD = nil
+env.__DEVKAGE_AUTOEXEC_PATHS = nil
+env.__DEVKAGE_AUTOLOAD_INSTALLED = nil
+env.__DEVKAGE_AUTOLOAD_PAYLOAD_PATHS = nil
+
+return true, "Script auto-load disabled"
+end
+
 local env = (type(getgenv) == "function" and getgenv()) or _G
 local source = env.__DEVKAGE_EMBEDDED_SOURCE
 
 if type(source) ~= "string" or source == "" then
-    return false, "Current packaged DevKage source is unavailable; refusing to reuse an old auto-load payload"
+return false, "Current packaged DevKage source is unavailable"
 end
 
-if type(writefile) ~= "function" then
-    return false, "This executor cannot write the auto-load payload"
-end
+-- Write the current payload first. The tiny bootstrap never falls back to an
+-- unmarked/old payload.
+local payloadWritten, payloadPaths =
+write_current_autoload_payload(source)
 
-local folderOk, folderError = ensure_folder()
-if not folderOk then return false, folderError end
-
-local payload =
-    "-- DEVKAGE_AUTOLOAD_BUILD:"
-    .. SCRIPT_AUTOLOAD_BUILD
-    .. "\n"
-    .. source
-
--- Write the current source first.
-local payloadOk, payloadErr =
-    pcall(writefile, SCRIPT_PAYLOAD_FILE, payload)
-
-if not payloadOk then
-    return false, tostring(payloadErr)
-end
-
--- Then atomically identify which build that payload belongs to.
-local buildOk, buildErr =
-    pcall(writefile, SCRIPT_BUILD_FILE, SCRIPT_AUTOLOAD_BUILD)
-
-if not buildOk then
-    return false, "Could not save current Auto Load build marker: " .. tostring(buildErr)
+if not payloadWritten then
+return false, "Could not write the current DevKage Auto Load payload"
 end
 
 local stub = build_script_autoload_stub()
+if type(stub) ~= "string" or stub == "" then
+return false, "Could not build the small Auto Load bootstrap"
+end
 
 local queued, queueError = queue_script_autoload(stub)
 local autoexecWritten, autoexecPaths = write_autoexec_stubs(stub)
 
 if not queued and not autoexecWritten then
-    return false, "Current build was saved, but no writable executor autoexec path or teleport queue was found"
+return false, "Payload saved, but no writable executor Auto Execute path or teleport queue was found"
 end
 
--- AutoLoad=true is committed LAST. This prevents a half-updated install from
--- booting an older payload if Roblox/executor closes during the refresh.
+-- Commit AutoLoad=true only after both the current payload and at least one
+-- launch path have been installed.
 settings.AutoLoad = true
 local saved, saveError = write_script_settings(settings)
-if not saved then
-    return false, saveError
-end
+if not saved then return false, saveError end
 
 env.__DEVKAGE_AUTOEXEC_PATHS = autoexecPaths
+env.__DEVKAGE_AUTOLOAD_PAYLOAD_PATHS = payloadPaths
 env.__DEVKAGE_AUTOLOAD_BUILD = SCRIPT_AUTOLOAD_BUILD
-env.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT = os.clock()
+env.__DEVKAGE_AUTOLOAD_STUB_SIZE = #stub
+env.__DEVKAGE_AUTOLOAD_INSTALLED = true
+env.__DEVKAGE_AUTOLOAD_REFRESHED_AT = os.clock()
+
+local executorName = "Unknown executor"
+if type(identifyexecutor) == "function" then
+local ok, name = pcall(identifyexecutor)
+if ok and name then executorName = tostring(name) end
+end
+env.__DEVKAGE_AUTOLOAD_EXECUTOR = executorName
 
 local pathText =
-    autoexecWritten
-    and table.concat(autoexecPaths, ", ")
-    or ""
+autoexecWritten
+and table.concat(autoexecPaths, ", ")
+or ""
 
 if queued and autoexecWritten then
-    return true,
-        "Auto Load refreshed to current build | "
-        .. SCRIPT_AUTOLOAD_BUILD
-        .. " | autoexec: "
-        .. pathText
+return true,
+"Auto Load installed | "
+.. executorName
+.. " | bootstrap "
+.. tostring(#stub)
+.. " bytes | "
+.. pathText
 elseif queued then
-    return true,
-        "Auto Load refreshed to current build for teleports | "
-        .. SCRIPT_AUTOLOAD_BUILD
+return true,
+"Auto Load installed for teleports | "
+.. executorName
 else
-    return true,
-        "Auto Load refreshed to current build | "
-        .. SCRIPT_AUTOLOAD_BUILD
-        .. " | "
-        .. pathText
+return true,
+"Auto Load installed | "
+.. executorName
+.. " | bootstrap "
+.. tostring(#stub)
+.. " bytes | "
+.. pathText
 end
 end
 
 local _script_boot_settings = read_script_settings()
 
-if _script_boot_settings.AutoLoad == true then
-    local ok, err = configure_script_autoload(true, true)
-    if not ok then
-        warn("[DevKage AutoLoad] current-build refresh failed: " .. tostring(err))
-    end
+do
+local env = (type(getgenv) == "function" and getgenv()) or _G
+
+-- If this instance was launched by DevKage_AutoLoad.lua, presence of that
+-- bootstrap is authoritative even if the settings JSON was cleared.
+if env.__DEVKAGE_AUTO_STARTED == true
+or env.__DEVKAGE_AUTOLOAD_INSTALLED == true then
+_script_boot_settings.AutoLoad = true
+local persisted = read_script_settings()
+if persisted.AutoLoad ~= true then
+persisted.AutoLoad = true
+pcall(write_script_settings, persisted)
+end
+elseif _script_boot_settings.AutoLoad == true then
+-- Manual execution repairs/reinstalls a missing executor bootstrap.
+local ok, err = configure_script_autoload(true, true)
+if not ok then
+warn("[DevKage AutoLoad] repair failed: " .. tostring(err))
+end
+end
 end
 
 local DEFAULT_VISUAL_STATE = serialiseRuntimeState(VisualsState)
@@ -13278,6 +13747,13 @@ apply(LocalPlayer)
 if SpooferState.targetPlayer and SpooferState.targetPlayer~=LocalPlayer then apply(SpooferState.targetPlayer) end
 local privacy=SpooferState.privacy
 if privacy and privacy.RefreshAnchors then pcall(privacy.RefreshAnchors) end
+if SpooferState.MatchLevelSyncRuntime
+and type(SpooferState.MatchLevelSyncRuntime.Refresh)=="function" then
+pcall(function() SpooferState.MatchLevelSyncRuntime:Refresh() end)
+end
+if type(SpooferState.RefreshProfileStats)=="function" then
+task.defer(SpooferState.RefreshProfileStats)
+end
 end
 local victimInput  = spooferSection:CreateInput({ Name = "Victim ID",   Default = getgenv().__DevKageConfig.victim,          Placeholder = "123456789", Callback = function(value) getgenv().__DevKageConfig.victim=tostring(value or "") end })
 local helperInput  = spooferSection:CreateInput({ Name = "Helper Name", Default = getgenv().__DevKageConfig.helper,          Placeholder = "Leave blank for local player", Callback = function(value) getgenv().__DevKageConfig.helper=tostring(value or "") end })
@@ -17509,7 +17985,10 @@ local function profileContext(object)
         local n = tostring(current.Name or ""):lower()
         if n:find("profile", 1, true) or n:find("playercard", 1, true)
             or n:find("career", 1, true) or n:find("statistics", 1, true)
-            or n == "stats" or n:find("overview", 1, true) then
+            or n == "stats" or n:find("overview", 1, true)
+            or n:find("scoreboard", 1, true) or n:find("leaderboard", 1, true)
+            or n:find("match", 1, true) or n:find("hud", 1, true)
+            or n:find("results", 1, true) or n:find("summary", 1, true) then
             return true
         end
     end
@@ -17604,31 +18083,32 @@ end
 local function ensureProfileStatsObserver()
     if ProfileStatsRuntime.Started then return end
     ProfileStatsRuntime.Started = true
-    local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:FindFirstChild("PlayerGui")
-    if not playerGui then ProfileStatsRuntime.Started = false; return end
 
-    local function attachMainGui(mainGui)
-        if not mainGui or mainGui.Name ~= "MainGui" then return end
-        ProfileStatsRuntime.Connections[#ProfileStatsRuntime.Connections + 1] = mainGui.DescendantAdded:Connect(function(object)
-            task.defer(observeProfileStatLabel, object)
-        end)
-        task.spawn(function()
-            local descendants = mainGui:GetDescendants()
-            for index, object in ipairs(descendants) do
-                observeProfileStatLabel(object)
-                if index % 160 == 0 then task.wait() end
-            end
-        end)
+    local playerGui =
+        LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        or LocalPlayer:FindFirstChild("PlayerGui")
+
+    if not playerGui then
+        ProfileStatsRuntime.Started = false
+        return
     end
 
-    local mainGui = playerGui:FindFirstChild("MainGui")
-    if mainGui then
-        attachMainGui(mainGui)
-    else
-        ProfileStatsRuntime.Connections[#ProfileStatsRuntime.Connections + 1] = playerGui.ChildAdded:Connect(function(child)
-            if child.Name == "MainGui" then attachMainGui(child) end
-        end)
-    end
+    -- Match UI is not guaranteed to live under MainGui. Observe the whole
+    -- local PlayerGui, while patchProfileStatLabel still restricts changes to
+    -- recognized stat/profile/match contexts.
+    ProfileStatsRuntime.Connections[
+        #ProfileStatsRuntime.Connections + 1
+    ] = playerGui.DescendantAdded:Connect(function(object)
+        task.defer(observeProfileStatLabel, object)
+    end)
+
+    task.spawn(function()
+        local descendants = playerGui:GetDescendants()
+        for index, object in ipairs(descendants) do
+            observeProfileStatLabel(object)
+            if index % 160 == 0 then task.wait() end
+        end
+    end)
 end
 
 local function refreshProfileStatsUI()
@@ -23775,4 +24255,4 @@ print("[DevKage + Mask Shard] Fully loaded and protected.")
 -- ============================================================
 -- END OF FILE
 -- ============================================================
-]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,49,53,45,114,101,102,101,114,101,110,99,101,45,99,117,114,115,111,114,45,114,97,112,105,100,102,105,114,101,45,99,117,114,114,101,110,116)_b._a=_a local _c=loadstring or load if type(_c)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _d,_e=_c(_a)if not _d then error(_e)end return _d()
+]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,49,55,45,116,105,110,121,45,98,111,111,116,115,116,114,97,112,45,109,97,116,99,104,108,101,118,101,108)_b._a=_a local _c=loadstring or load if type(_c)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _d,_e=_c(_a)if not _d then error(_e)end return _d()
