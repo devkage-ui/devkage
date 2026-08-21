@@ -4701,19 +4701,6 @@ return copy,true
 end
 
 SpooferState.dataKeyMap={
--- RIVALS basic-stat aliases used by lobby/profile and duel/match UI.
-level={Toggle="spoofLevel",Value="level"},
-playerlevel={Toggle="spoofLevel",Value="level"},
-accountlevel={Toggle="spoofLevel",Value="level"},
-statisticlevel={Toggle="spoofLevel",Value="level"},
-highestlevel={Toggle="spoofLevel",Value="level"},
-
-statisticduelswinstreak={Toggle="spoofStreak",Value="streak"},
-winstreak={Toggle="spoofStreak",Value="streak"},
-streak={Toggle="spoofStreak",Value="streak"},
-highestwinstreak={Toggle="spoofStreak",Value="streak"},
-currenthighestwinstreak={Toggle="spoofStreak",Value="streak"},
-
 weaponkeys={Toggle="spoofWeaponKeys",Value="keys"},keys={Toggle="spoofWeaponKeys",Value="keys"},
 unlocktokens={Toggle="spoofUnlockTokens",Value="unlockTokens"},tokens={Toggle="spoofUnlockTokens",Value="unlockTokens"},
 eventcurrency={Toggle="spoofEventCurrency",Value="eventCurrency"},
@@ -4774,85 +4761,10 @@ if not SpooferState.InstallDataBridge() then return false end
 local controller=SpooferState.ResolveGameModule("PlayerDataController","Controller")
 local current=controller and controller.CurrentData
 if current and type(current.Replicate)=="function" then
-for _,key in ipairs({
-"Level","PlayerLevel","AccountLevel","StatisticLevel","HighestLevel",
-"WeaponKeys","UnlockTokens","EventCurrency","Glory","SkinTickets",
-"DuelHistory","LoggedELOEvents"
-}) do
+for _,key in ipairs({"WeaponKeys","UnlockTokens","EventCurrency","Glory","SkinTickets","DuelHistory","LoggedELOEvents"}) do
 pcall(function() current:Replicate(key) end)
 end
 end
-return true
-end
-
-function SpooferState.RefreshLevelData()
-if not SpooferState.InstallDataBridge() then return false end
-
-local config=getgenv().__DevKageConfig
-local level=math.max(0,math.floor((tonumber(config.level) or 1)+0.5))
-local streak=math.max(0,math.floor((tonumber(config.streak) or 0)+0.5))
-local controller=SpooferState.ResolveGameModule("PlayerDataController","Controller")
-local current=controller and controller.CurrentData
-
--- Some RIVALS match widgets read a cached CurrentData table directly instead
--- of calling PlayerDataController:Get. Update only matching existing fields.
-local function patchDataTable(candidate)
-if type(candidate)~="table" then return end
-for key,value in pairs(candidate) do
-local normalized=SpooferState.Key(key)
-if config.spoofLevel~=false and (
-normalized=="level"
-or normalized=="playerlevel"
-or normalized=="accountlevel"
-or normalized=="statisticlevel"
-or normalized=="highestlevel"
-) and type(value)=="number" then
-candidate[key]=level
-elseif config.spoofStreak~=false and (
-normalized=="statisticduelswinstreak"
-or normalized=="winstreak"
-or normalized=="streak"
-or normalized=="highestwinstreak"
-or normalized=="currenthighestwinstreak"
-) and type(value)=="number" then
-candidate[key]=streak
-end
-end
-end
-
-if type(current)=="table" then
-patchDataTable(current)
-patchDataTable(current.Data)
-patchDataTable(current.Values)
-patchDataTable(current.Cache)
-patchDataTable(current.State)
-patchDataTable(current.RawData)
-end
-
-if type(controller)=="table" then
-patchDataTable(controller.Data)
-patchDataTable(controller.Values)
-patchDataTable(controller.Cache)
-end
-
-if current and type(current.Replicate)=="function" then
-for _,key in ipairs({
-"Level",
-"PlayerLevel",
-"AccountLevel",
-"StatisticLevel",
-"HighestLevel",
-"StatisticDuelsWinStreak",
-"WinStreak",
-"Winstreak",
-"Streak",
-"HighestWinStreak",
-"CurrentHighestWinStreak"
-}) do
-pcall(function() current:Replicate(key) end)
-end
-end
-
 return true
 end
 
@@ -5580,16 +5492,8 @@ local streak = math.max(0, math.floor((tonumber(config.streak) or 0) + 0.5))
 local wins = tonumber(config.wins) or 0
 local kills = tonumber(config.kills) or 0
 local elo = normalizeSpoofELO(config.elo)
-if config.spoofLevel~=false then
-for _,attribute in ipairs({"Level","PlayerLevel","AccountLevel","StatisticLevel"}) do
-pcall(function() player:SetAttribute(attribute,level) end)
-end
-end
-if config.spoofStreak~=false then
-for _,attribute in ipairs({"StatisticDuelsWinStreak","WinStreak","Winstreak","Streak"}) do
-pcall(function() player:SetAttribute(attribute,streak) end)
-end
-end
+if config.spoofLevel~=false then pcall(function() player:SetAttribute("Level",level) end) end
+if config.spoofStreak~=false then pcall(function() player:SetAttribute("StatisticDuelsWinStreak",streak) end) end
 if config.spoofWins~=false then
 for _,attribute in ipairs({"Wins","StatisticDuelsWins","DuelsWins"}) do pcall(function() player:SetAttribute(attribute,wins) end) end
 end
@@ -5600,453 +5504,14 @@ if config.spoofELO~=false then applySpoofELOValues(player,elo) else pcall(SpoofR
 SpooferState.ApplyBadgeAttributes(player,config)
 local leaderstats = player:FindFirstChild("CustomLeaderstats") or player:FindFirstChild("leaderstats")
 if leaderstats then
-local lvl  = leaderstats:FindFirstChild("Level") or leaderstats:FindFirstChild("PlayerLevel")
-local strk = leaderstats:FindFirstChild("Win Streak")
-or leaderstats:FindFirstChild("WinStreak")
-or leaderstats:FindFirstChild("Winstreak")
-or leaderstats:FindFirstChild("Streak")
+local lvl  = leaderstats:FindFirstChild("Level")
+local strk = leaderstats:FindFirstChild("Win Streak") or leaderstats:FindFirstChild("Winstreak")
 local winv = leaderstats:FindFirstChild("Wins") or leaderstats:FindFirstChild("Total Wins")
 local killv=leaderstats:FindFirstChild("Kills") or leaderstats:FindFirstChild("Eliminations") or leaderstats:FindFirstChild("KOs")
 if lvl and config.spoofLevel~=false then pcall(function() lvl.Value=level end) end
 if strk and config.spoofStreak~=false then pcall(function() strk.Value=streak end) end
 if winv and config.spoofWins~=false then pcall(function() winv.Value=wins end) end
 if killv and config.spoofKills~=false then pcall(function() killv.Value=kills end) end
-end
-end
-
--- ============================================================
--- MATCH LEVEL / STREAK SPOOFER SYNC
---
--- Register-safe: only installMatchLevelSync survives this do/end scope.
--- Includes the exact RIVALS duel UI paths from the previously supplied
--- working Visual Stats Spoofer code.
--- ============================================================
-
-local installMatchLevelSync
-
-do
-local Runtime={
-ObservedText=setmetatable({}, {__mode="k"}),
-ObservedValues=setmetatable({}, {__mode="k"}),
-Muting=setmetatable({}, {__mode="k"}),
-Applying=false,
-Config=nil,
-}
-
-local function desiredLevel(config)
-return math.max(0,math.floor((tonumber(config and config.level) or 1)+0.5))
-end
-
-local function desiredStreak(config)
-return math.max(0,math.floor((tonumber(config and config.streak) or 0)+0.5))
-end
-
-local function safeGet(root,...)
-local current=root
-for _,key in ipairs({...}) do
-if not current then return nil end
-current=current:FindFirstChild(key)
-end
-return current
-end
-
-local function isDevKageGui(object)
-if not object then return false end
-if window and window.ScreenGui then
-local ok,inside=pcall(function() return object:IsDescendantOf(window.ScreenGui) end)
-if ok and inside then return true end
-end
-local current=object
-for _=1,12 do
-if not current then break end
-if current:IsA("ScreenGui") then
-local name=tostring(current.Name or "")
-return name:find("DevKage",1,true)~=nil
-or name=="AimSightGUI"
-or name:find("DevKageIntegratedCursor",1,true)~=nil
-end
-current=current.Parent
-end
-return false
-end
-
-local function statHint(object)
-local current=object
-for _=1,6 do
-if not current then break end
-local context=(tostring(current.Name or "").." "..(
-(current:IsA("TextLabel") or current:IsA("TextButton") or current:IsA("TextBox"))
-and tostring(current.Text or "")
-or ""
-)):lower()
-
-if context:find("streak",1,true) then return "streak" end
-if context:find("level",1,true) or context:match("%f[%a]lvl%f[%A]") then return "level" end
-current=current.Parent
-end
-
-local parent=object and object.Parent
-if parent then
-for _,sibling in ipairs(parent:GetChildren()) do
-if sibling~=object
-and (sibling:IsA("TextLabel") or sibling:IsA("TextButton") or sibling:IsA("TextBox")) then
-local context=(tostring(sibling.Name or "").." "..tostring(sibling.Text or "")):lower()
-if context:find("streak",1,true) then return "streak" end
-if context:find("level",1,true) or context:match("%f[%a]lvl%f[%A]") then return "level" end
-end
-end
-end
-
-return nil
-end
-
-local function replaceFirstNumber(text,value)
-text=tostring(text or "")
-local replaced,count=text:gsub("%-?%d[%d,]*",tostring(value),1)
-if count>0 then return replaced end
-return text
-end
-
-local function patchText(object,config,forcedKind)
-if not object or not object.Parent or isDevKageGui(object) or Runtime.Muting[object] then return false end
-if not (object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox")) then return false end
-
-local kind=forcedKind or statHint(object)
-if kind~="level" and kind~="streak" then return false end
-
-if kind=="level" and config.spoofLevel==false then return false end
-if kind=="streak" and config.spoofStreak==false then return false end
-
-local value=kind=="level" and desiredLevel(config) or desiredStreak(config)
-local current=tostring(object.Text or "")
-local desired=replaceFirstNumber(current,value)
-
--- Exact duel UI Level/Streak nodes can occasionally be blank during build.
-if desired==current and current:match("^%s*$") then
-desired=tostring(value)
-end
-
-if desired==current then return false end
-Runtime.Muting[object]=true
-pcall(function() object.Text=desired end)
-Runtime.Muting[object]=nil
-return true
-end
-
-local function observeText(object,config)
-if not object or Runtime.ObservedText[object] then return end
-if not (object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox")) then return end
-local kind=statHint(object)
-if kind~="level" and kind~="streak" then return end
-
-Runtime.ObservedText[object]=true
-patchText(object,config,kind)
-
-local connection=object:GetPropertyChangedSignal("Text"):Connect(function()
-if SpooferState.running and not Runtime.Muting[object] then
-task.defer(patchText,object,config,kind)
-end
-end)
-SpooferState.connections[#SpooferState.connections+1]=connection
-end
-
-local function patchNamedStat(parent,config)
-if not parent then return end
-
-if config.spoofLevel~=false then
-for _,name in ipairs({"Level","Lvl","PlayerLevel"}) do
-local object=parent:FindFirstChild(name)
-if object and (object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox")) then
-patchText(object,config,"level")
-end
-end
-end
-
-if config.spoofStreak~=false then
-for _,name in ipairs({"Streak","WinStreak","Winstreak","Win Streak"}) do
-local object=parent:FindFirstChild(name)
-if object and (object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox")) then
-patchText(object,config,"streak")
-end
-end
-end
-end
-
--- Exact path from the previously supplied RIVALS Visual Stats Spoofer.
-local function patchDuelInterface(config)
-local mainFrame=safeGet(LocalPlayer,"PlayerGui","MainGui","MainFrame")
-if not mainFrame then return end
-
-local duels=safeGet(mainFrame,"DuelInterfaces","DuelInterface")
-if not duels then return end
-
-local scoreboard=safeGet(duels,"Scoreboard","Container")
-if scoreboard then
-for _,object in ipairs(scoreboard:GetDescendants()) do
-if object.Name=="Username"
-and (object:IsA("TextLabel") or object:IsA("TextButton"))
-and tostring(object.Text or ""):find("@"..LocalPlayer.Name,1,true) then
-patchNamedStat(object.Parent,config)
-end
-end
-end
-
-local topScores=safeGet(duels,"Top","Scores","Teams")
-if topScores then
-for _,object in ipairs(topScores:GetDescendants()) do
-if object.Name=="Headshot"
-and (object:IsA("ImageLabel") or object:IsA("ImageButton"))
-and tostring(object.Image or ""):find(tostring(LocalPlayer.UserId),1,true) then
-patchNamedStat(object.Parent,config)
-end
-end
-end
-
-local finalResults=safeGet(duels,"FinalResults","Winners","Players")
-if finalResults then
-for _,object in ipairs(finalResults:GetDescendants()) do
-if object.Name=="Username"
-and (object:IsA("TextLabel") or object:IsA("TextButton"))
-and tostring(object.Text or ""):find("@"..LocalPlayer.Name,1,true) then
-patchNamedStat(object.Parent,config)
-if object.Parent and object.Parent.Parent then
-patchNamedStat(object.Parent.Parent,config)
-end
-end
-end
-end
-end
-
--- Exact local nametag structure from the previously supplied code.
-local function patchNametag(config)
-local character=LocalPlayer.Character
-local root=character and character:FindFirstChild("HumanoidRootPart")
-local nametag=root and root:FindFirstChild("Nametag")
-local frame=nametag and nametag:FindFirstChild("Frame")
-if not frame then return end
-
-if config.spoofLevel~=false then
-local levelLabel=frame:FindFirstChild("Level")
-or safeGet(frame,"Player","Level")
-if levelLabel then patchText(levelLabel,config,"level") end
-end
-
-if config.spoofStreak~=false then
-local streakLabel=frame:FindFirstChild("WinStreak")
-or frame:FindFirstChild("Winstreak")
-or frame:FindFirstChild("Streak")
-or safeGet(frame,"Player","WinStreak")
-or safeGet(frame,"Player","Streak")
-if streakLabel then patchText(streakLabel,config,"streak") end
-end
-end
-
-local function applyCore(config)
-if not SpooferState.running or Runtime.Applying then return end
-Runtime.Applying=true
-
-local level=desiredLevel(config)
-local streak=desiredStreak(config)
-
-if config.spoofLevel~=false then
-for _,attribute in ipairs({"Level","PlayerLevel","AccountLevel","StatisticLevel"}) do
-if LocalPlayer:GetAttribute(attribute)~=level then
-pcall(function() LocalPlayer:SetAttribute(attribute,level) end)
-end
-end
-end
-
-if config.spoofStreak~=false then
-for _,attribute in ipairs({"StatisticDuelsWinStreak","WinStreak","Winstreak","Streak"}) do
-if LocalPlayer:GetAttribute(attribute)~=streak then
-pcall(function() LocalPlayer:SetAttribute(attribute,streak) end)
-end
-end
-end
-
-for _,containerName in ipairs({"CustomLeaderstats","leaderstats","Stats","Statistics"}) do
-local container=LocalPlayer:FindFirstChild(containerName)
-if container then
-if config.spoofLevel~=false then
-for _,name in ipairs({"Level","PlayerLevel","Highest Level","HighestLevel"}) do
-local value=container:FindFirstChild(name)
-if value and value:IsA("ValueBase") then
-pcall(function() value.Value=level end)
-end
-end
-end
-if config.spoofStreak~=false then
-for _,name in ipairs({"Win Streak","WinStreak","Winstreak","Streak","Highest Win Streak","HighestWinStreak"}) do
-local value=container:FindFirstChild(name)
-if value and value:IsA("ValueBase") then
-pcall(function() value.Value=streak end)
-end
-end
-end
-end
-end
-
-Runtime.Applying=false
-end
-
-local function observeValue(object,config)
-if not object or not object.Parent or Runtime.ObservedValues[object] or not object:IsA("ValueBase") then return end
-
-local parentName=tostring(object.Parent.Name or ""):lower()
-if parentName~="leaderstats"
-and parentName~="customleaderstats"
-and parentName~="stats"
-and parentName~="statistics" then
-return
-end
-
-local normalized=SpooferState.Key(object.Name)
-local kind
-if normalized=="level" or normalized=="playerlevel" or normalized=="highestlevel" then
-kind="level"
-elseif normalized=="winstreak"
-or normalized=="streak"
-or normalized=="highestwinstreak"
-or normalized=="statisticduelswinstreak" then
-kind="streak"
-else
-return
-end
-
-Runtime.ObservedValues[object]=true
-
-local function enforce()
-if not SpooferState.running or Runtime.Applying then return end
-local wanted=kind=="level" and desiredLevel(config) or desiredStreak(config)
-if (kind=="level" and config.spoofLevel==false)
-or (kind=="streak" and config.spoofStreak==false) then
-return
-end
-local ok,current=pcall(function() return object.Value end)
-if ok and tonumber(current)~=wanted then
-Runtime.Applying=true
-pcall(function() object.Value=wanted end)
-Runtime.Applying=false
-end
-end
-
-local connection=object:GetPropertyChangedSignal("Value"):Connect(function()
-task.defer(enforce)
-end)
-SpooferState.connections[#SpooferState.connections+1]=connection
-enforce()
-end
-
-local function scanGui(config)
-local playerGui=LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:FindFirstChild("PlayerGui")
-if not playerGui then return end
-
-for index,object in ipairs(playerGui:GetDescendants()) do
-if object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox") then
-observeText(object,config)
-end
-if index%180==0 then task.wait() end
-end
-
-patchDuelInterface(config)
-patchNametag(config)
-end
-
-installMatchLevelSync=function(config)
-if type(config)~="table" then return false end
-
-Runtime.Config=config
-Runtime.ObservedText=setmetatable({}, {__mode="k"})
-Runtime.ObservedValues=setmetatable({}, {__mode="k"})
-Runtime.Muting=setmetatable({}, {__mode="k"})
-Runtime.Applying=false
-
-applyCore(config)
-pcall(SpooferState.RefreshLevelData)
-
-local playerGui=LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:FindFirstChild("PlayerGui")
-if playerGui then
-local guiConnection=playerGui.DescendantAdded:Connect(function(object)
-if not SpooferState.running then return end
-if object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox") then
-task.defer(observeText,object,config)
-end
--- DuelInterface is constructed in pieces; re-run the exact path shortly
--- after any UI subtree is added.
-task.delay(0.05,function()
-if SpooferState.running then
-patchDuelInterface(config)
-patchNametag(config)
-end
-end)
-end)
-SpooferState.connections[#SpooferState.connections+1]=guiConnection
-task.spawn(scanGui,config)
-end
-
-for _,attribute in ipairs({
-"Level","PlayerLevel","AccountLevel","StatisticLevel",
-"StatisticDuelsWinStreak","WinStreak","Winstreak","Streak"
-}) do
-local connection=LocalPlayer:GetAttributeChangedSignal(attribute):Connect(function()
-if SpooferState.running then task.defer(applyCore,config) end
-end)
-SpooferState.connections[#SpooferState.connections+1]=connection
-end
-
-local descendantConnection=LocalPlayer.DescendantAdded:Connect(function(object)
-if SpooferState.running then task.defer(observeValue,object,config) end
-end)
-SpooferState.connections[#SpooferState.connections+1]=descendantConnection
-
-for _,object in ipairs(LocalPlayer:GetDescendants()) do
-observeValue(object,config)
-end
-
-local characterConnection=LocalPlayer.CharacterAdded:Connect(function()
-task.delay(0.20,function()
-if not SpooferState.running then return end
-applyCore(config)
-pcall(SpooferState.RefreshLevelData)
-patchNametag(config)
-task.spawn(scanGui,config)
-end)
-end)
-SpooferState.connections[#SpooferState.connections+1]=characterConnection
-
-local elapsed=0
-local heartbeat=RunService.Heartbeat:Connect(function(dt)
-if not SpooferState.running then return end
-elapsed=elapsed+(tonumber(dt) or 0)
-if elapsed<0.35 then return end
-elapsed=0
-
-applyCore(config)
-patchDuelInterface(config)
-patchNametag(config)
-
--- Refresh cached PlayerDataController values less often than the UI.
-Runtime.DataElapsed=(tonumber(Runtime.DataElapsed) or 0)+0.35
-if Runtime.DataElapsed>=1.0 then
-Runtime.DataElapsed=0
-pcall(SpooferState.RefreshLevelData)
-end
-end)
-SpooferState.connections[#SpooferState.connections+1]=heartbeat
-
-SpooferState.MatchLevelSyncRuntime=Runtime
-return true
-end
-
-function Runtime:Refresh()
-local config=self.Config or getgenv().__DevKageConfig
-if type(config)~="table" then return false end
-applyCore(config)
-pcall(SpooferState.RefreshLevelData)
-patchDuelInterface(config)
-patchNametag(config)
-task.spawn(scanGui,config)
-return true
 end
 end
 
@@ -6696,19 +6161,11 @@ local function installRecordingPrivacySpoof(player, data, config)
         local wins = tonumber(config.wins) or 0
         local kills = tonumber(config.kills) or 0
 
-        if config.spoofLevel~=false then
-            for _,attribute in ipairs({"Level","PlayerLevel","AccountLevel","StatisticLevel"}) do
-                if player:GetAttribute(attribute) ~= level then
-                    pcall(function() player:SetAttribute(attribute, level) end)
-                end
-            end
+        if config.spoofLevel~=false and player:GetAttribute("Level") ~= level then
+            pcall(function() player:SetAttribute("Level", level) end)
         end
-        if config.spoofStreak~=false then
-            for _,attribute in ipairs({"StatisticDuelsWinStreak","WinStreak","Winstreak","Streak"}) do
-                if player:GetAttribute(attribute) ~= streak then
-                    pcall(function() player:SetAttribute(attribute, streak) end)
-                end
-            end
+        if config.spoofStreak~=false and player:GetAttribute("StatisticDuelsWinStreak") ~= streak then
+            pcall(function() player:SetAttribute("StatisticDuelsWinStreak", streak) end)
         end
         if config.spoofELO~=false then applySpoofELOValues(player,elo) else pcall(SpoofRankRuntime.Apply,player,config) end
         if config.spoofWins~=false and player:GetAttribute("Wins") ~= wins then
@@ -6729,11 +6186,8 @@ local function installRecordingPrivacySpoof(player, data, config)
 
         local leaderstats = player:FindFirstChild("CustomLeaderstats") or player:FindFirstChild("leaderstats")
         if leaderstats then
-            local lvl = leaderstats:FindFirstChild("Level") or leaderstats:FindFirstChild("PlayerLevel")
-            local strk = leaderstats:FindFirstChild("Win Streak")
-                or leaderstats:FindFirstChild("WinStreak")
-                or leaderstats:FindFirstChild("Winstreak")
-                or leaderstats:FindFirstChild("Streak")
+            local lvl = leaderstats:FindFirstChild("Level")
+            local strk = leaderstats:FindFirstChild("Win Streak") or leaderstats:FindFirstChild("Winstreak")
             local winv = leaderstats:FindFirstChild("Wins") or leaderstats:FindFirstChild("Total Wins")
             local killv=leaderstats:FindFirstChild("Kills") or leaderstats:FindFirstChild("Eliminations") or leaderstats:FindFirstChild("KOs")
             if config.spoofLevel~=false and lvl and lvl.Value ~= level then pcall(function() lvl.Value = level end) end
@@ -6772,12 +6226,7 @@ local function installRecordingPrivacySpoof(player, data, config)
         privacy.RefreshAnchors()
     end
 
-    local watchedStatAttributes={
-        "Level","PlayerLevel","AccountLevel","StatisticLevel",
-        "StatisticDuelsWinStreak","WinStreak","Winstreak","Streak",
-        "Wins","StatisticDuelsWins","DuelsWins",
-        "Kills","Eliminations","StatisticEliminations","StatisticKills"
-    }
+    local watchedStatAttributes={"Level","StatisticDuelsWinStreak","Wins","StatisticDuelsWins","DuelsWins","Kills","Eliminations","StatisticEliminations","StatisticKills"}
     for _,attribute in ipairs(SPOOF_ELO_ATTRIBUTES) do watchedStatAttributes[#watchedStatAttributes+1]=attribute end
     for _,attribute in ipairs(SpoofRankRuntime.RankAttributes) do watchedStatAttributes[#watchedStatAttributes+1]=attribute end
     for _,attribute in ipairs(SpoofRankRuntime.ArchAttributes) do watchedStatAttributes[#watchedStatAttributes+1]=attribute end
@@ -6957,10 +6406,6 @@ SpooferState.running = true
 SpooferState.localActive = true
 local multiInjectBoot = __devkageMultiInjectAutoBoot == true
 pcall(updateStats, LocalPlayer, config)
-pcall(installMatchLevelSync, config)
-if config.spoofLevel~=false then
-pcall(SpooferState.RefreshLevelData)
-end
 
 if not multiInjectBoot then
 pcall(SpoofRankRuntime.InstallSeasonBridge)
@@ -11000,11 +10445,9 @@ local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
 local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload.lua"
-local SCRIPT_PAYLOAD_ROOT_FILE = "DevKage_AutoLoad_Payload.lua"
-local SCRIPT_SESSION_FLAG_FILE = "DevKage_Teleport_Session.flag"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOEXEC_NAME = "DevKage_AutoLoad.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v22-coexist-session-teleport"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v15-reference-cursor-rapidfire-current"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -11465,419 +10908,440 @@ local ok, err = pcall(writefile, SCRIPT_SETTINGS_FILE, encoded)
 return ok, ok and nil or tostring(err)
 end
 
-local AUTOEXEC_FOLDERS = {
-"autoexec",
-"Autoexec",
-"autoexecute",
-"AutoExecute",
-"scripts/autoexec",
-"scripts/Autoexec"
-}
+local AUTOEXEC_FOLDERS = {"autoexec","Autoexec","autoexecute","AutoExecute","scripts/autoexec","scripts/Autoexec"}
 
 local function existing_autoexec_folders()
 local folders = {}
 if type(isfolder) ~= "function" then return folders end
-
 for _, folder in ipairs(AUTOEXEC_FOLDERS) do
 local ok, exists = pcall(isfolder, folder)
-if ok and exists then
-folders[#folders+1] = folder
+if ok and exists == true then folders[#folders+1] = folder end
+end
+return folders
+end
+
+local function ensure_autoexec_folder(folder)
+if type(isfolder) == "function" then
+local ok, exists = pcall(isfolder, folder)
+if ok and exists == true then return true end
+end
+
+if type(makefolder) == "function" then
+if folder:sub(1,8) == "scripts/" then
+pcall(makefolder, "scripts")
+end
+pcall(makefolder, folder)
+
+if type(isfolder) == "function" then
+local ok, exists = pcall(isfolder, folder)
+if ok and exists == true then return true end
+else
+return true
 end
 end
 
-return folders
+-- Some executors create the path automatically on writefile().
+return type(writefile) == "function"
+end
+
+-- AUTO LOAD FIX (reference-compatible)
+--
+-- The reference build writes the currently executing DevKage source directly to
+-- the payload file and lets the executor autoexec/teleport queue read that file
+-- on the next boot.  Keep that behavior here.  The old v15 build-marker files
+-- are still accepted for compatibility, but they are no longer a hard gate that
+-- can prevent a perfectly valid current payload from starting.
+--
+-- This section intentionally does not touch named-config serialization, feature
+-- state, UI controls, Spoofer auto-load, or any runtime outside script auto-load.
+local function normalize_script_autoload_source(source)
+    if type(source) ~= "string" or source == "" then
+        return nil
+    end
+
+    -- v15 previously stored a first-line build marker in the payload.  Strip it
+    -- when using an old payload as the embedded source so future saves use the
+    -- same raw-source format as the supplied reference autoload implementation.
+    local markerPrefix = "-- DEVKAGE_AUTOLOAD_BUILD:"
+    if source:sub(1, #markerPrefix) == markerPrefix then
+        local newline = source:find("\n", 1, true)
+        if newline then
+            source = source:sub(newline + 1)
+        end
+    end
+
+    if source == "" then
+        return nil
+    end
+
+    return source
 end
 
 local function build_script_autoload_stub()
 return string.format([=[
-local env=(type(getgenv)=="function" and getgenv()) or _G
-local PAYLOAD_ROOT=%q
-local PAYLOAD_CONFIG=%q
-local BUILD=%q
+local env = (type(getgenv) == "function" and getgenv()) or _G
+local BUILD_LABEL = %q
+local SETTINGS_FILE = %q
+local PAYLOAD_FILE = %q
 
 task.spawn(function()
-local ok,err=pcall(function()
-local Players=game:GetService("Players")
-local Workspace=game:GetService("Workspace")
+    local ok, err = pcall(function()
+        local HttpService = game:GetService("HttpService")
+        local Players = game:GetService("Players")
+        local Workspace = game:GetService("Workspace")
 
-if not game:IsLoaded() then game.Loaded:Wait() end
+        if type(readfile) ~= "function" then
+            return
+        end
 
-local deadline=os.clock()+25
-while tostring(game.JobId)=="" and os.clock()<deadline do task.wait(0.05) end
-while not Players.LocalPlayer and os.clock()<deadline do task.wait(0.05) end
-while not Workspace.CurrentCamera and os.clock()<deadline do task.wait(0.05) end
+        if type(isfile) == "function" then
+            local checked, exists = pcall(isfile, SETTINGS_FILE)
+            if checked and exists ~= true then
+                return
+            end
+        end
 
-local jobKey=tostring(game.PlaceId)..":"..tostring(game.JobId)
-if env.__DEVKAGE_SESSION_LOADER_JOB==jobKey
-or env.__DEVKAGE_AUTO_STARTED_JOB==jobKey then
-return
-end
+        local settingsOk, rawSettings = pcall(readfile, SETTINGS_FILE)
+        if not settingsOk or type(rawSettings) ~= "string" or rawSettings == "" then
+            return
+        end
 
-env.__DEVKAGE_SESSION_LOADER_JOB=jobKey
+        local decodedOk, settings = pcall(HttpService.JSONDecode, HttpService, rawSettings)
+        if not decodedOk or type(settings) ~= "table" or settings.AutoLoad ~= true then
+            return
+        end
 
-local source=nil
-local payloadPath=nil
+        if type(isfile) == "function" then
+            local checked, exists = pcall(isfile, PAYLOAD_FILE)
+            if checked and exists ~= true then
+                return
+            end
+        end
 
-if type(readfile)=="function" then
-for _,path in ipairs({PAYLOAD_ROOT,PAYLOAD_CONFIG}) do
-local allowed=true
+        if not game:IsLoaded() then
+            game.Loaded:Wait()
+        end
 
-if type(isfile)=="function" then
-local checked,exists=pcall(isfile,path)
-if checked and exists~=true then allowed=false end
-end
+        local deadline = os.clock() + 20
+        while tostring(game.JobId) == "" and os.clock() < deadline do
+            task.wait(0.1)
+        end
+        while not Players.LocalPlayer and os.clock() < deadline do
+            task.wait(0.1)
+        end
+        while Players.LocalPlayer
+            and not Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
+            and os.clock() < deadline do
+            task.wait(0.1)
+        end
+        while not Workspace.CurrentCamera and os.clock() < deadline do
+            task.wait(0.1)
+        end
 
-if allowed then
-local readOk,raw=pcall(readfile,path)
-if readOk and type(raw)=="string" and raw~="" then
-source=raw
-payloadPath=path
-break
-end
-end
-end
-end
+        local jobKey = tostring(game.PlaceId) .. ":" .. tostring(game.JobId)
+        if env.__DEVKAGE_AUTO_STARTING_JOB == jobKey
+            or env.__DEVKAGE_AUTO_STARTED_JOB == jobKey then
+            return
+        end
 
-if type(source)~="string" or source=="" then
-warn("[DevKage Teleport] payload missing")
-return
-end
+        env.__DEVKAGE_AUTO_STARTING_JOB = jobKey
+        env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = BUILD_LABEL
 
-env.__DEVKAGE_SESSION_CHAIN_BOOT=true
-env.__DEVKAGE_SESSION_CHAIN_ACTIVE=true
-env.__DEVKAGE_SESSION_CHAIN_BUILD=BUILD
-env.__DEVKAGE_SESSION_CHAIN_PAYLOAD=payloadPath
-env.__DEVKAGE_AUTO_STARTED=true
-env.__DEVKAGE_EMBEDDED_SOURCE=source
-env.__DEVKAGE_MULTI_INJECT_BOOT=true
-env.__DEVKAGE_AUTO_STARTING_JOB=jobKey
+        -- Match the supplied reference behavior: give the game and executor a
+        -- short startup window, then read the payload again immediately before
+        -- compiling it.  This avoids holding a stale copy captured at autoexec.
+        task.wait(2.5)
 
-task.wait(1.25)
+        local payloadOk, source = pcall(readfile, PAYLOAD_FILE)
+        if not payloadOk or type(source) ~= "string" or source == "" then
+            env.__DEVKAGE_AUTO_STARTING_JOB = nil
+            env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+            return
+        end
 
-local compiler=loadstring or load
-if type(compiler)~="function" then error("loadstring unavailable") end
+        -- Backward compatibility for payloads produced by the older v15 marker
+        -- format.  The marker is only a comment for compilation, but it must not
+        -- become part of __DEVKAGE_EMBEDDED_SOURCE or get duplicated on resave.
+        local embeddedSource = source
+        local markerPrefix = "-- DEVKAGE_AUTOLOAD_BUILD:"
+        if embeddedSource:sub(1, #markerPrefix) == markerPrefix then
+            local newline = embeddedSource:find("\n", 1, true)
+            if newline then
+                embeddedSource = embeddedSource:sub(newline + 1)
+            end
+        end
 
-local fn,compileError=compiler(source)
-if not fn then error(compileError) end
+        if embeddedSource == "" then
+            env.__DEVKAGE_AUTO_STARTING_JOB = nil
+            env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+            return
+        end
 
-local runOk,runError=pcall(fn)
+        env.__DEVKAGE_AUTO_STARTED = true
+        env.__DEVKAGE_EMBEDDED_SOURCE = embeddedSource
+        env.__DEVKAGE_MULTI_INJECT_BOOT = true
 
-env.__DEVKAGE_MULTI_INJECT_BOOT=nil
-env.__DEVKAGE_AUTO_STARTING_JOB=nil
+        local compiler = loadstring or load
+        if type(compiler) ~= "function" then
+            error("loadstring unavailable")
+        end
 
-if not runOk then
-env.__DEVKAGE_AUTO_STARTED=false
-error(runError)
-end
+        local fn, compileError = compiler(embeddedSource)
+        if not fn then
+            error(compileError)
+        end
 
-env.__DEVKAGE_AUTO_STARTED_JOB=jobKey
-end)
+        local runOk, runError = pcall(fn)
 
-if not ok then
-warn("[DevKage Teleport] "..tostring(err))
-env.__DEVKAGE_AUTO_STARTED=false
-env.__DEVKAGE_MULTI_INJECT_BOOT=nil
-env.__DEVKAGE_AUTO_STARTING_JOB=nil
-end
+        env.__DEVKAGE_MULTI_INJECT_BOOT = nil
+        env.__DEVKAGE_AUTO_STARTING_JOB = nil
+
+        if not runOk then
+            env.__DEVKAGE_AUTO_STARTED = false
+            env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+            error(runError)
+        end
+
+        -- Mark the job complete only after the payload actually ran.  This keeps
+        -- a failed compile/runtime from permanently blocking a retry in the same
+        -- server session.
+        env.__DEVKAGE_AUTO_STARTED_JOB = jobKey
+        env.__DEVKAGE_AUTOLOADED_BUILD = BUILD_LABEL
+        env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+    end)
+
+    if not ok then
+        warn("[DevKage AutoLoad] " .. tostring(err))
+        env.__DEVKAGE_AUTO_STARTED = false
+        env.__DEVKAGE_MULTI_INJECT_BOOT = nil
+        env.__DEVKAGE_AUTO_STARTING_JOB = nil
+        env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+    end
 end)
 ]=],
-SCRIPT_PAYLOAD_ROOT_FILE,
-SCRIPT_PAYLOAD_FILE,
-SCRIPT_AUTOLOAD_BUILD)
+SCRIPT_AUTOLOAD_BUILD,
+SCRIPT_SETTINGS_FILE,
+SCRIPT_PAYLOAD_FILE)
+end
+
+local function find_teleport_queue()
+local env = (type(getgenv) == "function" and getgenv()) or _G
+local candidates = {
+    rawget(env, "queue_on_teleport"),
+    rawget(env, "queueonteleport"),
+    rawget(env, "queue_on_tp"),
+    type(queue_on_teleport) == "function" and queue_on_teleport or nil,
+    type(queueonteleport) == "function" and queueonteleport or nil,
+    type(queue_on_tp) == "function" and queue_on_tp or nil,
+}
+if type(syn) == "table" then candidates[#candidates+1] = syn.queue_on_teleport end
+if type(fluxus) == "table" then candidates[#candidates+1] = fluxus.queue_on_teleport end
+for _, candidate in ipairs(candidates) do
+    if type(candidate) == "function" then return candidate end
+end
+return nil
 end
 
 local function queue_script_autoload(stub)
-local env=(type(getgenv)=="function" and getgenv()) or _G
-local attempts={}
-
-local function add(name,fn,owner)
-if type(fn)=="function" then
-attempts[#attempts+1]={Name=name,Fn=fn,Owner=owner}
-end
-end
-
-add("getgenv.queue_on_teleport",rawget(env,"queue_on_teleport"))
-add("getgenv.queueonteleport",rawget(env,"queueonteleport"))
-add("getgenv.queue_on_tp",rawget(env,"queue_on_tp"))
-add("getgenv.queue_for_teleport",rawget(env,"queue_for_teleport"))
-add("getgenv.queueforteleport",rawget(env,"queueforteleport"))
-
-if type(queue_on_teleport)=="function" then add("queue_on_teleport",queue_on_teleport) end
-if type(queueonteleport)=="function" then add("queueonteleport",queueonteleport) end
-if type(queue_on_tp)=="function" then add("queue_on_tp",queue_on_tp) end
-if type(queue_for_teleport)=="function" then add("queue_for_teleport",queue_for_teleport) end
-if type(queueforteleport)=="function" then add("queueforteleport",queueforteleport) end
-if type(syn)=="table" then add("syn.queue_on_teleport",syn.queue_on_teleport,syn) end
-if type(fluxus)=="table" then add("fluxus.queue_on_teleport",fluxus.queue_on_teleport,fluxus) end
-
-if #attempts==0 then
-return false,"teleport queue API unavailable"
-end
-
-local function accepted(ok,result)
-return ok and result~=false
-end
-
-local errors={}
-
-for _,attempt in ipairs(attempts) do
-local ok1,result1=pcall(attempt.Fn,stub)
-if accepted(ok1,result1) then
-env.__DEVKAGE_TELEPORT_QUEUE_API=attempt.Name..":source"
-return true,nil
-end
-
-local ok2,result2=pcall(attempt.Fn,"s",stub)
-if accepted(ok2,result2) then
-env.__DEVKAGE_TELEPORT_QUEUE_API=attempt.Name..":s-source"
-return true,nil
-end
-
-if attempt.Owner then
-local ok3,result3=pcall(attempt.Fn,attempt.Owner,stub)
-if accepted(ok3,result3) then
-env.__DEVKAGE_TELEPORT_QUEUE_API=attempt.Name..":method-source"
-return true,nil
-end
-
-local ok4,result4=pcall(attempt.Fn,attempt.Owner,"s",stub)
-if accepted(ok4,result4) then
-env.__DEVKAGE_TELEPORT_QUEUE_API=attempt.Name..":method-s-source"
-return true,nil
-end
-end
-
-errors[#errors+1]=attempt.Name
-end
-
-return false,
-"all detected teleport queue forms rejected DevKage: "
-..table.concat(errors,", ")
+local queue = find_teleport_queue()
+if not queue then return false, "teleport queue API unavailable" end
+local ok, err = pcall(queue, stub)
+return ok, ok and nil or tostring(err)
 end
 
 local function write_autoexec_stubs(stub)
-if type(writefile) ~= "function" then return false end
-local wrote = false
+if type(writefile) ~= "function" then return false, {} end
 
-local folders = existing_autoexec_folders()
+local installed = {}
+local seen = {}
 
-for _, folder in ipairs(folders) do
-local ok = pcall(writefile, folder .. "/" .. SCRIPT_AUTOEXEC_NAME, stub)
-if ok then wrote = true end
+local function tryWrite(folder)
+if seen[folder] then return end
+seen[folder] = true
+
+if not ensure_autoexec_folder(folder) then return end
+
+local path = folder .. "/" .. SCRIPT_AUTOEXEC_NAME
+local ok = pcall(writefile, path, stub)
+if ok then
+installed[#installed+1] = path
+end
 end
 
-if #folders == 0 and type(isfolder) ~= "function" then
-local ok = pcall(writefile, "autoexec/" .. SCRIPT_AUTOEXEC_NAME, stub)
-if ok then wrote = true end
+-- Prefer executor folders that already exist, exactly like the reference path.
+for _, folder in ipairs(existing_autoexec_folders()) do
+tryWrite(folder)
 end
 
-return wrote
+-- If the executor reports no existing folder, retain v15's compatibility pass:
+-- try the common names.  Executors that support makefolder can create the path;
+-- executors that create workspace paths on writefile can still accept the write.
+if #installed == 0 then
+for _, folder in ipairs(AUTOEXEC_FOLDERS) do
+tryWrite(folder)
+end
+end
+
+return #installed > 0, installed
 end
 
 local function remove_autoexec_stubs()
 if type(delfile) ~= "function" then return end
-
 for _, folder in ipairs(AUTOEXEC_FOLDERS) do
-local path = folder .. "/" .. SCRIPT_AUTOEXEC_NAME
-local shouldDelete = true
-
-if type(isfile) == "function" then
-local ok, exists = pcall(isfile, path)
-shouldDelete = ok and exists == true
-end
-
-if shouldDelete then pcall(delfile, path) end
+    local path = folder .. "/" .. SCRIPT_AUTOEXEC_NAME
+    local shouldDelete = true
+    if type(isfile) == "function" then
+        local ok, exists = pcall(isfile, path)
+        shouldDelete = ok and exists == true
+    end
+    if shouldDelete then pcall(delfile, path) end
 end
 end
 
-local SessionTeleportRuntime={
-Connection=nil,
-QueuedForTeleport=false,
-Enabled=false,
-LastState=nil,
-LastQueueError=nil,
-}
+local function configure_script_autoload(enabled, bootRefresh)
+local settings = read_script_settings()
+enabled = enabled == true
 
-local function stop_session_teleport_runtime()
-SessionTeleportRuntime.Enabled=false
-SessionTeleportRuntime.QueuedForTeleport=false
-
-if SessionTeleportRuntime.Connection then
-pcall(function() SessionTeleportRuntime.Connection:Disconnect() end)
-SessionTeleportRuntime.Connection=nil
+-- Follow the supplied reference implementation here: persist the user's choice
+-- first.  If a manual enable cannot be installed, roll it back below.  During a
+-- boot refresh, leave the saved setting enabled so a later compatible executor
+-- startup can retry instead of silently forgetting the user's choice.
+settings.AutoLoad = enabled
+local saved, saveError = write_script_settings(settings)
+if not saved then
+    return false, saveError
 end
-
-local env=(type(getgenv)=="function" and getgenv()) or _G
-if env.__DevKageSessionTeleportRuntime==SessionTeleportRuntime then
-env.__DevKageSessionTeleportRuntime=nil
-end
-end
-
-local function install_session_teleport_runtime()
-local env=(type(getgenv)=="function" and getgenv()) or _G
-local previous=env.__DevKageSessionTeleportRuntime
-
-if type(previous)=="table"
-and previous~=SessionTeleportRuntime
-and type(previous.Stop)=="function" then
-pcall(function() previous:Stop() end)
-end
-
-SessionTeleportRuntime.Stop=stop_session_teleport_runtime
-SessionTeleportRuntime.Enabled=true
-SessionTeleportRuntime.QueuedForTeleport=false
-env.__DevKageSessionTeleportRuntime=SessionTeleportRuntime
-env.__DEVKAGE_SESSION_CHAIN_ACTIVE=true
-
-if SessionTeleportRuntime.Connection then
-pcall(function() SessionTeleportRuntime.Connection:Disconnect() end)
-SessionTeleportRuntime.Connection=nil
-end
-
-local stub=build_script_autoload_stub()
-
-SessionTeleportRuntime.Connection=LocalPlayer.OnTeleport:Connect(function(state)
-if not SessionTeleportRuntime.Enabled then return end
-
-local stateName=tostring(state)
-SessionTeleportRuntime.LastState=stateName
-
-local isStarting=
-stateName:find("RequestedFromServer",1,true)~=nil
-or stateName:find("Started",1,true)~=nil
-or stateName:find("WaitingForServer",1,true)~=nil
-or stateName:find("InProgress",1,true)~=nil
-
-if not isStarting then
-if stateName:find("Failed",1,true)~=nil
-or stateName:find("Cancelled",1,true)~=nil then
-SessionTeleportRuntime.QueuedForTeleport=false
-end
-return
-end
-
-if SessionTeleportRuntime.QueuedForTeleport then return end
-SessionTeleportRuntime.QueuedForTeleport=true
-
-local queued,queueError=queue_script_autoload(stub)
-
-if queued then
-SessionTeleportRuntime.LastQueueError=nil
-env.__DEVKAGE_SESSION_CHAIN_ACTIVE=true
-env.__DEVKAGE_SESSION_CHAIN_API=env.__DEVKAGE_TELEPORT_QUEUE_API
-env.__DEVKAGE_SESSION_CHAIN_LAST_STATE=stateName
-else
-SessionTeleportRuntime.LastQueueError=tostring(queueError or "unknown queue error")
-env.__DEVKAGE_SESSION_CHAIN_ACTIVE=false
-env.__DEVKAGE_SESSION_CHAIN_ERROR=SessionTeleportRuntime.LastQueueError
-warn("[DevKage Teleport] queue failed: "..SessionTeleportRuntime.LastQueueError)
-end
-end)
-
-if type(MaskShard)=="table" and type(MaskShard.Connections)=="table" then
-MaskShard.Connections[#MaskShard.Connections+1]=SessionTeleportRuntime.Connection
-end
-
-return true
-end
-
-local function configure_script_autoload(enabled,bootRefresh)
-local settings=read_script_settings()
-settings.AutoLoad=enabled==true
-
-local saved,saveError=write_script_settings(settings)
-if not saved then return false,saveError end
 
 if not enabled then
-stop_session_teleport_runtime()
-remove_autoexec_stubs()
+    remove_autoexec_stubs()
 
-if type(delfile)=="function" then
-for _,path in ipairs({
-SCRIPT_PAYLOAD_FILE,
-SCRIPT_PAYLOAD_ROOT_FILE,
-SCRIPT_SESSION_FLAG_FILE
-}) do
-local shouldDelete=true
-if type(isfile)=="function" then
-local ok,exists=pcall(isfile,path)
-shouldDelete=not ok or exists==true
-end
-if shouldDelete then pcall(delfile,path) end
-end
-end
+    if type(delfile) == "function" then
+        for _, path in ipairs({SCRIPT_PAYLOAD_FILE, SCRIPT_BUILD_FILE}) do
+            local shouldDelete = true
+            if type(isfile) == "function" then
+                local ok, exists = pcall(isfile, path)
+                shouldDelete = not ok or exists == true
+            end
+            if shouldDelete then
+                pcall(delfile, path)
+            end
+        end
+    end
 
-return true,"DevKage session teleport auto-load disabled"
-end
-
-local env=(type(getgenv)=="function" and getgenv()) or _G
-local source=env.__DEVKAGE_EMBEDDED_SOURCE
-
-if type(source)~="string" or source=="" then
-if not bootRefresh then
-settings.AutoLoad=false
-write_script_settings(settings)
-end
-return false,"Packaged source is unavailable"
+    local env = (type(getgenv) == "function" and getgenv()) or _G
+    env.__DEVKAGE_AUTOLOAD_BUILD = nil
+    env.__DEVKAGE_AUTOEXEC_PATHS = nil
+    env.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT = nil
+    return true, "Script auto-load disabled"
 end
 
-if type(writefile)~="function" then
-if not bootRefresh then
-settings.AutoLoad=false
-write_script_settings(settings)
-end
-return false,"This executor cannot write the DevKage teleport payload"
-end
+local env = (type(getgenv) == "function" and getgenv()) or _G
+local source = normalize_script_autoload_source(env.__DEVKAGE_EMBEDDED_SOURCE)
 
-local rootOk=pcall(writefile,SCRIPT_PAYLOAD_ROOT_FILE,source)
-local configOk=pcall(writefile,SCRIPT_PAYLOAD_FILE,source)
-
-if not rootOk and not configOk then
-if not bootRefresh then
-settings.AutoLoad=false
-write_script_settings(settings)
-end
-return false,"Could not write the DevKage teleport payload"
-end
-
-pcall(writefile,SCRIPT_SESSION_FLAG_FILE,SCRIPT_AUTOLOAD_BUILD)
-
-if not install_session_teleport_runtime() then
-if not bootRefresh then
-settings.AutoLoad=false
-write_script_settings(settings)
-end
-return false,"Could not install DevKage's teleport listener"
+-- Reference-compatible fallback: if the current packaged source is not exposed
+-- by the executor environment, reuse the already-saved payload rather than
+-- immediately breaking Auto Load.  Old marker-prefixed v15 payloads are safely
+-- normalized by normalize_script_autoload_source().
+if not source and type(readfile) == "function" then
+    if type(isfile) ~= "function" then
+        local ok, existing = pcall(readfile, SCRIPT_PAYLOAD_FILE)
+        if ok then
+            source = normalize_script_autoload_source(existing)
+        end
+    else
+        local checked, exists = pcall(isfile, SCRIPT_PAYLOAD_FILE)
+        if not checked or exists == true then
+            local ok, existing = pcall(readfile, SCRIPT_PAYLOAD_FILE)
+            if ok then
+                source = normalize_script_autoload_source(existing)
+            end
+        end
+    end
 end
 
-return true,"DevKage will follow this executor session on teleport"
+if not source then
+    if not bootRefresh then
+        settings.AutoLoad = false
+        write_script_settings(settings)
+    end
+    return false, "Packaged source is unavailable"
 end
 
--- Session-only Auto Load:
--- manual execution starts the chain; queued destination execution reinstalls
--- the OnTeleport listener for the next server transition.
-local _script_boot_settings=read_script_settings()
-
-do
-local env=(type(getgenv)=="function" and getgenv()) or _G
-
-local shouldChain=
-env.__DEVKAGE_SESSION_CHAIN_BOOT==true
-or _script_boot_settings.AutoLoad==true
-
-if env.__DEVKAGE_SESSION_CHAIN_BOOT~=true
-and env.__DEVKAGE_EMBEDDED_SOURCE then
-shouldChain=true
+if type(writefile) ~= "function" then
+    if not bootRefresh then
+        settings.AutoLoad = false
+        write_script_settings(settings)
+    end
+    return false, "This executor cannot write the auto-load payload"
 end
 
-if shouldChain then
-local ok,err=configure_script_autoload(true,true)
-if not ok then
-warn("[DevKage AutoLoad] session listener install failed: "..tostring(err))
+local folderOk, folderError = ensure_folder()
+if not folderOk then
+    if not bootRefresh then
+        settings.AutoLoad = false
+        write_script_settings(settings)
+    end
+    return false, folderError
+end
+
+-- Save the raw current source, matching the known-working reference file.  This
+-- is the full embedded DevKage program, so every feature/config path remains in
+-- the payload rather than trying to reconstruct a partial script at boot.
+local payloadOk, payloadErr = pcall(writefile, SCRIPT_PAYLOAD_FILE, source)
+if not payloadOk then
+    if not bootRefresh then
+        settings.AutoLoad = false
+        write_script_settings(settings)
+    end
+    return false, tostring(payloadErr)
+end
+
+-- Keep the v15 build file only as optional metadata/diagnostics.  Auto Load no
+-- longer depends on this file existing or matching, which is the compatibility
+-- problem that prevented valid payloads from starting on some executors.
+if type(writefile) == "function" then
+    pcall(writefile, SCRIPT_BUILD_FILE, SCRIPT_AUTOLOAD_BUILD)
+end
+
+local stub = build_script_autoload_stub()
+
+local queued, queueError = queue_script_autoload(stub)
+local autoexecWritten, autoexecPaths = write_autoexec_stubs(stub)
+
+if not queued and not autoexecWritten then
+    if not bootRefresh then
+        settings.AutoLoad = false
+        write_script_settings(settings)
+    end
+    return false, "Executor exposes neither a working teleport queue nor a writable autoexec folder"
+end
+
+env.__DEVKAGE_AUTOEXEC_PATHS = autoexecPaths
+env.__DEVKAGE_AUTOLOAD_BUILD = SCRIPT_AUTOLOAD_BUILD
+env.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT = os.clock()
+
+local pathText = autoexecWritten and table.concat(autoexecPaths, ", ") or ""
+
+if queued and autoexecWritten then
+    return true, "Auto Load enabled (teleports + executor autoexec) | " .. pathText
+elseif queued then
+    return true, "Auto Load enabled for teleports"
+else
+    return true, "Auto Load installed in executor autoexec | " .. pathText
 end
 end
 
-env.__DEVKAGE_SESSION_CHAIN_BOOT=nil
+local _script_boot_settings = read_script_settings()
+
+if _script_boot_settings.AutoLoad == true then
+    -- The reference file defers the refresh so normal DevKage initialization is
+    -- not blocked by folder probing, file writes, or a teleport-queue provider.
+    task.defer(function()
+        local ok, err = configure_script_autoload(true, true)
+        if not ok then
+            warn("[DevKage AutoLoad] refresh failed: " .. tostring(err))
+        end
+    end)
 end
 
 local DEFAULT_VISUAL_STATE = serialiseRuntimeState(VisualsState)
@@ -13873,23 +13337,12 @@ local streak=math.max(0,math.floor((tonumber(config.streak) or 0)+0.5))
 
 local function apply(player)
 if not player then return end
-if config.spoofLevel~=false then
-for _,attribute in ipairs({"Level","PlayerLevel","AccountLevel","StatisticLevel"}) do
-pcall(function() player:SetAttribute(attribute,level) end)
-end
-end
-if config.spoofStreak~=false then
-for _,attribute in ipairs({"StatisticDuelsWinStreak","WinStreak","Winstreak","Streak"}) do
-pcall(function() player:SetAttribute(attribute,streak) end)
-end
-end
+if config.spoofLevel~=false then pcall(function() player:SetAttribute("Level",level) end) end
+if config.spoofStreak~=false then pcall(function() player:SetAttribute("StatisticDuelsWinStreak",streak) end) end
 local leaderstats=player:FindFirstChild("CustomLeaderstats") or player:FindFirstChild("leaderstats")
 if leaderstats then
-local lvl=leaderstats:FindFirstChild("Level") or leaderstats:FindFirstChild("PlayerLevel")
-local strk=leaderstats:FindFirstChild("Win Streak")
-or leaderstats:FindFirstChild("WinStreak")
-or leaderstats:FindFirstChild("Winstreak")
-or leaderstats:FindFirstChild("Streak")
+local lvl=leaderstats:FindFirstChild("Level")
+local strk=leaderstats:FindFirstChild("Win Streak") or leaderstats:FindFirstChild("Winstreak")
 if lvl and config.spoofLevel~=false then pcall(function() lvl.Value=level end) end
 if strk and config.spoofStreak~=false then pcall(function() strk.Value=streak end) end
 end
@@ -13899,13 +13352,6 @@ apply(LocalPlayer)
 if SpooferState.targetPlayer and SpooferState.targetPlayer~=LocalPlayer then apply(SpooferState.targetPlayer) end
 local privacy=SpooferState.privacy
 if privacy and privacy.RefreshAnchors then pcall(privacy.RefreshAnchors) end
-if SpooferState.MatchLevelSyncRuntime
-and type(SpooferState.MatchLevelSyncRuntime.Refresh)=="function" then
-pcall(function() SpooferState.MatchLevelSyncRuntime:Refresh() end)
-end
-if type(SpooferState.RefreshProfileStats)=="function" then
-task.defer(SpooferState.RefreshProfileStats)
-end
 end
 local victimInput  = spooferSection:CreateInput({ Name = "Victim ID",   Default = getgenv().__DevKageConfig.victim,          Placeholder = "123456789", Callback = function(value) getgenv().__DevKageConfig.victim=tostring(value or "") end })
 local helperInput  = spooferSection:CreateInput({ Name = "Helper Name", Default = getgenv().__DevKageConfig.helper,          Placeholder = "Leave blank for local player", Callback = function(value) getgenv().__DevKageConfig.helper=tostring(value or "") end })
@@ -18137,10 +17583,7 @@ local function profileContext(object)
         local n = tostring(current.Name or ""):lower()
         if n:find("profile", 1, true) or n:find("playercard", 1, true)
             or n:find("career", 1, true) or n:find("statistics", 1, true)
-            or n == "stats" or n:find("overview", 1, true)
-            or n:find("scoreboard", 1, true) or n:find("leaderboard", 1, true)
-            or n:find("match", 1, true) or n:find("hud", 1, true)
-            or n:find("results", 1, true) or n:find("summary", 1, true) then
+            or n == "stats" or n:find("overview", 1, true) then
             return true
         end
     end
@@ -18235,32 +17678,31 @@ end
 local function ensureProfileStatsObserver()
     if ProfileStatsRuntime.Started then return end
     ProfileStatsRuntime.Started = true
+    local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:FindFirstChild("PlayerGui")
+    if not playerGui then ProfileStatsRuntime.Started = false; return end
 
-    local playerGui =
-        LocalPlayer:FindFirstChildOfClass("PlayerGui")
-        or LocalPlayer:FindFirstChild("PlayerGui")
-
-    if not playerGui then
-        ProfileStatsRuntime.Started = false
-        return
+    local function attachMainGui(mainGui)
+        if not mainGui or mainGui.Name ~= "MainGui" then return end
+        ProfileStatsRuntime.Connections[#ProfileStatsRuntime.Connections + 1] = mainGui.DescendantAdded:Connect(function(object)
+            task.defer(observeProfileStatLabel, object)
+        end)
+        task.spawn(function()
+            local descendants = mainGui:GetDescendants()
+            for index, object in ipairs(descendants) do
+                observeProfileStatLabel(object)
+                if index % 160 == 0 then task.wait() end
+            end
+        end)
     end
 
-    -- Match UI is not guaranteed to live under MainGui. Observe the whole
-    -- local PlayerGui, while patchProfileStatLabel still restricts changes to
-    -- recognized stat/profile/match contexts.
-    ProfileStatsRuntime.Connections[
-        #ProfileStatsRuntime.Connections + 1
-    ] = playerGui.DescendantAdded:Connect(function(object)
-        task.defer(observeProfileStatLabel, object)
-    end)
-
-    task.spawn(function()
-        local descendants = playerGui:GetDescendants()
-        for index, object in ipairs(descendants) do
-            observeProfileStatLabel(object)
-            if index % 160 == 0 then task.wait() end
-        end
-    end)
+    local mainGui = playerGui:FindFirstChild("MainGui")
+    if mainGui then
+        attachMainGui(mainGui)
+    else
+        ProfileStatsRuntime.Connections[#ProfileStatsRuntime.Connections + 1] = playerGui.ChildAdded:Connect(function(child)
+            if child.Name == "MainGui" then attachMainGui(child) end
+        end)
+    end
 end
 
 local function refreshProfileStatsUI()
@@ -24407,4 +23849,4 @@ print("[DevKage + Mask Shard] Fully loaded and protected.")
 -- ============================================================
 -- END OF FILE
 -- ============================================================
-]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,50,50,45,99,111,101,120,105,115,116,45,115,101,115,115,105,111,110,45,116,101,108,101,112,111,114,116)_b._a=_a local _c=loadstring or load if type(_c)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _d,_e=_c(_a)if not _d then error(_e)end return _d()
+]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,49,53,45,114,101,102,101,114,101,110,99,101,45,99,117,114,115,111,114,45,114,97,112,105,100,102,105,114,101,45,99,117,114,114,101,110,116)_b._a=_a local _c=loadstring or load if type(_c)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _d,_e=_c(_a)if not _d then error(_e)end return _d()
