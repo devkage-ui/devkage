@@ -11018,25 +11018,32 @@ task.spawn(function()
             end
         end
 
+        -- Auto-execute can run before Roblox has finished creating the client
+        -- objects that DevKage stores in locals during startup.  Do not use an
+        -- arbitrary timeout here: if LocalPlayer/PlayerGui/CurrentCamera are nil
+        -- when the payload starts, those locals stay nil and later features fail.
         if not game:IsLoaded() then
             game.Loaded:Wait()
         end
 
-        local deadline = os.clock() + 20
-        while tostring(game.JobId) == "" and os.clock() < deadline do
+        while not Players.LocalPlayer do
             task.wait(0.1)
         end
-        while not Players.LocalPlayer and os.clock() < deadline do
+
+        local localPlayer = Players.LocalPlayer
+        while localPlayer and not localPlayer:FindFirstChildOfClass("PlayerGui") do
+            task.wait(0.1)
+            localPlayer = Players.LocalPlayer
+        end
+
+        while not Workspace.CurrentCamera do
             task.wait(0.1)
         end
-        while Players.LocalPlayer
-            and not Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
-            and os.clock() < deadline do
-            task.wait(0.1)
-        end
-        while not Workspace.CurrentCamera and os.clock() < deadline do
-            task.wait(0.1)
-        end
+
+        -- Give executor auto-execute one final scheduling turn after the core
+        -- client objects exist.  Manual execution is already ready and only
+        -- pays this tiny delay.
+        task.wait(0.25)
 
         local jobKey = tostring(game.PlaceId) .. ":" .. tostring(game.JobId)
         if env.__DEVKAGE_AUTO_STARTING_JOB == jobKey
@@ -23849,4 +23856,4 @@ print("[DevKage + Mask Shard] Fully loaded and protected.")
 -- ============================================================
 -- END OF FILE
 -- ============================================================
-]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,49,53,45,114,101,102,101,114,101,110,99,101,45,99,117,114,115,111,114,45,114,97,112,105,100,102,105,114,101,45,99,117,114,114,101,110,116)_b._a=_a local _c=loadstring or load if type(_c)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _d,_e=_c(_a)if not _d then error(_e)end return _d()
+]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,49,53,45,114,101,102,101,114,101,110,99,101,45,99,117,114,115,111,114,45,114,97,112,105,100,102,105,114,101,45,99,117,114,114,101,110,116)_b._a=_a do local _c=game:GetService(string.char(80,108,97,121,101,114,115))local _d=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while not _c.LocalPlayer do task.wait(0.1)end local _e=_c.LocalPlayer while _e and not _e:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_e=_c.LocalPlayer end while not _d.CurrentCamera do task.wait(0.1)end task.wait(0.25)end local _f=loadstring or load if type(_f)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _g,_h=_f(_a)if not _g then error(_h)end return _g()
