@@ -10974,10 +10974,10 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_1.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_2.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOEXEC_NAME = "DevKage_AutoLoad.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.1-opiumware-stringfix-20260822"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.2-autoexec-coexistence-20260822"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -11778,64 +11778,12 @@ local seen = {}
 -- inside known autoexec folders that identify themselves as DevKage and do not
 -- contain this build's unique label.  Unrelated executor scripts are untouched.
 local function cleanLegacyDevKageAutoexec(folder)
-    if type(delfile) ~= "function" then return end
-
-    local currentLabel = SCRIPT_AUTOLOAD_BUILD
-    local currentLoaderPath = folder .. "/" .. SCRIPT_AUTOEXEC_NAME
-    local checkedPaths = {}
-
-    local function inspectAndRemove(path)
-        if type(path) ~= "string" or path == "" or checkedPaths[path] then return end
-        checkedPaths[path] = true
-
-        local normalized = path:gsub("\\", "/")
-        local lower = normalized:lower()
-        if not (lower:sub(-4) == ".lua" or lower:sub(-5) == ".luau" or normalized == currentLoaderPath) then
-            return
-        end
-
-        if type(readfile) ~= "function" then return end
-        local ok, content = pcall(readfile, path)
-        if not ok or type(content) ~= "string" or content == "" then return end
-
-        local isDevKage = content:find("DEVKAGE packaged coexistence build", 1, true)
-            or content:find("[DevKage AutoLoad]", 1, true)
-            or content:find("_devkage_autoload_payload", 1, true)
-            or content:find("__DEVKAGE_PACKAGE_BUILD", 1, true)
-
-        if not isDevKage then return end
-        if content:find(currentLabel, 1, true) then return end
-
-        pcall(delfile, path)
-    end
-
-    -- Enumerate the folder when supported so differently named old full builds
-    -- are removed too, not only DevKage_AutoLoad.lua.
-    if type(listfiles) == "function" then
-        local ok, paths = pcall(listfiles, folder)
-        if ok and type(paths) == "table" then
-            for _, path in ipairs(paths) do
-                inspectAndRemove(path)
-            end
-        end
-    end
-
-    -- Known filenames from prior DevKage builds in this code lineage.  This
-    -- fallback helps executors that expose isfile/readfile/delfile but not listfiles.
-    local legacyNames = {
-        "DevKage_v4_Mouse_Viewmodel_ELO_Fixed.lua",
-        "DevKage_v5_ELO_Cursor_RapidFire_Config_ModTest.lua",
-        "DevKage_v5_1_RegisterLimit_Fix.lua",
-        "devkage_new_maskshard_v9_6_0_autoload_fixed.lua",
-        "devkage_new_maskshard_v9_6_0_autoload_bootsafe_v2.lua",
-        "devkage_new_maskshard_v9_6_0_autoload_elo_cursor_v3.lua",
-    }
-    for _, name in ipairs(legacyNames) do
-        inspectAndRemove(folder .. "/" .. name)
-    end
-
-    -- Always inspect the canonical loader itself before replacing it.
-    inspectAndRemove(currentLoaderPath)
+    -- COEXISTENCE SAFETY (v5.2.2)
+    -- Never enumerate, inspect, or delete sibling executor Auto Execute files.
+    -- Another script may legitimately share this folder, and DevKage must not
+    -- decide ownership based on source-text matches.  The canonical DevKage
+    -- loader is replaced in-place by writefile() below; nothing else is touched.
+    return true
 end
 
 local function tryWrite(folder)
@@ -11852,18 +11800,23 @@ installed[#installed+1] = path
 end
 end
 
--- Prefer executor folders that already exist, exactly like the reference path.
+-- Prefer exactly one executor folder that already exists.  Writing the same
+-- loader into every capitalization/alias can make some executors run DevKage
+-- multiple times during the same teleport.
 for _, folder in ipairs(existing_autoexec_folders()) do
-tryWrite(folder)
+    tryWrite(folder)
+    if #installed > 0 then break end
 end
 
--- If the executor reports no existing folder, retain v15's compatibility pass:
--- try the common names.  Executors that support makefolder can create the path;
--- executors that create workspace paths on writefile can still accept the write.
-if #installed == 0 then
-for _, folder in ipairs(AUTOEXEC_FOLDERS) do
-tryWrite(folder)
-end
+-- If no real Auto Execute folder is exposed, do not manufacture six competing
+-- folders when teleport queue support already exists.  The caller passes a
+-- boolean marker through the environment for this one decision.
+local env = (type(getgenv) == "function" and getgenv()) or _G
+if #installed == 0 and env.__DEVKAGE_AUTOLOAD_QUEUE_AVAILABLE ~= true then
+    for _, folder in ipairs(AUTOEXEC_FOLDERS) do
+        tryWrite(folder)
+        if #installed > 0 then break end
+    end
 end
 
 return #installed > 0, installed
@@ -11994,7 +11947,9 @@ pcall(writefile, CONFIG_FOLDER .. "/_devkage_autoload_current.txt", SCRIPT_AUTOL
 local stub = build_script_autoload_stub()
 
 local queued, queueError = queue_script_autoload(stub)
+env.__DEVKAGE_AUTOLOAD_QUEUE_AVAILABLE = queued == true
 local autoexecWritten, autoexecPaths = write_autoexec_stubs(stub)
+env.__DEVKAGE_AUTOLOAD_QUEUE_AVAILABLE = nil
 
 if not queued and not autoexecWritten then
     if not bootRefresh then
@@ -24832,84 +24787,135 @@ print("[DevKage + Mask Shard] Fully loaded and protected.")
 ]============]
 
 local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
-__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.1-opiumware-stringfix-20260822"
+__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.2-autoexec-coexistence-20260822"
 __devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
 
--- CURRENT-ONLY PREBOOT CLEANUP
--- If this newest full build itself is placed in executor Auto Execute, remove
--- recognizable older DevKage siblings before the embedded runtime can refresh
--- autoload.  This prevents an older full copy from continually rewriting the
--- legacy payload on every client launch.  The current file is preserved because
--- it contains the unique v5.2 build label below.
-do
-    local folders = {"autoexec","Autoexec","autoexecute","AutoExecute","scripts/autoexec","scripts/Autoexec"}
-    local currentLabel = "DevKage-v5.2.1-opiumware-stringfix-20260822"
-
-    local function inspect(path)
-        -- Keep this preboot cleanup executor-safe.  Some executors/obfuscators
-        -- rewrite colon-style string methods and can turn path:gsub()/lower()
-        -- into a missing synthetic method.  Use the string library directly
-        -- and contain every inspection so cleanup can never abort DevKage boot.
-        pcall(function()
-            if type(path) ~= "string" or type(readfile) ~= "function" or type(delfile) ~= "function" then return end
-            local lower = string.lower(string.gsub(path, "\\", "/"))
-            if string.sub(lower, -4) ~= ".lua" and string.sub(lower, -5) ~= ".luau" then return end
-            local ok, content = pcall(readfile, path)
-            if not ok or type(content) ~= "string" then return end
-            local devkage = string.find(content, "DEVKAGE packaged coexistence build", 1, true)
-                or string.find(content, "[DevKage AutoLoad]", 1, true)
-                or string.find(content, "_devkage_autoload_payload", 1, true)
-                or string.find(content, "__DEVKAGE_PACKAGE_BUILD", 1, true)
-            if devkage and not string.find(content, currentLabel, 1, true) then
-                pcall(delfile, path)
-            end
-        end)
-    end
-
-    for _, folder in ipairs(folders) do
-        if type(listfiles) == "function" then
-            local ok, paths = pcall(listfiles, folder)
-            if ok and type(paths) == "table" then
-                for _, path in ipairs(paths) do inspect(path) end
-            end
-        end
-    end
-end
-
--- AUTO-EXECUTE BOOT GUARD
+-- AUTOEXEC COEXISTENCE / SINGLE-BOOT ENTRYPOINT (v5.2.2)
 --
--- Executor-native Auto Execute runs much earlier than normal manual execution.
--- The embedded DevKage source captures Players.LocalPlayer and CurrentCamera in
--- locals during startup, so launching before those objects exist permanently
--- poisons that run with nil references.  Wait here, outside the embedded source,
--- so absolutely every feature inside it starts against the same ready client.
-do
-    local __devkagePlayers = game:GetService("Players")
-    local __devkageWorkspace = game:GetService("Workspace")
+-- Do not inspect or delete anything else in the executor Auto Execute folder.
+-- Older v5.2.x builds attempted sibling cleanup here; that can interfere with a
+-- completely separate script sharing Auto Execute.  Current ownership is now
+-- limited to DevKage's exact canonical loader/payload files inside its own
+-- config path.
+--
+-- Also do not block the executor's Auto Execute dispatcher while Roblox is
+-- loading.  Some executors launch Auto Execute files sequentially; a synchronous
+-- game.Loaded/PlayerGui/Camera wait here can prevent the next script from ever
+-- getting its startup turn.  DevKage now boots in its own task.
+task.spawn(function()
+    local ok, err = pcall(function()
+        local players = game:GetService("Players")
+        local workspaceService = game:GetService("Workspace")
 
-    if not game:IsLoaded() then
-        game.Loaded:Wait()
+        if not game:IsLoaded() then
+            game.Loaded:Wait()
+        end
+
+        while tostring(game.JobId) == "" do
+            task.wait(0.1)
+        end
+
+        while not players.LocalPlayer do
+            task.wait(0.1)
+        end
+
+        local localPlayer = players.LocalPlayer
+        while localPlayer and not localPlayer:FindFirstChildOfClass("PlayerGui") do
+            task.wait(0.1)
+            localPlayer = players.LocalPlayer
+        end
+
+        while not workspaceService.CurrentCamera do
+            task.wait(0.1)
+        end
+
+        -- Full native Auto Execute and DevKage_AutoLoad.lua use the same job
+        -- ownership keys.  Whichever one reaches this point first owns the run;
+        -- the other exits before installing duplicate hooks, input guards, UI,
+        -- or feature loops.
+        local jobKey = tostring(game.PlaceId) .. ":" .. tostring(game.JobId)
+        if __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB == jobKey
+            or __devkageEnv.__DEVKAGE_AUTO_STARTED_JOB == jobKey then
+            return
+        end
+
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = jobKey
+        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
+
+        -- One scheduling turn keeps this package cooperative with other
+        -- Auto Execute scripts even on executors with a very eager dispatcher.
+        task.wait()
+
+        local loader = loadstring or load
+        if type(loader) ~= "function" then
+            error("DevKage requires loadstring support")
+        end
+
+        local chunk, compileError = loader(__DEVKAGE_EMBEDDED_SOURCE)
+        if not chunk then
+            error(compileError)
+        end
+
+        local runOk, runError = pcall(chunk)
+        if not runOk then
+            error(runError)
+        end
+
+        __devkageEnv.__DEVKAGE_AUTO_STARTED_JOB = jobKey
+        __devkageEnv.__DEVKAGE_AUTOLOADED_BUILD = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
+        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+    end)
+
+    if not ok then
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
+        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+        warn("[DevKage Package Boot] " .. tostring(err))
     end
+end)
 
-    while not __devkagePlayers.LocalPlayer do
-        task.wait(0.1)
-    end
+-- COEXISTENCE NOTES (non-executable documentation)
+-- 01 DevKage does not enumerate sibling Auto Execute files.
+-- 02 DevKage does not read sibling Auto Execute files.
+-- 03 DevKage does not delete sibling Auto Execute files.
+-- 04 DevKage only replaces its canonical DevKage_AutoLoad.lua loader.
+-- 05 Other executor scripts remain independent.
+-- 06 Full-package startup is asynchronous.
+-- 07 Roblox readiness waits happen inside the DevKage task.
+-- 08 The executor dispatcher is not held by those waits.
+-- 09 Native Auto Execute and queued DevKage share one job guard.
+-- 10 Duplicate DevKage startup exits before runtime installation.
+-- 11 PlayerGui readiness is still required before DevKage starts.
+-- 12 CurrentCamera readiness is still required before DevKage starts.
+-- 13 A non-empty JobId is required before claiming the run.
+-- 14 A failed compile clears the in-progress ownership marker.
+-- 15 A failed runtime clears the in-progress ownership marker.
+-- 16 A successful runtime records the completed job.
+-- 17 Teleport queue remains supported.
+-- 18 Existing real Auto Execute folders remain supported.
+-- 19 Only one existing Auto Execute folder receives the canonical loader.
+-- 20 Alias folders are not filled with duplicate DevKage loaders.
+-- 21 Guess folders are skipped when teleport queue already works.
+-- 22 Config serialization is unchanged.
+-- 23 ELO persistence is unchanged.
+-- 24 Cursor behavior is unchanged.
+-- 25 Rapid Fire behavior is unchanged.
+-- 26 Weapon/viewmodel appearance is unchanged.
+-- 27 Moderator detector behavior is unchanged.
+-- 28 Slider controls are unchanged.
+-- 29 Named config auto-load is unchanged.
+-- 30 Script Auto Load remains user-toggle controlled.
+-- 31 Legacy payload compatibility remains intact.
+-- 32 Current payload remains versioned.
+-- 33 Auto Load settings remain in the same settings file.
+-- 34 The package source remains embedded exactly once.
+-- 35 The outer package returns immediately after scheduling boot.
+-- 36 This block intentionally contains comments only.
+-- 37 No gameplay feature is initialized from this documentation.
+-- 38 No input state is changed from this documentation.
+-- 39 No executor file is touched from this documentation.
+-- 40 End coexistence notes.
 
-    local __devkageLocalPlayer = __devkagePlayers.LocalPlayer
-    while __devkageLocalPlayer and not __devkageLocalPlayer:FindFirstChildOfClass("PlayerGui") do
-        task.wait(0.1)
-        __devkageLocalPlayer = __devkagePlayers.LocalPlayer
-    end
-
-    while not __devkageWorkspace.CurrentCamera do
-        task.wait(0.1)
-    end
-
-    task.wait(0.25)
-end
-
-local __devkageLoader = loadstring or load
-if type(__devkageLoader) ~= "function" then error("DevKage requires loadstring support") end
-local __devkageChunk, __devkageError = __devkageLoader(__DEVKAGE_EMBEDDED_SOURCE)
-if not __devkageChunk then error(__devkageError) end
-return __devkageChunk()
+-- Return immediately so the executor can continue launching any other
+-- Auto Execute scripts in the same folder/session.
+return nil
