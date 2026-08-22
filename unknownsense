@@ -10970,10 +10970,10 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOEXEC_NAME = "DevKage_AutoLoad.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v15-reference-cursor-rapidfire-current"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2-current-only-20260822"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -11765,11 +11765,81 @@ if type(writefile) ~= "function" then return false, {} end
 local installed = {}
 local seen = {}
 
+-- CURRENT-ONLY AUTOEXEC CLEANUP
+--
+-- Older DevKage builds all used the same payload and loader name.  If a user
+-- had more than one full DevKage build in an executor's Auto Execute folder,
+-- those copies could race each other and an older one could rewrite the shared
+-- payload after the current build had already refreshed it.  Clean only files
+-- inside known autoexec folders that identify themselves as DevKage and do not
+-- contain this build's unique label.  Unrelated executor scripts are untouched.
+local function cleanLegacyDevKageAutoexec(folder)
+    if type(delfile) ~= "function" then return end
+
+    local currentLabel = SCRIPT_AUTOLOAD_BUILD
+    local currentLoaderPath = folder .. "/" .. SCRIPT_AUTOEXEC_NAME
+    local checkedPaths = {}
+
+    local function inspectAndRemove(path)
+        if type(path) ~= "string" or path == "" or checkedPaths[path] then return end
+        checkedPaths[path] = true
+
+        local normalized = path:gsub("\\", "/")
+        local lower = normalized:lower()
+        if not (lower:sub(-4) == ".lua" or lower:sub(-5) == ".luau" or normalized == currentLoaderPath) then
+            return
+        end
+
+        if type(readfile) ~= "function" then return end
+        local ok, content = pcall(readfile, path)
+        if not ok or type(content) ~= "string" or content == "" then return end
+
+        local isDevKage = content:find("DEVKAGE packaged coexistence build", 1, true)
+            or content:find("[DevKage AutoLoad]", 1, true)
+            or content:find("_devkage_autoload_payload", 1, true)
+            or content:find("__DEVKAGE_PACKAGE_BUILD", 1, true)
+
+        if not isDevKage then return end
+        if content:find(currentLabel, 1, true) then return end
+
+        pcall(delfile, path)
+    end
+
+    -- Enumerate the folder when supported so differently named old full builds
+    -- are removed too, not only DevKage_AutoLoad.lua.
+    if type(listfiles) == "function" then
+        local ok, paths = pcall(listfiles, folder)
+        if ok and type(paths) == "table" then
+            for _, path in ipairs(paths) do
+                inspectAndRemove(path)
+            end
+        end
+    end
+
+    -- Known filenames from prior DevKage builds in this code lineage.  This
+    -- fallback helps executors that expose isfile/readfile/delfile but not listfiles.
+    local legacyNames = {
+        "DevKage_v4_Mouse_Viewmodel_ELO_Fixed.lua",
+        "DevKage_v5_ELO_Cursor_RapidFire_Config_ModTest.lua",
+        "DevKage_v5_1_RegisterLimit_Fix.lua",
+        "devkage_new_maskshard_v9_6_0_autoload_fixed.lua",
+        "devkage_new_maskshard_v9_6_0_autoload_bootsafe_v2.lua",
+        "devkage_new_maskshard_v9_6_0_autoload_elo_cursor_v3.lua",
+    }
+    for _, name in ipairs(legacyNames) do
+        inspectAndRemove(folder .. "/" .. name)
+    end
+
+    -- Always inspect the canonical loader itself before replacing it.
+    inspectAndRemove(currentLoaderPath)
+end
+
 local function tryWrite(folder)
 if seen[folder] then return end
 seen[folder] = true
 
 if not ensure_autoexec_folder(folder) then return end
+cleanLegacyDevKageAutoexec(folder)
 
 local path = folder .. "/" .. SCRIPT_AUTOEXEC_NAME
 local ok = pcall(writefile, path, stub)
@@ -11794,7 +11864,6 @@ end
 
 return #installed > 0, installed
 end
-
 local function remove_autoexec_stubs()
 if type(delfile) ~= "function" then return end
 for _, folder in ipairs(AUTOEXEC_FOLDERS) do
@@ -11826,7 +11895,7 @@ if not enabled then
     remove_autoexec_stubs()
 
     if type(delfile) == "function" then
-        for _, path in ipairs({SCRIPT_PAYLOAD_FILE, SCRIPT_BUILD_FILE}) do
+        for _, path in ipairs({SCRIPT_PAYLOAD_FILE, CONFIG_FOLDER .. "/_devkage_autoload_payload.lua", SCRIPT_BUILD_FILE}) do
             local shouldDelete = true
             if type(isfile) == "function" then
                 local ok, exists = pcall(isfile, path)
@@ -11906,12 +11975,17 @@ if not payloadOk then
     return false, tostring(payloadErr)
 end
 
--- Keep the v15 build file only as optional metadata/diagnostics.  Auto Load no
--- longer depends on this file existing or matching, which is the compatibility
--- problem that prevented valid payloads from starting on some executors.
-if type(writefile) == "function" then
-    pcall(writefile, SCRIPT_BUILD_FILE, SCRIPT_AUTOLOAD_BUILD)
-end
+-- Keep the old shared payload fresh as a compatibility redirect.  Very old
+-- DevKage stubs require the v15 first-line marker and build file; newer legacy
+-- stubs strip that marker before compiling.  Writing the CURRENT source here
+-- means either kind of stale queued loader still resolves to this newest build.
+local legacyPayload = "-- DEVKAGE_AUTOLOAD_BUILD:DevKage-v15-reference-cursor-rapidfire-current\n" .. source
+pcall(writefile, CONFIG_FOLDER .. "/_devkage_autoload_payload.lua", legacyPayload)
+pcall(writefile, SCRIPT_BUILD_FILE, "DevKage-v15-reference-cursor-rapidfire-current")
+
+-- Record the unique current build separately for diagnostics/current-only
+-- ownership.  This file is not required for execution.
+pcall(writefile, CONFIG_FOLDER .. "/_devkage_autoload_current.txt", SCRIPT_AUTOLOAD_BUILD)
 
 local stub = build_script_autoload_stub()
 
@@ -24751,4 +24825,4 @@ print("[DevKage + Mask Shard] Fully loaded and protected.")
 -- ============================================================
 -- END OF FILE
 -- ============================================================
-]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,49,53,45,114,101,102,101,114,101,110,99,101,45,99,117,114,115,111,114,45,114,97,112,105,100,102,105,114,101,45,99,117,114,114,101,110,116)_b._a=_a do local _c=game:GetService(string.char(80,108,97,121,101,114,115))local _d=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while not _c.LocalPlayer do task.wait(0.1)end local _e=_c.LocalPlayer while _e and not _e:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_e=_c.LocalPlayer end while not _d.CurrentCamera do task.wait(0.1)end task.wait(0.25)end local _f=loadstring or load if type(_f)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _g,_h=_f(_a)if not _g then error(_h)end return _g()
+]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,45,99,117,114,114,101,110,116,45,111,110,108,121,45,50,48,50,54,48,56,50,50)_b._a=_a do local _c={string.char(97,117,116,111,101,120,101,99),string.char(65,117,116,111,101,120,101,99),string.char(97,117,116,111,101,120,101,99,117,116,101),string.char(65,117,116,111,69,120,101,99,117,116,101),string.char(115,99,114,105,112,116,115,47,97,117,116,111,101,120,101,99),string.char(115,99,114,105,112,116,115,47,65,117,116,111,101,120,101,99)}local _d=string.char(68,101,118,75,97,103,101,45,118,53,46,50,45,99,117,114,114,101,110,116,45,111,110,108,121,45,50,48,50,54,48,56,50,50)local function _e(_f)if type(_f)~=string.char(115,116,114,105,110,103)or type(readfile)~=string.char(102,117,110,99,116,105,111,110)or type(delfile)~=string.char(102,117,110,99,116,105,111,110)then return end local _g=_f:gsub(string.char(92),string.char(47)):_g()if _g:sub(-4)~=string.char(46,108,117,97)and _g:sub(-5)~=string.char(46,108,117,97,117)then return end local _h,_i=pcall(readfile,_f)if not _h or type(_i)~=string.char(115,116,114,105,110,103)then return end local _j=_i:find(string.char(68,69,86,75,65,71,69,32,112,97,99,107,97,103,101,100,32,99,111,101,120,105,115,116,101,110,99,101,32,98,117,105,108,100),1,true)or _i:find(string.char(91,68,101,118,75,97,103,101,32,65,117,116,111,76,111,97,100,93),1,true)or _i:find(string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100),1,true)or _i:find(string.char(95,95,68,69,86,75,65,71,69,95,80,65,67,75,65,71,69,95,66,85,73,76,68),1,true)if _j and not _i:find(_d,1,true)then pcall(delfile,_f)end end for _k,_l in ipairs(_c)do if type(listfiles)==string.char(102,117,110,99,116,105,111,110)then local _h,_m=pcall(listfiles,_l)if _h and type(_m)==string.char(116,97,98,108,101)then for _k,_f in ipairs(_m)do _e(_f)end end end end end do local _n=game:GetService(string.char(80,108,97,121,101,114,115))local _o=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while not _n.LocalPlayer do task.wait(0.1)end local _p=_n.LocalPlayer while _p and not _p:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_p=_n.LocalPlayer end while not _o.CurrentCamera do task.wait(0.1)end task.wait(0.25)end local _q=loadstring or load if type(_q)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _r,_s=_q(_a)if not _r then error(_s)end return _r()
