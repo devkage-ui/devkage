@@ -649,6 +649,24 @@ function library:CreateWindow(Properties)
         Window.Root = ScreenGui
         library.ThemeRoot = ScreenGui
 
+        -- A zero-size Modal TextButton is the same first-person mouse-release
+        -- technique used by the supplied working UI.  MouseBehavior=Default
+        -- alone is not enough in every first-person camera controller; Modal
+        -- keeps Roblox's real GUI hover/click pointer active while DevKage is open.
+        local MenuModalRelease = Instance.new("TextButton")
+        MenuModalRelease.Name = "DevKage_MouseModalRelease"
+        MenuModalRelease.BackgroundTransparency = 1
+        MenuModalRelease.BorderSizePixel = 0
+        MenuModalRelease.Size = UDim2.fromOffset(0, 0)
+        MenuModalRelease.Position = UDim2.fromOffset(0, 0)
+        MenuModalRelease.Text = ""
+        MenuModalRelease.Visible = true
+        MenuModalRelease.AutoButtonColor = false
+        MenuModalRelease.Modal = Window.Enabled
+        MenuModalRelease.ZIndex = 1
+        MenuModalRelease.Parent = ScreenGui
+        Window.MouseModalRelease = MenuModalRelease
+
         local PreviousMouseIconEnabled = uis.MouseIconEnabled
         local PreviousMouseBehavior = uis.MouseBehavior
         local MenuInputRuntime = {
@@ -680,6 +698,10 @@ function library:CreateWindow(Properties)
         local function applyMenuMouseState()
             if not Window.Enabled then return end
             MenuInputRuntime.Guarding = true
+
+            pcall(function()
+                MenuModalRelease.Modal = true
+            end)
 
             -- First-person/camera scripts can restore LockCenter every frame.
             -- DevKage owns the cursor only while its own menu is visible.
@@ -722,6 +744,9 @@ function library:CreateWindow(Properties)
         local function restoreSavedMouseState()
             MenuInputRuntime.Guarding = true
             pcall(function()
+                MenuModalRelease.Modal = false
+            end)
+            pcall(function()
                 uis.MouseBehavior = MenuInputRuntime.SavedMouseBehavior
             end)
             pcall(function()
@@ -733,6 +758,9 @@ function library:CreateWindow(Properties)
         local function applyGameplayMouseState()
             if Window.Enabled or Window.CursorControlMode ~= "Cursor Lock" then return end
             MenuInputRuntime.Guarding = true
+            pcall(function()
+                MenuModalRelease.Modal = false
+            end)
             pcall(function()
                 if uis.MouseBehavior ~= Enum.MouseBehavior.LockCenter then
                     uis.MouseBehavior = Enum.MouseBehavior.LockCenter
@@ -748,6 +776,9 @@ function library:CreateWindow(Properties)
 
         local function restoreGameplayMouseState()
             MenuInputRuntime.Guarding = true
+            pcall(function()
+                MenuModalRelease.Modal = false
+            end)
             pcall(function()
                 uis.MouseBehavior = PreviousMouseBehavior
             end)
@@ -1691,6 +1722,7 @@ library.KeybindManager = library.KeybindManager or {
     ModAlertStroke = nil,
     ModAlertActive = false,
     ModAlertFlashConnection = nil,
+    ModAlertExpiresAt = 0,
 }
 
 local BindManager = library.KeybindManager
@@ -1845,7 +1877,7 @@ function BindManager:EnsureUI(window)
     modAlertLabel.BackgroundTransparency = 1
     modAlertLabel.Size = UDim2.fromScale(1, 1)
     modAlertLabel.Font = Enum.Font.Code
-    modAlertLabel.Text = "enemy detected"
+    modAlertLabel.Text = "!mod!"
     modAlertLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
     modAlertLabel.TextSize = 9
     modAlertLabel.TextStrokeColor3 = Color3.fromRGB(40, 0, 0)
@@ -1858,6 +1890,18 @@ function BindManager:EnsureUI(window)
     if not self.ModAlertFlashConnection then
         local modRunService = game:GetService("RunService")
         self.ModAlertFlashConnection = utility:CreateConnection(modRunService.RenderStepped, function()
+            if self.ModAlertActive
+                and tonumber(self.ModAlertExpiresAt)
+                and self.ModAlertExpiresAt > 0
+                and os.clock() >= self.ModAlertExpiresAt then
+
+                self.ModAlertActive = false
+                self.ModAlertExpiresAt = 0
+                if self.ModAlertFrame then self.ModAlertFrame.Visible = false end
+                self:RefreshActive()
+                return
+            end
+
             if not self.ModAlertActive or not self.ModAlertFrame or not self.ModAlertFrame.Parent then return end
             local pulse = math.sin(os.clock() * 7) * 0.5 + 0.5
             local dark = Color3.fromRGB(58, 5, 5)
@@ -2067,16 +2111,34 @@ function BindManager:EnsureUI(window)
             self.ModAlertLabel = nil
             self.ModAlertStroke = nil
             self.ModAlertActive = false
+            self.ModAlertExpiresAt = 0
             self.ModAlertFlashConnection = nil
         end)
     end
 end
 
-function BindManager:SetModAlert(active, window)
+function BindManager:SetModAlert(active, window, durationSeconds)
     if (not self.Overlay or not self.Overlay.Parent) and window then
         self:EnsureUI(window)
     end
-    self.ModAlertActive = active == true
+
+    active = active == true
+    if active then
+        local duration = math.max(tonumber(durationSeconds) or 240, 1)
+        -- Do not keep extending the timer on every 15-second detector scan.
+        -- A fresh detection/test starts one approximately four-minute flash.
+        if not self.ModAlertActive or (tonumber(self.ModAlertExpiresAt) or 0) <= os.clock() then
+            self.ModAlertExpiresAt = os.clock() + duration
+        end
+        self.ModAlertActive = true
+    else
+        self.ModAlertActive = false
+        self.ModAlertExpiresAt = 0
+    end
+
+    if self.ModAlertLabel then
+        self.ModAlertLabel.Text = "!mod!"
+    end
     if self.ModAlertFrame then
         self.ModAlertFrame.Visible = self.ModAlertActive
     end
@@ -2508,6 +2570,39 @@ function sections:CreateSlider(Properties)
             Active              = true,
             ZIndex              = 20
         })
+        -- Universal fine-step controls for every DevKage slider. These use
+        -- the slider's own Step/Decimals rules, so +/- always matches the same
+        -- value precision as dragging the bar.
+        local SliderButtonY = Content.Name and 14 or 1
+        local Content_Holder_Minus = utility:RenderObject("TextButton", {
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            Parent = Content_Holder,
+            Position = UDim2.new(0, 20, 0, SliderButtonY),
+            Size = UDim2.fromOffset(16, 16),
+            Font = "Code",
+            Text = "-",
+            TextColor3 = Color3.fromRGB(165, 165, 165),
+            TextSize = 12,
+            AutoButtonColor = false,
+            Active = true,
+            ZIndex = 35
+        })
+        local Content_Holder_Plus = utility:RenderObject("TextButton", {
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            Parent = Content_Holder,
+            Position = UDim2.new(1, -55, 0, SliderButtonY),
+            Size = UDim2.fromOffset(16, 16),
+            Font = "Code",
+            Text = "+",
+            TextColor3 = Color3.fromRGB(165, 165, 165),
+            TextSize = 12,
+            AutoButtonColor = false,
+            Active = true,
+            ZIndex = 35
+        })
+
         local Holder_Outline_Frame = utility:RenderObject("Frame", {
             BackgroundColor3    = Color3.fromRGB(71, 71, 71),
             BackgroundTransparency = 0,
@@ -2609,6 +2704,30 @@ function sections:CreateSlider(Properties)
             Content:Set(Content.Min + (Content.Max - Content.Min) * ratio)
         end
         function Content:Get() return Content.State end
+
+        local function nudgeSlider(direction)
+            local directionValue = direction < 0 and -1 or 1
+            Content:Set(Content.State + (Content.Step * directionValue))
+        end
+
+        utility:CreateConnection(Content_Holder_Minus.MouseButton1Click, function()
+            nudgeSlider(-1)
+        end)
+        utility:CreateConnection(Content_Holder_Plus.MouseButton1Click, function()
+            nudgeSlider(1)
+        end)
+        utility:CreateConnection(Content_Holder_Minus.MouseEnter, function()
+            Content_Holder_Minus.TextColor3 = Color3.fromRGB(235, 235, 235)
+        end)
+        utility:CreateConnection(Content_Holder_Minus.MouseLeave, function()
+            Content_Holder_Minus.TextColor3 = Color3.fromRGB(165, 165, 165)
+        end)
+        utility:CreateConnection(Content_Holder_Plus.MouseEnter, function()
+            Content_Holder_Plus.TextColor3 = Color3.fromRGB(235, 235, 235)
+        end)
+        utility:CreateConnection(Content_Holder_Plus.MouseLeave, function()
+            Content_Holder_Plus.TextColor3 = Color3.fromRGB(165, 165, 165)
+        end)
 
         local function beginSliderDrag(input)
             Content.Holding = true
@@ -5243,12 +5362,9 @@ function SpooferState.SaveAutoLoad(enabled)
 
     local savedConfig=SpooferState.BuildAutoLoadConfig(config)
 
-    -- Live ELO Auto Load is independent from full Spoofer Auto Load. Keep a
-    -- runtime copy so a normal named-config load cannot accidentally erase
-    -- the persisted ELO auto-load choice later in this same startup.
-    SpooferState.savedELOAutoLoad = savedConfig.eloLiveSyncAutoLoad == true
-    SpooferState.savedELO = normalizeSpoofELO(savedConfig.elo)
-    pcall(SpooferState.SaveELOAutoLoad, SpooferState.savedELOAutoLoad, SpooferState.savedELO)
+    -- Live ELO Auto Load has its own persistence file. Do not mirror or
+    -- overwrite it from the full Spoofer Auto Load path; keeping one owner
+    -- removes the startup/config race that could flip ELO autoload on/off.
 
     local payload = {
         Enabled = config.autoLoadSpoofer,
@@ -5369,17 +5485,24 @@ do
 
         local config=getgenv().__DevKageConfig
         if type(config)~="table" then return end
-        local enabled=config.eloLiveSyncAutoLoad==true or SpooferState.savedELOAutoLoad==true
-        if not enabled then
+
+        -- The dedicated ELO autoload file is authoritative. Named configs may
+        -- contain older ELO/autoload values, but they must not overwrite the
+        -- separately persisted live-ELO choice or value.
+        if SpooferState.savedELOAutoLoad ~= true then
             watcher.LastSignature="off"
             return
         end
 
-        local elo=normalizeSpoofELO(config.elo)
-        local signature="on:"..tostring(elo)
-        if watcher.LastSignature==signature then return end
-        local saved=SpooferState.SaveELOAutoLoad(true,elo)
-        if saved then watcher.LastSignature=signature end
+        config.eloLiveSyncAutoLoad=true
+        config.eloLiveSync=true
+        config.spoofELO=true
+        config.rankDisplay="Use Spoofed ELO"
+        if SpooferState.savedELO ~= nil then
+            config.elo=normalizeSpoofELO(SpooferState.savedELO)
+        end
+
+        watcher.LastSignature="on:"..tostring(config.elo)
     end)
 
     table.insert(library.CleanupCallbacks,function()
@@ -6725,6 +6848,9 @@ function ELOAutoLoadRuntime:ApplyOnce(forcePresentation)
     -- dedicated Live ELO auto-load fields that the user explicitly persisted.
     if persistedEnabled then
         config.eloLiveSyncAutoLoad = true
+        if SpooferState.savedELO ~= nil then
+            config.elo = normalizeSpoofELO(SpooferState.savedELO)
+        end
     end
 
     config.eloLiveSync = true
@@ -6792,8 +6918,13 @@ function ELOAutoLoadRuntime:SetEnabled(enabled)
 
         if SpooferState.savedELOAutoLoad == true then
             current.eloLiveSyncAutoLoad = true
+            if SpooferState.savedELO ~= nil then
+                current.elo = normalizeSpoofELO(SpooferState.savedELO)
+            end
         end
         current.eloLiveSync = true
+        current.spoofELO = true
+        current.rankDisplay = "Use Spoofed ELO"
 
         local dt = tonumber(deltaTime) or 0
         self.Elapsed = self.Elapsed + dt
@@ -10928,6 +11059,72 @@ end
 return output
 end
 
+local function serialiseControlValues()
+local output = {}
+for flag, control in pairs(library.Controls or {}) do
+local flagName = tostring(flag or "")
+if flagName ~= ""
+and not flagName:match("^script%.")
+and flagName ~= "visuals.devkage_cursor_enabled"
+and flagName ~= "visuals.devkage_cursor_control_mode"
+and control
+and type(control.Get) == "function" then
+
+local ok, value = pcall(control.Get, control)
+if ok then
+local valueType = typeof(value)
+if valueType == "Color3" then
+local alpha = nil
+if type(control.GetAlpha) == "function" then
+local alphaOk, alphaValue = pcall(control.GetAlpha, control)
+if alphaOk then alpha = tonumber(alphaValue) end
+end
+output[flagName] = {
+__devkage_control_type = "Color3",
+r = math.floor(value.R * 255 + 0.5),
+g = math.floor(value.G * 255 + 0.5),
+b = math.floor(value.B * 255 + 0.5),
+alpha = alpha
+}
+elseif type(value) == "boolean"
+or type(value) == "number"
+or type(value) == "string" then
+output[flagName] = value
+end
+end
+end
+end
+return output
+end
+
+local function applySavedControlValues(savedValues)
+if type(savedValues) ~= "table" then return end
+for flag, savedValue in pairs(savedValues) do
+local flagName = tostring(flag or "")
+local control = library.Controls and library.Controls[flagName]
+if control
+and type(control.Set) == "function"
+and not flagName:match("^script%.")
+and flagName ~= "visuals.devkage_cursor_enabled"
+and flagName ~= "visuals.devkage_cursor_control_mode" then
+
+if type(savedValue) == "table"
+and savedValue.__devkage_control_type == "Color3" then
+local color = Color3.fromRGB(
+math.clamp(tonumber(savedValue.r) or 255, 0, 255),
+math.clamp(tonumber(savedValue.g) or 255, 0, 255),
+math.clamp(tonumber(savedValue.b) or 255, 0, 255)
+)
+pcall(control.Set, control, color, tonumber(savedValue.alpha), false)
+elseif type(savedValue) == "boolean"
+or type(savedValue) == "number"
+or type(savedValue) == "string" then
+pcall(control.Set, control, savedValue, false)
+end
+end
+end
+end
+
 local function gather_state(cfg)
 return {
 schemaVersion = CONFIG_SCHEMA_VERSION,
@@ -10938,6 +11135,7 @@ antiAim = serialiseRuntimeState(AntiAimState),
 lighting = serialiseRuntimeState(AdvancedLighting),
 theme = serialiseRuntimeState(library.Theme),
 keybinds = (library.KeybindManager and library.KeybindManager.Serialize) and library.KeybindManager:Serialize() or {},
+controlValues = serialiseControlValues(),
 victim       = cfg.victim,
 helper       = cfg.helper,
 level        = cfg.level,
@@ -11167,6 +11365,11 @@ if type(data.keybinds) == "table" then
     if library.KeybindManager and library.KeybindManager.Apply then
         library.KeybindManager:Apply(data.keybinds)
     end
+end
+if type(data.controlValues) == "table" and getgenv then
+    -- Named config auto-load happens before every UI control exists. Hold the
+    -- flagged values until the UI has finished constructing, then apply them.
+    getgenv().__DevKagePendingControlValues = data.controlValues
 end
 
 if data.ua_equipped then
@@ -11758,15 +11961,17 @@ end
 -- The named config system and Live ELO Auto Load are separate. If Live ELO
 -- was explicitly persisted, restore those ELO-only fields after the named
 -- config has finished loading and restart its dedicated sync runtime.
-if SpooferState.savedELOAutoLoad == true then
+do
 local config = getgenv().__DevKageConfig
 if type(config) == "table" then
-config.eloLiveSyncAutoLoad = true
+config.eloLiveSyncAutoLoad = SpooferState.savedELOAutoLoad == true
+if SpooferState.savedELOAutoLoad == true then
 config.eloLiveSync = true
 config.spoofELO = true
 config.rankDisplay = "Use Spoofed ELO"
 if SpooferState.savedELO ~= nil then config.elo = normalizeSpoofELO(SpooferState.savedELO) end
 task.defer(function() ELOAutoLoadRuntime:SetEnabled(true) end)
+end
 end
 end
 
@@ -13782,7 +13987,12 @@ Numeric = true, DigitsOnly = true, MaxLength = 7,
 Callback = function(value)
 local config=getgenv().__DevKageConfig
 config.elo=normalizeSpoofELO(value)
-if config.eloLiveSyncAutoLoad==true then SpooferState.savedELO=config.elo end
+if config.eloLiveSyncAutoLoad==true or SpooferState.savedELOAutoLoad==true then
+config.eloLiveSyncAutoLoad=true
+SpooferState.savedELOAutoLoad=true
+SpooferState.savedELO=config.elo
+pcall(SpooferState.SaveELOAutoLoad,true,config.elo)
+end
 end
 })
 local keysInput    = spooferSection:CreateInput({ Name = "Keys",        Default = tostring(getgenv().__DevKageConfig.keys),  Placeholder = "9999", Numeric = false, Callback = function(value) getgenv().__DevKageConfig.keys=tostring(value or "") end })
@@ -13823,6 +14033,12 @@ local value=normalizeSpoofELO(eloInput:Get())
 getgenv().__DevKageConfig.elo=value
 getgenv().__DevKageConfig.spoofELO=true
 getgenv().__DevKageConfig.rankDisplay="Use Spoofed ELO"
+if getgenv().__DevKageConfig.eloLiveSyncAutoLoad==true or SpooferState.savedELOAutoLoad==true then
+getgenv().__DevKageConfig.eloLiveSyncAutoLoad=true
+SpooferState.savedELOAutoLoad=true
+SpooferState.savedELO=value
+pcall(SpooferState.SaveELOAutoLoad,true,value)
+end
 SpooferState.localActive=true
 eloInput:Set(tostring(value),true)
 if spooferExtraControls.rankDisplayDrop then spooferExtraControls.rankDisplayDrop:Set(optionIndex(SpoofRankRuntime.Options,"Use Spoofed ELO"),true) end
@@ -19167,6 +19383,15 @@ local RapidFireRuntime = {
     SelectedWeapon = tostring(getgenv().__DevKageConfig.rapidFireSelectedWeapon or ""),
     LastStatus = "",
     MaskShardProtected = true,
+    GunModule = nil,
+    MeleeModule = nil,
+    GunHookInstalled = false,
+    MeleeHookInstalled = false,
+    OriginalGunStartShooting = nil,
+    OriginalMeleeStartShooting = nil,
+    GunWrapper = nil,
+    MeleeWrapper = nil,
+    InfoNameCache = setmetatable({}, {__mode = "k"}),
 }
 
 local RAPID_FIRE_MELEE_FIELDS = {
@@ -19277,7 +19502,12 @@ local function rapidFireDelayPercent(weaponName)
 
     local saved = tonumber(config.rapidFireRates[tostring(weaponName or "")])
     local fallback = tonumber(config.rapidFireDefaultRate) or 25
-    return math.clamp(math.floor((saved or fallback) + 0.5), 1, 100)
+
+    -- While Rapid Fire is enabled the rate is intentionally global: every
+    -- weapon uses the same current slider percentage. Per-weapon saved values
+    -- are kept only for compatibility when the feature is off.
+    local resolved = config.rapidFireEnabled == true and fallback or (saved or fallback)
+    return math.clamp(math.floor(resolved + 0.5), 1, 100)
 end
 
 local function rapidFireScaledCooldown(originalValue, percent)
@@ -19297,6 +19527,201 @@ local function rapidFireScaledCooldown(originalValue, percent)
     -- Keep a tiny positive floor so code expecting a positive cooldown
     -- does not receive zero.
     return math.max(0.001, originalValue * (percent / 100))
+end
+
+local function rapidFireWeaponNameFromInfo(info)
+    if type(info) ~= "table" then return nil end
+
+    local cached = RapidFireRuntime.InfoNameCache[info]
+    if cached then return cached end
+
+    local items = RapidFireRuntime.Items
+    if type(items) == "table" then
+        for weaponName, data in pairs(items) do
+            if data == info then
+                local resolved = tostring(weaponName)
+                RapidFireRuntime.InfoNameCache[info] = resolved
+                return resolved
+            end
+        end
+    end
+
+    for _, key in ipairs({"Name", "ItemName", "WeaponName", "DisplayName"}) do
+        local value = rawget(info, key)
+        if value ~= nil and tostring(value) ~= "" then
+            local resolved = tostring(value)
+            RapidFireRuntime.InfoNameCache[info] = resolved
+            return resolved
+        end
+    end
+
+    return nil
+end
+
+local function rapidFireHookPercent(info)
+    local weaponName = rapidFireWeaponNameFromInfo(info)
+    if weaponName then
+        return rapidFireDelayPercent(weaponName), weaponName
+    end
+
+    local config = getgenv().__DevKageConfig
+    local percent = math.clamp(
+        math.floor((tonumber(config.rapidFireDefaultRate) or 25) + 0.5),
+        1,
+        100
+    )
+    return percent, nil
+end
+
+local function rapidFireHookBaseValue(info, weaponName, field, currentValue)
+    if weaponName then
+        local snapshot = RapidFireRuntime.Originals[weaponName]
+        if type(snapshot) == "table" and type(snapshot[field]) == "number" then
+            return snapshot[field]
+        end
+    end
+    return currentValue
+end
+
+local function rapidFireInstallTypeHooks()
+    if not rapidFireIsRivals() then return false end
+
+    local playerScripts = LocalPlayer and LocalPlayer:FindFirstChild("PlayerScripts")
+    if not playerScripts and LocalPlayer then
+        playerScripts = LocalPlayer:WaitForChild("PlayerScripts", 8)
+    end
+    if not playerScripts then return false end
+
+    local modules = playerScripts:FindFirstChild("Modules")
+    if not modules then modules = playerScripts:WaitForChild("Modules", 8) end
+    local itemTypes = modules and modules:FindFirstChild("ItemTypes")
+    if not itemTypes and modules then itemTypes = modules:WaitForChild("ItemTypes", 8) end
+    if not itemTypes then return false end
+
+    if not RapidFireRuntime.GunHookInstalled then
+        local gunModuleScript = itemTypes:FindFirstChild("Gun")
+        if gunModuleScript and gunModuleScript:IsA("ModuleScript") then
+            local ok, gunModule = pcall(require, gunModuleScript)
+            if ok and type(gunModule) == "table" and type(gunModule.StartShooting) == "function" then
+                RapidFireRuntime.GunModule = gunModule
+                RapidFireRuntime.OriginalGunStartShooting = gunModule.StartShooting
+
+                local original = RapidFireRuntime.OriginalGunStartShooting
+                local wrapper
+                wrapper = function(self, ...)
+                    local config = getgenv().__DevKageConfig
+                    local info = type(self) == "table" and self.Info or nil
+                    local oldCooldown = type(info) == "table" and info.ShootCooldown or nil
+
+                    if type(config) == "table"
+                        and config.rapidFireEnabled == true
+                        and type(oldCooldown) == "number"
+                        and oldCooldown > 0 then
+
+                        local percent, weaponName = rapidFireHookPercent(info)
+                        local baseValue = rapidFireHookBaseValue(
+                            info,
+                            weaponName,
+                            "ShootCooldown",
+                            oldCooldown
+                        )
+                        info.ShootCooldown = rapidFireScaledCooldown(baseValue, percent)
+                    end
+
+                    local results = table.pack(pcall(original, self, ...))
+
+                    if type(info) == "table" and oldCooldown ~= nil then
+                        info.ShootCooldown = oldCooldown
+                    end
+
+                    if not results[1] then
+                        error(results[2], 0)
+                    end
+                    return table.unpack(results, 2, results.n)
+                end
+
+                RapidFireRuntime.GunWrapper = wrapper
+                gunModule.StartShooting = wrapper
+                RapidFireRuntime.GunHookInstalled = true
+            end
+        end
+    end
+
+    if not RapidFireRuntime.MeleeHookInstalled then
+        local meleeModuleScript = itemTypes:FindFirstChild("Melee")
+        if meleeModuleScript and meleeModuleScript:IsA("ModuleScript") then
+            local ok, meleeModule = pcall(require, meleeModuleScript)
+            if ok and type(meleeModule) == "table" and type(meleeModule.StartShooting) == "function" then
+                RapidFireRuntime.MeleeModule = meleeModule
+                RapidFireRuntime.OriginalMeleeStartShooting = meleeModule.StartShooting
+
+                local original = RapidFireRuntime.OriginalMeleeStartShooting
+                local wrapper
+                wrapper = function(self, ...)
+                    local config = getgenv().__DevKageConfig
+                    local info = type(self) == "table" and self.Info or nil
+                    local oldCooldown = type(info) == "table" and info.AttackCooldown or nil
+
+                    if type(config) == "table"
+                        and config.rapidFireEnabled == true
+                        and type(oldCooldown) == "number"
+                        and oldCooldown > 0 then
+
+                        local percent, weaponName = rapidFireHookPercent(info)
+                        local baseValue = rapidFireHookBaseValue(
+                            info,
+                            weaponName,
+                            "AttackCooldown",
+                            oldCooldown
+                        )
+                        info.AttackCooldown = rapidFireScaledCooldown(baseValue, percent)
+                    end
+
+                    local results = table.pack(pcall(original, self, ...))
+
+                    if type(info) == "table" and oldCooldown ~= nil then
+                        info.AttackCooldown = oldCooldown
+                    end
+
+                    if not results[1] then
+                        error(results[2], 0)
+                    end
+                    return table.unpack(results, 2, results.n)
+                end
+
+                RapidFireRuntime.MeleeWrapper = wrapper
+                meleeModule.StartShooting = wrapper
+                RapidFireRuntime.MeleeHookInstalled = true
+            end
+        end
+    end
+
+    return RapidFireRuntime.GunHookInstalled or RapidFireRuntime.MeleeHookInstalled
+end
+
+local function rapidFireUninstallTypeHooks()
+    if RapidFireRuntime.GunHookInstalled
+        and type(RapidFireRuntime.GunModule) == "table"
+        and RapidFireRuntime.GunModule.StartShooting == RapidFireRuntime.GunWrapper
+        and type(RapidFireRuntime.OriginalGunStartShooting) == "function" then
+
+        RapidFireRuntime.GunModule.StartShooting =
+            RapidFireRuntime.OriginalGunStartShooting
+    end
+
+    if RapidFireRuntime.MeleeHookInstalled
+        and type(RapidFireRuntime.MeleeModule) == "table"
+        and RapidFireRuntime.MeleeModule.StartShooting == RapidFireRuntime.MeleeWrapper
+        and type(RapidFireRuntime.OriginalMeleeStartShooting) == "function" then
+
+        RapidFireRuntime.MeleeModule.StartShooting =
+            RapidFireRuntime.OriginalMeleeStartShooting
+    end
+
+    RapidFireRuntime.GunHookInstalled = false
+    RapidFireRuntime.MeleeHookInstalled = false
+    RapidFireRuntime.GunWrapper = nil
+    RapidFireRuntime.MeleeWrapper = nil
 end
 
 local function rapidFireSnapshotWeapon(weaponName, data)
@@ -19417,6 +19842,12 @@ local function rapidFireApplyConfigured()
         return
     end
 
+    -- Hook the game's shared Gun/Melee item-type modules as a live fallback.
+    -- That path follows self.Info for whatever weapon is actually firing, so
+    -- newly equipped weapons are covered even if ItemLibrary has not been
+    -- refreshed since the toggle was enabled.
+    pcall(rapidFireInstallTypeHooks)
+
     local items = rapidFireLoadItems()
     if type(items) ~= "table" then return end
 
@@ -19424,18 +19855,16 @@ local function rapidFireApplyConfigured()
         config.rapidFireRates = {}
     end
 
-    -- Re-apply every weapon that has its own saved percentage.
-    for weaponName, percent in pairs(config.rapidFireRates) do
-        if type(items[tostring(weaponName)]) == "table" then
-            pcall(rapidFireApplyWeapon, tostring(weaponName), percent)
+    -- Rapid Fire is global when enabled: every supported ItemLibrary weapon
+    -- receives either its own saved percentage or the current default rate.
+    for weaponName, data in pairs(items) do
+        if type(data) == "table" and #rapidFireRelevantFields(data) > 0 then
+            pcall(
+                rapidFireApplyWeapon,
+                tostring(weaponName),
+                rapidFireDelayPercent(tostring(weaponName))
+            )
         end
-    end
-
-    -- Also apply the currently selected weapon, even if it has not yet
-    -- received an explicit entry in rapidFireRates.
-    local selected = tostring(config.rapidFireSelectedWeapon or "")
-    if selected ~= "" and selected ~= "Equipped Weapon" then
-        pcall(rapidFireApplyWeapon, selected, rapidFireDelayPercent(selected))
     end
 end
 
@@ -19620,10 +20049,7 @@ rapidFireWeaponDrop = rapidFireSection:CreateDropdown({
         end
 
         if config.rapidFireEnabled == true then
-            rapidFireApplyWeapon(
-                weaponName,
-                rapidFireDelayPercent(weaponName)
-            )
+            rapidFireApplyConfigured()
         end
 
         rapidFireUpdateStatus(weaponName)
@@ -19665,8 +20091,11 @@ rapidFireRateSlider = rapidFireSection:CreateSlider({
             and weaponName ~= ""
             and weaponName ~= "Equipped Weapon" then
 
+            -- Keep the selected weapon's explicit rate, then refresh the full
+            -- global Rapid Fire patch so every other weapon remains active too.
             local ok, changed, kind =
                 rapidFireApplyWeapon(weaponName, percent)
+            rapidFireApplyConfigured()
 
             if ok then
                 rapidFireStatus:SetText(
@@ -19717,6 +20146,7 @@ rapidFireSection:CreateButton({
 -- Restore every ItemLibrary value DevKage changed when the UI unloads.
 table.insert(library.CleanupCallbacks, function()
     rapidFireRestoreAll()
+    rapidFireUninstallTypeHooks()
 
     if type(MaskShard) == "table"
         and type(MaskShard.Runtime) == "table"
@@ -19821,7 +20251,8 @@ local function modDetectorRoleIsStaff(roleName)
     local normalized = " " .. tostring(roleName or ""):lower():gsub("[^%w]+", " ") .. " "
     local words = {
         " moderator ", " mod ", " admin ", " administrator ",
-        " staff ", " owner ", " manager ", " developer ", " dev "
+        " staff ", " owner ", " manager ", " developer ", " dev ",
+        " contributor ", " script ", " scripter ", " build ", " builder "
     }
     for _, word in ipairs(words) do
         if normalized:find(word, 1, true) then return true end
@@ -19829,12 +20260,16 @@ local function modDetectorRoleIsStaff(roleName)
     return false
 end
 
-local function modDetectorSetAlert(active)
+local function modDetectorSetAlert(active, forceClear)
     active = active == true
     ModDetectorRuntime.Detected = active
     local manager = library and library.KeybindManager
-    if manager and manager.SetModAlert then
-        manager:SetModAlert(active, window)
+    if not manager or not manager.SetModAlert then return end
+
+    if active then
+        manager:SetModAlert(true, window, 240)
+    elseif forceClear == true then
+        manager:SetModAlert(false, window)
     end
 end
 
@@ -19906,6 +20341,16 @@ local function modDetectorLoadStaffIds(token)
             end
 
             local data = modDetectorReadJson(url)
+            if type(data) ~= "table" or type(data.data) ~= "table" then
+                local proxyUrl = ("https://groups.roproxy.com/v1/groups/%d/roles/%d/users?limit=100&sortOrder=Asc"):format(
+                    ModDetectorGroupId,
+                    roleId
+                )
+                if cursor ~= "" then
+                    proxyUrl = proxyUrl .. "&cursor=" .. ModDetectorHttpService:UrlEncode(cursor)
+                end
+                data = modDetectorReadJson(proxyUrl)
+            end
             if type(data) ~= "table" or type(data.data) ~= "table" then break end
 
             for _, entry in ipairs(data.data) do
@@ -20000,7 +20445,7 @@ local function setModDetectorEnabled(enabled)
     if enabled and library and library.KeybindManager and library.KeybindManager.EnsureUI then
         library.KeybindManager:EnsureUI(window)
     end
-    modDetectorSetAlert(false)
+    modDetectorSetAlert(false, true)
 
     if not enabled then return end
 
@@ -20031,6 +20476,19 @@ trackVisualControl("mod_detector_enabled", modDetectorSection:CreateToggle({
         setModDetectorEnabled(v)
     end
 }))
+
+modDetectorSection:CreateButton({
+    Name = "Test Mod Alert",
+    Callback = function()
+        if library and library.KeybindManager and library.KeybindManager.EnsureUI then
+            library.KeybindManager:EnsureUI(window)
+        end
+        if library and library.KeybindManager and library.KeybindManager.SetModAlert then
+            library.KeybindManager:SetModAlert(true, window, 240)
+            library:Notify({Message="Mod detector test: !mod! alert active",Duration=3})
+        end
+    end
+})
 
 avatarToggle(avatarSection,"avatar_zombie_animations","Zombie Animations")
 avatarToggle(avatarSection,"avatar_headless","Headless")
@@ -20931,6 +21389,8 @@ local function referenceCreateLine(parent, name)
         )
 
     frame.BorderSizePixel = 0
+    frame.Active = false
+    frame.Selectable = false
     frame.ZIndex = 5
     frame.Parent = parent
 
@@ -20967,6 +21427,8 @@ local function referenceCreateLine(parent, name)
 
     glow.BackgroundTransparency = 1
     glow.BorderSizePixel = 0
+    glow.Active = false
+    glow.Selectable = false
     glow.ZIndex = 4
     glow.Visible = false
     glow.Parent = parent
@@ -21023,6 +21485,8 @@ local function referenceCreateTextLabel(parent, name)
     label.TextScaled = true
 
     label.BackgroundTransparency = 1
+    label.Active = false
+    label.Selectable = false
 
     -- EXACT default source-cursor label dimensions.
     label.Size =
@@ -21165,6 +21629,8 @@ local function referenceCreateCursorGui()
             0.5
         )
 
+    aimContainer.Active = false
+    aimContainer.Selectable = false
     aimContainer.ZIndex = 5
     aimContainer.Parent = screenGui
 
@@ -23081,10 +23547,20 @@ end
 local function applyLoadedConfig(data)
 if type(data) ~= "table" then return false end
 local cursorEnabledBeforeLoad = VisualsState.devkage_cursor_enabled
+local preservedELOAutoLoad = SpooferState.savedELOAutoLoad == true
+local preservedELO = SpooferState.savedELO
 local controls=UI.Spoofer
 local profile = type(data.profile)=="table" and data.profile or data
 for key,value in pairs(profile) do
 if defaultConfig[key]~=nil then getgenv().__DevKageConfig[key]=value end
+end
+
+getgenv().__DevKageConfig.eloLiveSyncAutoLoad=preservedELOAutoLoad
+if preservedELOAutoLoad then
+getgenv().__DevKageConfig.eloLiveSync=true
+getgenv().__DevKageConfig.spoofELO=true
+getgenv().__DevKageConfig.rankDisplay="Use Spoofed ELO"
+if preservedELO~=nil then getgenv().__DevKageConfig.elo=normalizeSpoofELO(preservedELO) end
 end
 
 if type(data.ua_equipped)=="table" then
@@ -23288,6 +23764,12 @@ elseif control.GetAlpha then control:Set(value,control:GetAlpha())
 else control:Set(value) end
 end
 end
+
+-- Final flagged-control pass: this makes the values actually stored in the
+-- selected config authoritative, including controls whose feature callback
+-- is not represented by one of the older hand-written config bindings.
+applySavedControlValues(data.controlValues)
+
 aa_apply(AntiAimState.enabled)
 AntiAimMovement:SetNoClip(AntiAimState.noclip_enabled)
 AntiAimMovement:SetFlight(AntiAimState.flight_enabled)
@@ -24159,6 +24641,15 @@ for property,value in pairs(AdvancedLighting.original) do
 if property~="Technology" and property~="ColorShift_Top" and property~="ColorShift_Bottom" then setLightingProperty(property,value) end
 end
 end)
+
+do
+local environment=(type(getgenv)=="function" and getgenv()) or _G
+local pendingControlValues=environment.__DevKagePendingControlValues
+if type(pendingControlValues)=="table" then
+pcall(applySavedControlValues,pendingControlValues)
+environment.__DevKagePendingControlValues=nil
+end
+end
 
 rebuildConfigList()
 
