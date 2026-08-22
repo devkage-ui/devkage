@@ -11059,7 +11059,12 @@ end
 return output
 end
 
-local function serialiseControlValues()
+-- REGISTER-SAFE CONFIG HELPERS
+-- These helpers intentionally live on getgenv() instead of as persistent locals.
+-- DevKage's packaged source is close to Luau's per-function local-register ceiling,
+-- so keeping helper names out of the giant outer chunk prevents executor compile failures.
+-- Behavior is unchanged: named configs still capture and replay flagged controls.
+getgenv().__DevKageSerialiseControlValues = function()
 local output = {}
 for flag, control in pairs(library.Controls or {}) do
 local flagName = tostring(flag or "")
@@ -11097,7 +11102,7 @@ end
 return output
 end
 
-local function applySavedControlValues(savedValues)
+getgenv().__DevKageApplySavedControlValues = function(savedValues)
 if type(savedValues) ~= "table" then return end
 for flag, savedValue in pairs(savedValues) do
 local flagName = tostring(flag or "")
@@ -11135,7 +11140,7 @@ antiAim = serialiseRuntimeState(AntiAimState),
 lighting = serialiseRuntimeState(AdvancedLighting),
 theme = serialiseRuntimeState(library.Theme),
 keybinds = (library.KeybindManager and library.KeybindManager.Serialize) and library.KeybindManager:Serialize() or {},
-controlValues = serialiseControlValues(),
+controlValues = getgenv().__DevKageSerialiseControlValues(),
 victim       = cfg.victim,
 helper       = cfg.helper,
 level        = cfg.level,
@@ -13527,15 +13532,14 @@ end
 return 1
 end
 
-local __devkageRuntimeEnv = (type(getgenv) == "function" and getgenv()) or _G
-local __devkageAutoStarted = __devkageRuntimeEnv.__DEVKAGE_AUTO_STARTED == true
-local __devkageSilentBoot = __devkageAutoStarted and _script_boot_settings.SilentLoad == true
 if __devkageMultiInjectAutoBoot then task.wait() end
-local window = library:CreateWindow({ Key = Enum.KeyCode.RightShift, Enabled = not __devkageSilentBoot })
-do
-local env = (type(getgenv) == "function" and getgenv()) or _G
-env.__DevKageWindow = window
-if __devkageAutoStarted then env.__DEVKAGE_AUTO_STARTED = false end
+local window = library:CreateWindow({
+Key = Enum.KeyCode.RightShift,
+Enabled = not (getgenv().__DEVKAGE_AUTO_STARTED == true and _script_boot_settings.SilentLoad == true)
+})
+getgenv().__DevKageWindow = window
+if getgenv().__DEVKAGE_AUTO_STARTED == true then
+getgenv().__DEVKAGE_AUTO_STARTED = false
 end
 local UI = {}
 
@@ -19529,7 +19533,10 @@ local function rapidFireScaledCooldown(originalValue, percent)
     return math.max(0.001, originalValue * (percent / 100))
 end
 
-local function rapidFireWeaponNameFromInfo(info)
+-- REGISTER-SAFE RAPID FIRE HELPERS
+-- Keep the universal weapon hooks on the existing runtime table so they do not
+-- consume additional persistent locals inside the very large DevKage UI function.
+RapidFireRuntime.WeaponNameFromInfo = function(info)
     if type(info) ~= "table" then return nil end
 
     local cached = RapidFireRuntime.InfoNameCache[info]
@@ -19558,8 +19565,8 @@ local function rapidFireWeaponNameFromInfo(info)
     return nil
 end
 
-local function rapidFireHookPercent(info)
-    local weaponName = rapidFireWeaponNameFromInfo(info)
+RapidFireRuntime.HookPercent = function(info)
+    local weaponName = RapidFireRuntime.WeaponNameFromInfo(info)
     if weaponName then
         return rapidFireDelayPercent(weaponName), weaponName
     end
@@ -19573,7 +19580,7 @@ local function rapidFireHookPercent(info)
     return percent, nil
 end
 
-local function rapidFireHookBaseValue(info, weaponName, field, currentValue)
+RapidFireRuntime.HookBaseValue = function(info, weaponName, field, currentValue)
     if weaponName then
         local snapshot = RapidFireRuntime.Originals[weaponName]
         if type(snapshot) == "table" and type(snapshot[field]) == "number" then
@@ -19583,7 +19590,7 @@ local function rapidFireHookBaseValue(info, weaponName, field, currentValue)
     return currentValue
 end
 
-local function rapidFireInstallTypeHooks()
+RapidFireRuntime.InstallTypeHooks = function()
     if not rapidFireIsRivals() then return false end
 
     local playerScripts = LocalPlayer and LocalPlayer:FindFirstChild("PlayerScripts")
@@ -19618,8 +19625,8 @@ local function rapidFireInstallTypeHooks()
                         and type(oldCooldown) == "number"
                         and oldCooldown > 0 then
 
-                        local percent, weaponName = rapidFireHookPercent(info)
-                        local baseValue = rapidFireHookBaseValue(
+                        local percent, weaponName = RapidFireRuntime.HookPercent(info)
+                        local baseValue = RapidFireRuntime.HookBaseValue(
                             info,
                             weaponName,
                             "ShootCooldown",
@@ -19667,8 +19674,8 @@ local function rapidFireInstallTypeHooks()
                         and type(oldCooldown) == "number"
                         and oldCooldown > 0 then
 
-                        local percent, weaponName = rapidFireHookPercent(info)
-                        local baseValue = rapidFireHookBaseValue(
+                        local percent, weaponName = RapidFireRuntime.HookPercent(info)
+                        local baseValue = RapidFireRuntime.HookBaseValue(
                             info,
                             weaponName,
                             "AttackCooldown",
@@ -19699,7 +19706,7 @@ local function rapidFireInstallTypeHooks()
     return RapidFireRuntime.GunHookInstalled or RapidFireRuntime.MeleeHookInstalled
 end
 
-local function rapidFireUninstallTypeHooks()
+RapidFireRuntime.UninstallTypeHooks = function()
     if RapidFireRuntime.GunHookInstalled
         and type(RapidFireRuntime.GunModule) == "table"
         and RapidFireRuntime.GunModule.StartShooting == RapidFireRuntime.GunWrapper
@@ -19846,7 +19853,7 @@ local function rapidFireApplyConfigured()
     -- That path follows self.Info for whatever weapon is actually firing, so
     -- newly equipped weapons are covered even if ItemLibrary has not been
     -- refreshed since the toggle was enabled.
-    pcall(rapidFireInstallTypeHooks)
+    pcall(RapidFireRuntime.InstallTypeHooks)
 
     local items = rapidFireLoadItems()
     if type(items) ~= "table" then return end
@@ -20146,7 +20153,7 @@ rapidFireSection:CreateButton({
 -- Restore every ItemLibrary value DevKage changed when the UI unloads.
 table.insert(library.CleanupCallbacks, function()
     rapidFireRestoreAll()
-    rapidFireUninstallTypeHooks()
+    RapidFireRuntime.UninstallTypeHooks()
 
     if type(MaskShard) == "table"
         and type(MaskShard.Runtime) == "table"
@@ -23547,20 +23554,18 @@ end
 local function applyLoadedConfig(data)
 if type(data) ~= "table" then return false end
 local cursorEnabledBeforeLoad = VisualsState.devkage_cursor_enabled
-local preservedELOAutoLoad = SpooferState.savedELOAutoLoad == true
-local preservedELO = SpooferState.savedELO
 local controls=UI.Spoofer
 local profile = type(data.profile)=="table" and data.profile or data
 for key,value in pairs(profile) do
 if defaultConfig[key]~=nil then getgenv().__DevKageConfig[key]=value end
 end
 
-getgenv().__DevKageConfig.eloLiveSyncAutoLoad=preservedELOAutoLoad
-if preservedELOAutoLoad then
+getgenv().__DevKageConfig.eloLiveSyncAutoLoad=SpooferState.savedELOAutoLoad == true
+if SpooferState.savedELOAutoLoad == true then
 getgenv().__DevKageConfig.eloLiveSync=true
 getgenv().__DevKageConfig.spoofELO=true
 getgenv().__DevKageConfig.rankDisplay="Use Spoofed ELO"
-if preservedELO~=nil then getgenv().__DevKageConfig.elo=normalizeSpoofELO(preservedELO) end
+if SpooferState.savedELO~=nil then getgenv().__DevKageConfig.elo=normalizeSpoofELO(SpooferState.savedELO) end
 end
 
 if type(data.ua_equipped)=="table" then
@@ -23768,7 +23773,7 @@ end
 -- Final flagged-control pass: this makes the values actually stored in the
 -- selected config authoritative, including controls whose feature callback
 -- is not represented by one of the older hand-written config bindings.
-applySavedControlValues(data.controlValues)
+getgenv().__DevKageApplySavedControlValues(data.controlValues)
 
 aa_apply(AntiAimState.enabled)
 AntiAimMovement:SetNoClip(AntiAimState.noclip_enabled)
@@ -24643,11 +24648,9 @@ end
 end)
 
 do
-local environment=(type(getgenv)=="function" and getgenv()) or _G
-local pendingControlValues=environment.__DevKagePendingControlValues
-if type(pendingControlValues)=="table" then
-pcall(applySavedControlValues,pendingControlValues)
-environment.__DevKagePendingControlValues=nil
+if type(getgenv().__DevKagePendingControlValues)=="table" then
+pcall(getgenv().__DevKageApplySavedControlValues,getgenv().__DevKagePendingControlValues)
+getgenv().__DevKagePendingControlValues=nil
 end
 end
 
