@@ -10974,10 +10974,10 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_2.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_3.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
-local SCRIPT_AUTOEXEC_NAME = "DevKage_AutoLoad.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.2-autoexec-coexistence-20260822"
+local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_AutoLoad_LAST.lua"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.3-late-boot-autoexec-last-20260822"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -11647,11 +11647,30 @@ task.spawn(function()
             task.wait(0.1)
         end
 
-        -- Give executor auto-execute one final scheduling turn after the core
-        -- client objects exist.  Manual execution is already ready and only
-        -- pays this tiny delay.
-        task.wait(0.25)
+        -- LATE-BOOT AUTOEXEC COEXISTENCE (v5.2.3)
+        --
+        -- queue_on_teleport can run before an executor starts its native Auto
+        -- Execute folder.  DevKage must deliberately be the late script so it
+        -- cannot initialize hooks/input/UI while another Auto Execute script or
+        -- the match's own controllers are still booting.
+        local playerScripts = localPlayer:FindFirstChild("PlayerScripts")
+        if not playerScripts then
+            playerScripts = localPlayer:WaitForChild("PlayerScripts", 10)
+        end
+        if playerScripts then
+            playerScripts:WaitForChild("Controllers", 8)
+            playerScripts:WaitForChild("Modules", 8)
+        end
+        Workspace:WaitForChild("ViewModels", 8)
 
+        env.__DEVKAGE_LATE_BOOT_WAITING = true
+        local lateDelay = tonumber(rawget(env, "__DEVKAGE_LATE_BOOT_DELAY")) or 15
+        if lateDelay < 5 then lateDelay = 5 end
+        task.wait(lateDelay)
+        env.__DEVKAGE_LATE_BOOT_WAITING = nil
+
+        -- Claim the job only AFTER the grace window.  Until this point DevKage
+        -- owns nothing and the executor/game/other scripts are free to finish.
         local jobKey = tostring(game.PlaceId) .. ":" .. tostring(game.JobId)
         if env.__DEVKAGE_AUTO_STARTING_JOB == jobKey
             or env.__DEVKAGE_AUTO_STARTED_JOB == jobKey then
@@ -11730,6 +11749,7 @@ task.spawn(function()
         env.__DEVKAGE_MULTI_INJECT_BOOT = nil
         env.__DEVKAGE_AUTO_STARTING_JOB = nil
         env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+        env.__DEVKAGE_LATE_BOOT_WAITING = nil
     end
 end)
 ]=],
@@ -11778,7 +11798,7 @@ local seen = {}
 -- inside known autoexec folders that identify themselves as DevKage and do not
 -- contain this build's unique label.  Unrelated executor scripts are untouched.
 local function cleanLegacyDevKageAutoexec(folder)
-    -- COEXISTENCE SAFETY (v5.2.2)
+    -- COEXISTENCE SAFETY (v5.2.3)
     -- Never enumerate, inspect, or delete sibling executor Auto Execute files.
     -- Another script may legitimately share this folder, and DevKage must not
     -- decide ownership based on source-text matches.  The canonical DevKage
@@ -11792,6 +11812,18 @@ seen[folder] = true
 
 if not ensure_autoexec_folder(folder) then return end
 cleanLegacyDevKageAutoexec(folder)
+
+-- Remove only DevKage's previous exact canonical loader.  This is not a
+-- sibling scan and cannot touch the user's other Auto Execute scripts.
+if type(delfile) == "function" then
+    local legacyPath = folder .. "/DevKage_AutoLoad.lua"
+    local deleteLegacy = true
+    if type(isfile) == "function" then
+        local okLegacy, existsLegacy = pcall(isfile, legacyPath)
+        deleteLegacy = okLegacy and existsLegacy == true
+    end
+    if deleteLegacy then pcall(delfile, legacyPath) end
+end
 
 local path = folder .. "/" .. SCRIPT_AUTOEXEC_NAME
 local ok = pcall(writefile, path, stub)
@@ -11824,13 +11856,15 @@ end
 local function remove_autoexec_stubs()
 if type(delfile) ~= "function" then return end
 for _, folder in ipairs(AUTOEXEC_FOLDERS) do
-    local path = folder .. "/" .. SCRIPT_AUTOEXEC_NAME
-    local shouldDelete = true
-    if type(isfile) == "function" then
-        local ok, exists = pcall(isfile, path)
-        shouldDelete = ok and exists == true
+    for _, loaderName in ipairs({SCRIPT_AUTOEXEC_NAME, "DevKage_AutoLoad.lua"}) do
+        local path = folder .. "/" .. loaderName
+        local shouldDelete = true
+        if type(isfile) == "function" then
+            local ok, exists = pcall(isfile, path)
+            shouldDelete = ok and exists == true
+        end
+        if shouldDelete then pcall(delfile, path) end
     end
-    if shouldDelete then pcall(delfile, path) end
 end
 end
 
@@ -24787,10 +24821,10 @@ print("[DevKage + Mask Shard] Fully loaded and protected.")
 ]============]
 
 local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
-__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.2-autoexec-coexistence-20260822"
+__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.3-late-boot-autoexec-last-20260822"
 __devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
 
--- AUTOEXEC COEXISTENCE / SINGLE-BOOT ENTRYPOINT (v5.2.2)
+-- AUTOEXEC COEXISTENCE / LATE-BOOT SINGLE-BOOT ENTRYPOINT (v5.2.3)
 --
 -- Do not inspect or delete anything else in the executor Auto Execute folder.
 -- Older v5.2.x builds attempted sibling cleanup here; that can interfere with a
@@ -24829,10 +24863,30 @@ task.spawn(function()
             task.wait(0.1)
         end
 
+        -- LATE-BOOT AUTOEXEC COEXISTENCE (v5.2.3)
+        -- Wait for the match's own client controllers/viewmodel to appear, then
+        -- deliberately leave a grace period for every other native Auto Execute
+        -- script.  This package returns immediately at top level, so this wait
+        -- happens only inside DevKage's background boot task.
+        local playerScripts = localPlayer:FindFirstChild("PlayerScripts")
+        if not playerScripts then
+            playerScripts = localPlayer:WaitForChild("PlayerScripts", 10)
+        end
+        if playerScripts then
+            playerScripts:WaitForChild("Controllers", 8)
+            playerScripts:WaitForChild("Modules", 8)
+        end
+        workspaceService:WaitForChild("ViewModels", 8)
+
+        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = true
+        local lateDelay = tonumber(rawget(__devkageEnv, "__DEVKAGE_LATE_BOOT_DELAY")) or 15
+        if lateDelay < 5 then lateDelay = 5 end
+        task.wait(lateDelay)
+        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = nil
+
         -- Full native Auto Execute and DevKage_AutoLoad.lua use the same job
-        -- ownership keys.  Whichever one reaches this point first owns the run;
-        -- the other exits before installing duplicate hooks, input guards, UI,
-        -- or feature loops.
+        -- ownership keys, but neither is allowed to claim the match until the
+        -- late-boot grace period has completed.
         local jobKey = tostring(game.PlaceId) .. ":" .. tostring(game.JobId)
         if __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB == jobKey
             or __devkageEnv.__DEVKAGE_AUTO_STARTED_JOB == jobKey then
@@ -24870,6 +24924,7 @@ task.spawn(function()
     if not ok then
         __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
         __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = nil
         warn("[DevKage Package Boot] " .. tostring(err))
     end
 end)
@@ -24878,7 +24933,7 @@ end)
 -- 01 DevKage does not enumerate sibling Auto Execute files.
 -- 02 DevKage does not read sibling Auto Execute files.
 -- 03 DevKage does not delete sibling Auto Execute files.
--- 04 DevKage only replaces its canonical DevKage_AutoLoad.lua loader.
+-- 04 DevKage only replaces its own zzzz_DevKage_AutoLoad_LAST.lua loader.
 -- 05 Other executor scripts remain independent.
 -- 06 Full-package startup is asynchronous.
 -- 07 Roblox readiness waits happen inside the DevKage task.
@@ -24893,9 +24948,10 @@ end)
 -- 16 A successful runtime records the completed job.
 -- 17 Teleport queue remains supported.
 -- 18 Existing real Auto Execute folders remain supported.
--- 19 Only one existing Auto Execute folder receives the canonical loader.
--- 20 Alias folders are not filled with duplicate DevKage loaders.
--- 21 Guess folders are skipped when teleport queue already works.
+-- 19 Only one existing Auto Execute folder receives the last-named loader.
+-- 20 The old exact DevKage_AutoLoad.lua is removed during refresh.
+-- 21 Alias folders are not filled with duplicate DevKage loaders.
+-- 22 Guess folders are skipped when teleport queue already works.
 -- 22 Config serialization is unchanged.
 -- 23 ELO persistence is unchanged.
 -- 24 Cursor behavior is unchanged.
@@ -24910,11 +24966,18 @@ end)
 -- 33 Auto Load settings remain in the same settings file.
 -- 34 The package source remains embedded exactly once.
 -- 35 The outer package returns immediately after scheduling boot.
--- 36 This block intentionally contains comments only.
--- 37 No gameplay feature is initialized from this documentation.
--- 38 No input state is changed from this documentation.
--- 39 No executor file is touched from this documentation.
--- 40 End coexistence notes.
+-- 36 DevKage waits for PlayerScripts before claiming a match.
+-- 37 DevKage waits for Controllers/Modules when exposed by the game.
+-- 38 DevKage waits briefly for ViewModels when exposed by the game.
+-- 39 DevKage then yields a default 15-second late-boot grace period.
+-- 40 The late-boot delay can be increased through __DEVKAGE_LATE_BOOT_DELAY.
+-- 41 The minimum late-boot delay is five seconds.
+-- 42 No DevKage ownership flag is set during the grace period.
+-- 43 This block intentionally contains comments only.
+-- 44 No gameplay feature is initialized from this documentation.
+-- 45 No input state is changed from this documentation.
+-- 46 No executor file is touched from this documentation.
+-- 47 End coexistence notes.
 
 -- Return immediately so the executor can continue launching any other
 -- Auto Execute scripts in the same folder/session.
