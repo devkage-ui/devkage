@@ -1,4 +1,5 @@
-local _a=[============[
+-- DEVKAGE packaged coexistence build: current-source auto-load + namespaced runtime
+local __DEVKAGE_EMBEDDED_SOURCE = [============[
 -- ============================================================
 -- MASK SHARD v9.6.0 — STABLE BYPASS (AUG 2026 UPDATE)
 -- ============================================================
@@ -24828,4 +24829,87 @@ print("[DevKage + Mask Shard] Fully loaded and protected.")
 -- ============================================================
 -- END OF FILE
 -- ============================================================
-]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,49,45,111,112,105,117,109,119,97,114,101,45,115,116,114,105,110,103,102,105,120,45,50,48,50,54,48,56,50,50)_b._a=_a do local _c={string.char(97,117,116,111,101,120,101,99),string.char(65,117,116,111,101,120,101,99),string.char(97,117,116,111,101,120,101,99,117,116,101),string.char(65,117,116,111,69,120,101,99,117,116,101),string.char(115,99,114,105,112,116,115,47,97,117,116,111,101,120,101,99),string.char(115,99,114,105,112,116,115,47,65,117,116,111,101,120,101,99)}local _d=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,49,45,111,112,105,117,109,119,97,114,101,45,115,116,114,105,110,103,102,105,120,45,50,48,50,54,48,56,50,50)local function _e(_f)pcall(function()if type(_f)~=string.char(115,116,114,105,110,103)or type(readfile)~=string.char(102,117,110,99,116,105,111,110)or type(delfile)~=string.char(102,117,110,99,116,105,111,110)then return end local _g=string._g(string.gsub(_f,string.char(92),string.char(47)))if string.sub(_g,-4)~=string.char(46,108,117,97)and string.sub(_g,-5)~=string.char(46,108,117,97,117)then return end local _h,_i=pcall(readfile,_f)if not _h or type(_i)~=string.char(115,116,114,105,110,103)then return end local _j=string.find(_i,string.char(68,69,86,75,65,71,69,32,112,97,99,107,97,103,101,100,32,99,111,101,120,105,115,116,101,110,99,101,32,98,117,105,108,100),1,true)or string.find(_i,string.char(91,68,101,118,75,97,103,101,32,65,117,116,111,76,111,97,100,93),1,true)or string.find(_i,string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100),1,true)or string.find(_i,string.char(95,95,68,69,86,75,65,71,69,95,80,65,67,75,65,71,69,95,66,85,73,76,68),1,true)if _j and not string.find(_i,_d,1,true)then pcall(delfile,_f)end end)end for _k,_l in ipairs(_c)do if type(listfiles)==string.char(102,117,110,99,116,105,111,110)then local _h,_m=pcall(listfiles,_l)if _h and type(_m)==string.char(116,97,98,108,101)then for _k,_f in ipairs(_m)do _e(_f)end end end end end do local _n=game:GetService(string.char(80,108,97,121,101,114,115))local _o=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while not _n.LocalPlayer do task.wait(0.1)end local _p=_n.LocalPlayer while _p and not _p:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_p=_n.LocalPlayer end while not _o.CurrentCamera do task.wait(0.1)end task.wait(0.25)end local _q=loadstring or load if type(_q)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _r,_s=_q(_a)if not _r then error(_s)end return _r()
+]============]
+
+local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
+__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.1-opiumware-stringfix-20260822"
+__devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
+
+-- CURRENT-ONLY PREBOOT CLEANUP
+-- If this newest full build itself is placed in executor Auto Execute, remove
+-- recognizable older DevKage siblings before the embedded runtime can refresh
+-- autoload.  This prevents an older full copy from continually rewriting the
+-- legacy payload on every client launch.  The current file is preserved because
+-- it contains the unique v5.2 build label below.
+do
+    local folders = {"autoexec","Autoexec","autoexecute","AutoExecute","scripts/autoexec","scripts/Autoexec"}
+    local currentLabel = "DevKage-v5.2.1-opiumware-stringfix-20260822"
+
+    local function inspect(path)
+        -- Keep this preboot cleanup executor-safe.  Some executors/obfuscators
+        -- rewrite colon-style string methods and can turn path:gsub()/lower()
+        -- into a missing synthetic method.  Use the string library directly
+        -- and contain every inspection so cleanup can never abort DevKage boot.
+        pcall(function()
+            if type(path) ~= "string" or type(readfile) ~= "function" or type(delfile) ~= "function" then return end
+            local lower = string.lower(string.gsub(path, "\\", "/"))
+            if string.sub(lower, -4) ~= ".lua" and string.sub(lower, -5) ~= ".luau" then return end
+            local ok, content = pcall(readfile, path)
+            if not ok or type(content) ~= "string" then return end
+            local devkage = string.find(content, "DEVKAGE packaged coexistence build", 1, true)
+                or string.find(content, "[DevKage AutoLoad]", 1, true)
+                or string.find(content, "_devkage_autoload_payload", 1, true)
+                or string.find(content, "__DEVKAGE_PACKAGE_BUILD", 1, true)
+            if devkage and not string.find(content, currentLabel, 1, true) then
+                pcall(delfile, path)
+            end
+        end)
+    end
+
+    for _, folder in ipairs(folders) do
+        if type(listfiles) == "function" then
+            local ok, paths = pcall(listfiles, folder)
+            if ok and type(paths) == "table" then
+                for _, path in ipairs(paths) do inspect(path) end
+            end
+        end
+    end
+end
+
+-- AUTO-EXECUTE BOOT GUARD
+--
+-- Executor-native Auto Execute runs much earlier than normal manual execution.
+-- The embedded DevKage source captures Players.LocalPlayer and CurrentCamera in
+-- locals during startup, so launching before those objects exist permanently
+-- poisons that run with nil references.  Wait here, outside the embedded source,
+-- so absolutely every feature inside it starts against the same ready client.
+do
+    local __devkagePlayers = game:GetService("Players")
+    local __devkageWorkspace = game:GetService("Workspace")
+
+    if not game:IsLoaded() then
+        game.Loaded:Wait()
+    end
+
+    while not __devkagePlayers.LocalPlayer do
+        task.wait(0.1)
+    end
+
+    local __devkageLocalPlayer = __devkagePlayers.LocalPlayer
+    while __devkageLocalPlayer and not __devkageLocalPlayer:FindFirstChildOfClass("PlayerGui") do
+        task.wait(0.1)
+        __devkageLocalPlayer = __devkagePlayers.LocalPlayer
+    end
+
+    while not __devkageWorkspace.CurrentCamera do
+        task.wait(0.1)
+    end
+
+    task.wait(0.25)
+end
+
+local __devkageLoader = loadstring or load
+if type(__devkageLoader) ~= "function" then error("DevKage requires loadstring support") end
+local __devkageChunk, __devkageError = __devkageLoader(__DEVKAGE_EMBEDDED_SOURCE)
+if not __devkageChunk then error(__devkageError) end
+return __devkageChunk()
