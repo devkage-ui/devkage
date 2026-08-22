@@ -1,5 +1,4 @@
--- DEVKAGE packaged coexistence build: current-source auto-load + namespaced runtime
-local __DEVKAGE_EMBEDDED_SOURCE = [============[
+local _a=[============[
 -- ============================================================
 -- MASK SHARD v9.6.0 — STABLE BYPASS (AUG 2026 UPDATE)
 -- ============================================================
@@ -300,9 +299,6 @@ getgenv().__DevKageMaskShard = MaskShard
 -- ============================================================
 -- DEVKAGE UI LIBRARY (RightShift + dropdown/colorpicker + crosshair pass)
 local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
--- COMPATIBILITY MARKER: DevKage-v5.2-current-only-20260822
--- Keep this marker so the older v5.2 cleaner recognizes v5.2.1 as a safe successor
--- instead of deleting it when both copies exist in executor Auto Execute.
 __devkageEnv.__DEVKAGE_RUNTIME_VERSION = "dual-script-autoload-v5"
 local __devkageMultiInjectAutoBoot = __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT == true
 -- ============================================================
@@ -10974,10 +10970,10 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_2.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOEXEC_NAME = "DevKage_AutoLoad.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.2-autoexec-coexistence-20260822"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v15-reference-cursor-rapidfire-current"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -11769,29 +11765,11 @@ if type(writefile) ~= "function" then return false, {} end
 local installed = {}
 local seen = {}
 
--- CURRENT-ONLY AUTOEXEC CLEANUP
---
--- Older DevKage builds all used the same payload and loader name.  If a user
--- had more than one full DevKage build in an executor's Auto Execute folder,
--- those copies could race each other and an older one could rewrite the shared
--- payload after the current build had already refreshed it.  Clean only files
--- inside known autoexec folders that identify themselves as DevKage and do not
--- contain this build's unique label.  Unrelated executor scripts are untouched.
-local function cleanLegacyDevKageAutoexec(folder)
-    -- COEXISTENCE SAFETY (v5.2.2)
-    -- Never enumerate, inspect, or delete sibling executor Auto Execute files.
-    -- Another script may legitimately share this folder, and DevKage must not
-    -- decide ownership based on source-text matches.  The canonical DevKage
-    -- loader is replaced in-place by writefile() below; nothing else is touched.
-    return true
-end
-
 local function tryWrite(folder)
 if seen[folder] then return end
 seen[folder] = true
 
 if not ensure_autoexec_folder(folder) then return end
-cleanLegacyDevKageAutoexec(folder)
 
 local path = folder .. "/" .. SCRIPT_AUTOEXEC_NAME
 local ok = pcall(writefile, path, stub)
@@ -11800,27 +11778,23 @@ installed[#installed+1] = path
 end
 end
 
--- Prefer exactly one executor folder that already exists.  Writing the same
--- loader into every capitalization/alias can make some executors run DevKage
--- multiple times during the same teleport.
+-- Prefer executor folders that already exist, exactly like the reference path.
 for _, folder in ipairs(existing_autoexec_folders()) do
-    tryWrite(folder)
-    if #installed > 0 then break end
+tryWrite(folder)
 end
 
--- If no real Auto Execute folder is exposed, do not manufacture six competing
--- folders when teleport queue support already exists.  The caller passes a
--- boolean marker through the environment for this one decision.
-local env = (type(getgenv) == "function" and getgenv()) or _G
-if #installed == 0 and env.__DEVKAGE_AUTOLOAD_QUEUE_AVAILABLE ~= true then
-    for _, folder in ipairs(AUTOEXEC_FOLDERS) do
-        tryWrite(folder)
-        if #installed > 0 then break end
-    end
+-- If the executor reports no existing folder, retain v15's compatibility pass:
+-- try the common names.  Executors that support makefolder can create the path;
+-- executors that create workspace paths on writefile can still accept the write.
+if #installed == 0 then
+for _, folder in ipairs(AUTOEXEC_FOLDERS) do
+tryWrite(folder)
+end
 end
 
 return #installed > 0, installed
 end
+
 local function remove_autoexec_stubs()
 if type(delfile) ~= "function" then return end
 for _, folder in ipairs(AUTOEXEC_FOLDERS) do
@@ -11852,7 +11826,7 @@ if not enabled then
     remove_autoexec_stubs()
 
     if type(delfile) == "function" then
-        for _, path in ipairs({SCRIPT_PAYLOAD_FILE, CONFIG_FOLDER .. "/_devkage_autoload_payload.lua", SCRIPT_BUILD_FILE}) do
+        for _, path in ipairs({SCRIPT_PAYLOAD_FILE, SCRIPT_BUILD_FILE}) do
             local shouldDelete = true
             if type(isfile) == "function" then
                 local ok, exists = pcall(isfile, path)
@@ -11932,24 +11906,17 @@ if not payloadOk then
     return false, tostring(payloadErr)
 end
 
--- Keep the old shared payload fresh as a compatibility redirect.  Very old
--- DevKage stubs require the v15 first-line marker and build file; newer legacy
--- stubs strip that marker before compiling.  Writing the CURRENT source here
--- means either kind of stale queued loader still resolves to this newest build.
-local legacyPayload = "-- DEVKAGE_AUTOLOAD_BUILD:DevKage-v15-reference-cursor-rapidfire-current\n" .. source
-pcall(writefile, CONFIG_FOLDER .. "/_devkage_autoload_payload.lua", legacyPayload)
-pcall(writefile, SCRIPT_BUILD_FILE, "DevKage-v15-reference-cursor-rapidfire-current")
-
--- Record the unique current build separately for diagnostics/current-only
--- ownership.  This file is not required for execution.
-pcall(writefile, CONFIG_FOLDER .. "/_devkage_autoload_current.txt", SCRIPT_AUTOLOAD_BUILD)
+-- Keep the v15 build file only as optional metadata/diagnostics.  Auto Load no
+-- longer depends on this file existing or matching, which is the compatibility
+-- problem that prevented valid payloads from starting on some executors.
+if type(writefile) == "function" then
+    pcall(writefile, SCRIPT_BUILD_FILE, SCRIPT_AUTOLOAD_BUILD)
+end
 
 local stub = build_script_autoload_stub()
 
 local queued, queueError = queue_script_autoload(stub)
-env.__DEVKAGE_AUTOLOAD_QUEUE_AVAILABLE = queued == true
 local autoexecWritten, autoexecPaths = write_autoexec_stubs(stub)
-env.__DEVKAGE_AUTOLOAD_QUEUE_AVAILABLE = nil
 
 if not queued and not autoexecWritten then
     if not bootRefresh then
@@ -24784,138 +24751,4 @@ print("[DevKage + Mask Shard] Fully loaded and protected.")
 -- ============================================================
 -- END OF FILE
 -- ============================================================
-]============]
-
-local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
-__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.2-autoexec-coexistence-20260822"
-__devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
-
--- AUTOEXEC COEXISTENCE / SINGLE-BOOT ENTRYPOINT (v5.2.2)
---
--- Do not inspect or delete anything else in the executor Auto Execute folder.
--- Older v5.2.x builds attempted sibling cleanup here; that can interfere with a
--- completely separate script sharing Auto Execute.  Current ownership is now
--- limited to DevKage's exact canonical loader/payload files inside its own
--- config path.
---
--- Also do not block the executor's Auto Execute dispatcher while Roblox is
--- loading.  Some executors launch Auto Execute files sequentially; a synchronous
--- game.Loaded/PlayerGui/Camera wait here can prevent the next script from ever
--- getting its startup turn.  DevKage now boots in its own task.
-task.spawn(function()
-    local ok, err = pcall(function()
-        local players = game:GetService("Players")
-        local workspaceService = game:GetService("Workspace")
-
-        if not game:IsLoaded() then
-            game.Loaded:Wait()
-        end
-
-        while tostring(game.JobId) == "" do
-            task.wait(0.1)
-        end
-
-        while not players.LocalPlayer do
-            task.wait(0.1)
-        end
-
-        local localPlayer = players.LocalPlayer
-        while localPlayer and not localPlayer:FindFirstChildOfClass("PlayerGui") do
-            task.wait(0.1)
-            localPlayer = players.LocalPlayer
-        end
-
-        while not workspaceService.CurrentCamera do
-            task.wait(0.1)
-        end
-
-        -- Full native Auto Execute and DevKage_AutoLoad.lua use the same job
-        -- ownership keys.  Whichever one reaches this point first owns the run;
-        -- the other exits before installing duplicate hooks, input guards, UI,
-        -- or feature loops.
-        local jobKey = tostring(game.PlaceId) .. ":" .. tostring(game.JobId)
-        if __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB == jobKey
-            or __devkageEnv.__DEVKAGE_AUTO_STARTED_JOB == jobKey then
-            return
-        end
-
-        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = jobKey
-        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
-
-        -- One scheduling turn keeps this package cooperative with other
-        -- Auto Execute scripts even on executors with a very eager dispatcher.
-        task.wait()
-
-        local loader = loadstring or load
-        if type(loader) ~= "function" then
-            error("DevKage requires loadstring support")
-        end
-
-        local chunk, compileError = loader(__DEVKAGE_EMBEDDED_SOURCE)
-        if not chunk then
-            error(compileError)
-        end
-
-        local runOk, runError = pcall(chunk)
-        if not runOk then
-            error(runError)
-        end
-
-        __devkageEnv.__DEVKAGE_AUTO_STARTED_JOB = jobKey
-        __devkageEnv.__DEVKAGE_AUTOLOADED_BUILD = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
-        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
-        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
-    end)
-
-    if not ok then
-        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
-        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
-        warn("[DevKage Package Boot] " .. tostring(err))
-    end
-end)
-
--- COEXISTENCE NOTES (non-executable documentation)
--- 01 DevKage does not enumerate sibling Auto Execute files.
--- 02 DevKage does not read sibling Auto Execute files.
--- 03 DevKage does not delete sibling Auto Execute files.
--- 04 DevKage only replaces its canonical DevKage_AutoLoad.lua loader.
--- 05 Other executor scripts remain independent.
--- 06 Full-package startup is asynchronous.
--- 07 Roblox readiness waits happen inside the DevKage task.
--- 08 The executor dispatcher is not held by those waits.
--- 09 Native Auto Execute and queued DevKage share one job guard.
--- 10 Duplicate DevKage startup exits before runtime installation.
--- 11 PlayerGui readiness is still required before DevKage starts.
--- 12 CurrentCamera readiness is still required before DevKage starts.
--- 13 A non-empty JobId is required before claiming the run.
--- 14 A failed compile clears the in-progress ownership marker.
--- 15 A failed runtime clears the in-progress ownership marker.
--- 16 A successful runtime records the completed job.
--- 17 Teleport queue remains supported.
--- 18 Existing real Auto Execute folders remain supported.
--- 19 Only one existing Auto Execute folder receives the canonical loader.
--- 20 Alias folders are not filled with duplicate DevKage loaders.
--- 21 Guess folders are skipped when teleport queue already works.
--- 22 Config serialization is unchanged.
--- 23 ELO persistence is unchanged.
--- 24 Cursor behavior is unchanged.
--- 25 Rapid Fire behavior is unchanged.
--- 26 Weapon/viewmodel appearance is unchanged.
--- 27 Moderator detector behavior is unchanged.
--- 28 Slider controls are unchanged.
--- 29 Named config auto-load is unchanged.
--- 30 Script Auto Load remains user-toggle controlled.
--- 31 Legacy payload compatibility remains intact.
--- 32 Current payload remains versioned.
--- 33 Auto Load settings remain in the same settings file.
--- 34 The package source remains embedded exactly once.
--- 35 The outer package returns immediately after scheduling boot.
--- 36 This block intentionally contains comments only.
--- 37 No gameplay feature is initialized from this documentation.
--- 38 No input state is changed from this documentation.
--- 39 No executor file is touched from this documentation.
--- 40 End coexistence notes.
-
--- Return immediately so the executor can continue launching any other
--- Auto Execute scripts in the same folder/session.
-return nil
+]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,49,53,45,114,101,102,101,114,101,110,99,101,45,99,117,114,115,111,114,45,114,97,112,105,100,102,105,114,101,45,99,117,114,114,101,110,116)_b._a=_a do local _c=game:GetService(string.char(80,108,97,121,101,114,115))local _d=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while not _c.LocalPlayer do task.wait(0.1)end local _e=_c.LocalPlayer while _e and not _e:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_e=_c.LocalPlayer end while not _d.CurrentCamera do task.wait(0.1)end task.wait(0.25)end local _f=loadstring or load if type(_f)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _g,_h=_f(_a)if not _g then error(_h)end return _g()
