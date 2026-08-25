@@ -1,4 +1,5 @@
-local _a=[============[
+-- DEVKAGE packaged coexistence build: current-source auto-load + namespaced runtime
+local __DEVKAGE_EMBEDDED_SOURCE = [============[
 -- ============================================================
 -- MASK SHARD v9.6.0 — STABLE BYPASS (AUG 2026 UPDATE)
 -- ============================================================
@@ -14369,6 +14370,37 @@ spooferExtraControls.fakeGifting=section:CreateToggle({Name="Fake Gifting",State
 section:CreateButton({Name="Apply Gifting Display",Callback=function() SpooferState.localActive=true; SpooferState.RefreshMarketplaceDisplay() end})
 end
 
+-- Local DevSense top-bar helper. The native keybind helper is scoped inside
+-- the UI-library initialization pcall, so it cannot be called from this later
+-- feature block. Keep an equivalent local helper here instead of reaching into
+-- that closed lexical scope.
+local function streamerBindTopBar(parent,zindex)
+local holder=Instance.new("Frame")
+holder.Name="RainbowTopBarShadow"
+holder.BackgroundColor3=Color3.fromRGB(12,12,12)
+holder.BorderSizePixel=0
+holder.Position=UDim2.new(0,0,0,0)
+holder.Size=UDim2.new(1,0,0,4)
+holder.ZIndex=(tonumber(zindex) or 40004)-1
+holder.Parent=parent
+
+local bar=Instance.new("ImageLabel")
+bar.Name="RainbowTopBar"
+bar.BackgroundTransparency=1
+bar.BorderSizePixel=0
+bar.Position=UDim2.new(0,1,0,1)
+bar.Size=UDim2.new(1,-2,1,-2)
+bar.Image="rbxassetid://8508019876"
+bar.ImageColor3=(library and library.Theme and library.Theme.TopBar) or Color3.fromRGB(255,255,255)
+bar.ImageTransparency=math.clamp(tonumber(library and library.Theme and library.Theme.TopBarTransparency) or 0,0,1)
+bar.ZIndex=tonumber(zindex) or 40004
+bar.Parent=holder
+if library and type(library.RegisterThemeTopBar)=="function" then
+pcall(function() library:RegisterThemeTopBar(bar) end)
+end
+return bar
+end
+
 local StreamerHUDRuntime={Gui=nil,Root=nil,Title=nil,Text=nil,TopLine=nil,Divider=nil,Stroke=nil,Corner=nil,Connection=nil,Frames=0,Elapsed=0,FPS=60,Ping=0}
 local StreamerStatsService=game:GetService("Stats")
 
@@ -14462,7 +14494,7 @@ local corner=Instance.new("UICorner")
 corner.CornerRadius=UDim.new(0,0)
 corner.Parent=root
 
-local topLine=bindRainbowBar(root,40004)
+local topLine=streamerBindTopBar(root,40004)
 
 local title=Instance.new("TextLabel")
 title.Name="Title"
@@ -24894,4 +24926,167 @@ print("[DevKage + Mask Shard] Fully loaded and protected.")
 -- ============================================================
 -- END OF FILE
 -- ============================================================
-]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,52,45,100,101,118,115,101,110,115,101,45,97,116,109,111,115,112,104,101,114,101,45,55,115,45,50,48,50,54,48,56,50,52)_b._a=_a task.spawn(function()local _c,_d=pcall(function()local _e=game:GetService(string.char(80,108,97,121,101,114,115))local _f=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while tostring(game.JobId)==""do task.wait(0.1)end while not _e.LocalPlayer do task.wait(0.1)end local _g=_e.LocalPlayer while _g and not _g:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_g=_e.LocalPlayer end while not _f.CurrentCamera do task.wait(0.1)end local _h=_g:FindFirstChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115))if not _h then _h=_g:WaitForChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115),10)end if _h then _h:WaitForChild(string.char(67,111,110,116,114,111,108,108,101,114,115),8)_h:WaitForChild(string.char(77,111,100,117,108,101,115),8)end _f:WaitForChild(string.char(86,105,101,119,77,111,100,101,108,115),8)_b.__DEVKAGE_LATE_BOOT_WAITING=true local _i=tonumber(rawget(_b,string.char(95,95,68,69,86,75,65,71,69,95,76,65,84,69,95,66,79,79,84,95,68,69,76,65,89)))or 7 if _i<5 then _i=5 end task.wait(_i)_b.__DEVKAGE_LATE_BOOT_WAITING=nil local _j=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)if _b.__DEVKAGE_AUTO_STARTING_JOB==_j or _b.__DEVKAGE_AUTO_STARTED_JOB==_j then return end _b.__DEVKAGE_AUTO_STARTING_JOB=_j _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=_b.__DEVKAGE_PACKAGE_BUILD task.wait()local _k=loadstring or load if type(_k)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _l,_m=_k(_a)if not _l then error(_m)end local _n,_o=pcall(_l)if not _n then error(_o)end _b.__DEVKAGE_AUTO_STARTED_JOB=_j _b.__DEVKAGE_AUTOLOADED_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil end)if not _c then _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_LATE_BOOT_WAITING=nil warn(string.char(91,68,101,118,75,97,103,101,32,80,97,99,107,97,103,101,32,66,111,111,116,93,32)..tostring(_d))end end)return nil
+]============]
+
+local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
+__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.4-devsense-atmosphere-7s-20260824"
+__devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
+
+-- AUTOEXEC COEXISTENCE / LATE-BOOT SINGLE-BOOT ENTRYPOINT (v5.2.3)
+--
+-- Do not inspect or delete anything else in the executor Auto Execute folder.
+-- Older v5.2.x builds attempted sibling cleanup here; that can interfere with a
+-- completely separate script sharing Auto Execute.  Current ownership is now
+-- limited to DevKage's exact canonical loader/payload files inside its own
+-- config path.
+--
+-- Also do not block the executor's Auto Execute dispatcher while Roblox is
+-- loading.  Some executors launch Auto Execute files sequentially; a synchronous
+-- game.Loaded/PlayerGui/Camera wait here can prevent the next script from ever
+-- getting its startup turn.  DevKage now boots in its own task.
+task.spawn(function()
+    local ok, err = pcall(function()
+        local players = game:GetService("Players")
+        local workspaceService = game:GetService("Workspace")
+
+        if not game:IsLoaded() then
+            game.Loaded:Wait()
+        end
+
+        while tostring(game.JobId) == "" do
+            task.wait(0.1)
+        end
+
+        while not players.LocalPlayer do
+            task.wait(0.1)
+        end
+
+        local localPlayer = players.LocalPlayer
+        while localPlayer and not localPlayer:FindFirstChildOfClass("PlayerGui") do
+            task.wait(0.1)
+            localPlayer = players.LocalPlayer
+        end
+
+        while not workspaceService.CurrentCamera do
+            task.wait(0.1)
+        end
+
+        -- LATE-BOOT AUTOEXEC COEXISTENCE (v5.2.3)
+        -- Wait for the match's own client controllers/viewmodel to appear, then
+        -- deliberately leave a grace period for every other native Auto Execute
+        -- script.  This package returns immediately at top level, so this wait
+        -- happens only inside DevKage's background boot task.
+        local playerScripts = localPlayer:FindFirstChild("PlayerScripts")
+        if not playerScripts then
+            playerScripts = localPlayer:WaitForChild("PlayerScripts", 10)
+        end
+        if playerScripts then
+            playerScripts:WaitForChild("Controllers", 8)
+            playerScripts:WaitForChild("Modules", 8)
+        end
+        workspaceService:WaitForChild("ViewModels", 8)
+
+        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = true
+        local lateDelay = tonumber(rawget(__devkageEnv, "__DEVKAGE_LATE_BOOT_DELAY")) or 7
+        if lateDelay < 5 then lateDelay = 5 end
+        task.wait(lateDelay)
+        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = nil
+
+        -- Full native Auto Execute and DevKage_AutoLoad.lua use the same job
+        -- ownership keys, but neither is allowed to claim the match until the
+        -- late-boot grace period has completed.
+        local jobKey = tostring(game.PlaceId) .. ":" .. tostring(game.JobId)
+        if __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB == jobKey
+            or __devkageEnv.__DEVKAGE_AUTO_STARTED_JOB == jobKey then
+            return
+        end
+
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = jobKey
+        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
+
+        -- One scheduling turn keeps this package cooperative with other
+        -- Auto Execute scripts even on executors with a very eager dispatcher.
+        task.wait()
+
+        local loader = loadstring or load
+        if type(loader) ~= "function" then
+            error("DevKage requires loadstring support")
+        end
+
+        local chunk, compileError = loader(__DEVKAGE_EMBEDDED_SOURCE)
+        if not chunk then
+            error(compileError)
+        end
+
+        local runOk, runError = pcall(chunk)
+        if not runOk then
+            error(runError)
+        end
+
+        __devkageEnv.__DEVKAGE_AUTO_STARTED_JOB = jobKey
+        __devkageEnv.__DEVKAGE_AUTOLOADED_BUILD = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
+        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+    end)
+
+    if not ok then
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
+        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = nil
+        warn("[DevKage Package Boot] " .. tostring(err))
+    end
+end)
+
+-- COEXISTENCE NOTES (non-executable documentation)
+-- 01 DevKage does not enumerate sibling Auto Execute files.
+-- 02 DevKage does not read sibling Auto Execute files.
+-- 03 DevKage does not delete sibling Auto Execute files.
+-- 04 DevKage only replaces its own zzzz_DevKage_AutoLoad_LAST.lua loader.
+-- 05 Other executor scripts remain independent.
+-- 06 Full-package startup is asynchronous.
+-- 07 Roblox readiness waits happen inside the DevKage task.
+-- 08 The executor dispatcher is not held by those waits.
+-- 09 Native Auto Execute and queued DevKage share one job guard.
+-- 10 Duplicate DevKage startup exits before runtime installation.
+-- 11 PlayerGui readiness is still required before DevKage starts.
+-- 12 CurrentCamera readiness is still required before DevKage starts.
+-- 13 A non-empty JobId is required before claiming the run.
+-- 14 A failed compile clears the in-progress ownership marker.
+-- 15 A failed runtime clears the in-progress ownership marker.
+-- 16 A successful runtime records the completed job.
+-- 17 Teleport queue remains supported.
+-- 18 Existing real Auto Execute folders remain supported.
+-- 19 Only one existing Auto Execute folder receives the last-named loader.
+-- 20 The old exact DevKage_AutoLoad.lua is removed during refresh.
+-- 21 Alias folders are not filled with duplicate DevKage loaders.
+-- 22 Guess folders are skipped when teleport queue already works.
+-- 22 Config serialization is unchanged.
+-- 23 ELO persistence is unchanged.
+-- 24 Cursor behavior is unchanged.
+-- 25 Rapid Fire behavior is unchanged.
+-- 26 Weapon/viewmodel appearance is unchanged.
+-- 27 Moderator detector behavior is unchanged.
+-- 28 Slider controls are unchanged.
+-- 29 Named config auto-load is unchanged.
+-- 30 Script Auto Load remains user-toggle controlled.
+-- 31 Legacy payload compatibility remains intact.
+-- 32 Current payload remains versioned.
+-- 33 Auto Load settings remain in the same settings file.
+-- 34 The package source remains embedded exactly once.
+-- 35 The outer package returns immediately after scheduling boot.
+-- 36 DevKage waits for PlayerScripts before claiming a match.
+-- 37 DevKage waits for Controllers/Modules when exposed by the game.
+-- 38 DevKage waits briefly for ViewModels when exposed by the game.
+-- 39 DevKage then yields a default seven-second coexistence grace period.
+-- 40 The late-boot delay can be increased through __DEVKAGE_LATE_BOOT_DELAY.
+-- 41 The minimum late-boot delay is five seconds.
+-- 42 No DevKage ownership flag is set during the grace period.
+-- 43 This block intentionally contains comments only.
+-- 44 No gameplay feature is initialized from this documentation.
+-- 45 No input state is changed from this documentation.
+-- 46 No executor file is touched from this documentation.
+-- 47 End coexistence notes.
+
+-- Return immediately so the executor can continue launching any other
+-- Auto Execute scripts in the same folder/session.
+return nil
