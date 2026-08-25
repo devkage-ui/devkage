@@ -11001,10 +11001,10 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_3.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_6.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_AutoLoad_LAST.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.4-devsense-atmosphere-7s-20260824"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.6-current-autoload-20260824"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -11699,8 +11699,13 @@ task.spawn(function()
         -- Claim the job only AFTER the grace window.  Until this point DevKage
         -- owns nothing and the executor/game/other scripts are free to finish.
         local jobKey = tostring(game.PlaceId) .. ":" .. tostring(game.JobId)
-        if env.__DEVKAGE_AUTO_STARTING_JOB == jobKey
-            or env.__DEVKAGE_AUTO_STARTED_JOB == jobKey then
+        local sameStartingBuild =
+            env.__DEVKAGE_AUTO_STARTING_JOB == jobKey
+            and env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD == BUILD_LABEL
+        local sameStartedBuild =
+            env.__DEVKAGE_AUTO_STARTED_JOB == jobKey
+            and env.__DEVKAGE_AUTOLOADED_BUILD == BUILD_LABEL
+        if sameStartingBuild or sameStartedBuild then
             return
         end
 
@@ -11913,7 +11918,12 @@ if not enabled then
     remove_autoexec_stubs()
 
     if type(delfile) == "function" then
-        for _, path in ipairs({SCRIPT_PAYLOAD_FILE, CONFIG_FOLDER .. "/_devkage_autoload_payload.lua", SCRIPT_BUILD_FILE}) do
+        for _, path in ipairs({
+            SCRIPT_PAYLOAD_FILE,
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_3.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload.lua",
+            SCRIPT_BUILD_FILE
+        }) do
             local shouldDelete = true
             if type(isfile) == "function" then
                 local ok, exists = pcall(isfile, path)
@@ -11992,6 +12002,11 @@ if not payloadOk then
     end
     return false, tostring(payloadErr)
 end
+
+-- Migration bridge: older installed DevKage loaders point at the v5.2.3
+-- payload filename. Keep that exact file synchronized to THIS embedded source
+-- so a stale loader can never resurrect an older DevKage UI/build.
+pcall(writefile, CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_3.lua", source)
 
 -- Keep the old shared payload fresh as a compatibility redirect.  Very old
 -- DevKage stubs require the v15 first-line marker and build file; newer legacy
@@ -24920,4 +24935,4 @@ print("[DevKage + Mask Shard] Fully loaded and protected.")
 -- ============================================================
 -- END OF FILE
 -- ============================================================
-]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,52,45,100,101,118,115,101,110,115,101,45,97,116,109,111,115,112,104,101,114,101,45,55,115,45,50,48,50,54,48,56,50,52)_b._a=_a task.spawn(function()local _c,_d=pcall(function()local _e=game:GetService(string.char(80,108,97,121,101,114,115))local _f=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while tostring(game.JobId)==""do task.wait(0.1)end while not _e.LocalPlayer do task.wait(0.1)end local _g=_e.LocalPlayer while _g and not _g:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_g=_e.LocalPlayer end while not _f.CurrentCamera do task.wait(0.1)end local _h=_g:FindFirstChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115))if not _h then _h=_g:WaitForChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115),10)end if _h then _h:WaitForChild(string.char(67,111,110,116,114,111,108,108,101,114,115),8)_h:WaitForChild(string.char(77,111,100,117,108,101,115),8)end _f:WaitForChild(string.char(86,105,101,119,77,111,100,101,108,115),8)_b.__DEVKAGE_LATE_BOOT_WAITING=true local _i=tonumber(rawget(_b,string.char(95,95,68,69,86,75,65,71,69,95,76,65,84,69,95,66,79,79,84,95,68,69,76,65,89)))or 7 if _i<5 then _i=5 end task.wait(_i)_b.__DEVKAGE_LATE_BOOT_WAITING=nil local _j=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)if _b.__DEVKAGE_AUTO_STARTING_JOB==_j or _b.__DEVKAGE_AUTO_STARTED_JOB==_j then return end _b.__DEVKAGE_AUTO_STARTING_JOB=_j _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=_b.__DEVKAGE_PACKAGE_BUILD task.wait()local _k=loadstring or load if type(_k)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _l,_m=_k(_a)if not _l then error(_m)end local _n,_o=pcall(_l)if not _n then error(_o)end _b.__DEVKAGE_AUTO_STARTED_JOB=_j _b.__DEVKAGE_AUTOLOADED_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil end)if not _c then _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_LATE_BOOT_WAITING=nil warn(string.char(91,68,101,118,75,97,103,101,32,80,97,99,107,97,103,101,32,66,111,111,116,93,32)..tostring(_d))end end)return nil
+]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,54,45,99,117,114,114,101,110,116,45,97,117,116,111,108,111,97,100,45,50,48,50,54,48,56,50,52)_b._a=_a pcall(function()if type(writefile)~=string.char(102,117,110,99,116,105,111,110)or type(readfile)~=string.char(102,117,110,99,116,105,111,110)then return end local _c=string.char(68,101,118,75,97,103,101,95,67,111,110,102,105,103,115,47,95,115,99,114,105,112,116,95,115,101,116,116,105,110,103,115,46,106,115,111,110)local _d,_e=pcall(readfile,_c)if not _d or type(_e)~=string.char(115,116,114,105,110,103)or _e==""then return end local _f=game:GetService(string.char(72,116,116,112,83,101,114,118,105,99,101))local _g,_h=pcall(_f.JSONDecode,_f,_e)if not _g or type(_h)~=string.char(116,97,98,108,101)or _h.AutoLoad~=true then return end if type(makefolder)==string.char(102,117,110,99,116,105,111,110)then pcall(makefolder,string.char(68,101,118,75,97,103,101,95,67,111,110,102,105,103,115))end local _i=_a pcall(writefile,string.char(68,101,118,75,97,103,101,95,67,111,110,102,105,103,115,47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,54,46,108,117,97),_i)pcall(writefile,string.char(68,101,118,75,97,103,101,95,67,111,110,102,105,103,115,47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,51,46,108,117,97),_i)pcall(writefile,string.char(68,101,118,75,97,103,101,95,67,111,110,102,105,103,115,47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,46,108,117,97),string.char(45,45,32,68,69,86,75,65,71,69,95,65,85,84,79,76,79,65,68,95,66,85,73,76,68,58,68,101,118,75,97,103,101,45,118,53,46,50,46,54,45,99,117,114,114,101,110,116,45,97,117,116,111,108,111,97,100,45,50,48,50,54,48,56,50,52,10).._i)pcall(writefile,string.char(68,101,118,75,97,103,101,95,67,111,110,102,105,103,115,47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,99,117,114,114,101,110,116,46,116,120,116),_b.__DEVKAGE_PACKAGE_BUILD)pcall(writefile,string.char(68,101,118,75,97,103,101,95,67,111,110,102,105,103,115,47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,98,117,105,108,100,46,116,120,116),_b.__DEVKAGE_PACKAGE_BUILD)_b.__DEVKAGE_AUTOLOAD_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT=os.clock()end)task.spawn(function()local _j,_k=pcall(function()local _l=game:GetService(string.char(80,108,97,121,101,114,115))local _m=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while tostring(game.JobId)==""do task.wait(0.1)end while not _l.LocalPlayer do task.wait(0.1)end local _n=_l.LocalPlayer while _n and not _n:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_n=_l.LocalPlayer end while not _m.CurrentCamera do task.wait(0.1)end local _o=_n:FindFirstChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115))if not _o then _o=_n:WaitForChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115),10)end if _o then _o:WaitForChild(string.char(67,111,110,116,114,111,108,108,101,114,115),8)_o:WaitForChild(string.char(77,111,100,117,108,101,115),8)end _m:WaitForChild(string.char(86,105,101,119,77,111,100,101,108,115),8)_b.__DEVKAGE_LATE_BOOT_WAITING=true local _p=tonumber(rawget(_b,string.char(95,95,68,69,86,75,65,71,69,95,76,65,84,69,95,66,79,79,84,95,68,69,76,65,89)))or 7 if _p<5 then _p=5 end task.wait(_p)_b.__DEVKAGE_LATE_BOOT_WAITING=nil local _q=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)local _r=_b.__DEVKAGE_AUTO_STARTING_JOB==_q and _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD==_b.__DEVKAGE_PACKAGE_BUILD local _s=_b.__DEVKAGE_AUTO_STARTED_JOB==_q and _b.__DEVKAGE_AUTOLOADED_BUILD==_b.__DEVKAGE_PACKAGE_BUILD if _r or _s then return end _b.__DEVKAGE_AUTO_STARTING_JOB=_q _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=_b.__DEVKAGE_PACKAGE_BUILD task.wait()local _t=loadstring or load if type(_t)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _u,_v=_t(_a)if not _u then error(_v)end local _w,_x=pcall(_u)if not _w then error(_x)end _b.__DEVKAGE_AUTO_STARTED_JOB=_q _b.__DEVKAGE_AUTOLOADED_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil end)if not _j then _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_LATE_BOOT_WAITING=nil warn(string.char(91,68,101,118,75,97,103,101,32,80,97,99,107,97,103,101,32,66,111,111,116,93,32)..tostring(_k))end end)return nil
