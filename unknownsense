@@ -1,4 +1,5 @@
-local _a=[============[
+-- DEVKAGE packaged coexistence build: current-source auto-load + namespaced runtime
+local __DEVKAGE_EMBEDDED_SOURCE = [============[
 -- ============================================================
 -- MASK SHARD v9.6.0 — STABLE BYPASS (AUG 2026 UPDATE)
 -- ============================================================
@@ -4441,18 +4442,18 @@ streamerHudShowPing = true,
 streamerHudShowClock = true,
 streamerHudAccent = {175, 205, 75},
 streamerHudSecondary = {110, 165, 255},
-streamerHudTextColor = {235, 235, 238},
-streamerHudBackgroundAlpha = 0.08,
+streamerHudTextColor = {205, 205, 205},
+streamerHudBackgroundAlpha = 0.03,
 streamerHudScale = 1,
-streamerHudWidthMode = "Custom Width",
+streamerHudWidthMode = "Full Width",
 streamerHudWidth = 660,
-streamerHudHeight = 36,
-streamerHudTextSize = 14,
-streamerHudPadding = 25,
+streamerHudHeight = 26,
+streamerHudTextSize = 11,
+streamerHudPadding = 14,
 streamerHudOffsetX = 0,
-streamerHudOffsetY = 12,
-streamerHudTextAlignment = "Auto",
-streamerHudCornerRadius = 7,
+streamerHudOffsetY = 8,
+streamerHudTextAlignment = "Left",
+streamerHudCornerRadius = 0,
 streamerHudLineThickness = 2,
 streamerHudStrokeThickness = 1,
 espBoxColor = {50,100,200},
@@ -9294,7 +9295,7 @@ colorCorrectionEnabled=false, tintColor=Color3.fromRGB(255,255,255), brightness=
 bloomEnabled=false, bloomIntensity=1, bloomSize=24, bloomThreshold=1,
 sunRaysEnabled=false, sunIntensity=0.1, sunSpread=0.2,
 depthOfFieldEnabled=false, focusDistance=50, focusRadius=10, nearBlur=0, farBlur=0,
-atmosphereEnabled=false, atmosphereDensity=0.25, atmosphereOffset=0,
+atmosphereEnabled=false, atmosphereProfile="Custom", atmosphereDensity=0.25, atmosphereOffset=0,
 atmosphereColor=Color3.fromRGB(199,199,199), atmosphereDecay=Color3.fromRGB(106,112,125),
 atmosphereGlare=0, atmosphereHaze=0,
 clockTime=getLightingProperty("ClockTime",14), exposure=getLightingProperty("ExposureCompensation",0),
@@ -9387,11 +9388,46 @@ local function setDepthOfField(enabled,focus,radius,nearIntensity,farIntensity)
 if enabled then local e=AdvancedLighting.depthOfField or getOrCreateEffect("DepthOfFieldEffect","DevKage_DepthOfField"); AdvancedLighting.depthOfField=e; e.Enabled=true; e.FocusDistance=focus; e.InFocusRadius=radius; e.NearIntensity=nearIntensity; e.FarIntensity=farIntensity elseif AdvancedLighting.depthOfField then AdvancedLighting.depthOfField.Enabled=false end
 end
 local function setAtmosphere(enabled,density,offset,color,decay,glare,haze)
-if enabled then
-local e=AdvancedLighting.atmosphere or getOrCreateEffect("Atmosphere","DevKage_Atmosphere")
-AdvancedLighting.atmosphere=e; e.Density=density; e.Offset=offset; e.Color=color; e.Decay=decay; e.Glare=glare; e.Haze=haze
+local atmosphereOn=enabled==true
+local fogOn=AdvancedLighting.fogEnabled==true
+
+-- DevKage owns one atmosphere layer.  Classic Roblox FogColor/FogStart/FogEnd
+-- remain independent, while Fog Density contributes gently to this same layer
+-- instead of creating a second Atmosphere that can fight with the user's haze.
+if atmosphereOn or fogOn then
+local e=AdvancedLighting.atmosphere
+if not e or not e.Parent or not e:IsA("Atmosphere") then
+e=getOrCreateEffect("Atmosphere","DevKage_Atmosphere")
+AdvancedLighting.atmosphere=e
+end
+
+local baseDensity=atmosphereOn and math.clamp(tonumber(density) or 0,0,1) or 0
+local baseOffset=atmosphereOn and math.clamp(tonumber(offset) or 0,-1,1) or -0.12
+local baseColor=(atmosphereOn and typeof(color)=="Color3") and color or AdvancedLighting.fogColor
+local baseDecay=(atmosphereOn and typeof(decay)=="Color3") and decay or AdvancedLighting.fogColor:Lerp(Color3.fromRGB(70,75,85),0.42)
+local baseGlare=atmosphereOn and math.clamp(tonumber(glare) or 0,0,10) or 0
+local baseHaze=atmosphereOn and math.clamp(tonumber(haze) or 0,0,10) or 0
+
+if fogOn then
+local fogDensity=math.clamp(tonumber(AdvancedLighting.fogDensity) or 0,0,1)
+baseDensity=math.clamp(baseDensity+(fogDensity*0.24),0,1)
+baseHaze=math.clamp(baseHaze+(fogDensity*2.35),0,10)
+if atmosphereOn then
+local blend=math.clamp(fogDensity*0.14,0,0.14)
+baseColor=baseColor:Lerp(AdvancedLighting.fogColor,blend)
+baseDecay=baseDecay:Lerp(AdvancedLighting.fogColor,blend*0.6)
+end
+end
+
+e.Density=baseDensity
+e.Offset=baseOffset
+e.Color=baseColor
+e.Decay=baseDecay
+e.Glare=baseGlare
+e.Haze=baseHaze
 elseif AdvancedLighting.atmosphere then
-AdvancedLighting.atmosphere:Destroy(); AdvancedLighting.atmosphere=nil
+pcall(function() AdvancedLighting.atmosphere:Destroy() end)
+AdvancedLighting.atmosphere=nil
 end
 end
 local function setLightingProperty(name,value) pcall(function() LightingService[name]=value end) end
@@ -9465,29 +9501,29 @@ if not AdvancedLighting.ambientEnabled then setLightingProperty("OutdoorAmbient"
 end
 end
 
-local CustomFogRuntime = {atmosphere=nil}
 local function refreshCustomFog()
 if AdvancedLighting.fogEnabled then
 setLightingProperty("FogColor",AdvancedLighting.fogColor)
-setLightingProperty("FogStart",math.max(0,AdvancedLighting.fogStart))
-setLightingProperty("FogEnd",math.max(AdvancedLighting.fogStart+1,AdvancedLighting.fogEnd))
-local e = CustomFogRuntime.atmosphere
-if not e or not e.Parent then
-e = getOrCreateEffect("Atmosphere","DevKage_CustomFog")
-CustomFogRuntime.atmosphere = e
-end
-e.Density = math.clamp(AdvancedLighting.fogDensity,0,1)
-e.Offset = -0.15
-e.Color = AdvancedLighting.fogColor
-e.Decay = AdvancedLighting.fogColor:Lerp(Color3.fromRGB(70,75,85),0.45)
-e.Glare = 0
-e.Haze = math.clamp(AdvancedLighting.fogDensity*8,0,10)
+setLightingProperty("FogStart",math.max(0,tonumber(AdvancedLighting.fogStart) or 0))
+setLightingProperty("FogEnd",math.max((tonumber(AdvancedLighting.fogStart) or 0)+1,tonumber(AdvancedLighting.fogEnd) or 100000))
 else
 setLightingProperty("FogColor",AdvancedLighting.original.FogColor)
 setLightingProperty("FogStart",AdvancedLighting.original.FogStart)
 setLightingProperty("FogEnd",AdvancedLighting.original.FogEnd)
-if CustomFogRuntime.atmosphere then pcall(function() CustomFogRuntime.atmosphere:Destroy() end); CustomFogRuntime.atmosphere=nil end
 end
+
+-- Recompose the single DevKage Atmosphere layer after every fog change.  This
+-- makes Fog + Atmosphere work together and prevents either toggle from deleting
+-- or silently replacing the other one's visual state.
+setAtmosphere(
+AdvancedLighting.atmosphereEnabled,
+AdvancedLighting.atmosphereDensity,
+AdvancedLighting.atmosphereOffset,
+AdvancedLighting.atmosphereColor,
+AdvancedLighting.atmosphereDecay,
+AdvancedLighting.atmosphereGlare,
+AdvancedLighting.atmosphereHaze
+)
 end
 
 local SnowRuntime = {folder=nil, layers={}, connection=nil}
@@ -14468,7 +14504,7 @@ end
 
 function StreamerHUDRuntime:DestroyGui()
 if self.Gui then pcall(function() self.Gui:Destroy() end) end
-self.Gui=nil; self.Root=nil; self.Text=nil; self.TopLine=nil; self.LineGradient=nil; self.Stroke=nil; self.Corner=nil
+self.Gui=nil; self.Root=nil; self.Text=nil; self.TopLine=nil; self.TopLineHolder=nil; self.LineGradient=nil; self.Stroke=nil; self.Corner=nil
 end
 
 function StreamerHUDRuntime:Ensure()
@@ -14487,55 +14523,47 @@ if not parented or not gui.Parent then pcall(function() gui:Destroy() end); retu
 
 local root=Instance.new("Frame")
 root.Name="DevSenseBar"
-root.BackgroundColor3=Color3.fromRGB(5,5,6)
-root.BorderSizePixel=0
+root.BackgroundColor3=(library.Theme and library.Theme.UI) or Color3.fromRGB(23,23,23)
+root.BackgroundTransparency=0.03
+root.BorderColor3=Color3.fromRGB(5,5,5)
+root.BorderSizePixel=1
 root.ZIndex=40
 root.Parent=gui
+
 local corner=Instance.new("UICorner")
 corner.CornerRadius=UDim.new(0,0)
 corner.Parent=root
+
 local stroke=Instance.new("UIStroke")
 stroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
-stroke.Color=Color3.fromRGB(175,205,75)
+stroke.Color=Color3.fromRGB(5,5,5)
 stroke.Transparency=1
 stroke.Thickness=1
 stroke.Parent=root
 
-local topLine=Instance.new("Frame")
-topLine.Name="ReferenceAccent"
-topLine.BackgroundColor3=Color3.fromRGB(255,255,255)
-topLine.BorderSizePixel=0
-topLine.Position=UDim2.fromOffset(0,0)
-topLine.Size=UDim2.new(1,0,0,2)
-topLine.ZIndex=42
-topLine.Parent=root
-local gradient=Instance.new("UIGradient")
-gradient.Color=ColorSequence.new({
-ColorSequenceKeypoint.new(0,Color3.fromRGB(105,155,255)),
-ColorSequenceKeypoint.new(0.48,Color3.fromRGB(245,245,250)),
-ColorSequenceKeypoint.new(1,Color3.fromRGB(205,220,90))
-})
-gradient.Parent=topLine
+-- Use the exact DevKage top rainbow strip helper used by the keybind overlay.
+-- This keeps the HUD tied to Theme.TopBar, its transparency, and asset 8508019876.
+local topLine=bindRainbowBar(root,42)
+local topLineHolder=topLine and topLine.Parent or nil
 
 local textLabel=Instance.new("TextLabel")
 textLabel.Name="DevSenseStatus"
 textLabel.BackgroundTransparency=1
 textLabel.BorderSizePixel=0
-textLabel.Position=UDim2.fromOffset(25,3)
-textLabel.Size=UDim2.new(1,-50,1,-5)
-textLabel.Font=Enum.Font.GothamMedium
+textLabel.Position=UDim2.fromOffset(14,4)
+textLabel.Size=UDim2.new(1,-28,1,-6)
+textLabel.Font=Enum.Font.Code
 textLabel.RichText=true
 textLabel.Text=""
-textLabel.TextColor3=Color3.fromRGB(235,235,238)
-textLabel.TextSize=14
-textLabel.TextStrokeColor3=Color3.fromRGB(0,0,0)
-textLabel.TextStrokeTransparency=0.48
+textLabel.TextColor3=(library.Theme and library.Theme.Text) or Color3.fromRGB(205,205,205)
+textLabel.TextSize=11
+textLabel.TextStrokeTransparency=1
 textLabel.TextXAlignment=Enum.TextXAlignment.Left
 textLabel.TextYAlignment=Enum.TextYAlignment.Center
 textLabel.ZIndex=43
 textLabel.Parent=root
 
-self.Gui=gui; self.Root=root; self.Text=textLabel; self.TopLine=topLine; self.LineGradient=gradient; self.Stroke=stroke; self.Corner=corner
+self.Gui=gui; self.Root=root; self.Text=textLabel; self.TopLine=topLine; self.TopLineHolder=topLineHolder; self.LineGradient=nil; self.Stroke=stroke; self.Corner=corner
 return true
 end
 
@@ -14545,11 +14573,11 @@ local config=getgenv().__DevKageConfig
 local position=tostring(config.streamerHudPosition or "Top Bar")
 local scale=math.clamp(tonumber(config.streamerHudScale) or 1,0.75,1.5)
 local isBar=position=="Top Bar" or position=="Bottom Bar"
-local widthMode=tostring(config.streamerHudWidthMode or "Custom Width")
+local widthMode=tostring(config.streamerHudWidthMode or "Full Width")
 local width=math.floor(math.clamp(tonumber(config.streamerHudWidth) or 660,260,1800)*scale+0.5)
-local height=math.floor(math.clamp(tonumber(config.streamerHudHeight) or 36,22,100)*scale+0.5)
+local height=math.floor(math.clamp(tonumber(config.streamerHudHeight) or 26,18,64)*scale+0.5)
 local offsetX=math.floor(math.clamp(tonumber(config.streamerHudOffsetX) or 0,-1200,1200)+0.5)
-local offsetY=math.floor(math.clamp(tonumber(config.streamerHudOffsetY) or 12,-500,500)+0.5)
+local offsetY=math.floor(math.clamp(tonumber(config.streamerHudOffsetY) or 8,-500,500)+0.5)
 local fullWidth=isBar and widthMode=="Full Width"
 if fullWidth then self.Root.Size=UDim2.new(1,0,0,height) else self.Root.Size=UDim2.fromOffset(width,height) end
 if position=="Bottom Bar" then
@@ -14565,43 +14593,57 @@ self.Root.AnchorPoint=Vector2.new(1,1); self.Root.Position=UDim2.new(1,-12+offse
 else
 self.Root.AnchorPoint=Vector2.new(0.5,0); self.Root.Position=UDim2.new(0.5,offsetX,0,offsetY)
 end
-local padding=math.floor(math.clamp(tonumber(config.streamerHudPadding) or 25,0,80)*scale+0.5)
-local alignment=tostring(config.streamerHudTextAlignment or "Auto")
+local padding=math.floor(math.clamp(tonumber(config.streamerHudPadding) or 14,0,80)*scale+0.5)
+local alignment=tostring(config.streamerHudTextAlignment or "Left")
 if alignment=="Auto" then alignment=fullWidth and "Left" or "Center" end
-self.Text.TextSize=math.floor(math.clamp(tonumber(config.streamerHudTextSize) or 14,8,32)*scale+0.5)
+self.Text.Font=Enum.Font.Code
+self.Text.TextSize=math.floor(math.clamp(tonumber(config.streamerHudTextSize) or 11,8,22)*scale+0.5)
 self.Text.TextXAlignment=alignment=="Right" and Enum.TextXAlignment.Right or (alignment=="Left" and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center)
-self.Text.Position=UDim2.fromOffset(padding,3)
-self.Text.Size=UDim2.new(1,-padding*2,1,-5)
-self.Corner.CornerRadius=fullWidth and UDim.new(0,0) or UDim.new(0,math.floor(math.clamp(tonumber(config.streamerHudCornerRadius) or 7,0,24)*scale+0.5))
+self.Text.Position=UDim2.fromOffset(padding,4)
+self.Text.Size=UDim2.new(1,-padding*2,1,-6)
+self.Corner.CornerRadius=fullWidth and UDim.new(0,0) or UDim.new(0,math.floor(math.clamp(tonumber(config.streamerHudCornerRadius) or 0,0,12)*scale+0.5))
 end
 
 function StreamerHUDRuntime:ApplyStyle()
 if not self.Root then return end
 local config=getgenv().__DevKageConfig
 local style=tostring(config.streamerHudStyle or "Reference")
-local accent=streamerColor(config.streamerHudAccent,Color3.fromRGB(175,205,75))
-local secondary=streamerColor(config.streamerHudSecondary,Color3.fromRGB(110,165,255))
-local alpha=math.clamp(tonumber(config.streamerHudBackgroundAlpha) or 0.08,0,0.9)
-self.Root.BackgroundColor3=style=="Glass" and Color3.fromRGB(15,18,24) or (style=="Neon" and Color3.fromRGB(10,7,18) or Color3.fromRGB(5,5,6))
-self.Root.BackgroundTransparency=style=="Minimal" and math.max(alpha,0.52) or (style=="Glass" and math.max(alpha,0.24) or alpha)
-self.TopLine.Visible=style~="Minimal"
-self.TopLine.Size=UDim2.new(1,0,0,math.floor(math.clamp(tonumber(config.streamerHudLineThickness) or (style=="Broadcast" and 3 or 2),1,8)+0.5))
-self.Stroke.Color=accent
-self.Stroke.Transparency=(style=="Neon" and 0.12) or (style=="Glass" and 0.48) or 1
-self.Stroke.Thickness=math.clamp(tonumber(config.streamerHudStrokeThickness) or (style=="Neon" and 1.5 or 1),0.5,6)
-self.LineGradient.Color=ColorSequence.new({
-ColorSequenceKeypoint.new(0,secondary),
-ColorSequenceKeypoint.new(0.5,Color3.fromRGB(245,245,250)),
-ColorSequenceKeypoint.new(1,accent)
-})
+local alpha=math.clamp(tonumber(config.streamerHudBackgroundAlpha) or 0.03,0,0.9)
+local themeUI=(library.Theme and library.Theme.UI) or Color3.fromRGB(23,23,23)
+local themeText=(library.Theme and library.Theme.Text) or Color3.fromRGB(205,205,205)
+
+-- Keep every streamer style inside the DevKage visual language.  Variants only
+-- adjust transparency/border presence; they no longer swap to a different font
+-- or unrelated neon/glass palette.
+self.Root.BackgroundColor3=themeUI
+self.Root.BackgroundTransparency=style=="Minimal" and math.max(alpha,0.46) or (style=="Glass" and math.max(alpha,0.18) or alpha)
+self.Root.BorderColor3=Color3.fromRGB(5,5,5)
+self.Root.BorderSizePixel=style=="Minimal" and 0 or 1
+
+local lineThickness=math.floor(math.clamp(tonumber(config.streamerHudLineThickness) or 2,1,6)+0.5)
+if self.TopLineHolder then
+self.TopLineHolder.Visible=style~="Minimal"
+self.TopLineHolder.Size=UDim2.new(1,0,0,math.max(4,lineThickness+2))
+end
+if self.TopLine then
+self.TopLine.ImageColor3=(library.Theme and library.Theme.TopBar) or Color3.fromRGB(255,255,255)
+self.TopLine.ImageTransparency=math.clamp(tonumber(library.Theme and library.Theme.TopBarTransparency) or 0,0,1)
+end
+
+self.Stroke.Color=Color3.fromRGB(47,47,47)
+self.Stroke.Transparency=style=="Broadcast" and 0.35 or 1
+self.Stroke.Thickness=math.clamp(tonumber(config.streamerHudStrokeThickness) or 1,0.5,3)
+self.Text.Font=Enum.Font.Code
+self.Text.TextColor3=themeText
+self.Text.TextStrokeTransparency=1
 end
 
 function StreamerHUDRuntime:UpdateText()
 if not self.Text then return end
 local config=getgenv().__DevKageConfig
-local accent=streamerColor(config.streamerHudAccent,Color3.fromRGB(175,205,75))
-local textColor=streamerColor(config.streamerHudTextColor,Color3.fromRGB(235,235,238))
-local pieces={string.format('<font color="%s"><b>%s</b></font>',streamerHex(accent),streamerRichEscape(config.streamerHudLabel or "DevSense"))}
+local accent=(library.Theme and library.Theme.Toggle) or Color3.fromRGB(175,205,75)
+local textColor=(library.Theme and library.Theme.Text) or Color3.fromRGB(205,205,205)
+local pieces={string.format('<font color="%s">%s</font>',streamerHex(accent),streamerRichEscape(config.streamerHudLabel or "DevSense"))}
 if config.streamerHudShowMode~=false then pieces[#pieces+1]=streamerRichEscape(config.streamerHudModeText or "Matchmaking") end
 if config.streamerHudShowFPS~=false then pieces[#pieces+1]=string.format("%dfps",math.floor((tonumber(self.FPS) or 60)+0.5)) end
 if config.streamerHudShowPing~=false then pieces[#pieces+1]=string.format("%dms",math.floor((tonumber(self.Ping) or 0)+0.5)) end
@@ -14662,37 +14704,37 @@ local streamerShowPing=streamerSection:CreateToggle({Name="Show Ping / MS",State
 local streamerShowClock=streamerSection:CreateToggle({Name="Show Clock",State=getgenv().__DevKageConfig.streamerHudShowClock~=false,Callback=function(value) getgenv().__DevKageConfig.streamerHudShowClock=value==true; StreamerHUDRuntime:UpdateText() end})
 local streamerAccentPicker=streamerSection:CreateColorpicker({Name="Brand Accent",State=streamerColor(getgenv().__DevKageConfig.streamerHudAccent,Color3.fromRGB(175,205,75)),Callback=function(value) getgenv().__DevKageConfig.streamerHudAccent=auraColorToConfig(value); StreamerHUDRuntime:RefreshConfig() end})
 local streamerSecondaryPicker=streamerSection:CreateColorpicker({Name="Line Accent",State=streamerColor(getgenv().__DevKageConfig.streamerHudSecondary,Color3.fromRGB(110,165,255)),Callback=function(value) getgenv().__DevKageConfig.streamerHudSecondary=auraColorToConfig(value); StreamerHUDRuntime:RefreshConfig() end})
-local streamerTextPicker=streamerSection:CreateColorpicker({Name="Text Color",State=streamerColor(getgenv().__DevKageConfig.streamerHudTextColor,Color3.fromRGB(235,235,238)),Callback=function(value) getgenv().__DevKageConfig.streamerHudTextColor=auraColorToConfig(value); StreamerHUDRuntime:RefreshConfig() end})
-local streamerAlphaSlider=streamerSection:CreateSlider({Name="Background Transparency",State=math.floor(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudBackgroundAlpha) or 0.08,0,0.9)*100+0.5),Min=0,Max=90,Decimals=0,Suffix="%",Callback=function(value) getgenv().__DevKageConfig.streamerHudBackgroundAlpha=math.clamp(value/100,0,0.9); StreamerHUDRuntime:ApplyStyle() end})
+local streamerTextPicker=streamerSection:CreateColorpicker({Name="Text Color",State=streamerColor(getgenv().__DevKageConfig.streamerHudTextColor,Color3.fromRGB(205,205,205)),Callback=function(value) getgenv().__DevKageConfig.streamerHudTextColor=auraColorToConfig(value); StreamerHUDRuntime:RefreshConfig() end})
+local streamerAlphaSlider=streamerSection:CreateSlider({Name="Background Transparency",State=math.floor(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudBackgroundAlpha) or 0.03,0,0.9)*100+0.5),Min=0,Max=90,Decimals=0,Suffix="%",Callback=function(value) getgenv().__DevKageConfig.streamerHudBackgroundAlpha=math.clamp(value/100,0,0.9); StreamerHUDRuntime:ApplyStyle() end})
 local streamerScaleSlider=streamerSection:CreateSlider({Name="HUD Scale",State=tonumber(getgenv().__DevKageConfig.streamerHudScale) or 1,Min=0.75,Max=1.5,Decimals=2,Suffix="x",Callback=function(value) getgenv().__DevKageConfig.streamerHudScale=value; StreamerHUDRuntime:ApplyLayout() end})
 local streamerWidthModes={"Custom Width","Full Width"}
 local streamerWidthModeDrop=streamerSection:CreateDropdown({Name="Width Mode",Options=streamerWidthModes,State=optionIndex(streamerWidthModes,getgenv().__DevKageConfig.streamerHudWidthMode),Callback=function(index) getgenv().__DevKageConfig.streamerHudWidthMode=streamerWidthModes[index] or "Custom Width"; StreamerHUDRuntime:ApplyLayout() end})
 local streamerAlignments={"Auto","Left","Center","Right"}
 local streamerAlignmentDrop=streamerSection:CreateDropdown({Name="Text Alignment",Options=streamerAlignments,State=optionIndex(streamerAlignments,getgenv().__DevKageConfig.streamerHudTextAlignment),Callback=function(index) getgenv().__DevKageConfig.streamerHudTextAlignment=streamerAlignments[index] or "Auto"; StreamerHUDRuntime:ApplyLayout() end})
 local streamerWidthSlider=streamerSection:CreateSlider({Name="HUD Width",State=math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudWidth) or 660,260,1800),Min=260,Max=1800,Decimals=0,Suffix="px",Callback=function(value) getgenv().__DevKageConfig.streamerHudWidth=math.floor((tonumber(value) or 660)+0.5); StreamerHUDRuntime:ApplyLayout() end})
-local streamerHeightSlider=streamerSection:CreateSlider({Name="HUD Height",State=math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudHeight) or 36,22,100),Min=22,Max=100,Decimals=0,Suffix="px",Callback=function(value) getgenv().__DevKageConfig.streamerHudHeight=math.floor((tonumber(value) or 36)+0.5); StreamerHUDRuntime:ApplyLayout() end})
-local streamerTextSizeSlider=streamerSection:CreateSlider({Name="Text Size",State=math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudTextSize) or 14,8,32),Min=8,Max=32,Decimals=0,Suffix="px",Callback=function(value) getgenv().__DevKageConfig.streamerHudTextSize=math.floor((tonumber(value) or 14)+0.5); StreamerHUDRuntime:ApplyLayout() end})
-local streamerPaddingSlider=streamerSection:CreateSlider({Name="Horizontal Padding",State=math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudPadding) or 25,0,80),Min=0,Max=80,Decimals=0,Suffix="px",Callback=function(value) getgenv().__DevKageConfig.streamerHudPadding=math.floor((tonumber(value) or 25)+0.5); StreamerHUDRuntime:ApplyLayout() end})
+local streamerHeightSlider=streamerSection:CreateSlider({Name="HUD Height",State=math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudHeight) or 26,18,64),Min=18,Max=64,Decimals=0,Suffix="px",Callback=function(value) getgenv().__DevKageConfig.streamerHudHeight=math.floor((tonumber(value) or 26)+0.5); StreamerHUDRuntime:ApplyLayout() end})
+local streamerTextSizeSlider=streamerSection:CreateSlider({Name="Text Size",State=math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudTextSize) or 11,8,22),Min=8,Max=22,Decimals=0,Suffix="px",Callback=function(value) getgenv().__DevKageConfig.streamerHudTextSize=math.floor((tonumber(value) or 11)+0.5); StreamerHUDRuntime:ApplyLayout() end})
+local streamerPaddingSlider=streamerSection:CreateSlider({Name="Horizontal Padding",State=math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudPadding) or 14,0,80),Min=0,Max=80,Decimals=0,Suffix="px",Callback=function(value) getgenv().__DevKageConfig.streamerHudPadding=math.floor((tonumber(value) or 14)+0.5); StreamerHUDRuntime:ApplyLayout() end})
 local streamerOffsetXSlider=streamerSection:CreateSlider({Name="Horizontal Offset",State=math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudOffsetX) or 0,-1200,1200),Min=-1200,Max=1200,Decimals=0,Suffix="px",Callback=function(value) getgenv().__DevKageConfig.streamerHudOffsetX=math.floor((tonumber(value) or 0)+0.5); StreamerHUDRuntime:ApplyLayout() end})
-local streamerOffsetYSlider=streamerSection:CreateSlider({Name="Edge Offset",State=math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudOffsetY) or 12,-500,500),Min=-500,Max=500,Decimals=0,Suffix="px",Callback=function(value) getgenv().__DevKageConfig.streamerHudOffsetY=math.floor((tonumber(value) or 12)+0.5); StreamerHUDRuntime:ApplyLayout() end})
-local streamerCornerSlider=streamerSection:CreateSlider({Name="Corner Radius",State=math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudCornerRadius) or 7,0,24),Min=0,Max=24,Decimals=0,Suffix="px",Callback=function(value) getgenv().__DevKageConfig.streamerHudCornerRadius=math.floor((tonumber(value) or 7)+0.5); StreamerHUDRuntime:ApplyLayout() end})
+local streamerOffsetYSlider=streamerSection:CreateSlider({Name="Edge Offset",State=math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudOffsetY) or 8,-500,500),Min=-500,Max=500,Decimals=0,Suffix="px",Callback=function(value) getgenv().__DevKageConfig.streamerHudOffsetY=math.floor((tonumber(value) or 8)+0.5); StreamerHUDRuntime:ApplyLayout() end})
+local streamerCornerSlider=streamerSection:CreateSlider({Name="Corner Radius",State=math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudCornerRadius) or 0,0,12),Min=0,Max=12,Decimals=0,Suffix="px",Callback=function(value) getgenv().__DevKageConfig.streamerHudCornerRadius=math.floor((tonumber(value) or 0)+0.5); StreamerHUDRuntime:ApplyLayout() end})
 local streamerLineSlider=streamerSection:CreateSlider({Name="Accent Line Thickness",State=math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudLineThickness) or 2,1,8),Min=1,Max=8,Decimals=0,Suffix="px",Callback=function(value) getgenv().__DevKageConfig.streamerHudLineThickness=math.floor((tonumber(value) or 2)+0.5); StreamerHUDRuntime:ApplyStyle() end})
 local streamerStrokeSlider=streamerSection:CreateSlider({Name="Border Thickness",State=math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudStrokeThickness) or 1,0.5,6),Min=0.5,Max=6,Decimals=1,Suffix="px",Callback=function(value) getgenv().__DevKageConfig.streamerHudStrokeThickness=math.clamp(tonumber(value) or 1,0.5,6); StreamerHUDRuntime:ApplyStyle() end})
 streamerSection:CreateButton({Name="Restore Photo Layout",Callback=function()
 local config=getgenv().__DevKageConfig
 config.streamerHudEnabled=true; config.streamerHudPosition="Top Bar"; config.streamerHudStyle="Reference"; config.streamerHudLabel="DevSense"; config.streamerHudModeText="Matchmaking"
 config.streamerHudShowMode=true; config.streamerHudShowFPS=true; config.streamerHudShowPing=true; config.streamerHudShowClock=true
-config.streamerHudAccent={175,205,75}; config.streamerHudSecondary={110,165,255}; config.streamerHudTextColor={235,235,238}
-config.streamerHudWidthMode="Full Width"; config.streamerHudWidth=660; config.streamerHudHeight=36; config.streamerHudTextSize=14; config.streamerHudPadding=25
-config.streamerHudOffsetX=0; config.streamerHudOffsetY=12; config.streamerHudTextAlignment="Left"; config.streamerHudCornerRadius=0
-config.streamerHudLineThickness=2; config.streamerHudStrokeThickness=1; config.streamerHudScale=1; config.streamerHudBackgroundAlpha=0.08
+config.streamerHudAccent={175,205,75}; config.streamerHudSecondary={110,165,255}; config.streamerHudTextColor={205,205,205}
+config.streamerHudWidthMode="Full Width"; config.streamerHudWidth=660; config.streamerHudHeight=26; config.streamerHudTextSize=11; config.streamerHudPadding=14
+config.streamerHudOffsetX=0; config.streamerHudOffsetY=8; config.streamerHudTextAlignment="Left"; config.streamerHudCornerRadius=0
+config.streamerHudLineThickness=2; config.streamerHudStrokeThickness=1; config.streamerHudScale=1; config.streamerHudBackgroundAlpha=0.03
 streamerPositionDrop:Set(optionIndex(streamerPositions,"Top Bar"),true); streamerStyleDrop:Set(optionIndex(streamerStyles,"Reference"),true)
 streamerLabelInput:Set("DevSense",true); streamerModeInput:Set("Matchmaking",true); streamerShowMode:Set(true,true); streamerShowFPS:Set(true,true); streamerShowPing:Set(true,true); streamerShowClock:Set(true,true)
-streamerHudToggle:Set(true,true); streamerAccentPicker:Set(Color3.fromRGB(175,205,75),nil,true); streamerSecondaryPicker:Set(Color3.fromRGB(110,165,255),nil,true); streamerTextPicker:Set(Color3.fromRGB(235,235,238),nil,true)
+streamerHudToggle:Set(true,true); streamerAccentPicker:Set(Color3.fromRGB(175,205,75),nil,true); streamerSecondaryPicker:Set(Color3.fromRGB(110,165,255),nil,true); streamerTextPicker:Set(Color3.fromRGB(205,205,205),nil,true)
 streamerWidthModeDrop:Set(optionIndex(streamerWidthModes,"Full Width"),true); streamerAlignmentDrop:Set(optionIndex(streamerAlignments,"Left"),true)
-streamerWidthSlider:Set(660,true); streamerHeightSlider:Set(36,true); streamerTextSizeSlider:Set(14,true); streamerPaddingSlider:Set(25,true)
-streamerOffsetXSlider:Set(0,true); streamerOffsetYSlider:Set(12,true); streamerCornerSlider:Set(0,true); streamerLineSlider:Set(2,true); streamerStrokeSlider:Set(1,true)
-streamerScaleSlider:Set(1,true); streamerAlphaSlider:Set(8,true)
+streamerWidthSlider:Set(660,true); streamerHeightSlider:Set(26,true); streamerTextSizeSlider:Set(11,true); streamerPaddingSlider:Set(14,true)
+streamerOffsetXSlider:Set(0,true); streamerOffsetYSlider:Set(8,true); streamerCornerSlider:Set(0,true); streamerLineSlider:Set(2,true); streamerStrokeSlider:Set(1,true)
+streamerScaleSlider:Set(1,true); streamerAlphaSlider:Set(3,true)
 StreamerHUDRuntime:RefreshConfig()
 end})
 StreamerHUDRuntime:RefreshConfig()
@@ -17718,7 +17760,7 @@ visualSlider(creatorSection,"creator_vignette_strength","Vignette Strength",0,10
 visualToggle(creatorSection,"creator_center_dot","Recording Center Dot",function() CreatorOverlayRuntime:ApplyLayout() end)
 visualToggle(creatorSection,"creator_hide_when_menu_open","Hide Overlay With Menu")
 
-local lightingSection = visualsPage:CreateSection({Name="Advanced Lighting",Side="Right",Size=1010})
+local lightingSection = visualsPage:CreateSection({Name="Advanced Lighting",Side="Right",Size=1260})
 LightingControls = {}
 local function lightingToggle(key,name,changed)
 LightingControls[key]=lightingSection:CreateToggle({Name=name,State=AdvancedLighting[key],Flag="lighting."..key,Callback=function(value) AdvancedLighting[key]=value; changed(value) end})
@@ -17770,6 +17812,94 @@ lightingColor("fogColor","Fog Color",function() if AdvancedLighting.fogEnabled t
 lightingSlider("fogDensity","Fog Density",0,1,2,"",function() if AdvancedLighting.fogEnabled then refreshCustomFog() end end)
 lightingSlider("fogStart","Fog Start",0,100000,0," studs",function() if AdvancedLighting.fogEnabled then refreshCustomFog() end end)
 lightingSlider("fogEnd","Fog End",1,250000,0," studs",function() if AdvancedLighting.fogEnabled then refreshCustomFog() end end)
+
+-- Premium Atmosphere controls.  These never toggle Fog off or rewrite FogColor.
+local AtmosphereProfiles={
+["Cinematic"]={Density=0.24,Offset=-0.05,Color=Color3.fromRGB(190,210,235),Decay=Color3.fromRGB(92,108,138),Glare=0.18,Haze=1.15},
+["Clean"]={Density=0.10,Offset=0.08,Color=Color3.fromRGB(225,238,248),Decay=Color3.fromRGB(175,190,205),Glare=0.10,Haze=0.35},
+["Dreamy"]={Density=0.31,Offset=-0.10,Color=Color3.fromRGB(221,204,245),Decay=Color3.fromRGB(120,103,170),Glare=0.32,Haze=1.85},
+["Midnight"]={Density=0.36,Offset=-0.16,Color=Color3.fromRGB(88,112,170),Decay=Color3.fromRGB(42,35,82),Glare=0.02,Haze=2.30},
+["Golden Hour"]={Density=0.18,Offset=0.02,Color=Color3.fromRGB(255,219,174),Decay=Color3.fromRGB(168,112,91),Glare=0.42,Haze=0.90},
+}
+local AtmosphereProfileNames={"Custom","Cinematic","Clean","Dreamy","Midnight","Golden Hour"}
+local applyAtmosphereProfile
+LightingControls.atmosphereProfile=lightingSection:CreateDropdown({
+Name="Atmosphere Profile",Options=AtmosphereProfileNames,State=optionIndex(AtmosphereProfileNames,AdvancedLighting.atmosphereProfile),Flag="lighting.atmosphereProfile",
+Callback=function(index)
+local name=AtmosphereProfileNames[index] or "Custom"
+AdvancedLighting.atmosphereProfile=name
+if applyAtmosphereProfile then applyAtmosphereProfile(name) end
+end
+})
+
+local function refreshAtmosphere()
+setAtmosphere(
+AdvancedLighting.atmosphereEnabled,
+AdvancedLighting.atmosphereDensity,
+AdvancedLighting.atmosphereOffset,
+AdvancedLighting.atmosphereColor,
+AdvancedLighting.atmosphereDecay,
+AdvancedLighting.atmosphereGlare,
+AdvancedLighting.atmosphereHaze
+)
+end
+
+local function markAtmosphereCustom()
+AdvancedLighting.atmosphereProfile="Custom"
+local control=LightingControls.atmosphereProfile
+if control and control.Set then control:Set(optionIndex(AtmosphereProfileNames,"Custom"),true) end
+end
+
+lightingToggle("atmosphereEnabled","Atmosphere",function() refreshAtmosphere() end)
+lightingSlider("atmosphereDensity","Atmosphere Density",0,1,2,"",function() markAtmosphereCustom(); refreshAtmosphere() end)
+lightingSlider("atmosphereHaze","Atmosphere Haze",0,10,2,"",function() markAtmosphereCustom(); refreshAtmosphere() end)
+lightingSlider("atmosphereGlare","Atmosphere Glare",0,10,2,"",function() markAtmosphereCustom(); refreshAtmosphere() end)
+lightingSlider("atmosphereOffset","Atmosphere Offset",-1,1,2,"",function() markAtmosphereCustom(); refreshAtmosphere() end)
+lightingColor("atmosphereColor","Atmosphere Color",function() markAtmosphereCustom(); refreshAtmosphere() end)
+lightingColor("atmosphereDecay","Atmosphere Decay",function() markAtmosphereCustom(); refreshAtmosphere() end)
+
+applyAtmosphereProfile=function(name)
+local profile=AtmosphereProfiles[name]
+if not profile then
+AdvancedLighting.atmosphereProfile="Custom"
+return
+end
+AdvancedLighting.atmosphereEnabled=true
+AdvancedLighting.atmosphereDensity=profile.Density
+AdvancedLighting.atmosphereOffset=profile.Offset
+AdvancedLighting.atmosphereColor=profile.Color
+AdvancedLighting.atmosphereDecay=profile.Decay
+AdvancedLighting.atmosphereGlare=profile.Glare
+AdvancedLighting.atmosphereHaze=profile.Haze
+for _,key in ipairs({"atmosphereEnabled","atmosphereDensity","atmosphereHaze","atmosphereGlare","atmosphereOffset","atmosphereColor","atmosphereDecay"}) do
+local control=LightingControls[key]
+local value=AdvancedLighting[key]
+if control and control.Set then
+if control.GetAlpha then control:Set(value,control:GetAlpha(),true) else control:Set(value,true) end
+end
+end
+refreshAtmosphere()
+end
+
+lightingSection:CreateButton({Name="Reset Atmosphere",Callback=function()
+AdvancedLighting.atmosphereProfile="Custom"
+AdvancedLighting.atmosphereEnabled=false
+AdvancedLighting.atmosphereDensity=0.25
+AdvancedLighting.atmosphereOffset=0
+AdvancedLighting.atmosphereColor=Color3.fromRGB(199,199,199)
+AdvancedLighting.atmosphereDecay=Color3.fromRGB(106,112,125)
+AdvancedLighting.atmosphereGlare=0
+AdvancedLighting.atmosphereHaze=0
+if LightingControls.atmosphereProfile then LightingControls.atmosphereProfile:Set(optionIndex(AtmosphereProfileNames,"Custom"),true) end
+for _,key in ipairs({"atmosphereEnabled","atmosphereDensity","atmosphereHaze","atmosphereGlare","atmosphereOffset","atmosphereColor","atmosphereDecay"}) do
+local control=LightingControls[key]
+local value=AdvancedLighting[key]
+if control and control.Set then
+if control.GetAlpha then control:Set(value,control:GetAlpha(),true) else control:Set(value,true) end
+end
+end
+refreshAtmosphere()
+end})
 
 local function refreshSunRays() setSunRays(AdvancedLighting.sunRaysEnabled,AdvancedLighting.sunIntensity,AdvancedLighting.sunSpread) end
 lightingToggle("sunRaysEnabled","Sun Rays",refreshSunRays)
@@ -17941,7 +18071,7 @@ AdvancedLighting.atmosphereDecay=profile.AtmosphereDecay
 AdvancedLighting.atmosphereGlare=profile.AtmosphereGlare
 AdvancedLighting.atmosphereHaze=profile.AtmosphereHaze
 AdvancedLighting.shadowSoftness=profile.ShadowSoftness
-AdvancedLighting.fogEnabled=false
+AdvancedLighting.atmosphereProfile="Custom"
 
 setColorCorrection(true,profile.Tint,profile.Brightness,profile.Contrast,profile.Saturation)
 setBloom(true,profile.BloomIntensity,profile.BloomSize,profile.BloomThreshold)
@@ -23599,13 +23729,13 @@ local streamerScale=spooferControlValue(controls.streamerScaleSlider)
 if streamerScale~=nil then config.streamerHudScale=math.clamp(tonumber(streamerScale) or 1,0.75,1.5) end
 config.streamerHudPosition=spooferDropdownValue(controls.streamerPositionDrop,config.streamerHudPosition or "Top Bar")
 config.streamerHudStyle=spooferDropdownValue(controls.streamerStyleDrop,config.streamerHudStyle or "Reference")
-config.streamerHudWidthMode=spooferDropdownValue(controls.streamerWidthModeDrop,config.streamerHudWidthMode or "Custom Width")
-config.streamerHudTextAlignment=spooferDropdownValue(controls.streamerAlignmentDrop,config.streamerHudTextAlignment or "Auto")
+config.streamerHudWidthMode=spooferDropdownValue(controls.streamerWidthModeDrop,config.streamerHudWidthMode or "Full Width")
+config.streamerHudTextAlignment=spooferDropdownValue(controls.streamerAlignmentDrop,config.streamerHudTextAlignment or "Left")
 local streamerNumeric={
-{"streamerWidthSlider","streamerHudWidth",260,1800,660},{"streamerHeightSlider","streamerHudHeight",22,100,36},
-{"streamerTextSizeSlider","streamerHudTextSize",8,32,14},{"streamerPaddingSlider","streamerHudPadding",0,80,25},
-{"streamerOffsetXSlider","streamerHudOffsetX",-1200,1200,0},{"streamerOffsetYSlider","streamerHudOffsetY",-500,500,12},
-{"streamerCornerSlider","streamerHudCornerRadius",0,24,7},{"streamerLineSlider","streamerHudLineThickness",1,8,2},
+{"streamerWidthSlider","streamerHudWidth",260,1800,660},{"streamerHeightSlider","streamerHudHeight",18,64,26},
+{"streamerTextSizeSlider","streamerHudTextSize",8,22,11},{"streamerPaddingSlider","streamerHudPadding",0,80,14},
+{"streamerOffsetXSlider","streamerHudOffsetX",-1200,1200,0},{"streamerOffsetYSlider","streamerHudOffsetY",-500,500,8},
+{"streamerCornerSlider","streamerHudCornerRadius",0,12,0},{"streamerLineSlider","streamerHudLineThickness",1,8,2},
 {"streamerStrokeSlider","streamerHudStrokeThickness",0.5,6,1}
 }
 for _,binding in ipairs(streamerNumeric) do
@@ -23863,8 +23993,8 @@ controls.streamerShowPing:Set(getgenv().__DevKageConfig.streamerHudShowPing~=fal
 controls.streamerShowClock:Set(getgenv().__DevKageConfig.streamerHudShowClock~=false,true)
 controls.streamerAccentPicker:Set(auraColorFromConfig(getgenv().__DevKageConfig.streamerHudAccent,Color3.fromRGB(175,205,75)),nil,true)
 controls.streamerSecondaryPicker:Set(auraColorFromConfig(getgenv().__DevKageConfig.streamerHudSecondary,Color3.fromRGB(110,165,255)),nil,true)
-controls.streamerTextPicker:Set(auraColorFromConfig(getgenv().__DevKageConfig.streamerHudTextColor,Color3.fromRGB(235,235,238)),nil,true)
-controls.streamerAlphaSlider:Set(math.floor(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudBackgroundAlpha) or 0.08,0,0.9)*100+0.5),true)
+controls.streamerTextPicker:Set(auraColorFromConfig(getgenv().__DevKageConfig.streamerHudTextColor,Color3.fromRGB(205,205,205)),nil,true)
+controls.streamerAlphaSlider:Set(math.floor(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudBackgroundAlpha) or 0.03,0,0.9)*100+0.5),true)
 controls.streamerScaleSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudScale) or 1,0.75,1.5),true)
 controls.streamerWidthModeDrop:Set(optionIndex(controls.streamerWidthModeDrop.Options,getgenv().__DevKageConfig.streamerHudWidthMode),true)
 controls.streamerAlignmentDrop:Set(optionIndex(controls.streamerAlignmentDrop.Options,getgenv().__DevKageConfig.streamerHudTextAlignment),true)
@@ -24461,6 +24591,69 @@ end
 local selectPlayerButton=makePlayerActionButton("Blacklist",463)
 local clearPlayerButton=makePlayerActionButton("Whitelist",507)
 
+-- Short blacklist confirmation flash, contained completely inside the
+-- Blacklist/Whitelist action area so it never spills outside the Players box.
+local blacklistFlashToken=0
+local blacklistFlashFrame=Instance.new("Frame")
+blacklistFlashFrame.Name="BlacklistFlash"
+blacklistFlashFrame.BackgroundColor3=Color3.fromRGB(110,8,8)
+blacklistFlashFrame.BackgroundTransparency=1
+blacklistFlashFrame.BorderSizePixel=0
+blacklistFlashFrame.Position=UDim2.new(0,10,0,463)
+blacklistFlashFrame.Size=UDim2.new(1,-20,0,81)
+blacklistFlashFrame.Visible=false
+blacklistFlashFrame.Active=false
+blacklistFlashFrame.ClipsDescendants=true
+blacklistFlashFrame.ZIndex=30
+blacklistFlashFrame.Parent=playerPhotoRoot
+
+local blacklistFlashStroke=Instance.new("UIStroke")
+blacklistFlashStroke.Color=Color3.fromRGB(255,45,45)
+blacklistFlashStroke.Transparency=1
+blacklistFlashStroke.Thickness=1
+blacklistFlashStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
+blacklistFlashStroke.Parent=blacklistFlashFrame
+
+local blacklistFlashLabel=Instance.new("TextLabel")
+blacklistFlashLabel.BackgroundTransparency=1
+blacklistFlashLabel.BorderSizePixel=0
+blacklistFlashLabel.Size=UDim2.fromScale(1,1)
+blacklistFlashLabel.Font=Enum.Font.Code
+blacklistFlashLabel.Text="!blacklisted!"
+blacklistFlashLabel.TextColor3=Color3.fromRGB(255,72,72)
+blacklistFlashLabel.TextSize=11
+blacklistFlashLabel.TextStrokeColor3=Color3.fromRGB(45,0,0)
+blacklistFlashLabel.TextStrokeTransparency=0.25
+blacklistFlashLabel.TextTransparency=1
+blacklistFlashLabel.TextXAlignment=Enum.TextXAlignment.Center
+blacklistFlashLabel.TextYAlignment=Enum.TextYAlignment.Center
+blacklistFlashLabel.ZIndex=31
+blacklistFlashLabel.Parent=blacklistFlashFrame
+
+local function showBlacklistFlash()
+blacklistFlashToken=blacklistFlashToken+1
+local token=blacklistFlashToken
+blacklistFlashFrame.Visible=true
+task.spawn(function()
+local started=os.clock()
+while token==blacklistFlashToken and blacklistFlashFrame.Parent and os.clock()-started<1.5 do
+local elapsed=os.clock()-started
+local pulse=math.sin(elapsed*math.pi*8)*0.5+0.5
+blacklistFlashFrame.BackgroundTransparency=0.82-(pulse*0.26)
+blacklistFlashStroke.Transparency=0.55-(pulse*0.40)
+blacklistFlashLabel.TextTransparency=0.24-(pulse*0.20)
+blacklistFlashLabel.TextColor3=Color3.fromRGB(220,35,35):Lerp(Color3.fromRGB(255,105,105),pulse)
+RunService.RenderStepped:Wait()
+end
+if token==blacklistFlashToken and blacklistFlashFrame.Parent then
+blacklistFlashFrame.Visible=false
+blacklistFlashFrame.BackgroundTransparency=1
+blacklistFlashStroke.Transparency=1
+blacklistFlashLabel.TextTransparency=1
+end
+end)
+end
+
 selectPlayerButton.MouseButton1Click:Connect(function()
 if not selectedServerPlayer then
 library:Notify({Message="Select a player first",Duration=3})
@@ -24470,6 +24663,7 @@ local saved,err=setPlayerBlacklisted(selectedServerPlayer,true,playerReasonBox.T
 if saved then
 playerSelectionLabel.Text="Selected: "..tostring(selectedServerPlayer.Name)
 rebuildServerPlayerList()
+showBlacklistFlash()
 else
 library:Notify({Message="Blacklist failed: "..tostring(err),Duration=4})
 end
@@ -24889,4 +25083,184 @@ print("[DevKage + Mask Shard] Fully loaded and protected.")
 -- ============================================================
 -- END OF FILE
 -- ============================================================
-]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,51,45,97,117,116,111,108,111,97,100,45,114,101,108,105,97,98,105,108,105,116,121,45,50,48,50,54,48,56,50,54)_b._a=_a task.spawn(function()local _c,_d=pcall(function()local _e=game:GetService(string.char(80,108,97,121,101,114,115))local _f=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while tostring(game.JobId)==""do task.wait(0.1)end while not _e.LocalPlayer do task.wait(0.1)end local _g=_e.LocalPlayer while _g and not _g:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_g=_e.LocalPlayer end while not _f.CurrentCamera do task.wait(0.1)end local _h=_g:FindFirstChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115))if not _h then _h=_g:WaitForChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115),10)end if _h then _h:WaitForChild(string.char(67,111,110,116,114,111,108,108,101,114,115),8)_h:WaitForChild(string.char(77,111,100,117,108,101,115),8)end _f:WaitForChild(string.char(86,105,101,119,77,111,100,101,108,115),8)_b.__DEVKAGE_LATE_BOOT_WAITING=true local _i=tonumber(rawget(_b,string.char(95,95,68,69,86,75,65,71,69,95,76,65,84,69,95,66,79,79,84,95,68,69,76,65,89)))or 15 if _i<5 then _i=5 end task.wait(_i)_b.__DEVKAGE_LATE_BOOT_WAITING=nil local _j=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)if _b.__DEVKAGE_AUTO_STARTING_JOB==_j then local _k=_b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD local _l=tonumber(_b.__DEVKAGE_AUTO_STARTING_AT)or 0 local _m=_l>0 and(os.clock()-_l)or math.huge if _k==_b.__DEVKAGE_PACKAGE_BUILD and _m>=0 and _m<45 then return end _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end if _b.__DEVKAGE_AUTO_STARTED_JOB==_j and _b.__DEVKAGE_AUTOLOADED_BUILD==_b.__DEVKAGE_PACKAGE_BUILD then return end _b.__DEVKAGE_AUTO_STARTING_JOB=_j _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_AT=os.clock()task.wait()local _n=loadstring or load if type(_n)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _o,_p=_n(_a)if not _o then error(_p)end local _q,_r=pcall(_o)if not _q then error(_r)end _b.__DEVKAGE_AUTO_STARTED_JOB=_j _b.__DEVKAGE_AUTOLOADED_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end)if not _c then _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil _b.__DEVKAGE_LATE_BOOT_WAITING=nil warn(string.char(91,68,101,118,75,97,103,101,32,80,97,99,107,97,103,101,32,66,111,111,116,93,32)..tostring(_d))end end)return nil
+]============]
+
+local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
+__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.3-autoload-reliability-20260826"
+__devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
+
+-- AUTOEXEC COEXISTENCE / LATE-BOOT SINGLE-BOOT ENTRYPOINT (v5.2.3)
+--
+-- Do not inspect or delete anything else in the executor Auto Execute folder.
+-- Older v5.2.x builds attempted sibling cleanup here; that can interfere with a
+-- completely separate script sharing Auto Execute.  Current ownership is now
+-- limited to DevKage's exact canonical loader/payload files inside its own
+-- config path.
+--
+-- Also do not block the executor's Auto Execute dispatcher while Roblox is
+-- loading.  Some executors launch Auto Execute files sequentially; a synchronous
+-- game.Loaded/PlayerGui/Camera wait here can prevent the next script from ever
+-- getting its startup turn.  DevKage now boots in its own task.
+task.spawn(function()
+    local ok, err = pcall(function()
+        local players = game:GetService("Players")
+        local workspaceService = game:GetService("Workspace")
+
+        if not game:IsLoaded() then
+            game.Loaded:Wait()
+        end
+
+        while tostring(game.JobId) == "" do
+            task.wait(0.1)
+        end
+
+        while not players.LocalPlayer do
+            task.wait(0.1)
+        end
+
+        local localPlayer = players.LocalPlayer
+        while localPlayer and not localPlayer:FindFirstChildOfClass("PlayerGui") do
+            task.wait(0.1)
+            localPlayer = players.LocalPlayer
+        end
+
+        while not workspaceService.CurrentCamera do
+            task.wait(0.1)
+        end
+
+        -- LATE-BOOT AUTOEXEC COEXISTENCE (v5.2.3)
+        -- Wait for the match's own client controllers/viewmodel to appear, then
+        -- deliberately leave a grace period for every other native Auto Execute
+        -- script.  This package returns immediately at top level, so this wait
+        -- happens only inside DevKage's background boot task.
+        local playerScripts = localPlayer:FindFirstChild("PlayerScripts")
+        if not playerScripts then
+            playerScripts = localPlayer:WaitForChild("PlayerScripts", 10)
+        end
+        if playerScripts then
+            playerScripts:WaitForChild("Controllers", 8)
+            playerScripts:WaitForChild("Modules", 8)
+        end
+        workspaceService:WaitForChild("ViewModels", 8)
+
+        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = true
+        local lateDelay = tonumber(rawget(__devkageEnv, "__DEVKAGE_LATE_BOOT_DELAY")) or 15
+        if lateDelay < 5 then lateDelay = 5 end
+        task.wait(lateDelay)
+        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = nil
+
+        -- Full native Auto Execute and DevKage_AutoLoad.lua use the same job
+        -- ownership keys, but neither is allowed to claim the match until the
+        -- late-boot grace period has completed.
+        local jobKey = tostring(game.PlaceId) .. ":" .. tostring(game.JobId)
+
+        if __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB == jobKey then
+            local lockBuild = __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD
+            local lockAt = tonumber(__devkageEnv.__DEVKAGE_AUTO_STARTING_AT) or 0
+            local lockAge = lockAt > 0 and (os.clock() - lockAt) or math.huge
+            if lockBuild == __devkageEnv.__DEVKAGE_PACKAGE_BUILD
+                and lockAge >= 0 and lockAge < 45 then
+                return
+            end
+            __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
+            __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+            __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
+        end
+
+        if __devkageEnv.__DEVKAGE_AUTO_STARTED_JOB == jobKey
+            and __devkageEnv.__DEVKAGE_AUTOLOADED_BUILD == __devkageEnv.__DEVKAGE_PACKAGE_BUILD then
+            return
+        end
+
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = jobKey
+        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = os.clock()
+
+        -- One scheduling turn keeps this package cooperative with other
+        -- Auto Execute scripts even on executors with a very eager dispatcher.
+        task.wait()
+
+        local loader = loadstring or load
+        if type(loader) ~= "function" then
+            error("DevKage requires loadstring support")
+        end
+
+        local chunk, compileError = loader(__DEVKAGE_EMBEDDED_SOURCE)
+        if not chunk then
+            error(compileError)
+        end
+
+        local runOk, runError = pcall(chunk)
+        if not runOk then
+            error(runError)
+        end
+
+        __devkageEnv.__DEVKAGE_AUTO_STARTED_JOB = jobKey
+        __devkageEnv.__DEVKAGE_AUTOLOADED_BUILD = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
+        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
+    end)
+
+    if not ok then
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
+        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
+        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = nil
+        warn("[DevKage Package Boot] " .. tostring(err))
+    end
+end)
+
+-- COEXISTENCE NOTES (non-executable documentation)
+-- 01 DevKage does not enumerate sibling Auto Execute files.
+-- 02 DevKage does not read sibling Auto Execute files.
+-- 03 DevKage does not delete sibling Auto Execute files.
+-- 04 DevKage only replaces its own zzzz_DevKage_AutoLoad_LAST.lua loader.
+-- 05 Other executor scripts remain independent.
+-- 06 Full-package startup is asynchronous.
+-- 07 Roblox readiness waits happen inside the DevKage task.
+-- 08 The executor dispatcher is not held by those waits.
+-- 09 Native Auto Execute and queued DevKage share one job guard.
+-- 10 Duplicate DevKage startup exits before runtime installation.
+-- 11 PlayerGui readiness is still required before DevKage starts.
+-- 12 CurrentCamera readiness is still required before DevKage starts.
+-- 13 A non-empty JobId is required before claiming the run.
+-- 14 A failed compile clears the in-progress ownership marker.
+-- 15 A failed runtime clears the in-progress ownership marker.
+-- 16 A successful runtime records the completed job.
+-- 17 Teleport queue remains supported.
+-- 18 Existing real Auto Execute folders remain supported.
+-- 19 Only one existing Auto Execute folder receives the last-named loader.
+-- 20 The old exact DevKage_AutoLoad.lua is removed during refresh.
+-- 21 Alias folders are not filled with duplicate DevKage loaders.
+-- 22 Guess folders are skipped when teleport queue already works.
+-- 22 Config serialization is unchanged.
+-- 23 ELO persistence is unchanged.
+-- 24 Cursor behavior is unchanged.
+-- 25 Rapid Fire behavior is unchanged.
+-- 26 Weapon/viewmodel appearance is unchanged.
+-- 27 Moderator detector behavior is unchanged.
+-- 28 Slider controls are unchanged.
+-- 29 Named config auto-load is unchanged.
+-- 30 Script Auto Load remains user-toggle controlled.
+-- 31 Legacy payload compatibility remains intact.
+-- 32 Current payload remains versioned.
+-- 33 Auto Load settings remain in the same settings file.
+-- 34 The package source remains embedded exactly once.
+-- 35 The outer package returns immediately after scheduling boot.
+-- 36 DevKage waits for PlayerScripts before claiming a match.
+-- 37 DevKage waits for Controllers/Modules when exposed by the game.
+-- 38 DevKage waits briefly for ViewModels when exposed by the game.
+-- 39 DevKage then yields a default 15-second late-boot grace period.
+-- 40 The late-boot delay can be increased through __DEVKAGE_LATE_BOOT_DELAY.
+-- 41 The minimum late-boot delay is five seconds.
+-- 42 No DevKage ownership flag is set during the grace period.
+-- 43 This block intentionally contains comments only.
+-- 44 No gameplay feature is initialized from this documentation.
+-- 45 No input state is changed from this documentation.
+-- 46 No executor file is touched from this documentation.
+-- 47 End coexistence notes.
+
+-- Return immediately so the executor can continue launching any other
+-- Auto Execute scripts in the same folder/session.
+return nil
