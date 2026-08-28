@@ -14502,6 +14502,39 @@ if ok and tonumber(value) then return math.max(0,tonumber(value)) end
 return 0
 end
 
+-- Streamer HUD owns its rainbow-strip constructor locally.  Do not rely on the
+-- earlier keybind helper's lexical scope: some executor compilers close that
+-- helper with the keybind block, which made Ensure() call nil and stopped the
+-- remaining tabs from being constructed.  The appearance is intentionally the
+-- same as DevKage's main/keybind top strip.
+local function streamerBindRainbowBar(parent,zindex)
+if not parent then return nil end
+local holder=Instance.new("Frame")
+holder.Name="RainbowTopBarShadow"
+holder.BackgroundColor3=Color3.fromRGB(12,12,12)
+holder.BorderSizePixel=0
+holder.Position=UDim2.new(0,0,0,0)
+holder.Size=UDim2.new(1,0,0,4)
+holder.ZIndex=(tonumber(zindex) or 42)-1
+holder.Parent=parent
+
+local bar=Instance.new("ImageLabel")
+bar.Name="RainbowTopBar"
+bar.BackgroundTransparency=1
+bar.BorderSizePixel=0
+bar.Position=UDim2.new(0,1,0,1)
+bar.Size=UDim2.new(1,-2,1,-2)
+bar.Image="rbxassetid://8508019876"
+bar.ImageColor3=(library.Theme and library.Theme.TopBar) or Color3.fromRGB(255,255,255)
+bar.ImageTransparency=math.clamp(tonumber(library.Theme and library.Theme.TopBarTransparency) or 0,0,1)
+bar.ZIndex=tonumber(zindex) or 42
+bar.Parent=holder
+if library and type(library.RegisterThemeTopBar)=="function" then
+    library:RegisterThemeTopBar(bar)
+end
+return bar
+end
+
 function StreamerHUDRuntime:DestroyGui()
 if self.Gui then pcall(function() self.Gui:Destroy() end) end
 self.Gui=nil; self.Root=nil; self.Text=nil; self.TopLine=nil; self.TopLineHolder=nil; self.LineGradient=nil; self.Stroke=nil; self.Corner=nil
@@ -14543,7 +14576,7 @@ stroke.Parent=root
 
 -- Use the exact DevKage top rainbow strip helper used by the keybind overlay.
 -- This keeps the HUD tied to Theme.TopBar, its transparency, and asset 8508019876.
-local topLine=bindRainbowBar(root,42)
+local topLine=streamerBindRainbowBar(root,42)
 local topLineHolder=topLine and topLine.Parent or nil
 
 local textLabel=Instance.new("TextLabel")
