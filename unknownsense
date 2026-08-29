@@ -1,5 +1,4 @@
--- DEVKAGE packaged coexistence build: current-source auto-load + namespaced runtime
-local __DEVKAGE_EMBEDDED_SOURCE = [============[
+local _a=[============[
 -- ============================================================
 -- MASK SHARD v9.6.0 — STABLE BYPASS (AUG 2026 UPDATE)
 -- ============================================================
@@ -9410,12 +9409,17 @@ local baseHaze=atmosphereOn and math.clamp(tonumber(haze) or 0,0,10) or 0
 
 if fogOn then
 local fogDensity=math.clamp(tonumber(AdvancedLighting.fogDensity) or 0,0,1)
-baseDensity=math.clamp(baseDensity+(fogDensity*0.24),0,1)
-baseHaze=math.clamp(baseHaze+(fogDensity*2.35),0,10)
+-- Classic Roblox fog has no Density property, so Fog Density is translated
+-- into both an effective fog distance (inside refreshCustomFog) and a small
+-- optical contribution here.  The curve makes low/mid values visible without
+-- forcing the slider to 1.00, while Atmosphere keeps its own authored look.
+local fogCurve=fogDensity^0.78
+baseDensity=math.clamp(baseDensity+(fogCurve*0.16),0,1)
+baseHaze=math.clamp(baseHaze+(fogCurve*1.55),0,10)
 if atmosphereOn then
-local blend=math.clamp(fogDensity*0.14,0,0.14)
+local blend=math.clamp(fogCurve*0.12,0,0.12)
 baseColor=baseColor:Lerp(AdvancedLighting.fogColor,blend)
-baseDecay=baseDecay:Lerp(AdvancedLighting.fogColor,blend*0.6)
+baseDecay=baseDecay:Lerp(AdvancedLighting.fogColor,blend*0.52)
 end
 end
 
@@ -9503,9 +9507,25 @@ end
 
 local function refreshCustomFog()
 if AdvancedLighting.fogEnabled then
+local configuredStart=math.max(0,tonumber(AdvancedLighting.fogStart) or 0)
+local configuredEnd=math.max(configuredStart+1,tonumber(AdvancedLighting.fogEnd) or 100000)
+local density=math.clamp(tonumber(AdvancedLighting.fogDensity) or 0,0,1)
+
+-- Roblox exposes FogStart/FogEnd rather than a real fog-density value.  Treat
+-- the user's Fog End as the farthest allowed distance, then derive a nearer
+-- optical distance from Fog Density.  This gives useful fog around 0.10-0.60
+-- instead of requiring 1.00 just to see it.  Manual Fog End can still make the
+-- fog even closer, and no Atmosphere/world preset is allowed to erase it.
+local effectiveEnd=configuredEnd
+if density>0.001 then
+local visibilityDistance=120+(6200*((1-density)^4))
+effectiveEnd=math.min(configuredEnd,configuredStart+visibilityDistance)
+effectiveEnd=math.max(configuredStart+1,effectiveEnd)
+end
+
 setLightingProperty("FogColor",AdvancedLighting.fogColor)
-setLightingProperty("FogStart",math.max(0,tonumber(AdvancedLighting.fogStart) or 0))
-setLightingProperty("FogEnd",math.max((tonumber(AdvancedLighting.fogStart) or 0)+1,tonumber(AdvancedLighting.fogEnd) or 100000))
+setLightingProperty("FogStart",configuredStart)
+setLightingProperty("FogEnd",effectiveEnd)
 else
 setLightingProperty("FogColor",AdvancedLighting.original.FogColor)
 setLightingProperty("FogStart",AdvancedLighting.original.FogStart)
@@ -9785,6 +9805,16 @@ end
 
 local LightingPresetProfiles={
 Neutral={Tint=Color3.fromRGB(255,255,255),Brightness=0,Contrast=0,Saturation=0,Bloom=false,BloomIntensity=1,BloomSize=24,Exposure=0,Clock=nil},
+["DevKage Worlds"]={
+Tint=Color3.fromRGB(226,229,255),Brightness=0.075,Contrast=0.08,Saturation=0.24,
+Bloom=true,BloomIntensity=1.42,BloomSize=48,BloomThreshold=0.55,Exposure=0.18,Clock=nil,
+AtmosphereProfile="DevKage Atmosphere",
+Atmosphere={Density=0.34,Offset=-0.18,Color=Color3.fromRGB(238,244,255),Decay=Color3.fromRGB(177,151,238),Glare=0.22,Haze=2.45},
+SunRays={Intensity=0.075,Spread=0.86},
+Ambient={Color=Color3.fromRGB(118,116,168),Outdoor=Color3.fromRGB(165,172,225),Strength=2.70},
+DepthOfField={FocusDistance=80,InFocusRadius=55,NearIntensity=0,FarIntensity=0.055},
+ShadowSoftness=0.48,ColorShiftTop=Color3.fromRGB(115,105,220),ColorShiftBottom=Color3.fromRGB(170,178,245)
+},
 Cinematic={Tint=Color3.fromRGB(245,232,220),Brightness=-0.03,Contrast=0.18,Saturation=-0.08,Bloom=true,BloomIntensity=0.65,BloomSize=34,Exposure=-0.15,Clock=nil},
 Vibrant={Tint=Color3.fromRGB(245,250,255),Brightness=0.04,Contrast=0.13,Saturation=0.38,Bloom=true,BloomIntensity=0.48,BloomSize=26,Exposure=0.12,Clock=nil},
 Noir={Tint=Color3.fromRGB(228,235,245),Brightness=-0.08,Contrast=0.42,Saturation=-1,Bloom=false,BloomIntensity=0,BloomSize=24,Exposure=-0.22,Clock=nil},
@@ -9793,7 +9823,7 @@ Cyberpunk={Tint=Color3.fromRGB(220,175,255),Brightness=-0.02,Contrast=0.32,Satur
 ["Cold Steel"]={Tint=Color3.fromRGB(185,220,255),Brightness=-0.04,Contrast=0.24,Saturation=-0.16,Bloom=true,BloomIntensity=0.36,BloomSize=24,Exposure=-0.12,Clock=7.2},
 ["Night Vision"]={Tint=Color3.fromRGB(120,255,145),Brightness=0.07,Contrast=0.28,Saturation=-0.22,Bloom=true,BloomIntensity=0.3,BloomSize=20,Exposure=0.35,Clock=0.5},
 }
-local LightingPresetNames={"Neutral","Cinematic","Vibrant","Noir","Cyberpunk","Golden Hour","Cold Steel","Night Vision"}
+local LightingPresetNames={"Neutral","DevKage Worlds","Cinematic","Vibrant","Noir","Cyberpunk","Golden Hour","Cold Steel","Night Vision"}
 local LightingControls
 
 local function applyLightingPreset(name)
@@ -9807,12 +9837,58 @@ AdvancedLighting.saturation=profile.Saturation
 AdvancedLighting.bloomEnabled=profile.Bloom
 AdvancedLighting.bloomIntensity=profile.BloomIntensity
 AdvancedLighting.bloomSize=profile.BloomSize
+if profile.BloomThreshold~=nil then AdvancedLighting.bloomThreshold=profile.BloomThreshold end
 AdvancedLighting.exposure=profile.Exposure
 if profile.Clock~=nil then AdvancedLighting.clockTime=profile.Clock end
 setColorCorrection(AdvancedLighting.colorCorrectionEnabled,AdvancedLighting.tintColor,AdvancedLighting.brightness,AdvancedLighting.contrast,AdvancedLighting.saturation)
 setBloom(AdvancedLighting.bloomEnabled,AdvancedLighting.bloomIntensity,AdvancedLighting.bloomSize,AdvancedLighting.bloomThreshold)
 setLightingProperty("ExposureCompensation",AdvancedLighting.exposure)
 if profile.Clock~=nil then setLightingProperty("ClockTime",AdvancedLighting.clockTime) end
+
+-- DevKage Worlds is a complete authored lighting look.  Optional profile fields
+-- below deliberately compose with the existing Fog system instead of disabling
+-- it, so Fog/Atmosphere/Bloom/DOF/SunRays can all remain active together.
+if profile.Atmosphere then
+local a=profile.Atmosphere
+AdvancedLighting.atmosphereEnabled=true
+AdvancedLighting.atmosphereProfile=profile.AtmosphereProfile or "Custom"
+AdvancedLighting.atmosphereDensity=a.Density
+AdvancedLighting.atmosphereOffset=a.Offset
+AdvancedLighting.atmosphereColor=a.Color
+AdvancedLighting.atmosphereDecay=a.Decay
+AdvancedLighting.atmosphereGlare=a.Glare
+AdvancedLighting.atmosphereHaze=a.Haze
+setAtmosphere(true,a.Density,a.Offset,a.Color,a.Decay,a.Glare,a.Haze)
+end
+if profile.SunRays then
+AdvancedLighting.sunRaysEnabled=true
+AdvancedLighting.sunIntensity=profile.SunRays.Intensity
+AdvancedLighting.sunSpread=profile.SunRays.Spread
+setSunRays(true,AdvancedLighting.sunIntensity,AdvancedLighting.sunSpread)
+end
+if profile.Ambient then
+AdvancedLighting.ambientEnabled=true
+AdvancedLighting.ambientColor=profile.Ambient.Color
+AdvancedLighting.ambientStrength=profile.Ambient.Strength
+setAdvancedAmbient(true,profile.Ambient.Color,profile.Ambient.Strength)
+setLightingProperty("OutdoorAmbient",profile.Ambient.Outdoor)
+end
+if profile.DepthOfField then
+AdvancedLighting.depthOfFieldEnabled=true
+AdvancedLighting.focusDistance=profile.DepthOfField.FocusDistance
+AdvancedLighting.focusRadius=profile.DepthOfField.InFocusRadius
+AdvancedLighting.nearBlur=profile.DepthOfField.NearIntensity
+AdvancedLighting.farBlur=profile.DepthOfField.FarIntensity
+setDepthOfField(true,AdvancedLighting.focusDistance,AdvancedLighting.focusRadius,AdvancedLighting.nearBlur,AdvancedLighting.farBlur)
+end
+if profile.ShadowSoftness~=nil then
+AdvancedLighting.shadowSoftness=profile.ShadowSoftness
+setLightingProperty("ShadowSoftness",profile.ShadowSoftness)
+end
+if profile.ColorShiftTop then setLightingProperty("ColorShift_Top",profile.ColorShiftTop) end
+if profile.ColorShiftBottom then setLightingProperty("ColorShift_Bottom",profile.ColorShiftBottom) end
+refreshCustomFog()
+
 if LightingControls then
 for key,control in pairs(LightingControls) do
 local value=AdvancedLighting[key]
@@ -17793,7 +17869,7 @@ visualSlider(creatorSection,"creator_vignette_strength","Vignette Strength",0,10
 visualToggle(creatorSection,"creator_center_dot","Recording Center Dot",function() CreatorOverlayRuntime:ApplyLayout() end)
 visualToggle(creatorSection,"creator_hide_when_menu_open","Hide Overlay With Menu")
 
-local lightingSection = visualsPage:CreateSection({Name="Advanced Lighting",Side="Right",Size=1260})
+local lightingSection = visualsPage:CreateSection({Name="Advanced Lighting",Side="Right",Size=1300})
 LightingControls = {}
 local function lightingToggle(key,name,changed)
 LightingControls[key]=lightingSection:CreateToggle({Name=name,State=AdvancedLighting[key],Flag="lighting."..key,Callback=function(value) AdvancedLighting[key]=value; changed(value) end})
@@ -17813,6 +17889,11 @@ Name="Visual Grade Preset",Options=LightingPresetNames,State=optionIndex(Lightin
 Callback=function(index) applyLightingPreset(LightingPresetNames[index] or "Neutral") end
 })
 lightingSection:CreateButton({Name="Reapply Visual Grade",Callback=function() applyLightingPreset(AdvancedLighting.visualPreset or "Neutral") end})
+lightingSection:CreateButton({Name="Apply DevKage Worlds",Callback=function()
+AdvancedLighting.visualPreset="DevKage Worlds"
+if LightingControls.visualPreset then LightingControls.visualPreset:Set(optionIndex(LightingPresetNames,"DevKage Worlds"),true) end
+applyLightingPreset("DevKage Worlds")
+end})
 
 local function refreshColorCorrection()
 setColorCorrection(AdvancedLighting.colorCorrectionEnabled,AdvancedLighting.tintColor,AdvancedLighting.brightness,AdvancedLighting.contrast,AdvancedLighting.saturation)
@@ -17847,14 +17928,16 @@ lightingSlider("fogStart","Fog Start",0,100000,0," studs",function() if Advanced
 lightingSlider("fogEnd","Fog End",1,250000,0," studs",function() if AdvancedLighting.fogEnabled then refreshCustomFog() end end)
 
 -- Premium Atmosphere controls.  These never toggle Fog off or rewrite FogColor.
+-- DevKage Atmosphere is tuned for a smooth cool-white haze with violet decay.
 local AtmosphereProfiles={
+["DevKage Atmosphere"]={Density=0.34,Offset=-0.18,Color=Color3.fromRGB(238,244,255),Decay=Color3.fromRGB(177,151,238),Glare=0.22,Haze=2.45},
 ["Cinematic"]={Density=0.24,Offset=-0.05,Color=Color3.fromRGB(190,210,235),Decay=Color3.fromRGB(92,108,138),Glare=0.18,Haze=1.15},
 ["Clean"]={Density=0.10,Offset=0.08,Color=Color3.fromRGB(225,238,248),Decay=Color3.fromRGB(175,190,205),Glare=0.10,Haze=0.35},
 ["Dreamy"]={Density=0.31,Offset=-0.10,Color=Color3.fromRGB(221,204,245),Decay=Color3.fromRGB(120,103,170),Glare=0.32,Haze=1.85},
 ["Midnight"]={Density=0.36,Offset=-0.16,Color=Color3.fromRGB(88,112,170),Decay=Color3.fromRGB(42,35,82),Glare=0.02,Haze=2.30},
 ["Golden Hour"]={Density=0.18,Offset=0.02,Color=Color3.fromRGB(255,219,174),Decay=Color3.fromRGB(168,112,91),Glare=0.42,Haze=0.90},
 }
-local AtmosphereProfileNames={"Custom","Cinematic","Clean","Dreamy","Midnight","Golden Hour"}
+local AtmosphereProfileNames={"Custom","DevKage Atmosphere","Cinematic","Clean","Dreamy","Midnight","Golden Hour"}
 local applyAtmosphereProfile
 LightingControls.atmosphereProfile=lightingSection:CreateDropdown({
 Name="Atmosphere Profile",Options=AtmosphereProfileNames,State=optionIndex(AtmosphereProfileNames,AdvancedLighting.atmosphereProfile),Flag="lighting.atmosphereProfile",
@@ -25116,184 +25199,4 @@ print("[DevKage + Mask Shard] Fully loaded and protected.")
 -- ============================================================
 -- END OF FILE
 -- ============================================================
-]============]
-
-local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
-__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.3-autoload-reliability-20260826"
-__devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
-
--- AUTOEXEC COEXISTENCE / LATE-BOOT SINGLE-BOOT ENTRYPOINT (v5.2.3)
---
--- Do not inspect or delete anything else in the executor Auto Execute folder.
--- Older v5.2.x builds attempted sibling cleanup here; that can interfere with a
--- completely separate script sharing Auto Execute.  Current ownership is now
--- limited to DevKage's exact canonical loader/payload files inside its own
--- config path.
---
--- Also do not block the executor's Auto Execute dispatcher while Roblox is
--- loading.  Some executors launch Auto Execute files sequentially; a synchronous
--- game.Loaded/PlayerGui/Camera wait here can prevent the next script from ever
--- getting its startup turn.  DevKage now boots in its own task.
-task.spawn(function()
-    local ok, err = pcall(function()
-        local players = game:GetService("Players")
-        local workspaceService = game:GetService("Workspace")
-
-        if not game:IsLoaded() then
-            game.Loaded:Wait()
-        end
-
-        while tostring(game.JobId) == "" do
-            task.wait(0.1)
-        end
-
-        while not players.LocalPlayer do
-            task.wait(0.1)
-        end
-
-        local localPlayer = players.LocalPlayer
-        while localPlayer and not localPlayer:FindFirstChildOfClass("PlayerGui") do
-            task.wait(0.1)
-            localPlayer = players.LocalPlayer
-        end
-
-        while not workspaceService.CurrentCamera do
-            task.wait(0.1)
-        end
-
-        -- LATE-BOOT AUTOEXEC COEXISTENCE (v5.2.3)
-        -- Wait for the match's own client controllers/viewmodel to appear, then
-        -- deliberately leave a grace period for every other native Auto Execute
-        -- script.  This package returns immediately at top level, so this wait
-        -- happens only inside DevKage's background boot task.
-        local playerScripts = localPlayer:FindFirstChild("PlayerScripts")
-        if not playerScripts then
-            playerScripts = localPlayer:WaitForChild("PlayerScripts", 10)
-        end
-        if playerScripts then
-            playerScripts:WaitForChild("Controllers", 8)
-            playerScripts:WaitForChild("Modules", 8)
-        end
-        workspaceService:WaitForChild("ViewModels", 8)
-
-        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = true
-        local lateDelay = tonumber(rawget(__devkageEnv, "__DEVKAGE_LATE_BOOT_DELAY")) or 15
-        if lateDelay < 5 then lateDelay = 5 end
-        task.wait(lateDelay)
-        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = nil
-
-        -- Full native Auto Execute and DevKage_AutoLoad.lua use the same job
-        -- ownership keys, but neither is allowed to claim the match until the
-        -- late-boot grace period has completed.
-        local jobKey = tostring(game.PlaceId) .. ":" .. tostring(game.JobId)
-
-        if __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB == jobKey then
-            local lockBuild = __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD
-            local lockAt = tonumber(__devkageEnv.__DEVKAGE_AUTO_STARTING_AT) or 0
-            local lockAge = lockAt > 0 and (os.clock() - lockAt) or math.huge
-            if lockBuild == __devkageEnv.__DEVKAGE_PACKAGE_BUILD
-                and lockAge >= 0 and lockAge < 45 then
-                return
-            end
-            __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
-            __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
-            __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
-        end
-
-        if __devkageEnv.__DEVKAGE_AUTO_STARTED_JOB == jobKey
-            and __devkageEnv.__DEVKAGE_AUTOLOADED_BUILD == __devkageEnv.__DEVKAGE_PACKAGE_BUILD then
-            return
-        end
-
-        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = jobKey
-        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
-        __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = os.clock()
-
-        -- One scheduling turn keeps this package cooperative with other
-        -- Auto Execute scripts even on executors with a very eager dispatcher.
-        task.wait()
-
-        local loader = loadstring or load
-        if type(loader) ~= "function" then
-            error("DevKage requires loadstring support")
-        end
-
-        local chunk, compileError = loader(__DEVKAGE_EMBEDDED_SOURCE)
-        if not chunk then
-            error(compileError)
-        end
-
-        local runOk, runError = pcall(chunk)
-        if not runOk then
-            error(runError)
-        end
-
-        __devkageEnv.__DEVKAGE_AUTO_STARTED_JOB = jobKey
-        __devkageEnv.__DEVKAGE_AUTOLOADED_BUILD = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
-        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
-        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
-        __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
-    end)
-
-    if not ok then
-        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
-        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
-        __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
-        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = nil
-        warn("[DevKage Package Boot] " .. tostring(err))
-    end
-end)
-
--- COEXISTENCE NOTES (non-executable documentation)
--- 01 DevKage does not enumerate sibling Auto Execute files.
--- 02 DevKage does not read sibling Auto Execute files.
--- 03 DevKage does not delete sibling Auto Execute files.
--- 04 DevKage only replaces its own zzzz_DevKage_AutoLoad_LAST.lua loader.
--- 05 Other executor scripts remain independent.
--- 06 Full-package startup is asynchronous.
--- 07 Roblox readiness waits happen inside the DevKage task.
--- 08 The executor dispatcher is not held by those waits.
--- 09 Native Auto Execute and queued DevKage share one job guard.
--- 10 Duplicate DevKage startup exits before runtime installation.
--- 11 PlayerGui readiness is still required before DevKage starts.
--- 12 CurrentCamera readiness is still required before DevKage starts.
--- 13 A non-empty JobId is required before claiming the run.
--- 14 A failed compile clears the in-progress ownership marker.
--- 15 A failed runtime clears the in-progress ownership marker.
--- 16 A successful runtime records the completed job.
--- 17 Teleport queue remains supported.
--- 18 Existing real Auto Execute folders remain supported.
--- 19 Only one existing Auto Execute folder receives the last-named loader.
--- 20 The old exact DevKage_AutoLoad.lua is removed during refresh.
--- 21 Alias folders are not filled with duplicate DevKage loaders.
--- 22 Guess folders are skipped when teleport queue already works.
--- 22 Config serialization is unchanged.
--- 23 ELO persistence is unchanged.
--- 24 Cursor behavior is unchanged.
--- 25 Rapid Fire behavior is unchanged.
--- 26 Weapon/viewmodel appearance is unchanged.
--- 27 Moderator detector behavior is unchanged.
--- 28 Slider controls are unchanged.
--- 29 Named config auto-load is unchanged.
--- 30 Script Auto Load remains user-toggle controlled.
--- 31 Legacy payload compatibility remains intact.
--- 32 Current payload remains versioned.
--- 33 Auto Load settings remain in the same settings file.
--- 34 The package source remains embedded exactly once.
--- 35 The outer package returns immediately after scheduling boot.
--- 36 DevKage waits for PlayerScripts before claiming a match.
--- 37 DevKage waits for Controllers/Modules when exposed by the game.
--- 38 DevKage waits briefly for ViewModels when exposed by the game.
--- 39 DevKage then yields a default 15-second late-boot grace period.
--- 40 The late-boot delay can be increased through __DEVKAGE_LATE_BOOT_DELAY.
--- 41 The minimum late-boot delay is five seconds.
--- 42 No DevKage ownership flag is set during the grace period.
--- 43 This block intentionally contains comments only.
--- 44 No gameplay feature is initialized from this documentation.
--- 45 No input state is changed from this documentation.
--- 46 No executor file is touched from this documentation.
--- 47 End coexistence notes.
-
--- Return immediately so the executor can continue launching any other
--- Auto Execute scripts in the same folder/session.
-return nil
+]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,51,45,97,117,116,111,108,111,97,100,45,114,101,108,105,97,98,105,108,105,116,121,45,50,48,50,54,48,56,50,54)_b._a=_a task.spawn(function()local _c,_d=pcall(function()local _e=game:GetService(string.char(80,108,97,121,101,114,115))local _f=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while tostring(game.JobId)==""do task.wait(0.1)end while not _e.LocalPlayer do task.wait(0.1)end local _g=_e.LocalPlayer while _g and not _g:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_g=_e.LocalPlayer end while not _f.CurrentCamera do task.wait(0.1)end local _h=_g:FindFirstChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115))if not _h then _h=_g:WaitForChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115),10)end if _h then _h:WaitForChild(string.char(67,111,110,116,114,111,108,108,101,114,115),8)_h:WaitForChild(string.char(77,111,100,117,108,101,115),8)end _f:WaitForChild(string.char(86,105,101,119,77,111,100,101,108,115),8)_b.__DEVKAGE_LATE_BOOT_WAITING=true local _i=tonumber(rawget(_b,string.char(95,95,68,69,86,75,65,71,69,95,76,65,84,69,95,66,79,79,84,95,68,69,76,65,89)))or 15 if _i<5 then _i=5 end task.wait(_i)_b.__DEVKAGE_LATE_BOOT_WAITING=nil local _j=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)if _b.__DEVKAGE_AUTO_STARTING_JOB==_j then local _k=_b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD local _l=tonumber(_b.__DEVKAGE_AUTO_STARTING_AT)or 0 local _m=_l>0 and(os.clock()-_l)or math.huge if _k==_b.__DEVKAGE_PACKAGE_BUILD and _m>=0 and _m<45 then return end _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end if _b.__DEVKAGE_AUTO_STARTED_JOB==_j and _b.__DEVKAGE_AUTOLOADED_BUILD==_b.__DEVKAGE_PACKAGE_BUILD then return end _b.__DEVKAGE_AUTO_STARTING_JOB=_j _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_AT=os.clock()task.wait()local _n=loadstring or load if type(_n)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _o,_p=_n(_a)if not _o then error(_p)end local _q,_r=pcall(_o)if not _q then error(_r)end _b.__DEVKAGE_AUTO_STARTED_JOB=_j _b.__DEVKAGE_AUTOLOADED_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end)if not _c then _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil _b.__DEVKAGE_LATE_BOOT_WAITING=nil warn(string.char(91,68,101,118,75,97,103,101,32,80,97,99,107,97,103,101,32,66,111,111,116,93,32)..tostring(_d))end end)return nil
