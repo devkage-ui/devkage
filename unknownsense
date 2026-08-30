@@ -9303,7 +9303,7 @@ reflectionQuality=5,
 ambientEnabled=false, ambientColor=getLightingProperty("Ambient",Color3.fromRGB(128,128,128)), ambientStrength=getLightingProperty("Brightness",2),
 blueSkyEnabled=false, blueSkyStrength=1,
 fogEnabled=false, fogColor=getLightingProperty("FogColor",Color3.fromRGB(192,192,192)), fogDensity=0.35,
-fogStart=getLightingProperty("FogStart",0), fogEnd=getLightingProperty("FogEnd",100000),
+fogStart=0, fogEnd=100000,
 snowEnabled=false, snowAmount=650, snowSpeed=55, snowSize=0.45, snowWind=0,
 snowColor=Color3.fromRGB(245,248,255), snowQuality="Ultra",
 weatherEnabled=false, weatherType="Rain", weatherIntensity=700, weatherSpeed=70,
@@ -9342,8 +9342,11 @@ end
 local function setColorCorrection(enabled,color,brightness,contrast,saturation)
 clearSaturationStack()
 if enabled then
-local e=AdvancedLighting.colorCorrection or getOrCreateEffect("ColorCorrectionEffect","DevKage_ColorCorrection")
+local e=AdvancedLighting.colorCorrection
+if not e or not e.Parent or not e:IsA("ColorCorrectionEffect") then
+e=getOrCreateEffect("ColorCorrectionEffect","DevKage_ColorCorrection")
 AdvancedLighting.colorCorrection=e
+end
 e.Enabled=true
 e.TintColor=color
 e.Brightness=math.clamp(brightness,-1,1)
@@ -9368,8 +9371,12 @@ end
 end
 local function setBloom(enabled,intensity,size,threshold)
 if enabled then
-local e=AdvancedLighting.bloom or getOrCreateEffect("BloomEffect","DevKage_Bloom")
-AdvancedLighting.bloom=e; e.Enabled=true
+local e=AdvancedLighting.bloom
+if not e or not e.Parent or not e:IsA("BloomEffect") then
+e=getOrCreateEffect("BloomEffect","DevKage_Bloom")
+AdvancedLighting.bloom=e
+end
+e.Enabled=true
 e.Intensity=math.clamp(tonumber(intensity) or 0,0,20)
 e.Size=math.clamp(tonumber(size) or 0,0,56)
 e.Threshold=math.clamp(tonumber(threshold) or 0,0,10)
@@ -9377,14 +9384,25 @@ elseif AdvancedLighting.bloom then AdvancedLighting.bloom.Enabled=false end
 end
 local function setSunRays(enabled,intensity,spread)
 if enabled then
-local e=AdvancedLighting.sunRays or getOrCreateEffect("SunRaysEffect","DevKage_SunRays")
-AdvancedLighting.sunRays=e; e.Enabled=true
+local e=AdvancedLighting.sunRays
+if not e or not e.Parent or not e:IsA("SunRaysEffect") then
+e=getOrCreateEffect("SunRaysEffect","DevKage_SunRays")
+AdvancedLighting.sunRays=e
+end
+e.Enabled=true
 e.Intensity=math.clamp(tonumber(intensity) or 0,0,1)
 e.Spread=math.clamp(tonumber(spread) or 0,0,1)
 elseif AdvancedLighting.sunRays then AdvancedLighting.sunRays.Enabled=false end
 end
 local function setDepthOfField(enabled,focus,radius,nearIntensity,farIntensity)
-if enabled then local e=AdvancedLighting.depthOfField or getOrCreateEffect("DepthOfFieldEffect","DevKage_DepthOfField"); AdvancedLighting.depthOfField=e; e.Enabled=true; e.FocusDistance=focus; e.InFocusRadius=radius; e.NearIntensity=nearIntensity; e.FarIntensity=farIntensity elseif AdvancedLighting.depthOfField then AdvancedLighting.depthOfField.Enabled=false end
+if enabled then
+local e=AdvancedLighting.depthOfField
+if not e or not e.Parent or not e:IsA("DepthOfFieldEffect") then
+e=getOrCreateEffect("DepthOfFieldEffect","DevKage_DepthOfField")
+AdvancedLighting.depthOfField=e
+end
+e.Enabled=true; e.FocusDistance=focus; e.InFocusRadius=radius; e.NearIntensity=nearIntensity; e.FarIntensity=farIntensity
+elseif AdvancedLighting.depthOfField then AdvancedLighting.depthOfField.Enabled=false end
 end
 local function setAtmosphere(enabled,density,offset,color,decay,glare,haze)
 local atmosphereOn=enabled==true
@@ -9414,13 +9432,13 @@ local fogDensity=math.clamp(tonumber(AdvancedLighting.fogDensity) or 0,0,1)
 -- FogEnd has no true density property, and Atmosphere can visually dominate
 -- weak legacy fog.  This response makes 0.10-0.50 useful instead of requiring
 -- the slider to sit near 1.00.  Fog still keeps its own FogColor/Start/End.
-local fogCurve=1-math.exp(-4.5*fogDensity)
-local densityContribution=fogCurve*(atmosphereOn and 0.26 or 0.34)
-local hazeContribution=fogCurve*(atmosphereOn and 2.35 or 3.10)
+local fogCurve=1-math.exp(-6.0*fogDensity)
+local densityContribution=fogCurve*(atmosphereOn and 0.30 or 0.40)
+local hazeContribution=fogCurve*(atmosphereOn and 2.80 or 3.80)
 
 baseDensity=math.clamp(baseDensity+densityContribution,0,1)
 baseHaze=math.clamp(baseHaze+hazeContribution,0,10)
-baseOffset=math.clamp(baseOffset-(fogCurve*0.075),-1,1)
+baseOffset=math.clamp(baseOffset-(fogCurve*0.10),-1,1)
 
 if atmosphereOn then
 local blend=math.clamp(fogCurve*0.18,0,0.18)
@@ -9511,31 +9529,27 @@ if not AdvancedLighting.ambientEnabled then setLightingProperty("OutdoorAmbient"
 end
 end
 
-local function refreshCustomFog()
-if AdvancedLighting.fogEnabled then
+local function getCustomFogTargets()
 local configuredStart=math.max(0,tonumber(AdvancedLighting.fogStart) or 0)
 local configuredEnd=math.max(configuredStart+1,tonumber(AdvancedLighting.fogEnd) or 100000)
 local density=math.clamp(tonumber(AdvancedLighting.fogDensity) or 0,0,1)
-
--- Roblox exposes FogStart/FogEnd rather than a real fog-density value.  Treat
--- the user's Fog End as the farthest allowed distance, then derive a nearer
--- optical distance from Fog Density.  This gives useful fog around 0.10-0.60
--- instead of requiring 1.00 just to see it.  Manual Fog End can still make the
--- fog even closer, and no Atmosphere/world preset is allowed to erase it.
 local effectiveEnd=configuredEnd
+
 if density>0.001 then
--- Strong perceptual curve:
---   0.10 ~= 2,000 studs
---   0.25 ~=   990 studs
---   0.35 ~=   620 studs
---   0.50 ~=   320 studs
---   0.75 ~=   120 studs
--- so Fog is clearly visible well before the maximum slider value.
-local visibilityDistance=45+(3200*math.exp(-4.85*density))
+-- Front-loaded visibility curve.  A normal 0.15-0.40 setting is now clearly
+-- visible even on maps whose original Lighting effectively disabled fog.
+-- 0.10 ~= 1,095 studs, 0.25 ~= 515, 0.35 ~= 315, 0.50 ~= 160.
+local visibilityDistance=25+(1800*math.exp(-5.2*density))
 effectiveEnd=math.min(configuredEnd,configuredStart+visibilityDistance)
 effectiveEnd=math.max(configuredStart+1,effectiveEnd)
 end
 
+return configuredStart,effectiveEnd
+end
+
+local function refreshCustomFog()
+if AdvancedLighting.fogEnabled then
+local configuredStart,effectiveEnd=getCustomFogTargets()
 setLightingProperty("FogColor",AdvancedLighting.fogColor)
 setLightingProperty("FogStart",configuredStart)
 setLightingProperty("FogEnd",effectiveEnd)
@@ -9545,9 +9559,8 @@ setLightingProperty("FogStart",AdvancedLighting.original.FogStart)
 setLightingProperty("FogEnd",AdvancedLighting.original.FogEnd)
 end
 
--- Recompose the single DevKage Atmosphere layer after every fog change.  This
--- makes Fog + Atmosphere work together and prevents either toggle from deleting
--- or silently replacing the other one's visual state.
+-- Recompose one DevKage atmosphere layer.  Fog never disables Atmosphere and
+-- Atmosphere never disables classic Fog; both contribute to the final image.
 setAtmosphere(
 AdvancedLighting.atmosphereEnabled,
 AdvancedLighting.atmosphereDensity,
@@ -10005,6 +10018,7 @@ flight_enabled = false,
 flight_speed = 120,
 connection = nil,
 characterConnection = nil,
+characterRemovingConnection = nil,
 savedHumanoids = {},
 savedNecks = {},
 lastYaw = nil,
@@ -10038,6 +10052,10 @@ end
 if AntiAimState.characterConnection then
 pcall(function() AntiAimState.characterConnection:Disconnect() end)
 AntiAimState.characterConnection = nil
+end
+if AntiAimState.characterRemovingConnection then
+pcall(function() AntiAimState.characterRemovingConnection:Disconnect() end)
+AntiAimState.characterRemovingConnection = nil
 end
 
 for humanoid, autoRotate in pairs(AntiAimState.savedHumanoids) do
@@ -10283,89 +10301,175 @@ end
 local function aa_apply(enabled)
 aa_restore()
 AntiAimState.enabled = enabled == true
-if not AntiAimState.enabled then return end
+if not AntiAimState.enabled then return true end
 
 local function setupCharacter(char)
+    if not char or not char.Parent then return false end
+
     local hum = char:FindFirstChildOfClass("Humanoid") or char:WaitForChild("Humanoid", 3)
-    if not hum then return end
+    if not hum or not hum.Parent then return false end
+
     if AntiAimState.savedHumanoids[hum] == nil then
         AntiAimState.savedHumanoids[hum] = hum.AutoRotate
     end
+
     local root = char:FindFirstChild("HumanoidRootPart") or char:WaitForChild("HumanoidRootPart", 3)
-    if root then
+    if root and root.Parent then
         local look = root.CFrame.LookVector
         AntiAimState.characterBaseYaw = math.atan2(-look.X, -look.Z)
     end
-    hum.AutoRotate = false
+
+    pcall(function() hum.AutoRotate = false end)
+    return true
 end
 
-if LocalPlayer.Character then setupCharacter(LocalPlayer.Character) end
+local function restoreCharacterState(char)
+    if not char then return end
+
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        local originalAutoRotate = AntiAimState.savedHumanoids[hum]
+        if originalAutoRotate ~= nil then
+            pcall(function() hum.AutoRotate = originalAutoRotate end)
+            AntiAimState.savedHumanoids[hum] = nil
+        end
+    end
+
+    local neck = aa_findNeck(char)
+    if neck then
+        local originalNeck = AntiAimState.savedNecks[neck]
+        if originalNeck then
+            pcall(function() neck.C0 = originalNeck end)
+            AntiAimState.savedNecks[neck] = nil
+        end
+    end
+
+    AntiAimState.characterBaseYaw = nil
+    AntiAimState.smoothedYaw = nil
+    AntiAimState.smoothedPitch = nil
+    AntiAimState.smoothedRoll = nil
+    AntiAimState.targetPlayer = nil
+    AntiAimState.lastTargetUpdate = 0
+end
+
+if LocalPlayer.Character then
+    setupCharacter(LocalPlayer.Character)
+end
+
 AntiAimState.characterConnection = LocalPlayer.CharacterAdded:Connect(function(char)
-    task.wait(0.2)
-    if AntiAimState.enabled and AntiAimState.respawn_reapply ~= false then setupCharacter(char) end
+    -- CharacterAdded can be followed by another character replacement before
+    -- HumanoidRootPart is ready. Delay without retaining a stale character.
+    task.delay(0.2, function()
+        if not AntiAimState.enabled or AntiAimState.respawn_reapply == false then return end
+        if LocalPlayer.Character ~= char or not char.Parent then return end
+        setupCharacter(char)
+    end)
+end)
+
+AntiAimState.characterRemovingConnection = LocalPlayer.CharacterRemoving:Connect(function(char)
+    restoreCharacterState(char)
 end)
 
 AntiAimState.connection = RunService.RenderStepped:Connect(function(dt)
     if not AntiAimState.enabled then return end
-    local char = LocalPlayer.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if not char or not hrp or not hum or hum.Health <= 0 then return end
-    if AntiAimState.savedHumanoids[hum] == nil then
-        if AntiAimState.respawn_reapply == false then return end
-        setupCharacter(char)
-    end
-    local paused = (AntiAimState.pause_while_typing == true and uis:GetFocusedTextBox() ~= nil)
-        or (AntiAimState.pause_while_seated == true and hum.SeatPart ~= nil)
-        or (AntiAimState.ground_only == true and hum.FloorMaterial == Enum.Material.Air)
-    if paused then
-        local originalAutoRotate = AntiAimState.savedHumanoids[hum]
-        pcall(function() hum.AutoRotate = originalAutoRotate == nil and true or originalAutoRotate end)
-        local pausedNeck = aa_findNeck(char)
-        local originalNeck = pausedNeck and AntiAimState.savedNecks[pausedNeck]
-        if pausedNeck and originalNeck then pcall(function() pausedNeck.C0 = originalNeck end) end
-        AntiAimState.smoothedYaw = nil
-        AntiAimState.smoothedPitch = nil
-        AntiAimState.smoothedRoll = nil
-        return
-    end
-    pcall(function() hum.AutoRotate = false end)
 
-    local now = os.clock()
-    local yaw, pitch, roll = aa_mode_angles(now, hum)
-    local position = hrp.Position
-    local camera = workspace.CurrentCamera
-    local baseYaw = AntiAimState.ResolveBaseYaw(hrp, hum, camera, now)
-    local desiredYaw = baseYaw + math.rad(yaw)
-    local smoothing = math.clamp(tonumber(AntiAimState.yaw_smoothing) or 0, 0, 30)
-    local deltaTime = math.max(tonumber(dt) or 0, 1 / 240)
-    local alpha = smoothing <= 0 and 1 or (1 - math.exp(-smoothing * deltaTime))
-    AntiAimState.smoothedYaw = AntiAimState.LerpAngle(AntiAimState.smoothedYaw or desiredYaw, desiredYaw, alpha)
-    AntiAimState.smoothedPitch = (AntiAimState.smoothedPitch or pitch) + (pitch - (AntiAimState.smoothedPitch or pitch)) * alpha
-    AntiAimState.smoothedRoll = (AntiAimState.smoothedRoll or roll) + (roll - (AntiAimState.smoothedRoll or roll)) * alpha
-    local appliedYaw = AntiAimState.smoothedYaw
-    local appliedPitch = AntiAimState.smoothedPitch
-    local appliedRoll = AntiAimState.smoothedRoll
-    local safeCFrame = CFrame.new(position) * CFrame.Angles(0, appliedYaw, 0)
-    pcall(function() hrp.CFrame = safeCFrame end)
+    local ok, runtimeError = xpcall(function()
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if not char or not hrp or not hum or hum.Health <= 0 then return end
 
-    local neck = aa_findNeck(char)
-    if neck then
-        if AntiAimState.savedNecks[neck] == nil then
-            AntiAimState.savedNecks[neck] = neck.C0
+        if AntiAimState.savedHumanoids[hum] == nil then
+            if AntiAimState.respawn_reapply == false then return end
+            if not setupCharacter(char) then return end
         end
-        pcall(function()
-            neck.C0 = AntiAimState.savedNecks[neck] * CFrame.Angles(math.rad(appliedPitch), 0, math.rad(appliedRoll))
+
+        local paused = (AntiAimState.pause_while_typing == true and uis:GetFocusedTextBox() ~= nil)
+            or (AntiAimState.pause_while_seated == true and hum.SeatPart ~= nil)
+            or (AntiAimState.ground_only == true and hum.FloorMaterial == Enum.Material.Air)
+
+        if paused then
+            local originalAutoRotate = AntiAimState.savedHumanoids[hum]
+            pcall(function()
+                hum.AutoRotate = originalAutoRotate == nil and true or originalAutoRotate
+            end)
+
+            local pausedNeck = aa_findNeck(char)
+            local originalNeck = pausedNeck and AntiAimState.savedNecks[pausedNeck]
+            if pausedNeck and originalNeck then
+                pcall(function() pausedNeck.C0 = originalNeck end)
+            end
+
+            AntiAimState.smoothedYaw = nil
+            AntiAimState.smoothedPitch = nil
+            AntiAimState.smoothedRoll = nil
+            return
+        end
+
+        pcall(function() hum.AutoRotate = false end)
+
+        local now = os.clock()
+        local yaw, pitch, roll = aa_mode_angles(now, hum)
+        local position = hrp.Position
+        local camera = workspace.CurrentCamera
+        local baseYaw = AntiAimState.ResolveBaseYaw(hrp, hum, camera, now)
+        local desiredYaw = baseYaw + math.rad(yaw)
+        local smoothing = math.clamp(tonumber(AntiAimState.yaw_smoothing) or 0, 0, 30)
+        local deltaTime = math.max(tonumber(dt) or 0, 1 / 240)
+        local alpha = smoothing <= 0 and 1 or (1 - math.exp(-smoothing * deltaTime))
+
+        AntiAimState.smoothedYaw = AntiAimState.LerpAngle(
+            AntiAimState.smoothedYaw or desiredYaw,
+            desiredYaw,
+            alpha
+        )
+        AntiAimState.smoothedPitch =
+            (AntiAimState.smoothedPitch or pitch)
+            + (pitch - (AntiAimState.smoothedPitch or pitch)) * alpha
+        AntiAimState.smoothedRoll =
+            (AntiAimState.smoothedRoll or roll)
+            + (roll - (AntiAimState.smoothedRoll or roll)) * alpha
+
+        local appliedYaw = AntiAimState.smoothedYaw
+        local appliedPitch = AntiAimState.smoothedPitch
+        local appliedRoll = AntiAimState.smoothedRoll
+
+        local safeCFrame = CFrame.new(position) * CFrame.Angles(0, appliedYaw, 0)
+        pcall(function() hrp.CFrame = safeCFrame end)
+
+        local neck = aa_findNeck(char)
+        if neck then
+            if AntiAimState.savedNecks[neck] == nil then
+                AntiAimState.savedNecks[neck] = neck.C0
+            end
+            pcall(function()
+                neck.C0 =
+                    AntiAimState.savedNecks[neck]
+                    * CFrame.Angles(math.rad(appliedPitch), 0, math.rad(appliedRoll))
+            end)
+        end
+
+        AntiAimState.lastYaw = yaw
+        AntiAimState.lastPitch = appliedPitch
+        AntiAimState.lastRoll = appliedRoll
+        AntiAimState.lastAppliedYaw = math.deg(appliedYaw)
+    end, function(err)
+        return tostring(err)
+    end)
+
+    if not ok then
+        -- Fail closed. A broken frame must not leave AutoRotate/neck state stuck
+        -- or spam the same exception every RenderStepped.
+        AntiAimState.enabled = false
+        task.defer(function()
+            aa_restore()
+            warn("[DevKage Anti Aim] disabled after runtime error: " .. tostring(runtimeError))
         end)
     end
-
-    AntiAimState.lastYaw = yaw
-    AntiAimState.lastPitch = appliedPitch
-    AntiAimState.lastRoll = appliedRoll
-    AntiAimState.lastAppliedYaw = math.deg(appliedYaw)
 end)
-end
 
+return true
+end
 local AntiAimMovement = {
     noclipConnection = nil,
     flightConnection = nil,
@@ -11098,11 +11202,11 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_8.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_9.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOLOAD_ENABLED_FILE = CONFIG_FOLDER .. "/_devkage_autoload_enabled.flag"
 local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_AutoLoad_LAST.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.8-universal-cursor-20260829"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.9-world-visual-reliability-20260830"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -18244,6 +18348,243 @@ devkagePresetSection:CreateButton({Name="Apply DevKage Night",Callback=function(
 devkagePresetSection:CreateButton({Name="Reapply Selected Look",Callback=function() if VisualsState.devkage_world_preset~="Custom" then applyDevKageWorldPreset(VisualsState.devkage_world_preset) else library:Notify({Message="Select DevKage Day or DevKage Night",Duration=3}) end end})
 devkagePresetStatus=devkagePresetSection:CreateLabel({Text="Night uses Heaven with a violet cinematic grade • Day uses bright warm dream clouds"})
 UI.applyDevKageWorldPreset=applyDevKageWorldPreset
+
+-- ============================================================
+-- WORLD VISUAL RELIABILITY GUARD
+-- ============================================================
+-- Many experiences continuously rewrite Lighting or recreate post effects.
+-- DevKage only reasserts visual settings that the user currently has enabled.
+-- Foreign map effects are preserved and restored when the matching DevKage
+-- override is no longer active.
+local WorldVisualGuard={
+Snapshots=setmetatable({}, {__mode="k"}),
+LastScan=0,
+Running=true,
+}
+
+local WorldVisualRunService=game:GetService("RunService")
+local WorldVisualHttpService=game:GetService("HttpService")
+local WorldVisualBindName="DevKageWorldVisualGuard_"..WorldVisualHttpService:GenerateGUID(false):gsub("%-","")
+
+local function worldVisualClassActive(className)
+if className=="Atmosphere" then return AdvancedLighting.atmosphereEnabled==true or AdvancedLighting.fogEnabled==true end
+if className=="BloomEffect" then return AdvancedLighting.bloomEnabled==true end
+if className=="SunRaysEffect" then return AdvancedLighting.sunRaysEnabled==true end
+if className=="DepthOfFieldEffect" then return AdvancedLighting.depthOfFieldEnabled==true end
+if className=="ColorCorrectionEffect" then return AdvancedLighting.colorCorrectionEnabled==true end
+return false
+end
+
+local function worldVisualOwned(object)
+if not object then return false end
+local name=tostring(object.Name or "")
+return name=="DevKage_Atmosphere"
+or name=="DevKage_Bloom"
+or name=="DevKage_SunRays"
+or name=="DevKage_DepthOfField"
+or name=="DevKage_ColorCorrection"
+or name:sub(1,23)=="DevKage_SaturationBoost"
+end
+
+local function snapshotForeignEffect(object)
+if WorldVisualGuard.Snapshots[object] then return WorldVisualGuard.Snapshots[object] end
+local snapshot={Class=object.ClassName}
+if object:IsA("Atmosphere") then
+snapshot.Density=object.Density; snapshot.Offset=object.Offset; snapshot.Color=object.Color
+snapshot.Decay=object.Decay; snapshot.Glare=object.Glare; snapshot.Haze=object.Haze
+else
+pcall(function() snapshot.Enabled=object.Enabled end)
+end
+WorldVisualGuard.Snapshots[object]=snapshot
+return snapshot
+end
+
+local function restoreForeignEffect(object,snapshot)
+if not object or not object.Parent or type(snapshot)~="table" then return end
+pcall(function()
+if snapshot.Class=="Atmosphere" and object:IsA("Atmosphere") then
+object.Density=snapshot.Density; object.Offset=snapshot.Offset; object.Color=snapshot.Color
+object.Decay=snapshot.Decay; object.Glare=snapshot.Glare; object.Haze=snapshot.Haze
+elseif snapshot.Enabled~=nil then
+object.Enabled=snapshot.Enabled
+end
+end)
+end
+
+local function reconcileForeignLightingEffects()
+for _,object in ipairs(LightingService:GetChildren()) do
+if not worldVisualOwned(object) then
+local className=object.ClassName
+if worldVisualClassActive(className) then
+local snapshot=snapshotForeignEffect(object)
+pcall(function()
+if className=="Atmosphere" and object:IsA("Atmosphere") then
+-- A map Atmosphere can completely wash out classic Fog.  Neutralize it only
+-- while DevKage Fog/Atmosphere is active; its exact values are restored later.
+object.Density=0
+object.Haze=0
+object.Glare=0
+elseif snapshot.Enabled~=nil then
+object.Enabled=false
+end
+end)
+end
+end
+end
+
+for object,snapshot in pairs(WorldVisualGuard.Snapshots) do
+if not object or not object.Parent then
+WorldVisualGuard.Snapshots[object]=nil
+elseif not worldVisualClassActive(snapshot.Class) then
+restoreForeignEffect(object,snapshot)
+WorldVisualGuard.Snapshots[object]=nil
+end
+end
+end
+
+local function ensureDevKagePostEffects()
+if AdvancedLighting.colorCorrectionEnabled then
+local e=AdvancedLighting.colorCorrection
+if not e or not e.Parent or not e:IsA("ColorCorrectionEffect") then
+setColorCorrection(true,AdvancedLighting.tintColor,AdvancedLighting.brightness,AdvancedLighting.contrast,AdvancedLighting.saturation)
+else
+pcall(function()
+e.Enabled=true
+e.TintColor=AdvancedLighting.tintColor
+e.Brightness=math.clamp(AdvancedLighting.brightness,-1,1)
+e.Contrast=math.clamp(AdvancedLighting.contrast,-1,1)
+e.Saturation=math.clamp(AdvancedLighting.saturation,-1,1)
+end)
+end
+end
+
+if AdvancedLighting.bloomEnabled then
+local e=AdvancedLighting.bloom
+if not e or not e.Parent or not e:IsA("BloomEffect") then
+setBloom(true,AdvancedLighting.bloomIntensity,AdvancedLighting.bloomSize,AdvancedLighting.bloomThreshold)
+else
+pcall(function()
+e.Enabled=true
+e.Intensity=math.clamp(tonumber(AdvancedLighting.bloomIntensity) or 0,0,20)
+e.Size=math.clamp(tonumber(AdvancedLighting.bloomSize) or 0,0,56)
+e.Threshold=math.clamp(tonumber(AdvancedLighting.bloomThreshold) or 0,0,10)
+end)
+end
+end
+
+if AdvancedLighting.sunRaysEnabled then
+local e=AdvancedLighting.sunRays
+if not e or not e.Parent or not e:IsA("SunRaysEffect") then
+setSunRays(true,AdvancedLighting.sunIntensity,AdvancedLighting.sunSpread)
+else
+pcall(function()
+e.Enabled=true
+e.Intensity=math.clamp(tonumber(AdvancedLighting.sunIntensity) or 0,0,1)
+e.Spread=math.clamp(tonumber(AdvancedLighting.sunSpread) or 0,0,1)
+end)
+end
+end
+
+if AdvancedLighting.depthOfFieldEnabled then
+local e=AdvancedLighting.depthOfField
+if not e or not e.Parent or not e:IsA("DepthOfFieldEffect") then
+setDepthOfField(true,AdvancedLighting.focusDistance,AdvancedLighting.focusRadius,AdvancedLighting.nearBlur,AdvancedLighting.farBlur)
+else
+pcall(function()
+e.Enabled=true
+e.FocusDistance=AdvancedLighting.focusDistance
+e.InFocusRadius=AdvancedLighting.focusRadius
+e.NearIntensity=AdvancedLighting.nearBlur
+e.FarIntensity=AdvancedLighting.farBlur
+end)
+end
+end
+end
+
+local function reassertWorldVisuals()
+if not WorldVisualGuard.Running then return end
+
+if AdvancedLighting.fogEnabled then
+local fogStart,fogEnd=getCustomFogTargets()
+pcall(function()
+LightingService.FogColor=AdvancedLighting.fogColor
+LightingService.FogStart=fogStart
+LightingService.FogEnd=fogEnd
+end)
+end
+
+if AdvancedLighting.atmosphereEnabled or AdvancedLighting.fogEnabled then
+pcall(setAtmosphere,
+AdvancedLighting.atmosphereEnabled,
+AdvancedLighting.atmosphereDensity,
+AdvancedLighting.atmosphereOffset,
+AdvancedLighting.atmosphereColor,
+AdvancedLighting.atmosphereDecay,
+AdvancedLighting.atmosphereGlare,
+AdvancedLighting.atmosphereHaze)
+end
+
+ensureDevKagePostEffects()
+
+if AdvancedLighting.ambientEnabled then
+pcall(setAdvancedAmbient,true,AdvancedLighting.ambientColor,AdvancedLighting.ambientStrength)
+end
+if AdvancedLighting.blueSkyEnabled then
+pcall(setBlueSky,true,AdvancedLighting.blueSkyStrength)
+end
+
+-- Preset-owned properties are also reasserted because time-of-day/lighting
+-- controllers commonly overwrite these every frame on individual maps.
+local visualProfile=LightingPresetProfiles[AdvancedLighting.visualPreset]
+if AdvancedLighting.visualPreset~="Neutral" and visualProfile then
+setLightingProperty("ExposureCompensation",AdvancedLighting.exposure)
+if visualProfile.Clock~=nil then setLightingProperty("ClockTime",AdvancedLighting.clockTime) end
+if visualProfile.ShadowSoftness~=nil then setLightingProperty("ShadowSoftness",AdvancedLighting.shadowSoftness) end
+if visualProfile.ColorShiftTop then setLightingProperty("ColorShift_Top",visualProfile.ColorShiftTop) end
+if visualProfile.ColorShiftBottom then setLightingProperty("ColorShift_Bottom",visualProfile.ColorShiftBottom) end
+end
+
+local worldPreset=DevKageWorldProfiles[VisualsState.devkage_world_preset]
+if VisualsState.devkage_world_preset~="Custom" and worldPreset then
+setLightingProperty("ExposureCompensation",AdvancedLighting.exposure)
+setLightingProperty("ClockTime",AdvancedLighting.clockTime)
+setLightingProperty("ShadowSoftness",AdvancedLighting.shadowSoftness)
+setLightingProperty("ColorShift_Top",worldPreset.ColorShiftTop)
+setLightingProperty("ColorShift_Bottom",worldPreset.ColorShiftBottom)
+if AdvancedLighting.ambientEnabled then
+setLightingProperty("OutdoorAmbient",worldPreset.OutdoorAmbient)
+end
+end
+
+local now=os.clock()
+if now-WorldVisualGuard.LastScan>=0.45 then
+WorldVisualGuard.LastScan=now
+reconcileForeignLightingEffects()
+
+-- Some maps destroy/recreate the selected Sky.  Reapply only when the user has
+-- explicitly enabled DevKage's skybox system.
+if VisualsState.skybox_enabled then pcall(applyPlayerESPSkybox) end
+end
+end
+
+pcall(function()
+WorldVisualRunService:BindToRenderStep(
+WorldVisualBindName,
+Enum.RenderPriority.Last.Value+750000,
+reassertWorldVisuals
+)
+end)
+
+library.CleanupCallbacks[#library.CleanupCallbacks+1]=function()
+WorldVisualGuard.Running=false
+pcall(function() WorldVisualRunService:UnbindFromRenderStep(WorldVisualBindName) end)
+for object,snapshot in pairs(WorldVisualGuard.Snapshots) do
+restoreForeignEffect(object,snapshot)
+end
+table.clear(WorldVisualGuard.Snapshots)
+end
+
+UI.WorldVisualGuard=WorldVisualGuard
 
 local animationSection = visualsPage:CreateSection({Name="Animation Preview",Side="Left",Size=350})
 VisualControls.animation_id = animationSection:CreateInput({Name="Animation ID",Placeholder="123456789",Default=tostring(VisualsState.animation_id or ""):match("%d+") or "",Numeric=true,DigitsOnly=true,MaxLength=20,Flag="visuals.animation_id",Callback=function(v) VisualsState.animation_id=tostring(v or ""):gsub("%D","") end})
@@ -25671,7 +26012,7 @@ task.spawn(function()
     if VisualsState.fov_changer then pcall(apply_fov, true, VisualsState.fov_value) end
     if VisualsState.fullbright then pcall(apply_fullbright, true, VisualsState.fullbright_value) end
     if VisualsState.ambient_override then pcall(apply_ambient, true, VisualsState.ambient_color) end
-    if VisualsState.fog_remove then pcall(apply_fog, true) end
+    if VisualsState.fog_remove and not AdvancedLighting.fogEnabled then pcall(apply_fog, true) end
     if VisualsState.motion_blur then pcall(setMotionBlur, true, VisualsState.motion_blur_intensity) end
     if VisualsState.color_shift then pcall(setColorShift, true, VisualsState.color_shift_top, VisualsState.color_shift_bottom) end
     if VisualsState.lighting_style then pcall(setLightingStyle, true, VisualsState.lighting_style_value) end
@@ -25752,4 +26093,4 @@ print("[DevKage + Mask Shard] Fully loaded and protected.")
 -- ============================================================
 -- END OF FILE
 -- ============================================================
-]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,56,45,117,110,105,118,101,114,115,97,108,45,99,117,114,115,111,114,45,50,48,50,54,48,56,50,57)_b._a=_a pcall(function()if type(writefile)~=string.char(102,117,110,99,116,105,111,110)or type(readfile)~=string.char(102,117,110,99,116,105,111,110)then return end local _c=string.char(68,101,118,75,97,103,101,95,67,111,110,102,105,103,115)local _d=_c..string.char(47,95,115,99,114,105,112,116,95,115,101,116,116,105,110,103,115,46,106,115,111,110)local _e=_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,101,110,97,98,108,101,100,46,102,108,97,103)local _f=false local _g,_h=pcall(readfile,_d)if _g and type(_h)==string.char(115,116,114,105,110,103)and _h~=""then local _i,_j=pcall(game.GetService,game,string.char(72,116,116,112,83,101,114,118,105,99,101))if _i and _j then local _k,_l=pcall(_j.JSONDecode,_j,_h)if _k and type(_l)==string.char(116,97,98,108,101)and _l.AutoLoad==true then _f=true end end end if not _f then if type(isfile)==string.char(102,117,110,99,116,105,111,110)then local _m,_n=pcall(isfile,_e)_f=_m and _n==true else local _m=pcall(readfile,_e)_f=_m end end if not _f then return end if type(makefolder)==string.char(102,117,110,99,116,105,111,110)then pcall(makefolder,_c)end local _o=_a pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,56,46,108,117,97),_o)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,55,46,108,117,97),_o)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,51,46,108,117,97),_o)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,46,108,117,97),string.char(45,45,32,68,69,86,75,65,71,69,95,65,85,84,79,76,79,65,68,95,66,85,73,76,68,58,68,101,118,75,97,103,101,45,118,49,53,45,114,101,102,101,114,101,110,99,101,45,99,117,114,115,111,114,45,114,97,112,105,100,102,105,114,101,45,99,117,114,114,101,110,116,10).._o)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,99,117,114,114,101,110,116,46,116,120,116),string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,56,45,117,110,105,118,101,114,115,97,108,45,99,117,114,115,111,114,45,50,48,50,54,48,56,50,57))pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,98,117,105,108,100,46,116,120,116),string.char(68,101,118,75,97,103,101,45,118,49,53,45,114,101,102,101,114,101,110,99,101,45,99,117,114,115,111,114,45,114,97,112,105,100,102,105,114,101,45,99,117,114,114,101,110,116))pcall(writefile,_e,string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,56,45,117,110,105,118,101,114,115,97,108,45,99,117,114,115,111,114,45,50,48,50,54,48,56,50,57))_b.__DEVKAGE_AUTOLOAD_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,56,45,117,110,105,118,101,114,115,97,108,45,99,117,114,115,111,114,45,50,48,50,54,48,56,50,57)_b.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT=os.clock()end)task.spawn(function()local _p,_q=pcall(function()local _r=game:GetService(string.char(80,108,97,121,101,114,115))local _s=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while tostring(game.JobId)==""do task.wait(0.1)end while not _r.LocalPlayer do task.wait(0.1)end local _t=_r.LocalPlayer while _t and not _t:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_t=_r.LocalPlayer end while not _s.CurrentCamera do task.wait(0.1)end local _u=_t:FindFirstChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115))if not _u then _u=_t:WaitForChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115),10)end if _u then _u:WaitForChild(string.char(67,111,110,116,114,111,108,108,101,114,115),8)_u:WaitForChild(string.char(77,111,100,117,108,101,115),8)end _s:WaitForChild(string.char(86,105,101,119,77,111,100,101,108,115),8)_b.__DEVKAGE_LATE_BOOT_WAITING=true local _v=tonumber(rawget(_b,string.char(95,95,68,69,86,75,65,71,69,95,76,65,84,69,95,66,79,79,84,95,68,69,76,65,89)))or 15 if _v<5 then _v=5 end task.wait(_v)_b.__DEVKAGE_LATE_BOOT_WAITING=nil local _w=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)if _b.__DEVKAGE_AUTO_STARTING_JOB==_w then local _x=_b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD local _y=tonumber(_b.__DEVKAGE_AUTO_STARTING_AT)or 0 local _z=_y>0 and(os.clock()-_y)or math.huge if _x==_b.__DEVKAGE_PACKAGE_BUILD and _z>=0 and _z<45 then return end _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end if _b.__DEVKAGE_AUTO_STARTED_JOB==_w and _b.__DEVKAGE_AUTOLOADED_BUILD==_b.__DEVKAGE_PACKAGE_BUILD then return end _b.__DEVKAGE_AUTO_STARTING_JOB=_w _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_AT=os.clock()task.wait()local _A=loadstring or load if type(_A)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _B,_C=_A(_a)if not _B then error(_C)end local _D,_E=pcall(_B)if not _D then error(_E)end _b.__DEVKAGE_AUTO_STARTED_JOB=_w _b.__DEVKAGE_AUTOLOADED_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end)if not _p then _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil _b.__DEVKAGE_LATE_BOOT_WAITING=nil warn(string.char(91,68,101,118,75,97,103,101,32,80,97,99,107,97,103,101,32,66,111,111,116,93,32)..tostring(_q))end end)return nil
+]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,57,45,119,111,114,108,100,45,118,105,115,117,97,108,45,114,101,108,105,97,98,105,108,105,116,121,45,50,48,50,54,48,56,51,48)_b._a=_a pcall(function()if type(writefile)~=string.char(102,117,110,99,116,105,111,110)or type(readfile)~=string.char(102,117,110,99,116,105,111,110)then return end local _c=string.char(68,101,118,75,97,103,101,95,67,111,110,102,105,103,115)local _d=_c..string.char(47,95,115,99,114,105,112,116,95,115,101,116,116,105,110,103,115,46,106,115,111,110)local _e=_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,101,110,97,98,108,101,100,46,102,108,97,103)local _f=false local _g,_h=pcall(readfile,_d)if _g and type(_h)==string.char(115,116,114,105,110,103)and _h~=""then local _i,_j=pcall(game.GetService,game,string.char(72,116,116,112,83,101,114,118,105,99,101))if _i and _j then local _k,_l=pcall(_j.JSONDecode,_j,_h)if _k and type(_l)==string.char(116,97,98,108,101)and _l.AutoLoad==true then _f=true end end end if not _f then if type(isfile)==string.char(102,117,110,99,116,105,111,110)then local _m,_n=pcall(isfile,_e)_f=_m and _n==true else local _m=pcall(readfile,_e)_f=_m end end if not _f then return end if type(makefolder)==string.char(102,117,110,99,116,105,111,110)then pcall(makefolder,_c)end local _o=_a pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,57,46,108,117,97),_o)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,56,46,108,117,97),_o)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,55,46,108,117,97),_o)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,51,46,108,117,97),_o)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,46,108,117,97),string.char(45,45,32,68,69,86,75,65,71,69,95,65,85,84,79,76,79,65,68,95,66,85,73,76,68,58,68,101,118,75,97,103,101,45,118,49,53,45,114,101,102,101,114,101,110,99,101,45,99,117,114,115,111,114,45,114,97,112,105,100,102,105,114,101,45,99,117,114,114,101,110,116,10).._o)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,99,117,114,114,101,110,116,46,116,120,116),string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,57,45,119,111,114,108,100,45,118,105,115,117,97,108,45,114,101,108,105,97,98,105,108,105,116,121,45,50,48,50,54,48,56,51,48))pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,98,117,105,108,100,46,116,120,116),string.char(68,101,118,75,97,103,101,45,118,49,53,45,114,101,102,101,114,101,110,99,101,45,99,117,114,115,111,114,45,114,97,112,105,100,102,105,114,101,45,99,117,114,114,101,110,116))pcall(writefile,_e,string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,57,45,119,111,114,108,100,45,118,105,115,117,97,108,45,114,101,108,105,97,98,105,108,105,116,121,45,50,48,50,54,48,56,51,48))_b.__DEVKAGE_AUTOLOAD_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,57,45,119,111,114,108,100,45,118,105,115,117,97,108,45,114,101,108,105,97,98,105,108,105,116,121,45,50,48,50,54,48,56,51,48)_b.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT=os.clock()end)task.spawn(function()local _p,_q=pcall(function()local _r=game:GetService(string.char(80,108,97,121,101,114,115))local _s=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while tostring(game.JobId)==""do task.wait(0.1)end while not _r.LocalPlayer do task.wait(0.1)end local _t=_r.LocalPlayer while _t and not _t:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_t=_r.LocalPlayer end while not _s.CurrentCamera do task.wait(0.1)end local _u=_t:FindFirstChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115))if not _u then _u=_t:WaitForChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115),10)end if _u then _u:WaitForChild(string.char(67,111,110,116,114,111,108,108,101,114,115),8)_u:WaitForChild(string.char(77,111,100,117,108,101,115),8)end _s:WaitForChild(string.char(86,105,101,119,77,111,100,101,108,115),8)_b.__DEVKAGE_LATE_BOOT_WAITING=true local _v=tonumber(rawget(_b,string.char(95,95,68,69,86,75,65,71,69,95,76,65,84,69,95,66,79,79,84,95,68,69,76,65,89)))or 15 if _v<5 then _v=5 end task.wait(_v)_b.__DEVKAGE_LATE_BOOT_WAITING=nil local _w=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)if _b.__DEVKAGE_AUTO_STARTING_JOB==_w then local _x=_b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD local _y=tonumber(_b.__DEVKAGE_AUTO_STARTING_AT)or 0 local _z=_y>0 and(os.clock()-_y)or math.huge if _x==_b.__DEVKAGE_PACKAGE_BUILD and _z>=0 and _z<45 then return end _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end if _b.__DEVKAGE_AUTO_STARTED_JOB==_w and _b.__DEVKAGE_AUTOLOADED_BUILD==_b.__DEVKAGE_PACKAGE_BUILD then return end _b.__DEVKAGE_AUTO_STARTING_JOB=_w _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_AT=os.clock()task.wait()local _A=loadstring or load if type(_A)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _B,_C=_A(_a)if not _B then error(_C)end local _D,_E=pcall(_B)if not _D then error(_E)end _b.__DEVKAGE_AUTO_STARTED_JOB=_w _b.__DEVKAGE_AUTOLOADED_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end)if not _p then _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil _b.__DEVKAGE_LATE_BOOT_WAITING=nil warn(string.char(91,68,101,118,75,97,103,101,32,80,97,99,107,97,103,101,32,66,111,111,116,93,32)..tostring(_q))end end)return nil
