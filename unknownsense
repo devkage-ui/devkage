@@ -9409,17 +9409,23 @@ local baseHaze=atmosphereOn and math.clamp(tonumber(haze) or 0,0,10) or 0
 
 if fogOn then
 local fogDensity=math.clamp(tonumber(AdvancedLighting.fogDensity) or 0,0,1)
--- Classic Roblox fog has no Density property, so Fog Density is translated
--- into both an effective fog distance (inside refreshCustomFog) and a small
--- optical contribution here.  The curve makes low/mid values visible without
--- forcing the slider to 1.00, while Atmosphere keeps its own authored look.
-local fogCurve=fogDensity^0.78
-baseDensity=math.clamp(baseDensity+(fogCurve*0.16),0,1)
-baseHaze=math.clamp(baseHaze+(fogCurve*1.55),0,10)
+
+-- Fog response is intentionally front-loaded.  Roblox's classic FogStart /
+-- FogEnd has no true density property, and Atmosphere can visually dominate
+-- weak legacy fog.  This response makes 0.10-0.50 useful instead of requiring
+-- the slider to sit near 1.00.  Fog still keeps its own FogColor/Start/End.
+local fogCurve=1-math.exp(-4.5*fogDensity)
+local densityContribution=fogCurve*(atmosphereOn and 0.26 or 0.34)
+local hazeContribution=fogCurve*(atmosphereOn and 2.35 or 3.10)
+
+baseDensity=math.clamp(baseDensity+densityContribution,0,1)
+baseHaze=math.clamp(baseHaze+hazeContribution,0,10)
+baseOffset=math.clamp(baseOffset-(fogCurve*0.075),-1,1)
+
 if atmosphereOn then
-local blend=math.clamp(fogCurve*0.12,0,0.12)
+local blend=math.clamp(fogCurve*0.18,0,0.18)
 baseColor=baseColor:Lerp(AdvancedLighting.fogColor,blend)
-baseDecay=baseDecay:Lerp(AdvancedLighting.fogColor,blend*0.52)
+baseDecay=baseDecay:Lerp(AdvancedLighting.fogColor,blend*0.62)
 end
 end
 
@@ -9518,7 +9524,14 @@ local density=math.clamp(tonumber(AdvancedLighting.fogDensity) or 0,0,1)
 -- fog even closer, and no Atmosphere/world preset is allowed to erase it.
 local effectiveEnd=configuredEnd
 if density>0.001 then
-local visibilityDistance=120+(6200*((1-density)^4))
+-- Strong perceptual curve:
+--   0.10 ~= 2,000 studs
+--   0.25 ~=   990 studs
+--   0.35 ~=   620 studs
+--   0.50 ~=   320 studs
+--   0.75 ~=   120 studs
+-- so Fog is clearly visible well before the maximum slider value.
+local visibilityDistance=45+(3200*math.exp(-4.85*density))
 effectiveEnd=math.min(configuredEnd,configuredStart+visibilityDistance)
 effectiveEnd=math.max(configuredStart+1,effectiveEnd)
 end
@@ -11085,11 +11098,11 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_7.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_8.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOLOAD_ENABLED_FILE = CONFIG_FOLDER .. "/_devkage_autoload_enabled.flag"
 local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_AutoLoad_LAST.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.7-current-autoload-20260829"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.8-universal-cursor-20260829"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -20584,6 +20597,502 @@ task.defer(function()
     end
 end)
 
+-- Universal server/session utilities.
+-- Deliberately self-contained: no remote hooks, metatable hooks, combat state,
+-- or executor-wide mutation.  This keeps the tools compatible with MaskShard's
+-- coexistence-only runtime while leaving MaskShard itself unchanged.
+local universalSection = ragePage:CreateSection({
+    Name = "Universal Tools",
+    Side = "Right",
+    Size = 650
+})
+
+local UniversalToolsRuntime = {
+    Busy = false,
+    LastError = nil,
+    LastServer = nil,
+    Visited = {},
+}
+
+UniversalToolsRuntime.Visited[tostring(game.JobId)] = true
+
+local TeleportServiceUniversal = game:GetService("TeleportService")
+local StatsServiceUniversal = game:GetService("Stats")
+
+local universalStatus = universalSection:CreateLabel({
+    Text = "Server tools ready"
+})
+
+local function universalNotify(message, duration)
+    if library then
+        library:Notify({
+            Message = tostring(message),
+            Duration = tonumber(duration) or 3
+        })
+    end
+end
+
+local function universalSetStatus(message)
+    message = tostring(message or "")
+    UniversalToolsRuntime.LastError = message
+    if universalStatus and universalStatus.SetText then
+        universalStatus:SetText(message)
+    end
+end
+
+local function universalPing()
+    local value = nil
+    pcall(function()
+        local network = StatsServiceUniversal.Network
+        local serverStats = network and network.ServerStatsItem
+        local pingItem = serverStats and serverStats["Data Ping"]
+        if pingItem then
+            local raw = pingItem:GetValue()
+            if type(raw) == "number" then
+                value = math.floor(raw + 0.5)
+            else
+                local display = tostring(pingItem:GetValueString() or "")
+                value = tonumber(display:match("([%d%.]+)"))
+                if value then value = math.floor(value + 0.5) end
+            end
+        end
+    end)
+    return value
+end
+
+local function universalRefreshInfo()
+    local playerCount = #Players:GetPlayers()
+    local maxPlayers = tonumber(Players.MaxPlayers) or 0
+    local ping = universalPing()
+    local shortJob = tostring(game.JobId or "")
+    if #shortJob > 12 then shortJob = shortJob:sub(1, 12) .. "..." end
+
+    local text = tostring(playerCount) .. "/" .. tostring(maxPlayers) .. " players"
+    if ping then text = text .. "  •  " .. tostring(ping) .. "ms" end
+    if shortJob ~= "" then text = text .. "  •  " .. shortJob end
+
+    universalSetStatus(text)
+    return text
+end
+
+local function universalClipboard(value, label)
+    local env = (type(getgenv) == "function" and getgenv()) or _G
+    local copy = rawget(env, "setclipboard")
+        or rawget(env, "toclipboard")
+        or (type(setclipboard) == "function" and setclipboard or nil)
+
+    if type(copy) ~= "function" then
+        universalNotify("Clipboard API unavailable", 3)
+        return false
+    end
+
+    local ok, err = pcall(copy, tostring(value or ""))
+    if ok then
+        universalNotify(tostring(label or "Value") .. " copied", 2)
+        return true
+    end
+
+    universalNotify("Copy failed: " .. tostring(err), 3)
+    return false
+end
+
+local function universalHttpGet(url)
+    -- Prefer Roblox's normal HttpGet path, then fall back to commonly exposed
+    -- executor request functions.  This is only used for Roblox's public server
+    -- listing endpoint and does not touch remotes or gameplay state.
+    local ok, body = pcall(function()
+        return game:HttpGet(url)
+    end)
+
+    if ok and type(body) == "string" and body ~= "" then
+        return body
+    end
+
+    local env = (type(getgenv) == "function" and getgenv()) or _G
+    local requestFn = rawget(env, "request")
+        or rawget(env, "http_request")
+        or (type(syn) == "table" and syn.request)
+
+    if type(requestFn) ~= "function" then
+        return nil, "HTTP request API unavailable"
+    end
+
+    local requestOk, response = pcall(requestFn, {
+        Url = url,
+        Method = "GET",
+        Headers = { ["Accept"] = "application/json" },
+    })
+
+    if not requestOk or type(response) ~= "table" then
+        return nil, "Server list request failed"
+    end
+
+    local statusCode = tonumber(response.StatusCode or response.Status or response.status_code)
+    local responseBody = response.Body or response.body
+
+    if statusCode and (statusCode < 200 or statusCode >= 300) then
+        return nil, "Server list HTTP " .. tostring(statusCode)
+    end
+
+    if type(responseBody) ~= "string" or responseBody == "" then
+        return nil, "Server list returned no data"
+    end
+
+    return responseBody
+end
+
+local function universalFetchServers(maxPages)
+    maxPages = math.clamp(math.floor(tonumber(maxPages) or 4), 1, 8)
+
+    local servers = {}
+    local cursor = nil
+    local placeId = tonumber(game.PlaceId)
+
+    for _ = 1, maxPages do
+        local url =
+            "https://games.roblox.com/v1/games/"
+            .. tostring(placeId)
+            .. "/servers/Public?sortOrder=Asc&excludeFullGames=true&limit=100"
+
+        if cursor and cursor ~= "" then
+            url = url .. "&cursor=" .. HttpService:UrlEncode(cursor)
+        end
+
+        local body, requestError = universalHttpGet(url)
+        if type(body) ~= "string" or body == "" then
+            return nil, tostring(requestError or "Server list request failed")
+        end
+
+        local decodeOk, data = pcall(HttpService.JSONDecode, HttpService, body)
+        if not decodeOk or type(data) ~= "table" then
+            return nil, "Server list response was invalid"
+        end
+
+        for _, server in ipairs(data.data or {}) do
+            local id = tostring(server.id or "")
+            local playing = tonumber(server.playing) or 0
+            local capacity = tonumber(server.maxPlayers) or 0
+
+            if id ~= ""
+                and id ~= tostring(game.JobId)
+                and not UniversalToolsRuntime.Visited[id]
+                and capacity > 0
+                and playing < capacity then
+
+                servers[#servers + 1] = {
+                    id = id,
+                    playing = playing,
+                    maxPlayers = capacity,
+                    ping = tonumber(server.ping),
+                    fps = tonumber(server.fps),
+                }
+            end
+        end
+
+        cursor = data.nextPageCursor
+        if not cursor or cursor == "" or #servers >= 250 then
+            break
+        end
+
+        task.wait()
+    end
+
+    return servers
+end
+
+local function universalTeleportToServer(server)
+    if UniversalToolsRuntime.Busy then
+        universalNotify("Teleport already in progress", 2)
+        return false
+    end
+
+    if type(server) ~= "table" or tostring(server.id or "") == "" then
+        universalNotify("No valid server was selected", 3)
+        return false
+    end
+
+    UniversalToolsRuntime.Busy = true
+    UniversalToolsRuntime.LastServer = server.id
+    UniversalToolsRuntime.Visited[server.id] = true
+
+    universalSetStatus(
+        "Joining "
+        .. tostring(server.playing or "?")
+        .. "/"
+        .. tostring(server.maxPlayers or "?")
+        .. " server..."
+    )
+
+    local ok, err = pcall(
+        TeleportServiceUniversal.TeleportToPlaceInstance,
+        TeleportServiceUniversal,
+        game.PlaceId,
+        server.id,
+        LocalPlayer
+    )
+
+    if not ok then
+        UniversalToolsRuntime.Busy = false
+        UniversalToolsRuntime.Visited[server.id] = nil
+        universalSetStatus("Teleport failed")
+        universalNotify("Server hop failed: " .. tostring(err), 4)
+        return false
+    end
+
+    return true
+end
+
+local function universalHop(mode)
+    if UniversalToolsRuntime.Busy then
+        universalNotify("Teleport already in progress", 2)
+        return
+    end
+
+    universalSetStatus("Finding public servers...")
+
+    task.spawn(function()
+        local servers, err = universalFetchServers(4)
+        if not servers then
+            universalSetStatus(tostring(err or "Server lookup failed"))
+            universalNotify(tostring(err or "Server lookup failed"), 4)
+            return
+        end
+
+        if #servers == 0 then
+            universalSetStatus("No open unvisited servers found")
+            universalNotify("No open unvisited servers found", 3)
+            return
+        end
+
+        local selected = nil
+
+        if mode == "Low Population" then
+            table.sort(servers, function(a, b)
+                if a.playing == b.playing then
+                    local ap = tonumber(a.ping) or math.huge
+                    local bp = tonumber(b.ping) or math.huge
+                    return ap < bp
+                end
+                return a.playing < b.playing
+            end)
+            selected = servers[1]
+        elseif mode == "High Population" then
+            table.sort(servers, function(a, b)
+                if a.playing == b.playing then
+                    local ap = tonumber(a.ping) or math.huge
+                    local bp = tonumber(b.ping) or math.huge
+                    return ap < bp
+                end
+                return a.playing > b.playing
+            end)
+            selected = servers[1]
+        elseif mode == "Best Ping" then
+            table.sort(servers, function(a, b)
+                local ap = tonumber(a.ping) or math.huge
+                local bp = tonumber(b.ping) or math.huge
+                if ap == bp then return a.playing < b.playing end
+                return ap < bp
+            end)
+            selected = servers[1]
+        else
+            selected = servers[math.random(1, #servers)]
+        end
+
+        universalTeleportToServer(selected)
+    end)
+end
+
+universalSection:CreateButton({
+    Name = "Server Hop",
+    Callback = function()
+        universalHop("Random")
+    end
+})
+
+universalSection:CreateButton({
+    Name = "Low Population Hop",
+    Callback = function()
+        universalHop("Low Population")
+    end
+})
+
+universalSection:CreateButton({
+    Name = "Best Ping Hop",
+    Callback = function()
+        universalHop("Best Ping")
+    end
+})
+
+universalSection:CreateButton({
+    Name = "High Population Hop",
+    Callback = function()
+        universalHop("High Population")
+    end
+})
+
+universalSection:CreateButton({
+    Name = "Scan Public Servers",
+    Callback = function()
+        if UniversalToolsRuntime.Busy then
+            universalNotify("Teleport already in progress", 2)
+            return
+        end
+
+        universalSetStatus("Scanning public servers...")
+
+        task.spawn(function()
+            local servers, err = universalFetchServers(4)
+            if not servers then
+                universalSetStatus(tostring(err or "Server scan failed"))
+                universalNotify(tostring(err or "Server scan failed"), 4)
+                return
+            end
+
+            local bestPing = math.huge
+            local lowestPopulation = math.huge
+            local highestPopulation = 0
+
+            for _, server in ipairs(servers) do
+                bestPing = math.min(bestPing, tonumber(server.ping) or math.huge)
+                lowestPopulation = math.min(lowestPopulation, tonumber(server.playing) or math.huge)
+                highestPopulation = math.max(highestPopulation, tonumber(server.playing) or 0)
+            end
+
+            local summary = tostring(#servers) .. " open servers"
+            if bestPing < math.huge then summary = summary .. "  •  best " .. tostring(math.floor(bestPing + 0.5)) .. "ms" end
+            if lowestPopulation < math.huge then summary = summary .. "  •  low " .. tostring(lowestPopulation) end
+            if highestPopulation > 0 then summary = summary .. "  •  high " .. tostring(highestPopulation) end
+
+            universalSetStatus(summary)
+            universalNotify(summary, 4)
+        end)
+    end
+})
+
+universalSection:CreateButton({
+    Name = "Clear Hop History",
+    Callback = function()
+        UniversalToolsRuntime.Visited = {}
+        UniversalToolsRuntime.Visited[tostring(game.JobId)] = true
+        universalSetStatus("Hop history cleared")
+        universalNotify("Server hop history cleared", 2)
+    end
+})
+
+universalSection:CreateButton({
+    Name = "Rejoin Current Server",
+    Callback = function()
+        if UniversalToolsRuntime.Busy then
+            universalNotify("Teleport already in progress", 2)
+            return
+        end
+
+        UniversalToolsRuntime.Busy = true
+        universalSetStatus("Rejoining current server...")
+
+        local ok, err = pcall(
+            TeleportServiceUniversal.TeleportToPlaceInstance,
+            TeleportServiceUniversal,
+            game.PlaceId,
+            game.JobId,
+            LocalPlayer
+        )
+
+        if not ok then
+            UniversalToolsRuntime.Busy = false
+            universalSetStatus("Rejoin failed")
+            universalNotify("Rejoin failed: " .. tostring(err), 4)
+        end
+    end
+})
+
+universalSection:CreateButton({
+    Name = "Refresh Server Info",
+    Callback = function()
+        universalRefreshInfo()
+    end
+})
+
+universalSection:CreateButton({
+    Name = "Copy Server ID",
+    Callback = function()
+        universalClipboard(game.JobId, "Server ID")
+    end
+})
+
+universalSection:CreateButton({
+    Name = "Copy Place ID",
+    Callback = function()
+        universalClipboard(game.PlaceId, "Place ID")
+    end
+})
+
+universalSection:CreateButton({
+    Name = "Copy Join Command",
+    Callback = function()
+        local command =
+            'game:GetService("TeleportService"):TeleportToPlaceInstance('
+            .. tostring(game.PlaceId)
+            .. ', "'
+            .. tostring(game.JobId)
+            .. '", game:GetService("Players").LocalPlayer)'
+        universalClipboard(command, "Join command")
+    end
+})
+
+universalSection:CreateButton({
+    Name = "Copy Server Summary",
+    Callback = function()
+        local ping = universalPing()
+        local summary =
+            "PlaceId=" .. tostring(game.PlaceId)
+            .. " | JobId=" .. tostring(game.JobId)
+            .. " | Players=" .. tostring(#Players:GetPlayers())
+            .. "/" .. tostring(Players.MaxPlayers)
+            .. (ping and (" | Ping=" .. tostring(ping) .. "ms") or "")
+        universalClipboard(summary, "Server summary")
+    end
+})
+
+utility:CreateConnection(TeleportServiceUniversal.TeleportInitFailed, function(player, result, errorMessage)
+    if player ~= LocalPlayer then return end
+    UniversalToolsRuntime.Busy = false
+    universalSetStatus("Teleport failed")
+    universalNotify(
+        "Teleport failed: "
+        .. tostring(errorMessage or result or "unknown error"),
+        4
+    )
+end)
+
+utility:CreateConnection(Players.PlayerAdded, function()
+    task.defer(universalRefreshInfo)
+end)
+
+utility:CreateConnection(Players.PlayerRemoving, function()
+    task.defer(universalRefreshInfo)
+end)
+
+universalRefreshInfo()
+
+-- MaskShard compatibility registration only.  This is lifecycle ownership,
+-- not concealment or anti-detection behavior.
+if type(MaskShard) == "table" and type(MaskShard.Runtime) == "table" then
+    MaskShard.Runtime.UniversalTools = UniversalToolsRuntime
+end
+
+table.insert(library.CleanupCallbacks, function()
+    UniversalToolsRuntime.Busy = false
+
+    if type(MaskShard) == "table"
+        and type(MaskShard.Runtime) == "table"
+        and MaskShard.Runtime.UniversalTools == UniversalToolsRuntime then
+        MaskShard.Runtime.UniversalTools = nil
+    end
+end)
+
+UI.UniversalTools = UniversalToolsRuntime
+
 local modDetectorSection = ragePage:CreateSection({Name="Mod Detector",Side="Left",Size=120})
 local worldTextureSection = ragePage:CreateSection({Name="World Texture",Side="Left",Size=330})
 local accessoriesSection = ragePage:CreateSection({Name="Accessories",Side="Left",Size=300})
@@ -21740,6 +22249,13 @@ end
 local function referenceDestroyCursorGui()
     local runtime = ReferenceCursorRuntime
 
+    -- The cursor can temporarily live inside DevKage's ScreenGui while the menu
+    -- is open, so destroy routed GuiObjects explicitly before destroying the
+    -- dedicated gameplay ScreenGui.
+    for _, object in ipairs({runtime.AimContainer, runtime.MainText, runtime.SecondText}) do
+        if object then pcall(function() object:Destroy() end) end
+    end
+
     if runtime.ScreenGui then
         pcall(function()
             runtime.ScreenGui:Destroy()
@@ -21788,7 +22304,7 @@ local function referenceCreateLine(parent, name)
     frame.BorderSizePixel = 0
     frame.Active = false
     frame.Selectable = false
-    frame.ZIndex = 5
+    frame.ZIndex = 100000
     frame.Parent = parent
 
     local stroke =
@@ -21826,7 +22342,7 @@ local function referenceCreateLine(parent, name)
     glow.BorderSizePixel = 0
     glow.Active = false
     glow.Selectable = false
-    glow.ZIndex = 4
+    glow.ZIndex = 99999
     glow.Visible = false
     glow.Parent = parent
 
@@ -21894,7 +22410,7 @@ local function referenceCreateTextLabel(parent, name)
             23
         )
 
-    label.ZIndex = 10
+    label.ZIndex = 100001
     label.Parent = parent
 
     local stroke =
@@ -21965,9 +22481,13 @@ local function referenceCreateCursorGui()
     -- DevKage's menu ScreenGui uses DisplayOrder 9999. This higher order is
     -- what makes the supplied cursor visible directly on the mouse while the
     -- DevKage UI itself is open.
-    screenGui.DisplayOrder = 1000000
+    screenGui.DisplayOrder = 2147483000
 
     screenGui.IgnoreGuiInset = true
+
+    -- Keep the custom pointer above DevKage's own UI and CoreGui blur layers.
+    pcall(function() screenGui.OnTopOfCoreBlur = true end)
+    pcall(function() screenGui.ClipToDeviceSafeArea = false end)
 
     screenGui.ZIndexBehavior =
         Enum.ZIndexBehavior.Global
@@ -22028,7 +22548,7 @@ local function referenceCreateCursorGui()
 
     aimContainer.Active = false
     aimContainer.Selectable = false
-    aimContainer.ZIndex = 5
+    aimContainer.ZIndex = 100000
     aimContainer.Parent = screenGui
 
     runtime.ScreenGui = screenGui
@@ -22813,6 +23333,31 @@ local function referenceUpdateRotation(settings, deltaTime)
 end
 
 -- ============================================================
+-- MENU OVERLAY ROUTING
+-- ============================================================
+
+local function referenceRouteCursorLayer()
+    local runtime = ReferenceCursorRuntime
+    if not runtime.ScreenGui or not runtime.AimContainer then return end
+
+    -- Some executor/CoreGui combinations ignore DisplayOrder between sibling
+    -- ScreenGuis.  While the DevKage menu is open, put the cursor GuiObjects
+    -- inside the SAME ScreenGui as the menu and give them a higher ZIndex.
+    -- When the menu closes, move them back to the dedicated cursor ScreenGui
+    -- so the pointer remains visible in normal gameplay.
+    local menuGui = window and window.ScreenGui
+    local target = (window and window.Enabled == true and menuGui and menuGui.Parent)
+        and menuGui
+        or runtime.ScreenGui
+
+    for _, object in ipairs({runtime.AimContainer, runtime.MainText, runtime.SecondText}) do
+        if object and object.Parent ~= target then
+            pcall(function() object.Parent = target end)
+        end
+    end
+end
+
+-- ============================================================
 -- RENDER LOOP
 -- ============================================================
 
@@ -22872,6 +23417,8 @@ local function referenceCursorRender(deltaTime)
 
     local enabled =
         settings.Enabled ~= false
+
+    referenceRouteCursorLayer()
 
     -- When DevKage is open in first person, the game camera may attempt to
     -- restore LockCenter after the menu's normal input pass. Release it again
@@ -25205,4 +25752,4 @@ print("[DevKage + Mask Shard] Fully loaded and protected.")
 -- ============================================================
 -- END OF FILE
 -- ============================================================
-]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,55,45,99,117,114,114,101,110,116,45,97,117,116,111,108,111,97,100,45,50,48,50,54,48,56,50,57)_b._a=_a pcall(function()if type(writefile)~=string.char(102,117,110,99,116,105,111,110)or type(readfile)~=string.char(102,117,110,99,116,105,111,110)then return end local _c=string.char(68,101,118,75,97,103,101,95,67,111,110,102,105,103,115)local _d=_c..string.char(47,95,115,99,114,105,112,116,95,115,101,116,116,105,110,103,115,46,106,115,111,110)local _e=_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,101,110,97,98,108,101,100,46,102,108,97,103)local _f=false local _g,_h=pcall(readfile,_d)if _g and type(_h)==string.char(115,116,114,105,110,103)and _h~=""then local _i,_j=pcall(game.GetService,game,string.char(72,116,116,112,83,101,114,118,105,99,101))if _i and _j then local _k,_l=pcall(_j.JSONDecode,_j,_h)if _k and type(_l)==string.char(116,97,98,108,101)and _l.AutoLoad==true then _f=true end end end if not _f then if type(isfile)==string.char(102,117,110,99,116,105,111,110)then local _m,_n=pcall(isfile,_e)_f=_m and _n==true else local _m=pcall(readfile,_e)_f=_m end end if not _f then return end if type(makefolder)==string.char(102,117,110,99,116,105,111,110)then pcall(makefolder,_c)end local _o=_a pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,55,46,108,117,97),_o)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,51,46,108,117,97),_o)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,46,108,117,97),string.char(45,45,32,68,69,86,75,65,71,69,95,65,85,84,79,76,79,65,68,95,66,85,73,76,68,58,68,101,118,75,97,103,101,45,118,49,53,45,114,101,102,101,114,101,110,99,101,45,99,117,114,115,111,114,45,114,97,112,105,100,102,105,114,101,45,99,117,114,114,101,110,116,10).._o)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,99,117,114,114,101,110,116,46,116,120,116),string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,55,45,99,117,114,114,101,110,116,45,97,117,116,111,108,111,97,100,45,50,48,50,54,48,56,50,57))pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,98,117,105,108,100,46,116,120,116),string.char(68,101,118,75,97,103,101,45,118,49,53,45,114,101,102,101,114,101,110,99,101,45,99,117,114,115,111,114,45,114,97,112,105,100,102,105,114,101,45,99,117,114,114,101,110,116))pcall(writefile,_e,string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,55,45,99,117,114,114,101,110,116,45,97,117,116,111,108,111,97,100,45,50,48,50,54,48,56,50,57))_b.__DEVKAGE_AUTOLOAD_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,55,45,99,117,114,114,101,110,116,45,97,117,116,111,108,111,97,100,45,50,48,50,54,48,56,50,57)_b.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT=os.clock()end)task.spawn(function()local _p,_q=pcall(function()local _r=game:GetService(string.char(80,108,97,121,101,114,115))local _s=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while tostring(game.JobId)==""do task.wait(0.1)end while not _r.LocalPlayer do task.wait(0.1)end local _t=_r.LocalPlayer while _t and not _t:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_t=_r.LocalPlayer end while not _s.CurrentCamera do task.wait(0.1)end local _u=_t:FindFirstChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115))if not _u then _u=_t:WaitForChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115),10)end if _u then _u:WaitForChild(string.char(67,111,110,116,114,111,108,108,101,114,115),8)_u:WaitForChild(string.char(77,111,100,117,108,101,115),8)end _s:WaitForChild(string.char(86,105,101,119,77,111,100,101,108,115),8)_b.__DEVKAGE_LATE_BOOT_WAITING=true local _v=tonumber(rawget(_b,string.char(95,95,68,69,86,75,65,71,69,95,76,65,84,69,95,66,79,79,84,95,68,69,76,65,89)))or 15 if _v<5 then _v=5 end task.wait(_v)_b.__DEVKAGE_LATE_BOOT_WAITING=nil local _w=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)if _b.__DEVKAGE_AUTO_STARTING_JOB==_w then local _x=_b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD local _y=tonumber(_b.__DEVKAGE_AUTO_STARTING_AT)or 0 local _z=_y>0 and(os.clock()-_y)or math.huge if _x==_b.__DEVKAGE_PACKAGE_BUILD and _z>=0 and _z<45 then return end _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end if _b.__DEVKAGE_AUTO_STARTED_JOB==_w and _b.__DEVKAGE_AUTOLOADED_BUILD==_b.__DEVKAGE_PACKAGE_BUILD then return end _b.__DEVKAGE_AUTO_STARTING_JOB=_w _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_AT=os.clock()task.wait()local _A=loadstring or load if type(_A)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _B,_C=_A(_a)if not _B then error(_C)end local _D,_E=pcall(_B)if not _D then error(_E)end _b.__DEVKAGE_AUTO_STARTED_JOB=_w _b.__DEVKAGE_AUTOLOADED_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end)if not _p then _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil _b.__DEVKAGE_LATE_BOOT_WAITING=nil warn(string.char(91,68,101,118,75,97,103,101,32,80,97,99,107,97,103,101,32,66,111,111,116,93,32)..tostring(_q))end end)return nil
+]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,56,45,117,110,105,118,101,114,115,97,108,45,99,117,114,115,111,114,45,50,48,50,54,48,56,50,57)_b._a=_a pcall(function()if type(writefile)~=string.char(102,117,110,99,116,105,111,110)or type(readfile)~=string.char(102,117,110,99,116,105,111,110)then return end local _c=string.char(68,101,118,75,97,103,101,95,67,111,110,102,105,103,115)local _d=_c..string.char(47,95,115,99,114,105,112,116,95,115,101,116,116,105,110,103,115,46,106,115,111,110)local _e=_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,101,110,97,98,108,101,100,46,102,108,97,103)local _f=false local _g,_h=pcall(readfile,_d)if _g and type(_h)==string.char(115,116,114,105,110,103)and _h~=""then local _i,_j=pcall(game.GetService,game,string.char(72,116,116,112,83,101,114,118,105,99,101))if _i and _j then local _k,_l=pcall(_j.JSONDecode,_j,_h)if _k and type(_l)==string.char(116,97,98,108,101)and _l.AutoLoad==true then _f=true end end end if not _f then if type(isfile)==string.char(102,117,110,99,116,105,111,110)then local _m,_n=pcall(isfile,_e)_f=_m and _n==true else local _m=pcall(readfile,_e)_f=_m end end if not _f then return end if type(makefolder)==string.char(102,117,110,99,116,105,111,110)then pcall(makefolder,_c)end local _o=_a pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,56,46,108,117,97),_o)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,55,46,108,117,97),_o)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,51,46,108,117,97),_o)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,46,108,117,97),string.char(45,45,32,68,69,86,75,65,71,69,95,65,85,84,79,76,79,65,68,95,66,85,73,76,68,58,68,101,118,75,97,103,101,45,118,49,53,45,114,101,102,101,114,101,110,99,101,45,99,117,114,115,111,114,45,114,97,112,105,100,102,105,114,101,45,99,117,114,114,101,110,116,10).._o)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,99,117,114,114,101,110,116,46,116,120,116),string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,56,45,117,110,105,118,101,114,115,97,108,45,99,117,114,115,111,114,45,50,48,50,54,48,56,50,57))pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,98,117,105,108,100,46,116,120,116),string.char(68,101,118,75,97,103,101,45,118,49,53,45,114,101,102,101,114,101,110,99,101,45,99,117,114,115,111,114,45,114,97,112,105,100,102,105,114,101,45,99,117,114,114,101,110,116))pcall(writefile,_e,string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,56,45,117,110,105,118,101,114,115,97,108,45,99,117,114,115,111,114,45,50,48,50,54,48,56,50,57))_b.__DEVKAGE_AUTOLOAD_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,56,45,117,110,105,118,101,114,115,97,108,45,99,117,114,115,111,114,45,50,48,50,54,48,56,50,57)_b.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT=os.clock()end)task.spawn(function()local _p,_q=pcall(function()local _r=game:GetService(string.char(80,108,97,121,101,114,115))local _s=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while tostring(game.JobId)==""do task.wait(0.1)end while not _r.LocalPlayer do task.wait(0.1)end local _t=_r.LocalPlayer while _t and not _t:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_t=_r.LocalPlayer end while not _s.CurrentCamera do task.wait(0.1)end local _u=_t:FindFirstChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115))if not _u then _u=_t:WaitForChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115),10)end if _u then _u:WaitForChild(string.char(67,111,110,116,114,111,108,108,101,114,115),8)_u:WaitForChild(string.char(77,111,100,117,108,101,115),8)end _s:WaitForChild(string.char(86,105,101,119,77,111,100,101,108,115),8)_b.__DEVKAGE_LATE_BOOT_WAITING=true local _v=tonumber(rawget(_b,string.char(95,95,68,69,86,75,65,71,69,95,76,65,84,69,95,66,79,79,84,95,68,69,76,65,89)))or 15 if _v<5 then _v=5 end task.wait(_v)_b.__DEVKAGE_LATE_BOOT_WAITING=nil local _w=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)if _b.__DEVKAGE_AUTO_STARTING_JOB==_w then local _x=_b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD local _y=tonumber(_b.__DEVKAGE_AUTO_STARTING_AT)or 0 local _z=_y>0 and(os.clock()-_y)or math.huge if _x==_b.__DEVKAGE_PACKAGE_BUILD and _z>=0 and _z<45 then return end _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end if _b.__DEVKAGE_AUTO_STARTED_JOB==_w and _b.__DEVKAGE_AUTOLOADED_BUILD==_b.__DEVKAGE_PACKAGE_BUILD then return end _b.__DEVKAGE_AUTO_STARTING_JOB=_w _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_AT=os.clock()task.wait()local _A=loadstring or load if type(_A)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _B,_C=_A(_a)if not _B then error(_C)end local _D,_E=pcall(_B)if not _D then error(_E)end _b.__DEVKAGE_AUTO_STARTED_JOB=_w _b.__DEVKAGE_AUTOLOADED_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end)if not _p then _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil _b.__DEVKAGE_LATE_BOOT_WAITING=nil warn(string.char(91,68,101,118,75,97,103,101,32,80,97,99,107,97,103,101,32,66,111,111,116,93,32)..tostring(_q))end end)return nil
