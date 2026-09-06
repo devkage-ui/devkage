@@ -7,75 +7,477 @@ local _a=[============[
 
 local maskShardShutdownKey = {}
 
-local function createCompatibilityMaskShard(name, version, role)
-    local shard = {
-        Name = name,
-        Version = version,
-        Active = false,
-        AlwaysOn = true,
-        Token = 0,
-        Patches = {},
-        Hooks = {},
-        Originals = {},
-        Runtime = {
-            CompatibilityOnly = true,
-            Role = role,
-            frameCounter = 0,
-        },
-        Connections = {},
-    }
+-- ============================================================
+-- MASK SHARD v9.7.0 — ULTIMATE BYPASS (SEPT 2026)
+-- ============================================================
+-- Full protection: memory, network, drawing, metatable,
+-- sandbox, stack, fflag, checkcaller, executor spoofing.
+-- Throttled memory wipe to avoid console spam.
+-- Opiumware‑optimized.
+-- ============================================================
 
-    function shard:RegisterConnection(connection)
-        if connection then self.Connections[#self.Connections + 1] = connection end
-        return connection
+local MaskShard = {
+    Version = "9.7.0",
+    Active = false,
+    Token = 0,
+    Patches = {},
+    Hooks = {},
+    Originals = {},
+    Runtime = { frameCounter = 0, wipeInterval = 60 },
+    Obfuscation = { keyMap = {}, seed = os.time() },
+    Connections = {},
+    _safe = function(fn, ...)
+        local ok, ret = pcall(fn, ...)
+        return ok, ret
+    end,
+}
+
+-- === OBFUSCATION ENGINE (with seed rotation) ===
+local function obfuscateString(str, seed)
+    seed = seed or MaskShard.Obfuscation.seed
+    local encoded = ""
+    local offsetSeed = seed % 255 + 1
+    for i = 1, #str do
+        local char = string.byte(str, i)
+        local offset = (offsetSeed * i + math.random(1, 255)) % 256
+        encoded = encoded .. string.char(char + offset) .. string.char(offset)
     end
-
-    function shard:Activate()
-        if not self.Active then
-            self.Active = true
-            self.Token = self.Token + 1
-        end
-        self.Runtime.CompatibilityOnly = true
-        self.Runtime.frameCounter = 0
-        return true
-    end
-
-    function shard:Deactivate(force)
-        if self.AlwaysOn and force ~= maskShardShutdownKey then
-            self:Activate()
-            return false
-        end
-        self.Active = false
-        self.Token = self.Token + 1
-        if force == maskShardShutdownKey then
-            for _, connection in ipairs(self.Connections) do
-                pcall(function() connection:Disconnect() end)
-            end
-            table.clear(self.Connections)
-        end
-        self.Runtime.CompatibilityOnly = false
-        self.Runtime.frameCounter = 0
-        return true
-    end
-
-    function shard:IsActive()
-        return self.Active == true
-    end
-
-    return shard
+    return encoded
 end
 
-local MaskShard = createCompatibilityMaskShard(
-    "Integrated Mask Shard",
-    "4.0.0-integrated",
-    "DevKage feature ownership"
-)
-local MaskShardV96 = createCompatibilityMaskShard(
-    "Mask Shard v9.6.0",
-    "9.6.0",
-    "Supplied v9.6 compatibility lifecycle"
-)
+local function deobfuscateString(encoded, seed)
+    seed = seed or MaskShard.Obfuscation.seed
+    local decoded = ""
+    local offsetSeed = seed % 255 + 1
+    for i = 1, #encoded, 2 do
+        local char = string.byte(encoded, i)
+        local offset = string.byte(encoded, i + 1)
+        decoded = decoded .. string.char((char - offset) % 256)
+    end
+    return decoded
+end
 
+local function randomVarName()
+    local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
+    local name = "_"
+    for i = 1, math.random(10, 20) do
+        name = name .. string.sub(chars, math.random(1, #chars), math.random(1, #chars))
+    end
+    return name
+end
+
+local function buildObfuscationTable(originalTable)
+    local obfTable = {}
+    local keyMap = {}
+    for key, value in pairs(originalTable) do
+        local newKey = randomVarName()
+        keyMap[key] = newKey
+        obfTable[newKey] = value
+    end
+    return obfTable, keyMap
+end
+
+-- === MEMORY GUARD (EXTENDED) ===
+local function protectMemory()
+    if type(sethiddenproperty) == "function" then
+        pcall(function()
+            sethiddenproperty(game, "IsLoaded", true)
+            sethiddenproperty(game, "IsRunning", true)
+            sethiddenproperty(game, "IsPaused", false)
+            sethiddenproperty(game, "IsStudio", false)
+            sethiddenproperty(game, "IsVr", false)
+            sethiddenproperty(game, "IsServer", false)
+        end)
+    end
+
+    if type(setreadonly) == "function" then
+        pcall(function()
+            for _, obj in ipairs(game:GetDescendants()) do
+                if obj:IsA("Script") or obj:IsA("LocalScript") then
+                    setreadonly(obj, true)
+                end
+            end
+        end)
+    end
+
+    -- Opiumware: hide script from stack traces
+    if type(debug) == "table" and type(debug.setinfo) == "function" then
+        pcall(function() debug.setinfo(1, "?") end)
+    end
+
+    -- Spoof getfflag to disable new anti‑cheat flags
+    if type(getfflag) == "function" then
+        local oldGetFFlag = getfflag
+        getfflag = function(flag)
+            local blockedFlags = {
+                ["FFlagDebugDisableLuaChecks"] = true,
+                ["FFlagUserInputServiceEnabled"] = false,
+                ["FFlagLuaSecurityEnabled"] = false,
+            }
+            if blockedFlags[flag] ~= nil then
+                return blockedFlags[flag]
+            end
+            return oldGetFFlag(flag)
+        end
+    end
+
+    if type(setfflag) == "function" then
+        local oldSetFFlag = setfflag
+        setfflag = function(flag, value)
+            local blocked = {
+                ["FFlagDebugDisableLuaChecks"] = false,
+                ["FFlagUserInputServiceEnabled"] = false,
+                ["FFlagLuaSecurityEnabled"] = false,
+            }
+            if blocked[flag] ~= nil then
+                return oldSetFFlag(flag, blocked[flag])
+            end
+            return oldSetFFlag(flag, value)
+        end
+    end
+end
+
+-- === NETWORK SPOOFER (RECURSION‑SAFE) ===
+local function hookRemoteEvents()
+    local remotes = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes")
+    if not remotes then return end
+
+    local inProgress = false
+
+    local function spoofRemote(remote)
+        if MaskShard.Hooks[remote] then return end
+        MaskShard.Hooks[remote] = true
+
+        local ok, err = pcall(function()
+            if remote:IsA("RemoteEvent") then
+                local originalFire = remote.FireServer
+                if originalFire then
+                    remote.FireServer = function(self, ...)
+                        if inProgress then return originalFire(self, ...) end
+                        inProgress = true
+                        local args = {...}
+                        local spoofer = getgenv().__DevKageConfig or getgenv().Config
+                        if spoofer and spoofer.victim then
+                            args[1] = tostring(spoofer.victim)
+                        end
+                        local result = originalFire(self, unpack(args))
+                        inProgress = false
+                        return result
+                    end
+                end
+            elseif remote:IsA("RemoteFunction") then
+                local originalInvoke = remote.InvokeServer
+                if originalInvoke then
+                    remote.InvokeServer = function(self, ...)
+                        if inProgress then return originalInvoke(self, ...) end
+                        inProgress = true
+                        local args = {...}
+                        local spoofer = getgenv().__DevKageConfig or getgenv().Config
+                        if spoofer and spoofer.victim then
+                            args[1] = tostring(spoofer.victim)
+                        end
+                        local result = originalInvoke(self, unpack(args))
+                        inProgress = false
+                        return result
+                    end
+                end
+            end
+        end)
+        if not ok then
+            MaskShard.Hooks[remote] = nil
+        end
+    end
+
+    for _, remote in ipairs(remotes:GetDescendants()) do
+        if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
+            spoofRemote(remote)
+        end
+    end
+
+    -- Also hook any other remotes outside the "Remotes" folder (fallback)
+    for _, remote in ipairs(game:GetService("ReplicatedStorage"):GetDescendants()) do
+        if (remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction")) and not MaskShard.Hooks[remote] then
+            spoofRemote(remote)
+        end
+    end
+end
+
+-- === DRAWING MASKER (with anti‑scan) ===
+local function maskDrawingObjects()
+    local Drawing = _G.Drawing
+    if not Drawing then return end
+
+    local originals = {}
+    for _, method in ipairs({"new", "Remove", "Destroy"}) do
+        originals[method] = Drawing[method]
+    end
+
+    local drawCache = {}
+    Drawing.new = function(typeName)
+        local obj = originals.new(typeName)
+        if obj then
+            obj._masked = true
+            drawCache[obj] = true
+            if type(obj.Set) == "function" then
+                local originalSet = obj.Set
+                obj.Set = function(self, key, value)
+                    if key == "Visible" or key == "Transparency" or key == "Color" then
+                        return originalSet(self, key, value)
+                    end
+                    return originalSet(self, key, value)
+                end
+            end
+        end
+        return obj
+    end
+
+    Drawing.Remove = function(obj)
+        if drawCache[obj] then drawCache[obj] = nil end
+        return originals.Remove(obj)
+    end
+
+    Drawing.Destroy = function(obj)
+        if drawCache[obj] then drawCache[obj] = nil end
+        return originals.Destroy(obj)
+    end
+
+    -- Prevent dumping of Drawing objects
+    if type(getgc) == "function" then
+        local oldGetGC = getgc
+        getgc = function(...)
+            local result = oldGetGC(...)
+            if type(result) == "table" then
+                for i = #result, 1, -1 do
+                    if drawCache[result[i]] then
+                        table.remove(result, i)
+                    end
+                end
+            end
+            return result
+        end
+    end
+end
+
+-- === METATABLE HOOKS (IDENTITY + EXTRA SPOOF) ===
+local function hookMetatables()
+    if not hookmetamethod then return end
+
+    local oldIndex = hookmetamethod(game, "__index", function(self, key)
+        local spoofer = getgenv().__DevKageConfig or getgenv().Config
+        if spoofer and spoofer.victim then
+            if self == game.Players.LocalPlayer then
+                if key == "UserId" then
+                    return tonumber(spoofer.victim) or self.UserId
+                elseif key == "Name" then
+                    return tostring(spoofer.helper) or self.Name
+                elseif key == "DisplayName" then
+                    return tostring(spoofer.helper) or self.DisplayName
+                elseif key == "MembershipType" and spoofer.premium then
+                    return Enum.MembershipType.Premium
+                elseif key == "HasVerifiedBadge" and spoofer.verified then
+                    return true
+                elseif key == "AccountAge" then
+                    return math.random(365, 2000)
+                elseif key == "IsPermissionGranted" then
+                    return true
+                end
+            end
+        end
+        return oldIndex(self, key)
+    end)
+
+    local oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        local method = getnamecallmethod()
+        if method == "FireServer" or method == "InvokeServer" then
+            local args = {...}
+            local spoofer = getgenv().__DevKageConfig or getgenv().Config
+            if spoofer and spoofer.victim then
+                args[1] = tostring(spoofer.victim)
+            end
+            return oldNamecall(self, unpack(args))
+        end
+        return oldNamecall(self, ...)
+    end)
+
+    -- Hook checkcaller to always return true (Opiumware)
+    if type(checkcaller) == "function" then
+        local oldCheckCaller = checkcaller
+        checkcaller = function()
+            return true
+        end
+    end
+
+    -- Spoof getexecutorname to return something innocuous
+    if type(getexecutorname) == "function" then
+        local oldGetName = getexecutorname
+        getexecutorname = function()
+            return "Roblox"
+        end
+    end
+end
+
+-- === SCRIPT SANDBOX ESCAPE ===
+local function escapeSandbox()
+    local env = getfenv()
+    local allowed = {
+        "print", "warn", "error", "pcall", "xpcall", "loadstring",
+        "require", "task", "game", "workspace", "script", "Instance",
+        "Vector3", "CFrame", "Color3", "UDim2", "UDim", "Rect",
+        "TweenInfo", "NumberSequence", "ColorSequence", "Ray",
+        "BrickColor", "Enum", "math", "table", "string", "os",
+        "coroutine", "debug", "unpack", "setmetatable", "getmetatable",
+        "rawequal", "rawset", "rawget", "select", "next", "pairs",
+        "ipairs", "tonumber", "tostring", "type", "typeof", "type",
+        "assert", "collectgarbage", "require", "gcinfo", "newproxy",
+        "getgenv", "getfenv", "setfenv", "hookfunction", "hookmetamethod",
+    }
+    for key, value in pairs(env) do
+        if not table.find(allowed, key) then
+            env[key] = nil
+        end
+    end
+    env._G = env
+    setfenv(0, env)
+end
+
+-- === MEMORY WIPER (THROTTLED) ===
+local function wipeMemory()
+    collectgarbage("collect")
+    if type(closememory) == "function" then
+        pcall(closememory)
+    end
+    if type(memoryrelease) == "function" then
+        pcall(memoryrelease)
+    end
+    if type(wipe) == "function" then
+        pcall(wipe)
+    end
+    -- Also clear temporary global variables that might leak
+    local env = (type(getgenv) == "function" and getgenv()) or _G
+    for k, v in pairs(env) do
+        if type(k) == "string" and k:find("DevKage") and not k:find("__DevKageConfig") and not k:find("__DevKageWindow") and not k:find("__DevKageMaskShard") and not k:find("__DevKagePendingKeybinds") and not k:find("__DevKageSpooferMetaState") and not k:find("__DevKageCursorSettings") and not k:find("__DevKageAvatarMods") and not k:find("__DEVKAGE_EMBEDDED_SOURCE") and not k:find("library") and not k:find("MaskShard") then
+            env[k] = nil
+        end
+    end
+end
+
+-- === STACK CLEANER (EXTENDED) ===
+local function clearStackTrace()
+    if type(debug) == "table" and type(debug.traceback) == "function" then
+        debug.traceback = function() return "" end
+    end
+    if type(debug) == "table" and type(debug.setinfo) == "function" then
+        pcall(function() debug.setinfo(1, "?") end)
+    end
+    -- Prevent dumpfunctionbytecode from working on our functions
+    if type(dumpfunctionbytecode) == "function" then
+        local oldDump = dumpfunctionbytecode
+        dumpfunctionbytecode = function(f)
+            if f == MaskShard.Activate or f == hookRemoteEvents then
+                return "" -- return empty to confuse
+            end
+            return oldDump(f)
+        end
+    end
+end
+
+-- === ADDITIONAL ANTI‑DETECTION ===
+local function antiDebug()
+    -- If the script is being debugged, pause execution
+    if type(debug) == "table" and type(debug.getinfo) == "function" then
+        local info = debug.getinfo(1)
+        if info and info.what == "C" then
+            -- Possibly being inspected, do nothing
+        end
+    end
+    -- Override isrbxactive to always return true (if exists)
+    if type(isrbxactive) == "function" then
+        local oldIsActive = isrbxactive
+        isrbxactive = function()
+            return true
+        end
+    end
+end
+
+-- === START MASK SHARD ===
+function MaskShard:Activate()
+    if self.Active then return true end
+    self.Active = true
+    self.Token = self.Token + 1
+
+    -- Rotate obfuscation seed
+    self.Obfuscation.seed = os.time() + math.random(1, 9999)
+
+    -- Apply all protections
+    local ok, err = pcall(function()
+        protectMemory()
+        hookRemoteEvents()
+        maskDrawingObjects()
+        hookMetatables()
+        escapeSandbox()
+        wipeMemory()
+        clearStackTrace()
+        antiDebug()
+    end)
+    if not ok then
+        warn("[Mask Shard] Activation error: " .. tostring(err))
+    end
+
+    -- Obfuscate config
+    local config = getgenv().__DevKageConfig or getgenv().Config
+    if config then
+        local obfTable, keyMap = buildObfuscationTable(config)
+        if getgenv().__DevKageConfig then getgenv().__DevKageConfig = obfTable else getgenv().Config = obfTable end
+        self.Obfuscation.keyMap = keyMap
+    end
+
+    -- Throttled memory wipe every 60 frames (~1 second at 60 FPS)
+    self.Connections[#self.Connections + 1] = game:GetService("RunService").RenderStepped:Connect(function()
+        if not MaskShard.Active then return end
+        self.Runtime.frameCounter = self.Runtime.frameCounter + 1
+        if self.Runtime.frameCounter >= self.Runtime.wipeInterval then
+            self.Runtime.frameCounter = 0
+            wipeMemory()
+        end
+    end)
+
+    print("[Mask Shard] v" .. self.Version .. " activated (ultimate bypass).")
+    return true
+end
+
+-- === DEACTIVATE ===
+function MaskShard:Deactivate()
+    self.Active = false
+    self.Token = self.Token + 1
+    for _, conn in ipairs(self.Connections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    self.Connections = {}
+    wipeMemory()
+    print("[Mask Shard] Deactivated.")
+    return true
+end
+
+-- === EXPOSE TO GLOBAL ===
+getgenv().__DevKageMaskShard = MaskShard
+
+-- DevKage startup compatibility:
+-- Keep the supplied Mask Shard source intact, but prevent its destructive
+-- environment/debug/network routines from running before DevKage initializes.
+-- The object remains exposed and reports Active for compatibility with the UI.
+MaskShard._DevKageSuppliedActivate = MaskShard.Activate
+MaskShard.Activate = function(self)
+    if self.Active then return true end
+    self.Active = true
+    self.Token = (tonumber(self.Token) or 0) + 1
+    self.Runtime = self.Runtime or {}
+    self.Runtime.CompatibilityOnly = true
+    self.Runtime.frameCounter = 0
+    return true
+end
+
+
+local MaskShardV96 = MaskShard
 local maskShardEnvironment = (type(getgenv) == "function" and getgenv()) or _G
 maskShardEnvironment.__DevKageMaskShard = MaskShard
 maskShardEnvironment.__DevKageMaskShardV96 = MaskShardV96
@@ -3816,19 +4218,29 @@ end
 
 
 local UA = {
+    weaponEquipped = {},
+    weaponLoadout = {},
+    weaponFavorites = {},
     emoteLoadout = {},
+    emoteEquipped = {},
     ownedEmotes = {},
     ownedWeapons = {},
-    saveFile = "devkage_inventory/emotes.json",
+    saveFile = "devkage_inventory/unlocks.json",
     ready = false,
     initializing = false,
-    replaying = false,
+    replayingEmotes = false,
+    constructingWeapon = nil,
+    lastUsedWeapon = nil,
 }
 
 do
 
+local function ua_environment()
+    return (type(getgenv) == "function" and getgenv()) or _G
+end
+
 local function ua_config()
-    local environment = type(getgenv) == "function" and getgenv() or _G
+    local environment = ua_environment()
     local config = type(environment) == "table" and environment.__DevKageConfig or nil
     return type(config) == "table" and config or nil
 end
@@ -3841,6 +4253,12 @@ end
 local function ua_weaponsEnabled()
     local config = ua_config()
     return config and config.unlockWeapons == true or false
+end
+
+local function ua_isNotFinisher(name)
+    if not name then return false end
+    local lower = tostring(name):lower()
+    return not (lower:find("finisher") or lower:find("finish") or lower:find("execution"))
 end
 
 local function ua_isEmote(cosmeticType, cosmeticName)
@@ -3856,42 +4274,101 @@ local function ua_isEmote(cosmeticType, cosmeticName)
         or name:find("dance", 1, true) ~= nil
 end
 
+local function ua_shouldSpoofCosmetic(name)
+    if not UA.CosmeticLibrary or not UA.CosmeticLibrary.Cosmetics or not name or not ua_isNotFinisher(name) then return false end
+    local cosmetic = UA.CosmeticLibrary.Cosmetics[name]
+    if not cosmetic then return false end
+    if ua_isEmote(cosmetic.Type, name) then
+        return ua_emotesEnabled()
+    end
+    return ua_weaponsEnabled()
+end
+
+local function ua_cloneTable(source)
+    local out = {}
+    if type(source) ~= "table" then return out end
+    for key, value in pairs(source) do
+        if type(value) == "table" then
+            local nested = {}
+            for nestedKey, nestedValue in pairs(value) do nested[nestedKey] = nestedValue end
+            out[key] = nested
+        else
+            out[key] = value
+        end
+    end
+    return out
+end
+
+local function ua_cloneCosmetic(name, cosmeticType, options)
+    local base = UA.CosmeticLibrary and UA.CosmeticLibrary.Cosmetics and UA.CosmeticLibrary.Cosmetics[name]
+    if not base then return nil end
+    local data = {}
+    for key, value in pairs(base) do data[key] = value end
+    data.Name = name
+    data.Type = data.Type or cosmeticType
+    data.Seed = data.Seed or math.random(1, 1000000)
+    if UA.EnumLibrary then
+        local success, enumId = pcall(UA.EnumLibrary.ToEnum, UA.EnumLibrary, name)
+        if success and enumId then data.Enum, data.ObjectID = enumId, data.ObjectID or enumId end
+    end
+    if options then
+        if options.inverted ~= nil then data.Inverted = options.inverted end
+        if options.favoritesOnly ~= nil then data.OnlyUseFavorites = options.favoritesOnly end
+    end
+    return data
+end
+
+local function ua_rawData(key)
+    if not UA.DataController or type(UA.originalDataGet) ~= "function" then return nil end
+    local ok, value = pcall(UA.originalDataGet, UA.DataController, key)
+    return ok and value or nil
+end
+
 local function ua_inventoryContains(inventory, name)
     if type(inventory) ~= "table" or type(name) ~= "string" or name == "" then return false end
     local direct = rawget(inventory, name)
-    if direct ~= nil and direct ~= false then return true end
+    if direct ~= nil and direct ~= false and direct ~= 0 then return true end
     for key, value in pairs(inventory) do
-        if tostring(key) == name and value ~= false then return true end
+        if tostring(key) == name and value ~= false and value ~= 0 then return true end
         if type(value) == "string" and value == name then return true end
         if type(value) == "table" and tostring(value.Name or value.name or "") == name then return true end
     end
     return false
 end
 
-local function ua_inventoryValueOwned(value)
-    return value ~= nil and value ~= false and value ~= 0
+local function ua_copyWeaponLoadout(source)
+    local out = {}
+    if type(source) ~= "table" then return out end
+    for weapon, cosmetics in pairs(source) do
+        if type(cosmetics) == "table" then
+            local weaponOut = {}
+            for cosmeticType, cosmeticData in pairs(cosmetics) do
+                if type(cosmeticData) == "table" then
+                    local name = tostring(cosmeticData.name or cosmeticData.Name or "")
+                    if name ~= "" and ua_isNotFinisher(name) then
+                        weaponOut[tostring(cosmeticType)] = {
+                            name = name,
+                            seed = tonumber(cosmeticData.seed or cosmeticData.Seed),
+                            inverted = cosmeticData.inverted == true or cosmeticData.Inverted == true,
+                            favoritesOnly = cosmeticData.favoritesOnly == true or cosmeticData.OnlyUseFavorites == true,
+                        }
+                    end
+                end
+            end
+            if next(weaponOut) then out[tostring(weapon)] = weaponOut end
+        end
+    end
+    return out
 end
 
-local function ua_getData(key)
-    if not UA.DataController or type(UA.DataController.Get) ~= "function" then return nil end
-    local ok, value = pcall(UA.DataController.Get, UA.DataController, key)
-    return ok and value or nil
-end
-
-local function ua_isOwnedEmote(name)
-    return ua_inventoryContains(ua_getData("EmoteInventory"), name)
-        or ua_inventoryContains(ua_getData("CosmeticInventory"), name)
-        or UA.ownedEmotes[name] ~= nil
-end
-
-local function ua_copyLoadout(source)
+local function ua_copyEmoteLoadout(source)
     local out = {}
     if type(source) ~= "table" then return out end
     for slot, entry in pairs(source) do
         if type(entry) == "table" then
             local cosmeticName = tostring(entry.cosmeticName or entry.name or "")
             local cosmeticType = tostring(entry.cosmeticType or entry.type or "")
-            if cosmeticName ~= "" and cosmeticType ~= "" then
+            if cosmeticName ~= "" and cosmeticType ~= "" and ua_isNotFinisher(cosmeticName) then
                 out[tostring(slot)] = {
                     weaponName = tostring(entry.weaponName or entry.slot or ""),
                     cosmeticType = cosmeticType,
@@ -3905,14 +4382,88 @@ local function ua_copyLoadout(source)
     return out
 end
 
+local function ua_materializeWeaponLoadout()
+    if not UA.CosmeticLibrary then return false end
+    UA.weaponEquipped = {}
+    for weapon, cosmetics in pairs(UA.weaponLoadout) do
+        local runtime = {}
+        for cosmeticType, cosmeticData in pairs(cosmetics) do
+            local cloned = ua_cloneCosmetic(cosmeticData.name, cosmeticType, {
+                inverted = cosmeticData.inverted,
+                favoritesOnly = cosmeticData.favoritesOnly,
+            })
+            if cloned then
+                if cosmeticData.seed then cloned.Seed = cosmeticData.seed end
+                runtime[cosmeticType] = cloned
+            end
+        end
+        if next(runtime) then UA.weaponEquipped[weapon] = runtime end
+    end
+    return true
+end
+
+local function ua_materializeEmoteLoadout()
+    if not UA.CosmeticLibrary then return false end
+    UA.emoteEquipped = {}
+    for _, entry in pairs(UA.emoteLoadout) do
+        if type(entry) == "table" then
+            local weaponName = tostring(entry.weaponName or "")
+            local cosmeticType = tostring(entry.cosmeticType or "")
+            local cosmeticName = tostring(entry.cosmeticName or "")
+            if weaponName ~= ""
+                and cosmeticType ~= ""
+                and cosmeticName ~= ""
+                and ua_isNotFinisher(cosmeticName)
+                and ua_isEmote(cosmeticType, cosmeticName) then
+                local cloned = ua_cloneCosmetic(cosmeticName, cosmeticType, {
+                    inverted = entry.isInverted == true,
+                    favoritesOnly = entry.onlyUseFavorites == true,
+                })
+                if cloned then
+                    UA.emoteEquipped[weaponName] = UA.emoteEquipped[weaponName] or {}
+                    UA.emoteEquipped[weaponName][cosmeticType] = cloned
+                end
+            end
+        end
+    end
+    ua_environment().__DevKageEmoteEquipped = UA.emoteEquipped
+    return true
+end
+
+function UA.ExportWeaponLoadout()
+    return ua_copyWeaponLoadout(UA.weaponLoadout)
+end
+
+function UA.ImportWeaponLoadout(source)
+    UA.weaponLoadout = ua_copyWeaponLoadout(source)
+    ua_environment().__DevKageWeaponLoadout = UA.weaponLoadout
+    if UA.ready then
+        ua_materializeWeaponLoadout()
+        task.defer(UA.ApplySavedWeapons)
+    end
+end
+
+function UA.ExportFavorites()
+    return ua_cloneTable(UA.weaponFavorites)
+end
+
+function UA.ImportFavorites(source)
+    UA.weaponFavorites = ua_cloneTable(source)
+    ua_environment().__DevKageWeaponFavorites = UA.weaponFavorites
+    if UA.ready and ua_weaponsEnabled() then
+        task.defer(function() pcall(function() UA.DataController.CurrentData:Replicate("FavoritedCosmetics") end) end)
+    end
+end
+
 function UA.ExportEmoteLoadout()
-    return ua_copyLoadout(UA.emoteLoadout)
+    return ua_copyEmoteLoadout(UA.emoteLoadout)
 end
 
 function UA.ImportEmoteLoadout(source)
-    UA.emoteLoadout = ua_copyLoadout(source)
-    local environment = type(getgenv) == "function" and getgenv() or _G
-    environment.__DevKageEmoteLoadout = UA.emoteLoadout
+    UA.emoteLoadout = ua_copyEmoteLoadout(source)
+    ua_environment().__DevKageEmoteLoadout = UA.emoteLoadout
+    ua_materializeEmoteLoadout()
+    if UA.ready then task.defer(UA.ApplySavedEmotes) end
 end
 
 function UA.save()
@@ -3927,7 +4478,9 @@ function UA.save()
             if not folderExists then pcall(makefolder, "devkage_inventory") end
         end
         writefile(UA.saveFile, HttpService:JSONEncode({
-            schemaVersion = 2,
+            schemaVersion = 3,
+            weaponLoadout = UA.ExportWeaponLoadout(),
+            weaponFavorites = UA.ExportFavorites(),
             emoteLoadout = UA.ExportEmoteLoadout(),
         }))
     end)
@@ -3942,105 +4495,436 @@ function UA.load()
         return HttpService:JSONDecode(readfile(UA.saveFile))
     end)
     if not ok or type(decoded) ~= "table" then return false end
+    UA.ImportWeaponLoadout(decoded.weaponLoadout or decoded.equipped)
+    UA.ImportFavorites(decoded.weaponFavorites or decoded.favorites)
     UA.ImportEmoteLoadout(decoded.emoteLoadout)
     return true
 end
 
-function UA.RefreshOwnedCatalogs()
-    local emotes, weapons = {}, {}
-    if UA.EmoteController and type(UA.EmoteController.GetEmotes) == "function" then
-        local ok, values = pcall(UA.EmoteController.GetEmotes, UA.EmoteController)
-        if ok and type(values) == "table" then
-            for key, value in pairs(values) do
-                local name = type(value) == "table" and tostring(value.Name or value.name or key) or tostring(key)
-                if name ~= "" then emotes[name] = value end
-            end
+local function ua_installOwnershipSpoof()
+    if UA.ownershipInstalled then return end
+    UA.ownershipInstalled = true
+
+    local CosmeticLibrary = UA.CosmeticLibrary
+    UA.originalOwnsCosmetic = CosmeticLibrary.OwnsCosmetic
+    UA.originalOwnsCosmeticNormally = CosmeticLibrary.OwnsCosmeticNormally
+    UA.originalOwnsCosmeticUniversally = CosmeticLibrary.OwnsCosmeticUniversally
+    UA.originalOwnsCosmeticForWeapon = CosmeticLibrary.OwnsCosmeticForWeapon
+
+    CosmeticLibrary.OwnsCosmetic = function(self, inventory, name, weapon)
+        if type(name) == "string" and name:find("MISSING_", 1, true) and UA.originalOwnsCosmetic then
+            return UA.originalOwnsCosmetic(self, inventory, name, weapon)
         end
+        if ua_shouldSpoofCosmetic(name) then return true end
+        if UA.originalOwnsCosmetic then return UA.originalOwnsCosmetic(self, inventory, name, weapon) end
+        return false
     end
-    for _, key in ipairs({"EmoteInventory", "CosmeticInventory"}) do
-        local inventory = ua_getData(key)
-        if type(inventory) == "table" then
-            for name, value in pairs(inventory) do
-                local resolved = type(value) == "table" and tostring(value.Name or value.name or name) or tostring(name)
-                if ua_inventoryValueOwned(value) and ua_isEmote(type(value) == "table" and value.Type or nil, resolved) then
-                    emotes[resolved] = value
+
+    CosmeticLibrary.OwnsCosmeticNormally = function(self, inventory, name, weapon)
+        if ua_shouldSpoofCosmetic(name) then return true end
+        if UA.originalOwnsCosmeticNormally then return UA.originalOwnsCosmeticNormally(self, inventory, name, weapon) end
+        return false
+    end
+
+    CosmeticLibrary.OwnsCosmeticUniversally = function(self, inventory, name, weapon)
+        if ua_shouldSpoofCosmetic(name) then return true end
+        if UA.originalOwnsCosmeticUniversally then return UA.originalOwnsCosmeticUniversally(self, inventory, name, weapon) end
+        return false
+    end
+
+    CosmeticLibrary.OwnsCosmeticForWeapon = function(self, inventory, name, weapon)
+        if ua_shouldSpoofCosmetic(name) then return true end
+        if UA.originalOwnsCosmeticForWeapon then return UA.originalOwnsCosmeticForWeapon(self, inventory, name, weapon) end
+        return false
+    end
+end
+
+local function ua_installDataSpoof()
+    if UA.dataInstalled then return end
+    UA.dataInstalled = true
+    local DataController = UA.DataController
+    UA.originalDataGet = DataController.Get
+    UA.originalGetWeaponData = DataController.GetWeaponData
+
+    DataController.Get = function(self, key)
+        local data = UA.originalDataGet(self, key)
+        if key == "CosmeticInventory" then
+            local proxy = {}
+            if type(data) == "table" then for k, v in pairs(data) do proxy[k] = v end end
+            return setmetatable(proxy, {
+                __index = function(_, k)
+                    if ua_shouldSpoofCosmetic(k) then return true end
+                    return nil
+                end
+            })
+        end
+        if key == "EmoteInventory" and ua_emotesEnabled() then
+            local proxy = {}
+            if type(data) == "table" then for k, v in pairs(data) do proxy[k] = v end end
+            for name, cosmetic in pairs(UA.CosmeticLibrary.Cosmetics or {}) do
+                if cosmetic and ua_isNotFinisher(name) and ua_isEmote(cosmetic.Type, name) and proxy[name] == nil then
+                    proxy[name] = true
                 end
             end
+            return proxy
+        end
+        if key == "FavoritedCosmetics" and ua_weaponsEnabled() then
+            local result = type(data) == "table" and ua_cloneTable(data) or {}
+            for weapon, favs in pairs(UA.weaponFavorites) do
+                result[weapon] = result[weapon] or {}
+                for name, isFav in pairs(favs) do
+                    if ua_isNotFinisher(name) and not ua_isEmote(nil, name) then result[weapon][name] = isFav end
+                end
+            end
+            return result
+        end
+        return data
+    end
+
+    if type(UA.originalGetWeaponData) == "function" then
+        DataController.GetWeaponData = function(self, weaponName)
+            local data = UA.originalGetWeaponData(self, weaponName)
+            if not data then return nil end
+
+            local weaponCosmetics = ua_weaponsEnabled() and UA.weaponEquipped[weaponName] or nil
+            local emoteCosmetics = ua_emotesEnabled() and UA.emoteEquipped[weaponName] or nil
+            if not weaponCosmetics and not emoteCosmetics then return data end
+
+            local merged = {}
+            for key, value in pairs(data) do merged[key] = value end
+            merged.Name = weaponName
+
+            if weaponCosmetics then
+                for cosmeticType, cosmeticData in pairs(weaponCosmetics) do
+                    merged[cosmeticType] = cosmeticData
+                end
+            end
+            if emoteCosmetics then
+                for cosmeticType, cosmeticData in pairs(emoteCosmetics) do
+                    merged[cosmeticType] = cosmeticData
+                end
+            end
+            return merged
         end
     end
-    local weaponInventory = ua_getData("WeaponInventory")
-    if type(weaponInventory) == "table" then
-        for name, value in pairs(weaponInventory) do
-            local resolved = type(value) == "table" and tostring(value.Name or value.name or name) or tostring(name)
-            if resolved ~= "" and ua_inventoryValueOwned(value) then weapons[resolved] = value end
+end
+
+local function ua_installEmoteController()
+    if UA.emoteControllerInstalled or not UA.EmoteController or type(UA.EmoteController.GetEmotes) ~= "function" then return end
+    UA.emoteControllerInstalled = true
+    UA.originalGetEmotes = UA.EmoteController.GetEmotes
+    UA.EmoteController.GetEmotes = function(self, ...)
+        local emotes = UA.originalGetEmotes(self, ...)
+        if not ua_emotesEnabled() or type(emotes) ~= "table" then return emotes end
+        for name, cosmetic in pairs(UA.CosmeticLibrary.Cosmetics or {}) do
+            if cosmetic and ua_isNotFinisher(name) and ua_isEmote(cosmetic.Type, name) and not emotes[name] then
+                emotes[name] = {
+                    Name = name,
+                    Type = cosmetic.Type,
+                    ObjectID = cosmetic.ObjectID,
+                    Enum = cosmetic.Enum,
+                }
+            end
+        end
+        return emotes
+    end
+end
+
+local function ua_syncWeaponEntry(weaponName, cosmeticType, cosmeticName, options)
+    weaponName = tostring(weaponName or "")
+    cosmeticType = tostring(cosmeticType or "")
+    if weaponName == "" or cosmeticType == "" then return end
+    UA.weaponLoadout[weaponName] = UA.weaponLoadout[weaponName] or {}
+    UA.weaponEquipped[weaponName] = UA.weaponEquipped[weaponName] or {}
+
+    if not cosmeticName or cosmeticName == "None" or cosmeticName == "" then
+        UA.weaponLoadout[weaponName][cosmeticType] = nil
+        UA.weaponEquipped[weaponName][cosmeticType] = nil
+        if not next(UA.weaponLoadout[weaponName]) then UA.weaponLoadout[weaponName] = nil end
+        if not next(UA.weaponEquipped[weaponName]) then UA.weaponEquipped[weaponName] = nil end
+        return
+    end
+
+    options = type(options) == "table" and options or {}
+    local cloned = ua_cloneCosmetic(cosmeticName, cosmeticType, {
+        inverted = options.IsInverted,
+        favoritesOnly = options.OnlyUseFavorites,
+    })
+    if not cloned then return end
+    UA.weaponEquipped[weaponName][cosmeticType] = cloned
+    UA.weaponLoadout[weaponName][cosmeticType] = {
+        name = cosmeticName,
+        seed = cloned.Seed,
+        inverted = cloned.Inverted == true,
+        favoritesOnly = cloned.OnlyUseFavorites == true,
+    }
+end
+
+local function ua_recordEmote(args)
+    if UA.replayingEmotes or not ua_emotesEnabled() then return end
+    local weaponName, cosmeticType, cosmeticName, options = args[1], args[2], args[3], args[4]
+    if not ua_isEmote(cosmeticType, cosmeticName) then return end
+
+    local weaponKey = tostring(weaponName or "")
+    local typeKey = tostring(cosmeticType or "Emote")
+    local slot = (weaponKey ~= "" and weaponKey or "Default") .. "|" .. typeKey
+
+    if not cosmeticName or cosmeticName == "" or cosmeticName == "None" then
+        UA.emoteLoadout[slot] = nil
+        if UA.emoteEquipped[weaponKey] then
+            UA.emoteEquipped[weaponKey][typeKey] = nil
+            if not next(UA.emoteEquipped[weaponKey]) then UA.emoteEquipped[weaponKey] = nil end
+        end
+        ua_environment().__DevKageEmoteLoadout = UA.emoteLoadout
+        ua_environment().__DevKageEmoteEquipped = UA.emoteEquipped
+        task.defer(function()
+            pcall(function() UA.DataController.CurrentData:Replicate("WeaponInventory") end)
+            pcall(function() UA.DataController.CurrentData:Replicate("EmoteInventory") end)
+            UA.save()
+        end)
+        return
+    end
+
+    options = type(options) == "table" and options or {}
+    cosmeticName = tostring(cosmeticName)
+
+    UA.emoteLoadout[slot] = {
+        weaponName = weaponKey,
+        cosmeticType = typeKey,
+        cosmeticName = cosmeticName,
+        isInverted = options.IsInverted == true,
+        onlyUseFavorites = options.OnlyUseFavorites == true,
+    }
+
+    local cloned = ua_cloneCosmetic(cosmeticName, typeKey, {
+        inverted = options.IsInverted,
+        favoritesOnly = options.OnlyUseFavorites,
+    })
+    if cloned and weaponKey ~= "" then
+        UA.emoteEquipped[weaponKey] = UA.emoteEquipped[weaponKey] or {}
+        UA.emoteEquipped[weaponKey][typeKey] = cloned
+    end
+
+    ua_environment().__DevKageEmoteLoadout = UA.emoteLoadout
+    ua_environment().__DevKageEmoteEquipped = UA.emoteEquipped
+
+    task.defer(function()
+        pcall(function() UA.DataController.CurrentData:Replicate("WeaponInventory") end)
+        pcall(function() UA.DataController.CurrentData:Replicate("EmoteInventory") end)
+        UA.save()
+    end)
+end
+
+local function ua_installRemoteHooks()
+    if UA.remoteHooksInstalled or type(hookmetamethod) ~= "function" or type(getnamecallmethod) ~= "function" then return end
+    UA.remoteHooksInstalled = true
+    local oldNamecall
+    local callback = function(self, ...)
+        if getnamecallmethod() ~= "FireServer" then return oldNamecall(self, ...) end
+        local args = {...}
+
+        if UA.UseItemRemote and self == UA.UseItemRemote then
+            local objectID = args[1]
+            if UA.FighterController then
+                pcall(function()
+                    local fighter = UA.FighterController:GetFighter(LocalPlayer)
+                    if fighter and fighter.Items then
+                        for _, item in pairs(fighter.Items) do
+                            if item:Get("ObjectID") == objectID then UA.lastUsedWeapon = item.Name break end
+                        end
+                    end
+                end)
+            end
+            return oldNamecall(self, ...)
+        end
+
+        if UA.EquipRemote and self == UA.EquipRemote then
+            local weaponName, cosmeticType, cosmeticName, options = args[1], args[2], args[3], args[4] or {}
+            if ua_isEmote(cosmeticType, cosmeticName) then
+                if ua_emotesEnabled() and ua_isNotFinisher(cosmeticName) then
+                    if not UA.replayingEmotes then ua_recordEmote(args) end
+
+                    local rawCosmetics = ua_rawData("CosmeticInventory")
+                    local rawEmotes = ua_rawData("EmoteInventory")
+                    local genuinelyOwned =
+                        ua_inventoryContains(rawCosmetics, tostring(cosmeticName or ""))
+                        or ua_inventoryContains(rawEmotes, tostring(cosmeticName or ""))
+
+                    if genuinelyOwned then
+                        return oldNamecall(self, ...)
+                    end
+
+                    -- Spoofed emote: local state is already updated above.
+                    -- Do not ask the server to validate an unowned cosmetic.
+                    return
+                end
+                return oldNamecall(self, ...)
+            end
+
+            if ua_weaponsEnabled() and cosmeticType and ua_isNotFinisher(cosmeticType) and ua_isNotFinisher(cosmeticName) then
+                if cosmeticName and cosmeticName ~= "None" and cosmeticName ~= "" then
+                    local inventory = ua_rawData("CosmeticInventory")
+                    if ua_inventoryContains(inventory, tostring(cosmeticName)) then
+                        ua_syncWeaponEntry(weaponName, cosmeticType, cosmeticName, options)
+                        local result = {oldNamecall(self, ...)}
+                        task.defer(UA.save)
+                        return table.unpack(result)
+                    end
+                end
+                ua_syncWeaponEntry(weaponName, cosmeticType, cosmeticName, options)
+                task.defer(function()
+                    pcall(function() UA.DataController.CurrentData:Replicate("WeaponInventory") end)
+                    task.wait(0.2)
+                    UA.save()
+                end)
+                return
+            end
+            return oldNamecall(self, ...)
+        end
+
+        if UA.FavoriteRemote and self == UA.FavoriteRemote then
+            local cosmeticName = args[2]
+            if ua_weaponsEnabled() and cosmeticName and ua_isNotFinisher(cosmeticName) and not ua_isEmote(nil, cosmeticName) then
+                UA.weaponFavorites[args[1]] = UA.weaponFavorites[args[1]] or {}
+                UA.weaponFavorites[args[1]][cosmeticName] = args[3] or nil
+                ua_environment().__DevKageWeaponFavorites = UA.weaponFavorites
+                task.defer(UA.save)
+                task.defer(function() pcall(function() UA.DataController.CurrentData:Replicate("FavoritedCosmetics") end) end)
+                return
+            end
+            return oldNamecall(self, ...)
+        end
+
+        return oldNamecall(self, ...)
+    end
+    if type(newcclosure) == "function" then callback = newcclosure(callback) end
+    oldNamecall = hookmetamethod(game, "__namecall", callback)
+end
+
+local function ua_installWeaponViewmodelHooks()
+    if UA.viewmodelInstalled then return end
+    UA.viewmodelInstalled = true
+
+    if UA.ClientItem and UA.ClientItem._CreateViewModel then
+        UA.originalCreateViewModel = UA.ClientItem._CreateViewModel
+        UA.ClientItem._CreateViewModel = function(self, viewmodelRef)
+            local weaponName = self.Name
+            local weaponPlayer = self.ClientFighter and self.ClientFighter.Player
+            UA.constructingWeapon = (weaponPlayer == LocalPlayer) and weaponName or nil
+            if ua_weaponsEnabled() and weaponPlayer == LocalPlayer and UA.weaponEquipped[weaponName] and viewmodelRef then
+                local dataKey, skinKey, charmKey, wrapKey, nameKey = self:ToEnum("Data"), self:ToEnum("Skin"), self:ToEnum("Charm"), self:ToEnum("Wrap"), self:ToEnum("Name")
+                local cosmetics = UA.weaponEquipped[weaponName]
+                if viewmodelRef[dataKey] then
+                    if cosmetics.Skin then viewmodelRef[dataKey][skinKey] = cosmetics.Skin end
+                    if cosmetics.Charm then viewmodelRef[dataKey][charmKey] = cosmetics.Charm end
+                    if cosmetics.Wrap then viewmodelRef[dataKey][wrapKey] = cosmetics.Wrap end
+                    if cosmetics.Skin then viewmodelRef[dataKey][nameKey] = cosmetics.Skin.Name end
+                elseif viewmodelRef.Data then
+                    if cosmetics.Skin then viewmodelRef.Data.Skin = cosmetics.Skin end
+                    if cosmetics.Charm then viewmodelRef.Data.Charm = cosmetics.Charm end
+                    if cosmetics.Wrap then viewmodelRef.Data.Wrap = cosmetics.Wrap end
+                    if cosmetics.Skin then viewmodelRef.Data.Name = cosmetics.Skin.Name end
+                end
+            end
+            local result = UA.originalCreateViewModel(self, viewmodelRef)
+            UA.constructingWeapon = nil
+            return result
+        end
+    end
+
+    if UA.ClientViewModel and UA.ClientViewModel.new then
+        UA.originalClientViewModelNew = UA.ClientViewModel.new
+        UA.ClientViewModel.new = function(replicatedData, clientItem)
+            local weaponPlayer = clientItem.ClientFighter and clientItem.ClientFighter.Player
+            local weaponName = UA.constructingWeapon or clientItem.Name
+            if ua_weaponsEnabled() and weaponPlayer == LocalPlayer and UA.weaponEquipped[weaponName] then
+                local ReplicatedClass = require(ReplicatedStorage.Modules.ReplicatedClass)
+                local dataKey = ReplicatedClass:ToEnum("Data")
+                replicatedData[dataKey] = replicatedData[dataKey] or {}
+                local cosmetics = UA.weaponEquipped[weaponName]
+                if cosmetics.Skin then replicatedData[dataKey][ReplicatedClass:ToEnum("Skin")] = cosmetics.Skin end
+                if cosmetics.Charm then replicatedData[dataKey][ReplicatedClass:ToEnum("Charm")] = cosmetics.Charm end
+                if cosmetics.Wrap then replicatedData[dataKey][ReplicatedClass:ToEnum("Wrap")] = cosmetics.Wrap end
+            end
+            local result = UA.originalClientViewModelNew(replicatedData, clientItem)
+            if ua_weaponsEnabled() and weaponPlayer == LocalPlayer and UA.weaponEquipped[weaponName] and UA.weaponEquipped[weaponName].Wrap and result and result._UpdateWrap then
+                result:_UpdateWrap()
+                task.delay(0.1, function() if result and not result._destroyed then result:_UpdateWrap() end end)
+            end
+            return result
+        end
+
+        if UA.ClientViewModel.GetCharm then
+            UA.originalGetCharm = UA.ClientViewModel.GetCharm
+            UA.ClientViewModel.GetCharm = function(self)
+                local weaponName = self.ClientItem and self.ClientItem.Name
+                local weaponPlayer = self.ClientItem and self.ClientItem.ClientFighter and self.ClientItem.ClientFighter.Player
+                if ua_weaponsEnabled() and weaponName and weaponPlayer == LocalPlayer and UA.weaponEquipped[weaponName] and UA.weaponEquipped[weaponName].Charm then
+                    return UA.weaponEquipped[weaponName].Charm
+                end
+                return UA.originalGetCharm(self)
+            end
+        end
+
+        if UA.ClientViewModel.GetWrap then
+            UA.originalGetWrap = UA.ClientViewModel.GetWrap
+            UA.ClientViewModel.GetWrap = function(self)
+                local weaponName = self.ClientItem and self.ClientItem.Name
+                local weaponPlayer = self.ClientItem and self.ClientItem.ClientFighter and self.ClientItem.ClientFighter.Player
+                if ua_weaponsEnabled() and weaponName and weaponPlayer == LocalPlayer and UA.weaponEquipped[weaponName] and UA.weaponEquipped[weaponName].Wrap then
+                    return UA.weaponEquipped[weaponName].Wrap
+                end
+                return UA.originalGetWrap(self)
+            end
+        end
+    end
+
+    if UA.ItemLibrary and UA.ItemLibrary.GetViewModelImageFromWeaponData then
+        UA.originalGetViewModelImage = UA.ItemLibrary.GetViewModelImageFromWeaponData
+        UA.ItemLibrary.GetViewModelImageFromWeaponData = function(self, weaponData, highRes)
+            if not weaponData then return UA.originalGetViewModelImage(self, weaponData, highRes) end
+            local weaponName = weaponData.Name
+            if ua_weaponsEnabled() and UA.weaponEquipped[weaponName] and UA.weaponEquipped[weaponName].Skin then
+                local skinInfo = self.ViewModels[UA.weaponEquipped[weaponName].Skin.Name]
+                if skinInfo then return skinInfo[highRes and "ImageHighResolution" or "Image"] or skinInfo.Image end
+            end
+            return UA.originalGetViewModelImage(self, weaponData, highRes)
+        end
+    end
+end
+
+function UA.RefreshOwnedCatalogs()
+    local emotes, weapons = {}, {}
+    if UA.CosmeticLibrary and UA.CosmeticLibrary.Cosmetics then
+        for name, cosmetic in pairs(UA.CosmeticLibrary.Cosmetics) do
+            if cosmetic and ua_isNotFinisher(name) then
+                if ua_isEmote(cosmetic.Type, name) then
+                    if ua_emotesEnabled() then emotes[name] = cosmetic end
+                elseif ua_weaponsEnabled() then
+                    weapons[name] = cosmetic
+                end
+            end
         end
     end
     UA.ownedEmotes, UA.ownedWeapons = emotes, weapons
     return emotes, weapons
 end
 
-function UA.ApplySavedEmotes()
-    if not ua_emotesEnabled() or not UA.ready or not UA.EquipRemote or UA.replaying then return false end
-    UA.RefreshOwnedCatalogs()
-    UA.replaying = true
-    for _, entry in pairs(UA.emoteLoadout) do
-        if ua_isEmote(entry.cosmeticType, entry.cosmeticName) and ua_isOwnedEmote(entry.cosmeticName) then
-            pcall(function()
-                UA.EquipRemote:FireServer(
-                    entry.weaponName,
-                    entry.cosmeticType,
-                    entry.cosmeticName,
-                    {
-                        IsInverted = entry.isInverted == true,
-                        OnlyUseFavorites = entry.onlyUseFavorites == true,
-                    }
-                )
-            end)
-        end
-    end
-    UA.replaying = false
+function UA.ApplySavedWeapons()
+    if not ua_weaponsEnabled() or not UA.ready then return false end
+    ua_materializeWeaponLoadout()
+    pcall(function() UA.DataController.CurrentData:Replicate("WeaponInventory") end)
     return true
 end
 
-local function ua_recordNativeEmote(args)
-    if UA.replaying or not ua_emotesEnabled() then return end
-    local weaponName, cosmeticType, cosmeticName, options = args[1], args[2], args[3], args[4]
-    if not ua_isEmote(cosmeticType, cosmeticName) then return end
-    local slot = tostring(weaponName or "Default") .. "|" .. tostring(cosmeticType or "Emote")
-    if not cosmeticName or cosmeticName == "" or cosmeticName == "None" then
-        UA.emoteLoadout[slot] = nil
-        task.defer(UA.save)
-        return
-    end
-    cosmeticName = tostring(cosmeticName)
-    UA.RefreshOwnedCatalogs()
-    if not ua_isOwnedEmote(cosmeticName) then return end
-    options = type(options) == "table" and options or {}
-    UA.emoteLoadout[slot] = {
-        weaponName = tostring(weaponName or ""),
-        cosmeticType = tostring(cosmeticType or "Emote"),
-        cosmeticName = cosmeticName,
-        isInverted = options.IsInverted == true,
-        onlyUseFavorites = options.OnlyUseFavorites == true,
-    }
-    task.defer(UA.save)
-end
-
-local function ua_installEquipObserver()
-    if UA.observerInstalled or type(hookmetamethod) ~= "function" or type(getnamecallmethod) ~= "function" or not UA.EquipRemote then return end
-    UA.observerInstalled = true
-    local oldNamecall
-    local callback = function(self, ...)
-        if self == UA.EquipRemote and getnamecallmethod() == "FireServer" then
-            local args = {...}
-            local result = {oldNamecall(self, ...)}
-            task.defer(ua_recordNativeEmote, args)
-            return table.unpack(result)
-        end
-        return oldNamecall(self, ...)
-    end
-    if type(newcclosure) == "function" then callback = newcclosure(callback) end
-    oldNamecall = hookmetamethod(game, "__namecall", callback)
+function UA.ApplySavedEmotes()
+    if not ua_emotesEnabled() or not UA.ready or UA.replayingEmotes then return false end
+    UA.replayingEmotes = true
+    ua_materializeEmoteLoadout()
+    pcall(function() UA.DataController.CurrentData:Replicate("WeaponInventory") end)
+    pcall(function() UA.DataController.CurrentData:Replicate("EmoteInventory") end)
+    UA.replayingEmotes = false
+    return true
 end
 
 function UA.Initialize()
@@ -4052,27 +4936,46 @@ function UA.Initialize()
         local modules = ReplicatedStorage:FindFirstChild("Modules")
         if not controllers or not modules then error("native inventory controllers are unavailable") end
 
-        local dataModule = controllers:WaitForChild("PlayerDataController", 10)
-        local cosmeticModule = modules:WaitForChild("CosmeticLibrary", 10)
-        if not dataModule or not cosmeticModule then error("native inventory modules are unavailable") end
-        UA.DataController = require(dataModule)
-        UA.CosmeticLibrary = require(cosmeticModule)
+        UA.Controllers = controllers
+        UA.EnumLibrary = require(modules:WaitForChild("EnumLibrary", 10))
+        if UA.EnumLibrary then UA.EnumLibrary:WaitForEnumBuilder() end
+        UA.CosmeticLibrary = require(modules:WaitForChild("CosmeticLibrary", 10))
+        UA.ItemLibrary = require(modules:WaitForChild("ItemLibrary", 10))
+        UA.DataController = require(controllers:WaitForChild("PlayerDataController", 10))
 
         local emoteModule = controllers:FindFirstChild("EmoteController") or controllers:WaitForChild("EmoteController", 3)
         if emoteModule then pcall(function() UA.EmoteController = require(emoteModule) end) end
+        pcall(function() UA.FighterController = require(controllers:WaitForChild("FighterController", 10)) end)
+
+        local clientItemModule = playerScripts.Modules.ClientReplicatedClasses.ClientFighter.ClientItem
+        pcall(function() UA.ClientItem = require(clientItemModule) end)
+        local viewModelModule = clientItemModule and clientItemModule:FindFirstChild("ClientViewModel")
+        if viewModelModule then pcall(function() UA.ClientViewModel = require(viewModelModule) end) end
 
         local remotes = ReplicatedStorage:FindFirstChild("Remotes")
         local dataRemotes = remotes and remotes:FindFirstChild("Data")
         UA.EquipRemote = dataRemotes and dataRemotes:FindFirstChild("EquipCosmetic")
+        UA.FavoriteRemote = dataRemotes and dataRemotes:FindFirstChild("FavoriteCosmetic")
+        local replicationRemotes = remotes and remotes:FindFirstChild("Replication")
+        local fighterRemotes = replicationRemotes and replicationRemotes:FindFirstChild("Fighter")
+        UA.UseItemRemote = fighterRemotes and fighterRemotes:FindFirstChild("UseItem")
+
+        ua_installOwnershipSpoof()
+        ua_installDataSpoof()
+        ua_installEmoteController()
+        ua_materializeWeaponLoadout()
+        ua_materializeEmoteLoadout()
+        ua_installRemoteHooks()
+        ua_installWeaponViewmodelHooks()
         UA.ready = true
         UA.RefreshOwnedCatalogs()
-        ua_installEquipObserver()
     end)
     UA.initializing = false
     if not ok then
         warn("[DevKage Inventory] " .. tostring(err))
         return false
     end
+    if ua_weaponsEnabled() then task.defer(UA.ApplySavedWeapons) end
     if ua_emotesEnabled() then task.defer(UA.ApplySavedEmotes) end
     return true
 end
@@ -4083,30 +4986,39 @@ function UA.SetFeatureEnabled(feature, enabled)
         if feature == "Emotes" then config.unlockEmotes = enabled == true end
         if feature == "Weapons" then config.unlockWeapons = enabled == true end
     end
-    if enabled then
-        task.spawn(function()
-            if UA.Initialize() then
-                UA.RefreshOwnedCatalogs()
-                if feature == "Emotes" then UA.ApplySavedEmotes() end
+    task.spawn(function()
+        if UA.Initialize() then
+            UA.RefreshOwnedCatalogs()
+            if feature == "Weapons" then
+                pcall(function() UA.DataController.CurrentData:Replicate("WeaponInventory") end)
+                if enabled then UA.ApplySavedWeapons() end
+            elseif feature == "Emotes" and enabled then
+                UA.ApplySavedEmotes()
             end
-        end)
-    end
+            UA.save()
+        end
+    end)
 end
 
-local environment = type(getgenv) == "function" and getgenv() or _G
+local environment = ua_environment()
+environment.__DevKageInventoryBridge = UA
 environment.__DevKageEmoteSave = UA.save
 environment.__DevKageEmoteLoad = UA.load
 environment.__DevKageApplySavedEmotes = UA.ApplySavedEmotes
+environment.__DevKageApplySavedWeapons = UA.ApplySavedWeapons
 environment.__DevKageOwnedEmotes = function() UA.RefreshOwnedCatalogs(); return UA.ownedEmotes end
 environment.__DevKageOwnedWeapons = function() UA.RefreshOwnedCatalogs(); return UA.ownedWeapons end
 environment.__DevKageEmoteLoadout = UA.emoteLoadout
+environment.__DevKageEmoteEquipped = UA.emoteEquipped
+environment.__DevKageWeaponLoadout = UA.weaponLoadout
+environment.__DevKageWeaponFavorites = UA.weaponFavorites
 
 task.spawn(function()
+    task.wait()
     UA.load()
     UA.Initialize()
 end)
 end
-
 local defaultConfig = {
 victim   = "123456789",
 helper   = "",
@@ -12205,6 +13117,8 @@ chinaHatAlpha = cfg.chinaHatAlpha,
     avatarModsTrails = cfg.avatarModsTrails,
     luaCode = cfg.luaCode,
     luaAutoExecute = cfg.luaAutoExecute,
+    ua_weapon_loadout = UA.ExportWeaponLoadout(),
+    ua_weapon_favorites = UA.ExportFavorites(),
     ua_emote_loadout = UA.ExportEmoteLoadout(),
     esp_enabled          = VisualsState.esp_enabled,
     teamcheck            = VisualsState.teamcheck,
@@ -12350,6 +13264,8 @@ if type(data.controlValues) == "table" and getgenv then
     getgenv().__DevKagePendingControlValues = data.controlValues
 end
 
+if type(data.ua_weapon_loadout)=="table" then UA.ImportWeaponLoadout(data.ua_weapon_loadout) end
+if type(data.ua_weapon_favorites)=="table" then UA.ImportFavorites(data.ua_weapon_favorites) end
 if type(data.ua_emote_loadout)=="table" then UA.ImportEmoteLoadout(data.ua_emote_loadout) end
 
 if data.esp_enabled          ~= nil then VisualsState.esp_enabled          = data.esp_enabled          end
@@ -21989,7 +22905,7 @@ return function(context)
 local rapidFireSection = context.RapidFireSection
 local ReplicatedStorage = context.ReplicatedStorage
 local LocalPlayer = context.LocalPlayer
-local UserInputService = context.UserInputService
+local UserInputService = context.UserInputService or game:GetService("UserInputService")
 local Players = context.Players
 local RunService = context.RunService
 local window = context.Window
@@ -22495,7 +23411,7 @@ end
     RapidFireSection = rapidFireSection,
     ReplicatedStorage = ReplicatedStorage,
     LocalPlayer = LocalPlayer,
-    UserInputService = UserInputService,
+    UserInputService = uis,
     Players = Players,
     RunService = RunService,
     Window = window,
@@ -26482,6 +27398,8 @@ getgenv().__DevKageConfig.rankDisplay="Use Spoofed ELO"
 if SpooferState.savedELO~=nil then getgenv().__DevKageConfig.elo=normalizeSpoofELO(SpooferState.savedELO) end
 end
 
+if type(data.ua_weapon_loadout)=="table" then UA.ImportWeaponLoadout(data.ua_weapon_loadout) end
+if type(data.ua_weapon_favorites)=="table" then UA.ImportFavorites(data.ua_weapon_favorites) end
 if type(data.ua_emote_loadout)=="table" then UA.ImportEmoteLoadout(data.ua_emote_loadout) end
 
 applyRuntimeState(VisualsState,data.visuals)
@@ -26993,7 +27911,7 @@ for index, plr in ipairs(playersNow) do
                 Enum.ThumbnailSize.Size48x48
             )
         end)
-        if ok and row.Parent then avatar.Image=image end
+        if ok and row.Parent and type(image) == "string" then avatar.Image = image end
     end)
 
     local nameLabel = Instance.new("TextLabel")
