@@ -3815,385 +3815,297 @@ end
 
 
 
-local UA = {}
-UA.equipped         = {}
-UA.favorites        = {}
-UA.constructingWeapon = nil
-UA.saveFile         = "unlockall/config.json"
+local UA = {
+    emoteLoadout = {},
+    ownedEmotes = {},
+    ownedWeapons = {},
+    saveFile = "devkage_inventory/emotes.json",
+    ready = false,
+    initializing = false,
+    replaying = false,
+}
 
-local function ua_isEnabled()
-local environment = type(getgenv) == "function" and getgenv() or nil
-local config = type(environment) == "table" and environment.__DevKageConfig or nil
-return type(config) == "table" and config.unlockall == true
+do
+
+local function ua_config()
+    local environment = type(getgenv) == "function" and getgenv() or _G
+    local config = type(environment) == "table" and environment.__DevKageConfig or nil
+    return type(config) == "table" and config or nil
 end
 
-local function ua_isNotFinisher(name)
-if not name then return false end
-local lower = name:lower()
-return not (lower:find("finisher") or lower:find("finish") or lower:find("execution"))
+local function ua_emotesEnabled()
+    local config = ua_config()
+    return config and config.unlockEmotes == true or false
 end
 
-local function ua_cloneCosmetic(name, cosmeticType, options)
-local CosmeticLibrary = ReplicatedStorage.Modules and ReplicatedStorage.Modules:FindFirstChild("CosmeticLibrary")
-if not CosmeticLibrary then return nil end
-local ok, lib = pcall(require, CosmeticLibrary)
-if not ok or not lib then return nil end
-local base = lib.Cosmetics and lib.Cosmetics[name]
-if not base then return nil end
-local data = {}
-for key, value in pairs(base) do data[key] = value end
-data.Name = name
-data.Type = data.Type or cosmeticType
-data.Seed = data.Seed or math.random(1, 1000000)
-local EnumLib = ReplicatedStorage.Modules and ReplicatedStorage.Modules:FindFirstChild("EnumLibrary")
-if EnumLib then
-local eok, EnumLibrary = pcall(require, EnumLib)
-if eok and EnumLibrary then
-local suc, enumId = pcall(EnumLibrary.ToEnum, EnumLibrary, name)
-if suc and enumId then data.Enum = enumId; data.ObjectID = data.ObjectID or enumId end
+local function ua_weaponsEnabled()
+    local config = ua_config()
+    return config and config.unlockWeapons == true or false
 end
+
+local function ua_isEmote(cosmeticType, cosmeticName)
+    local typeName = tostring(cosmeticType or ""):lower()
+    if typeName:find("emote", 1, true) or typeName:find("dance", 1, true) then return true end
+    local library = UA.CosmeticLibrary
+    local cosmetic = library and library.Cosmetics and library.Cosmetics[cosmeticName]
+    local libraryType = tostring(cosmetic and cosmetic.Type or ""):lower()
+    local name = tostring(cosmeticName or ""):lower()
+    return libraryType:find("emote", 1, true) ~= nil
+        or libraryType:find("dance", 1, true) ~= nil
+        or name:find("emote", 1, true) ~= nil
+        or name:find("dance", 1, true) ~= nil
 end
-if options then
-if options.inverted ~= nil then data.Inverted = options.inverted end
-if options.favoritesOnly ~= nil then data.OnlyUseFavorites = options.favoritesOnly end
+
+local function ua_inventoryContains(inventory, name)
+    if type(inventory) ~= "table" or type(name) ~= "string" or name == "" then return false end
+    local direct = rawget(inventory, name)
+    if direct ~= nil and direct ~= false then return true end
+    for key, value in pairs(inventory) do
+        if tostring(key) == name and value ~= false then return true end
+        if type(value) == "string" and value == name then return true end
+        if type(value) == "table" and tostring(value.Name or value.name or "") == name then return true end
+    end
+    return false
 end
-return data
+
+local function ua_inventoryValueOwned(value)
+    return value ~= nil and value ~= false and value ~= 0
+end
+
+local function ua_getData(key)
+    if not UA.DataController or type(UA.DataController.Get) ~= "function" then return nil end
+    local ok, value = pcall(UA.DataController.Get, UA.DataController, key)
+    return ok and value or nil
+end
+
+local function ua_isOwnedEmote(name)
+    return ua_inventoryContains(ua_getData("EmoteInventory"), name)
+        or ua_inventoryContains(ua_getData("CosmeticInventory"), name)
+        or UA.ownedEmotes[name] ~= nil
+end
+
+local function ua_copyLoadout(source)
+    local out = {}
+    if type(source) ~= "table" then return out end
+    for slot, entry in pairs(source) do
+        if type(entry) == "table" then
+            local cosmeticName = tostring(entry.cosmeticName or entry.name or "")
+            local cosmeticType = tostring(entry.cosmeticType or entry.type or "")
+            if cosmeticName ~= "" and cosmeticType ~= "" then
+                out[tostring(slot)] = {
+                    weaponName = tostring(entry.weaponName or entry.slot or ""),
+                    cosmeticType = cosmeticType,
+                    cosmeticName = cosmeticName,
+                    isInverted = entry.isInverted == true,
+                    onlyUseFavorites = entry.onlyUseFavorites == true,
+                }
+            end
+        end
+    end
+    return out
+end
+
+function UA.ExportEmoteLoadout()
+    return ua_copyLoadout(UA.emoteLoadout)
+end
+
+function UA.ImportEmoteLoadout(source)
+    UA.emoteLoadout = ua_copyLoadout(source)
+    local environment = type(getgenv) == "function" and getgenv() or _G
+    environment.__DevKageEmoteLoadout = UA.emoteLoadout
 end
 
 function UA.save()
-if not writefile then return end
-pcall(function()
-local config = {equipped = {}, favorites = UA.favorites}
-for weapon, cosmetics in pairs(UA.equipped) do
-config.equipped[weapon] = {}
-for cosmeticType, cosmeticData in pairs(cosmetics) do
-if cosmeticData and cosmeticData.Name then
-config.equipped[weapon][cosmeticType] = {
-name    = cosmeticData.Name,
-seed    = cosmeticData.Seed,
-inverted= cosmeticData.Inverted
-}
-end
-end
-end
-if not isfolder("unlockall") then makefolder("unlockall") end
-writefile(UA.saveFile, HttpService:JSONEncode(config))
-end)
+    if type(writefile) ~= "function" then return false end
+    local ok = pcall(function()
+        if type(makefolder) == "function" then
+            local folderExists = false
+            if type(isfolder) == "function" then
+                local checked, result = pcall(isfolder, "devkage_inventory")
+                folderExists = checked and result == true
+            end
+            if not folderExists then pcall(makefolder, "devkage_inventory") end
+        end
+        writefile(UA.saveFile, HttpService:JSONEncode({
+            schemaVersion = 2,
+            emoteLoadout = UA.ExportEmoteLoadout(),
+        }))
+    end)
+    return ok
 end
 
 function UA.load()
-if not readfile or not isfile or not isfile(UA.saveFile) then return end
-pcall(function()
-local config = HttpService:JSONDecode(readfile(UA.saveFile))
-if config.equipped then
-for weapon, cosmetics in pairs(config.equipped) do
-UA.equipped[weapon] = {}
-for cosmeticType, cosmeticData in pairs(cosmetics) do
-local cloned = ua_cloneCosmetic(cosmeticData.name, cosmeticType, {inverted=cosmeticData.inverted})
-if cloned then
-cloned.Seed = cosmeticData.seed
-UA.equipped[weapon][cosmeticType] = cloned
-end
-end
-end
-end
-UA.favorites = config.favorites or {}
-end)
+    if type(readfile) ~= "function" or type(isfile) ~= "function" then return false end
+    local existsOk, exists = pcall(isfile, UA.saveFile)
+    if not existsOk or not exists then return false end
+    local ok, decoded = pcall(function()
+        return HttpService:JSONDecode(readfile(UA.saveFile))
+    end)
+    if not ok or type(decoded) ~= "table" then return false end
+    UA.ImportEmoteLoadout(decoded.emoteLoadout)
+    return true
 end
 
-getgenv().__DevKageUnlockAllSave   = function() UA.save() end
-getgenv().__DevKageUnlockAllLoad   = function() UA.load() end
-getgenv().__DevKageUnlockAllEquipped = UA.equipped
-
-task.spawn(function()
-
-
-while not ua_isEnabled() do task.wait(0.5) end
-local ok, err = pcall(function()
-local playerScripts    = LocalPlayer.PlayerScripts
-local controllers      = playerScripts:WaitForChild("Controllers", 10)
-if not controllers then return end
-
-    local EnumLibMod = ReplicatedStorage.Modules:WaitForChild("EnumLibrary", 10)
-    local CosmeticLibMod = ReplicatedStorage.Modules:WaitForChild("CosmeticLibrary", 10)
-    local ItemLibMod = ReplicatedStorage.Modules:WaitForChild("ItemLibrary", 10)
-    local DataControllerMod = controllers:WaitForChild("PlayerDataController", 10)
-
-    if not (EnumLibMod and CosmeticLibMod and ItemLibMod and DataControllerMod) then return end
-
-    local EnumLibrary    = require(EnumLibMod)
-    if EnumLibrary and EnumLibrary.WaitForEnumBuilder then EnumLibrary:WaitForEnumBuilder() end
-    local CosmeticLibrary = require(CosmeticLibMod)
-    local ItemLibrary     = require(ItemLibMod)
-    local DataController  = require(DataControllerMod)
-
-    local originalOwnsCosmetic = CosmeticLibrary.OwnsCosmetic
-    local originalOwnsCosmeticNormally = CosmeticLibrary.OwnsCosmeticNormally
-    local originalOwnsCosmeticUniversally = CosmeticLibrary.OwnsCosmeticUniversally
-    local originalOwnsCosmeticForWeapon = CosmeticLibrary.OwnsCosmeticForWeapon
-    CosmeticLibrary.OwnsCosmetic = function(self, inventory, name, weapon)
-        if not ua_isEnabled() or tostring(name):find("MISSING_") then return originalOwnsCosmetic(self, inventory, name, weapon) end
-        local cosmetic = CosmeticLibrary.Cosmetics[name]
-        if cosmetic and ua_isNotFinisher(name) then return true end
-        return originalOwnsCosmetic(self, inventory, name, weapon)
-    end
-    CosmeticLibrary.OwnsCosmeticNormally = function(self, inventory, name, weapon)
-        if not ua_isEnabled() then
-            return originalOwnsCosmeticNormally and originalOwnsCosmeticNormally(self, inventory, name, weapon) or false
-        end
-        local cosmetic = CosmeticLibrary.Cosmetics[name]
-        return cosmetic and ua_isNotFinisher(name) or false
-    end
-    CosmeticLibrary.OwnsCosmeticUniversally = function(self, inventory, name, weapon)
-        if not ua_isEnabled() then
-            return originalOwnsCosmeticUniversally and originalOwnsCosmeticUniversally(self, inventory, name, weapon) or false
-        end
-        local cosmetic = CosmeticLibrary.Cosmetics[name]
-        return cosmetic and ua_isNotFinisher(name) or false
-    end
-    CosmeticLibrary.OwnsCosmeticForWeapon = function(self, inventory, name, weapon)
-        if not ua_isEnabled() then
-            return originalOwnsCosmeticForWeapon and originalOwnsCosmeticForWeapon(self, inventory, name, weapon) or false
-        end
-        local cosmetic = CosmeticLibrary.Cosmetics[name]
-        return cosmetic and ua_isNotFinisher(name) or false
-    end
-
-    local originalGet = DataController.Get
-    DataController.Get = function(self, key)
-        local data = originalGet(self, key)
-        if ua_isEnabled() and key == "CosmeticInventory" then
-            local proxy = {}
-            if data then
-                for k, v in pairs(data) do
-                    if CosmeticLibrary.Cosmetics[k] and ua_isNotFinisher(k) then proxy[k] = v end
-                end
-            end
-            return setmetatable(proxy, {
-                __index = function(t, k)
-                    if CosmeticLibrary.Cosmetics[k] and ua_isNotFinisher(k) then return true end
-                    return nil
-                end
-            })
-        end
-        if ua_isEnabled() and key == "FavoritedCosmetics" then
-            local result = data and table.clone(data) or {}
-            for weapon, favs in pairs(UA.favorites) do
-                result[weapon] = result[weapon] or {}
-                for name, isFav in pairs(favs) do
-                    if ua_isNotFinisher(name) then result[weapon][name] = isFav end
-                end
-            end
-            return result
-        end
-        return data
-    end
-
-    local originalGetWeaponData = DataController.GetWeaponData
-    DataController.GetWeaponData = function(self, weaponName)
-        local data = originalGetWeaponData(self, weaponName)
-        if not data then return nil end
-        local merged = {}
-        for key, value in pairs(data) do merged[key] = value end
-        merged.Name = weaponName
-        if ua_isEnabled() and UA.equipped[weaponName] then
-            for cosmeticType, cosmeticData in pairs(UA.equipped[weaponName]) do
-                merged[cosmeticType] = cosmeticData
+function UA.RefreshOwnedCatalogs()
+    local emotes, weapons = {}, {}
+    if UA.EmoteController and type(UA.EmoteController.GetEmotes) == "function" then
+        local ok, values = pcall(UA.EmoteController.GetEmotes, UA.EmoteController)
+        if ok and type(values) == "table" then
+            for key, value in pairs(values) do
+                local name = type(value) == "table" and tostring(value.Name or value.name or key) or tostring(key)
+                if name ~= "" then emotes[name] = value end
             end
         end
-        return merged
     end
-
-    if hookmetamethod then
-        local remotes        = ReplicatedStorage:FindFirstChild("Remotes")
-        local dataRemotes    = remotes and remotes:FindFirstChild("Data")
-        local equipRemote    = dataRemotes and dataRemotes:FindFirstChild("EquipCosmetic")
-        local favoriteRemote = dataRemotes and dataRemotes:FindFirstChild("FavoriteCosmetic")
-        local repRemotes     = remotes and remotes:FindFirstChild("Replication")
-        local fighterRemotes = repRemotes and repRemotes:FindFirstChild("Fighter")
-        local useItemRemote  = fighterRemotes and fighterRemotes:FindFirstChild("UseItem")
-
-        if equipRemote then
-            local FighterController
-            pcall(function() FighterController = require(controllers:WaitForChild("FighterController", 10)) end)
-
-            local oldNamecall
-            oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-                if getnamecallmethod() ~= "FireServer" then return oldNamecall(self, ...) end
-                local args = {...}
-
-                if ua_isEnabled() and useItemRemote and self == useItemRemote and FighterController then
-                    local objectID = args[1]
-                    pcall(function()
-                        local fighter = FighterController:GetFighter(LocalPlayer)
-                        if fighter and fighter.Items then
-                            for _, item in pairs(fighter.Items) do
-                                if item:Get("ObjectID") == objectID then UA.constructingWeapon = item.Name; break end
-                            end
-                        end
-                    end)
+    for _, key in ipairs({"EmoteInventory", "CosmeticInventory"}) do
+        local inventory = ua_getData(key)
+        if type(inventory) == "table" then
+            for name, value in pairs(inventory) do
+                local resolved = type(value) == "table" and tostring(value.Name or value.name or name) or tostring(name)
+                if ua_inventoryValueOwned(value) and ua_isEmote(type(value) == "table" and value.Type or nil, resolved) then
+                    emotes[resolved] = value
                 end
+            end
+        end
+    end
+    local weaponInventory = ua_getData("WeaponInventory")
+    if type(weaponInventory) == "table" then
+        for name, value in pairs(weaponInventory) do
+            local resolved = type(value) == "table" and tostring(value.Name or value.name or name) or tostring(name)
+            if resolved ~= "" and ua_inventoryValueOwned(value) then weapons[resolved] = value end
+        end
+    end
+    UA.ownedEmotes, UA.ownedWeapons = emotes, weapons
+    return emotes, weapons
+end
 
-                if ua_isEnabled() and self == equipRemote then
-                    local weaponName, cosmeticType, cosmeticName, options = args[1], args[2], args[3], args[4] or {}
-                    if cosmeticType and ua_isNotFinisher(cosmeticType) and ua_isNotFinisher(cosmeticName) then
-                        if cosmeticName and cosmeticName ~= "None" and cosmeticName ~= "" then
-                            local inventory = DataController:Get("CosmeticInventory")
-                            if inventory and rawget(inventory, cosmeticName) then
-                                return oldNamecall(self, ...)
-                            end
-                        end
-                        UA.equipped[weaponName] = UA.equipped[weaponName] or {}
-                        if not cosmeticName or cosmeticName == "None" or cosmeticName == "" then
-                            UA.equipped[weaponName][cosmeticType] = nil
-                            if not next(UA.equipped[weaponName]) then UA.equipped[weaponName] = nil end
-                        else
-                            local cloned = ua_cloneCosmetic(cosmeticName, cosmeticType, {
-                                inverted = options.IsInverted,
-                                favoritesOnly = options.OnlyUseFavorites
-                            })
-                            if cloned then UA.equipped[weaponName][cosmeticType] = cloned end
-                        end
-                        task.defer(function()
-                            pcall(function() DataController.CurrentData:Replicate("WeaponInventory") end)
-                            task.wait(0.2)
-                            UA.save()
-                        end)
-                        return
-                    end
-                    return oldNamecall(self, ...)
-                end
-
-                if ua_isEnabled() and self == favoriteRemote then
-                    local cosmetic = CosmeticLibrary.Cosmetics[args[2]]
-                    if cosmetic and ua_isNotFinisher(args[2]) then
-                        UA.favorites[args[1]] = UA.favorites[args[1]] or {}
-                        UA.favorites[args[1]][args[2]] = args[3] or nil
-                        UA.save()
-                        task.spawn(function() pcall(function() DataController.CurrentData:Replicate("FavoritedCosmetics") end) end)
-                    end
-                    return
-                end
-                return oldNamecall(self, ...)
+function UA.ApplySavedEmotes()
+    if not ua_emotesEnabled() or not UA.ready or not UA.EquipRemote or UA.replaying then return false end
+    UA.RefreshOwnedCatalogs()
+    UA.replaying = true
+    for _, entry in pairs(UA.emoteLoadout) do
+        if ua_isEmote(entry.cosmeticType, entry.cosmeticName) and ua_isOwnedEmote(entry.cosmeticName) then
+            pcall(function()
+                UA.EquipRemote:FireServer(
+                    entry.weaponName,
+                    entry.cosmeticType,
+                    entry.cosmeticName,
+                    {
+                        IsInverted = entry.isInverted == true,
+                        OnlyUseFavorites = entry.onlyUseFavorites == true,
+                    }
+                )
             end)
         end
     end
+    UA.replaying = false
+    return true
+end
 
-    local ClientItem
-    pcall(function()
-        ClientItem = require(playerScripts.Modules.ClientReplicatedClasses.ClientFighter.ClientItem)
+local function ua_recordNativeEmote(args)
+    if UA.replaying or not ua_emotesEnabled() then return end
+    local weaponName, cosmeticType, cosmeticName, options = args[1], args[2], args[3], args[4]
+    if not ua_isEmote(cosmeticType, cosmeticName) then return end
+    local slot = tostring(weaponName or "Default") .. "|" .. tostring(cosmeticType or "Emote")
+    if not cosmeticName or cosmeticName == "" or cosmeticName == "None" then
+        UA.emoteLoadout[slot] = nil
+        task.defer(UA.save)
+        return
+    end
+    cosmeticName = tostring(cosmeticName)
+    UA.RefreshOwnedCatalogs()
+    if not ua_isOwnedEmote(cosmeticName) then return end
+    options = type(options) == "table" and options or {}
+    UA.emoteLoadout[slot] = {
+        weaponName = tostring(weaponName or ""),
+        cosmeticType = tostring(cosmeticType or "Emote"),
+        cosmeticName = cosmeticName,
+        isInverted = options.IsInverted == true,
+        onlyUseFavorites = options.OnlyUseFavorites == true,
+    }
+    task.defer(UA.save)
+end
+
+local function ua_installEquipObserver()
+    if UA.observerInstalled or type(hookmetamethod) ~= "function" or type(getnamecallmethod) ~= "function" or not UA.EquipRemote then return end
+    UA.observerInstalled = true
+    local oldNamecall
+    local callback = function(self, ...)
+        if self == UA.EquipRemote and getnamecallmethod() == "FireServer" then
+            local args = {...}
+            local result = {oldNamecall(self, ...)}
+            task.defer(ua_recordNativeEmote, args)
+            return table.unpack(result)
+        end
+        return oldNamecall(self, ...)
+    end
+    if type(newcclosure) == "function" then callback = newcclosure(callback) end
+    oldNamecall = hookmetamethod(game, "__namecall", callback)
+end
+
+function UA.Initialize()
+    if UA.ready or UA.initializing then return UA.ready end
+    UA.initializing = true
+    local ok, err = pcall(function()
+        local playerScripts = LocalPlayer:WaitForChild("PlayerScripts", 10)
+        local controllers = playerScripts and playerScripts:WaitForChild("Controllers", 10)
+        local modules = ReplicatedStorage:FindFirstChild("Modules")
+        if not controllers or not modules then error("native inventory controllers are unavailable") end
+
+        local dataModule = controllers:WaitForChild("PlayerDataController", 10)
+        local cosmeticModule = modules:WaitForChild("CosmeticLibrary", 10)
+        if not dataModule or not cosmeticModule then error("native inventory modules are unavailable") end
+        UA.DataController = require(dataModule)
+        UA.CosmeticLibrary = require(cosmeticModule)
+
+        local emoteModule = controllers:FindFirstChild("EmoteController") or controllers:WaitForChild("EmoteController", 3)
+        if emoteModule then pcall(function() UA.EmoteController = require(emoteModule) end) end
+
+        local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+        local dataRemotes = remotes and remotes:FindFirstChild("Data")
+        UA.EquipRemote = dataRemotes and dataRemotes:FindFirstChild("EquipCosmetic")
+        UA.ready = true
+        UA.RefreshOwnedCatalogs()
+        ua_installEquipObserver()
     end)
-    if ClientItem and ClientItem._CreateViewModel then
-        local originalCreateViewModel = ClientItem._CreateViewModel
-        ClientItem._CreateViewModel = function(self, viewmodelRef)
-            local weaponName   = self.Name
-            local weaponPlayer = self.ClientFighter and self.ClientFighter.Player
-            UA.constructingWeapon = (weaponPlayer == LocalPlayer) and weaponName or nil
-            if ua_isEnabled() and weaponPlayer == LocalPlayer and UA.equipped[weaponName] and viewmodelRef then
-                local dataKey, skinKey, charmKey, wrapKey, nameKey =
-                    self:ToEnum("Data"), self:ToEnum("Skin"), self:ToEnum("Charm"), self:ToEnum("Wrap"), self:ToEnum("Name")
-                local cosmetics = UA.equipped[weaponName]
-                if viewmodelRef[dataKey] then
-                    if cosmetics.Skin  then viewmodelRef[dataKey][skinKey]  = cosmetics.Skin  end
-                    if cosmetics.Charm then viewmodelRef[dataKey][charmKey] = cosmetics.Charm end
-                    if cosmetics.Wrap  then viewmodelRef[dataKey][wrapKey]  = cosmetics.Wrap  end
-                    if cosmetics.Skin  then viewmodelRef[dataKey][nameKey]  = cosmetics.Skin.Name end
-                elseif viewmodelRef.Data then
-                    if cosmetics.Skin  then viewmodelRef.Data.Skin  = cosmetics.Skin  end
-                    if cosmetics.Charm then viewmodelRef.Data.Charm = cosmetics.Charm end
-                    if cosmetics.Wrap  then viewmodelRef.Data.Wrap  = cosmetics.Wrap  end
-                    if cosmetics.Skin  then viewmodelRef.Data.Name  = cosmetics.Skin.Name end
-                end
-            end
-            local result = originalCreateViewModel(self, viewmodelRef)
-            UA.constructingWeapon = nil
-            return result
-        end
+    UA.initializing = false
+    if not ok then
+        warn("[DevKage Inventory] " .. tostring(err))
+        return false
     end
+    if ua_emotesEnabled() then task.defer(UA.ApplySavedEmotes) end
+    return true
+end
 
-    local viewModelModulePath = playerScripts.Modules.ClientReplicatedClasses.ClientFighter.ClientItem
-    local viewModelModule = viewModelModulePath and viewModelModulePath:FindFirstChild("ClientViewModel")
-    if viewModelModule then
-        local ClientViewModel = require(viewModelModule)
-        local originalNew = ClientViewModel.new
-        ClientViewModel.new = function(replicatedData, clientItem)
-            local weaponPlayer = clientItem.ClientFighter and clientItem.ClientFighter.Player
-            local weaponName   = UA.constructingWeapon or clientItem.Name
-            if ua_isEnabled() and weaponPlayer == LocalPlayer and UA.equipped[weaponName] then
-                local ReplicatedClass = require(ReplicatedStorage.Modules.ReplicatedClass)
-                local dataKey = ReplicatedClass:ToEnum("Data")
-                replicatedData[dataKey] = replicatedData[dataKey] or {}
-                local cosmetics = UA.equipped[weaponName]
-                if cosmetics.Skin  then replicatedData[dataKey][ReplicatedClass:ToEnum("Skin")]  = cosmetics.Skin  end
-                if cosmetics.Charm then replicatedData[dataKey][ReplicatedClass:ToEnum("Charm")] = cosmetics.Charm end
-                if cosmetics.Wrap  then replicatedData[dataKey][ReplicatedClass:ToEnum("Wrap")]  = cosmetics.Wrap  end
-            end
-            local result = originalNew(replicatedData, clientItem)
-            if ua_isEnabled() and weaponPlayer == LocalPlayer and UA.equipped[weaponName] and UA.equipped[weaponName].Wrap and result._UpdateWrap then
-                result:_UpdateWrap()
-                task.delay(0.1, function() if not result._destroyed then result:_UpdateWrap() end end)
-            end
-            return result
-        end
-
-        if ClientViewModel.GetCharm then
-            local orig = ClientViewModel.GetCharm
-            ClientViewModel.GetCharm = function(self)
-                local wn = self.ClientItem and self.ClientItem.Name
-                local wp = self.ClientItem and self.ClientItem.ClientFighter and self.ClientItem.ClientFighter.Player
-                if ua_isEnabled() and wn and wp==LocalPlayer and UA.equipped[wn] and UA.equipped[wn].Charm then return UA.equipped[wn].Charm end
-                return orig(self)
-            end
-        end
-        if ClientViewModel.GetWrap then
-            local orig = ClientViewModel.GetWrap
-            ClientViewModel.GetWrap = function(self)
-                local wn = self.ClientItem and self.ClientItem.Name
-                local wp = self.ClientItem and self.ClientItem.ClientFighter and self.ClientItem.ClientFighter.Player
-                if ua_isEnabled() and wn and wp==LocalPlayer and UA.equipped[wn] and UA.equipped[wn].Wrap then return UA.equipped[wn].Wrap end
-                return orig(self)
-            end
-        end
+function UA.SetFeatureEnabled(feature, enabled)
+    local config = ua_config()
+    if config then
+        if feature == "Emotes" then config.unlockEmotes = enabled == true end
+        if feature == "Weapons" then config.unlockWeapons = enabled == true end
     end
-
-    local originalGetViewModelImage = ItemLibrary.GetViewModelImageFromWeaponData
-    ItemLibrary.GetViewModelImageFromWeaponData = function(self, weaponData, highRes)
-        if not weaponData then return originalGetViewModelImage(self, weaponData, highRes) end
-        local weaponName = weaponData.Name
-        if ua_isEnabled() and UA.equipped[weaponName] and UA.equipped[weaponName].Skin then
-            local skinInfo = self.ViewModels[UA.equipped[weaponName].Skin.Name]
-            if skinInfo then return skinInfo[highRes and "ImageHighResolution" or "Image"] or skinInfo.Image end
-        end
-        return originalGetViewModelImage(self, weaponData, highRes)
-    end
-
-    local EmoteController
-    pcall(function()
-        EmoteController = require(controllers:WaitForChild("EmoteController", 10))
-        if EmoteController and EmoteController.GetEmotes then
-            local originalGetEmotes = EmoteController.GetEmotes
-            EmoteController.GetEmotes = function(self)
-                local emotes = originalGetEmotes(self)
-                if not ua_isEnabled() then return emotes end
-                for name, cosmetic in pairs(CosmeticLibrary.Cosmetics) do
-                    if cosmetic and ua_isNotFinisher(name) and (cosmetic.Type=="Dance" or cosmetic.Type=="Emote" or name:lower():find("dance") or name:lower():find("emote")) then
-                        if not emotes[name] then
-                            emotes[name] = {Name=name, Type=cosmetic.Type, ObjectID=cosmetic.ObjectID, Enum=cosmetic.Enum}
-                        end
-                    end
-                end
-                return emotes
+    if enabled then
+        task.spawn(function()
+            if UA.Initialize() then
+                UA.RefreshOwnedCatalogs()
+                if feature == "Emotes" then UA.ApplySavedEmotes() end
             end
-        end
-    end)
+        end)
+    end
+end
 
+local environment = type(getgenv) == "function" and getgenv() or _G
+environment.__DevKageEmoteSave = UA.save
+environment.__DevKageEmoteLoad = UA.load
+environment.__DevKageApplySavedEmotes = UA.ApplySavedEmotes
+environment.__DevKageOwnedEmotes = function() UA.RefreshOwnedCatalogs(); return UA.ownedEmotes end
+environment.__DevKageOwnedWeapons = function() UA.RefreshOwnedCatalogs(); return UA.ownedWeapons end
+environment.__DevKageEmoteLoadout = UA.emoteLoadout
+
+task.spawn(function()
     UA.load()
+    UA.Initialize()
 end)
-if not ok then warn("[UnlockAll] Hook error:", err) end
-end)
-
-
-
+end
 
 local defaultConfig = {
 victim   = "123456789",
@@ -4232,7 +4144,8 @@ premium  = false,
 verified = false,
 influencer = false,
 admin = false,
-unlockall= false,
+unlockEmotes = false,
+unlockWeapons = false,
 autoLoadSpoofer = false,
 platform = "DESKTOP",
 spoofDevice = true,
@@ -4378,7 +4291,7 @@ __DevKageSpooferConfigKeys={
 "keys","spoofWeaponKeys","unlockTokens","spoofUnlockTokens",
 "eventCurrency","spoofEventCurrency","glory","spoofGlory",
 "skinTickets","spoofSkinTickets","premium","verified","influencer","admin",
-"unlockall","platform","spoofDevice","deviceSpam","deviceSpamRate",
+"unlockEmotes","unlockWeapons","platform","spoofDevice","deviceSpam","deviceSpamRate",
 "spoofAvatar","displayNameOverrideEnabled","displayNameOverride",
 "usernameOverrideEnabled","usernameOverride","anonymousMode",
 "duelHistoryEnabled","duelMatchIndex","duelMode","duelResult","duelMap",
@@ -6839,6 +6752,118 @@ end
 return refreshed
 end
 
+do
+local function restoreAvatarIdOnlyAppearance()
+    local character = SpooferState.avatarCharacter
+    local description = SpooferState.originalAvatarDescription
+    SpooferState.avatarCharacter = nil
+    SpooferState.originalAvatarDescription = nil
+    if character and character.Parent and description then
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            pcall(function()
+                local methodOk, clientServerMethod = pcall(function()
+                    return humanoid.ApplyDescriptionClientServer
+                end)
+                if methodOk and type(clientServerMethod) == "function" then
+                    clientServerMethod(humanoid, description)
+                else
+                    humanoid:ApplyDescription(description)
+                end
+            end)
+        end
+    end
+    if SpooferState.AvatarAssets then
+        pcall(SpooferState.AvatarAssets.RestoreBackup, character)
+    end
+end
+
+function SpooferState.StopAvatarIdOnly(restoreAppearance)
+    SpooferState.avatarOnlyToken = (SpooferState.avatarOnlyToken or 0) + 1
+    if SpooferState.avatarOnlyConnection then
+        pcall(function() SpooferState.avatarOnlyConnection:Disconnect() end)
+        SpooferState.avatarOnlyConnection = nil
+    end
+    SpooferState.avatarOnlyUserId = nil
+    SpooferState.avatarApplyPending = false
+    SpooferState.avatarApplyBusy = false
+    SpooferState.avatarJob = nil
+    if restoreAppearance ~= false then restoreAvatarIdOnlyAppearance() end
+end
+
+function SpooferState.ApplyAvatarIdOnly(userId)
+    local avatarUserId = tonumber(userId)
+    if not avatarUserId or avatarUserId <= 0 or avatarUserId ~= avatarUserId or avatarUserId == math.huge then
+        return false, "Enter a valid Avatar ID"
+    end
+    avatarUserId = math.floor(avatarUserId)
+    SpooferState.avatarOnlyToken = (SpooferState.avatarOnlyToken or 0) + 1
+    local avatarToken = SpooferState.avatarOnlyToken
+    if SpooferState.avatarOnlyConnection then
+        pcall(function() SpooferState.avatarOnlyConnection:Disconnect() end)
+    end
+
+    SpooferState.avatarOnlyUserId = avatarUserId
+    SpooferState.avatarApplyPending = true
+    SpooferState.avatarApplyCharacter = nil
+    SpooferState.avatarApplyBusy = false
+    SpooferState.avatarNextAttempt = 0
+    SpooferState.avatarNextValidation = 0
+    SpooferState.avatarRetryDelay = 0.35
+    SpooferState.avatarLastError = nil
+
+    local function applyAvatarTick()
+        if avatarToken ~= SpooferState.avatarOnlyToken then return end
+        local character = LocalPlayer and LocalPlayer.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        if not character or not humanoid or humanoid.Health <= 0 or SpooferState.avatarApplyBusy then return end
+        if tonumber(SpooferState.avatarOnlyUserId) ~= avatarUserId then return end
+        local now = os.clock()
+        if now < (tonumber(SpooferState.avatarNextAttempt) or 0) then return end
+        if not SpooferState.avatarApplyPending and SpooferState.avatarApplyCharacter == character then
+            if now < (SpooferState.avatarNextValidation or 0) then return end
+            SpooferState.avatarNextValidation = now + 0.75
+            if SpooferState.AvatarAssets.Matches(character, SpooferState.avatarManifest) then return end
+            SpooferState.avatarApplyPending = true
+        end
+
+        SpooferState.avatarApplyBusy = true
+        SpooferState.avatarApplyPending = false
+        local job = {}
+        SpooferState.avatarJob = job
+        task.spawn(function()
+            local called, ok, err = pcall(createLocalSpoofVisual, LocalPlayer, avatarUserId)
+            if not called then err, ok = ok, false end
+            if avatarToken == SpooferState.avatarOnlyToken and tonumber(SpooferState.avatarOnlyUserId) == avatarUserId then
+                if ok and LocalPlayer.Character == character then
+                    SpooferState.avatarApplyCharacter = character
+                    SpooferState.avatarRetryDelay = 0.35
+                    SpooferState.avatarNextAttempt = 0
+                    SpooferState.avatarNextValidation = os.clock() + 0.75
+                    SpooferState.avatarLastError = nil
+                elseif err ~= "superseded" then
+                    SpooferState.avatarApplyPending = true
+                    SpooferState.avatarLastError = tostring(err)
+                    local delay = math.clamp(tonumber(SpooferState.avatarRetryDelay) or 0.35, 0.35, 5)
+                    SpooferState.avatarNextAttempt = os.clock() + delay
+                    SpooferState.avatarRetryDelay = math.min(delay * 1.75, 5)
+                    warn("[DevKage Avatar] " .. tostring(err))
+                end
+            end
+            if SpooferState.avatarJob == job then
+                SpooferState.avatarApplyBusy, SpooferState.avatarJob = false, nil
+            end
+        end)
+    end
+
+    SpooferState.avatarOnlyConnection = RunService.Heartbeat:Connect(applyAvatarTick)
+    SpooferState.connections = type(SpooferState.connections) == "table" and SpooferState.connections or {}
+    SpooferState.connections[#SpooferState.connections + 1] = SpooferState.avatarOnlyConnection
+    task.defer(applyAvatarTick)
+    return true
+end
+end
+
 local function StartSpoofer(config)
 config = config or getgenv().__DevKageConfig
 if type(config) ~= "table" then return false end
@@ -6861,69 +6886,9 @@ SpooferState.running = false
 SpooferState.localActive = false
 SpooferState.UpdatePlatformAsset(config,false)
 
-local avatarUserId = config.spoofAvatar==false and nil or (config.anonymousMode==true and 6942067 or tonumber(config.victim))
-if avatarUserId and avatarUserId > 0 then
-    avatarUserId = math.floor(avatarUserId)
-    SpooferState.avatarOnlyUserId = avatarUserId
-    SpooferState.avatarApplyPending = true
-    SpooferState.avatarApplyCharacter = nil
-    SpooferState.avatarApplyBusy = SpooferState.avatarApplyBusy == true
-    SpooferState.avatarNextAttempt = 0
-    SpooferState.avatarNextValidation = 0
-    SpooferState.avatarRetryDelay = 0.35
-    SpooferState.avatarLastError = nil
-
-    if SpooferState.avatarOnlyConnection then
-        pcall(function() SpooferState.avatarOnlyConnection:Disconnect() end)
-        SpooferState.avatarOnlyConnection = nil
-    end
-
-    SpooferState.avatarOnlyConnection = game:GetService("RunService").Heartbeat:Connect(function()
-        if startToken ~= SpooferState.startToken then return end
-        local character = LocalPlayer and LocalPlayer.Character
-        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-        if not character or not humanoid or humanoid.Health <= 0 or SpooferState.avatarApplyBusy then return end
-        local currentId = tonumber(SpooferState.avatarOnlyUserId)
-        if not currentId or currentId <= 0 then return end
-        local now = os.clock()
-        if now < (tonumber(SpooferState.avatarNextAttempt) or 0) then return end
-        if not SpooferState.avatarApplyPending and SpooferState.avatarApplyCharacter == character then
-            if now < (SpooferState.avatarNextValidation or 0) then return end
-            SpooferState.avatarNextValidation = now + 0.75
-            if SpooferState.AvatarAssets.Matches(character, SpooferState.avatarManifest) then return end
-            SpooferState.avatarApplyPending = true
-        end
-        SpooferState.avatarApplyBusy = true
-        SpooferState.avatarApplyPending = false
-        local job = {}
-        SpooferState.avatarJob = job
-        task.spawn(function()
-            local called, ok, err = pcall(createLocalSpoofVisual, LocalPlayer, currentId)
-            if not called then err, ok = ok, false end
-            if startToken == SpooferState.startToken and tonumber(SpooferState.avatarOnlyUserId) == currentId then
-                if ok and LocalPlayer.Character == character then
-                    SpooferState.avatarApplyCharacter = character
-                    SpooferState.avatarRetryDelay = 0.35
-                    SpooferState.avatarNextAttempt = 0
-                    SpooferState.avatarNextValidation = os.clock() + 0.75
-                    SpooferState.avatarLastError = nil
-                elseif err ~= "superseded" then
-                    SpooferState.avatarApplyPending = true
-                    SpooferState.avatarLastError = tostring(err)
-                    local delay = math.clamp(tonumber(SpooferState.avatarRetryDelay) or 0.35, 0.35, 5)
-                    SpooferState.avatarNextAttempt = os.clock() + delay
-                    SpooferState.avatarRetryDelay = math.min(delay * 1.75, 5)
-                    warn("[DevKage Avatar] " .. tostring(err))
-                end
-            end
-
-            if SpooferState.avatarJob == job then
-                SpooferState.avatarApplyBusy, SpooferState.avatarJob = false, nil
-            end
-        end)
-    end)
-
-    SpooferState.connections[#SpooferState.connections + 1] = SpooferState.avatarOnlyConnection
+if config.spoofAvatar == true then
+    local avatarOk, avatarError = SpooferState.ApplyAvatarIdOnly(config.victim)
+    if not avatarOk then warn("[DevKage Avatar] " .. tostring(avatarError)) end
 end
 
 SpooferState.running = true
@@ -12009,11 +11974,11 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_19.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_20.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOLOAD_ENABLED_FILE = CONFIG_FOLDER .. "/_devkage_autoload_enabled.flag"
 local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_AutoLoad_LAST.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.19-six-second-skybox-20260906"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.20-inventory-avatar-skybox-20260906"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -12195,7 +12160,8 @@ elo          = cfg.elo,
 keys         = cfg.keys,
 premium      = cfg.premium,
 verified     = cfg.verified,
-unlockall    = cfg.unlockall,
+unlockEmotes = cfg.unlockEmotes,
+unlockWeapons = cfg.unlockWeapons,
 platform     = cfg.platform,
 join         = cfg.join,
 chinaHatEnabled = cfg.chinaHatEnabled,
@@ -12239,23 +12205,7 @@ chinaHatAlpha = cfg.chinaHatAlpha,
     avatarModsTrails = cfg.avatarModsTrails,
     luaCode = cfg.luaCode,
     luaAutoExecute = cfg.luaAutoExecute,
-    ua_equipped  = (function()
-        local out = {}
-        for weapon, cosmetics in pairs(UA.equipped) do
-            out[weapon] = {}
-            for cosmeticType, cosmeticData in pairs(cosmetics) do
-                if cosmeticData and cosmeticData.Name then
-                    out[weapon][cosmeticType] = {
-                        name     = cosmeticData.Name,
-                        seed     = cosmeticData.Seed,
-                        inverted = cosmeticData.Inverted
-                    }
-                end
-            end
-        end
-        return out
-    end)(),
-    ua_favorites = UA.favorites,
+    ua_emote_loadout = UA.ExportEmoteLoadout(),
     esp_enabled          = VisualsState.esp_enabled,
     teamcheck            = VisualsState.teamcheck,
     highlights           = VisualsState.highlights,
@@ -12400,20 +12350,7 @@ if type(data.controlValues) == "table" and getgenv then
     getgenv().__DevKagePendingControlValues = data.controlValues
 end
 
-if data.ua_equipped then
-    table.clear(UA.equipped)
-    for weapon, cosmetics in pairs(data.ua_equipped) do
-        UA.equipped[weapon] = {}
-        for cosmeticType, cosmeticData in pairs(cosmetics) do
-            local cloned = ua_cloneCosmetic(cosmeticData.name, cosmeticType, {inverted=cosmeticData.inverted})
-            if cloned then
-                cloned.Seed = cosmeticData.seed
-                UA.equipped[weapon][cosmeticType] = cloned
-            end
-        end
-    end
-end
-if data.ua_favorites then UA.favorites = data.ua_favorites end
+if type(data.ua_emote_loadout)=="table" then UA.ImportEmoteLoadout(data.ua_emote_loadout) end
 
 if data.esp_enabled          ~= nil then VisualsState.esp_enabled          = data.esp_enabled          end
 if data.teamcheck            ~= nil then VisualsState.teamcheck            = data.teamcheck            end
@@ -12982,6 +12919,7 @@ if not enabled then
     if type(delfile) == "function" then
         for _, path in ipairs({
             SCRIPT_PAYLOAD_FILE,
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_19.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_18.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_17.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_16.lua",
@@ -13070,6 +13008,7 @@ end
 
 
 for _, legacyName in ipairs({
+    "_devkage_autoload_payload_v5_2_19.lua",
     "_devkage_autoload_payload_v5_2_18.lua",
     "_devkage_autoload_payload_v5_2_17.lua",
     "_devkage_autoload_payload_v5_2_16.lua",
@@ -15179,7 +15118,7 @@ if SpooferState.targetPlayer and SpooferState.targetPlayer~=LocalPlayer then app
 local privacy=SpooferState.privacy
 if privacy and privacy.RefreshAnchors then pcall(privacy.RefreshAnchors) end
 end
-local victimInput  = spooferSection:CreateInput({ Name = "Victim ID",   Default = getgenv().__DevKageConfig.victim,          Placeholder = "123456789", Callback = function(value) getgenv().__DevKageConfig.victim=tostring(value or "") end })
+local victimInput  = spooferSection:CreateInput({ Name = "Avatar ID",   Default = getgenv().__DevKageConfig.victim,          Placeholder = "123456789", Callback = function(value) getgenv().__DevKageConfig.victim=tostring(value or "") end })
 local helperInput  = spooferSection:CreateInput({ Name = "Helper Name", Default = getgenv().__DevKageConfig.helper,          Placeholder = "Leave blank for local player", Callback = function(value) getgenv().__DevKageConfig.helper=tostring(value or "") end })
 local levelInput   = spooferSection:CreateInput({ Name = "Level",       Default = tostring(getgenv().__DevKageConfig.level), Placeholder = "999",  Numeric = true, Callback = function(value) getgenv().__DevKageConfig.level=math.max(0,math.floor((tonumber(value) or 999)+0.5)); task.defer(refreshBasicLevelStreak) end })
 local streakInput  = spooferSection:CreateInput({ Name = "Win Streak",  Default = tostring(getgenv().__DevKageConfig.streak),Placeholder = "100",  Numeric = true, Callback = function(value) getgenv().__DevKageConfig.streak=math.max(0,math.floor((tonumber(value) or 100)+0.5)); task.defer(refreshBasicLevelStreak) end })
@@ -15323,7 +15262,7 @@ if SpooferState.privacy and SpooferState.privacy.RefreshAll then pcall(SpooferSt
 pcall(SpooferState.RefreshLeaderboards)
 end
 
-local flagsSection = spooferPage:CreateSection({ Name = "Platform & Account Options", Side = "Right", Size = 610 })
+local flagsSection = spooferPage:CreateSection({ Name = "Platform & Account Options", Side = "Right", Size = 635 })
 flagsSection.Root.LayoutOrder=-290
 local platformDrop = flagsSection:CreateDropdown({
 Name    = "Platform",
@@ -15342,8 +15281,24 @@ local premiumToggle  = flagsSection:CreateToggle({ Name = "Premium",    State = 
 local verifiedToggle = flagsSection:CreateToggle({ Name = "Verified",   State = getgenv().__DevKageConfig.verified,  Callback = function(v) getgenv().__DevKageConfig.verified=v; refreshSpooferPresentation() end })
 spooferExtraControls.influencerToggle=flagsSection:CreateToggle({Name="Influencer",State=getgenv().__DevKageConfig.influencer==true,Callback=function(value) getgenv().__DevKageConfig.influencer=value==true; refreshSpooferPresentation() end})
 spooferExtraControls.adminToggle=flagsSection:CreateToggle({Name="Admin",State=getgenv().__DevKageConfig.admin==true,Callback=function(value) getgenv().__DevKageConfig.admin=value==true; refreshSpooferPresentation() end})
-local unlockToggle   = flagsSection:CreateToggle({ Name = "Unlock All", State = getgenv().__DevKageConfig.unlockall, Callback = function(v) getgenv().__DevKageConfig.unlockall = v end })
-spooferExtraControls.spoofAvatarToggle=flagsSection:CreateToggle({Name="Spoof Avatar",State=getgenv().__DevKageConfig.spoofAvatar~=false,Callback=function(value) getgenv().__DevKageConfig.spoofAvatar=value==true end})
+spooferExtraControls.emotesToggle = flagsSection:CreateToggle({Name="Emotes",State=getgenv().__DevKageConfig.unlockEmotes==true,Callback=function(value)
+getgenv().__DevKageConfig.unlockEmotes=value==true
+UA.SetFeatureEnabled("Emotes",value)
+end})
+spooferExtraControls.weaponsToggle = flagsSection:CreateToggle({Name="Weapons",State=getgenv().__DevKageConfig.unlockWeapons==true,Callback=function(value)
+getgenv().__DevKageConfig.unlockWeapons=value==true
+UA.SetFeatureEnabled("Weapons",value)
+end})
+spooferExtraControls.spoofAvatarToggle=flagsSection:CreateToggle({Name="Spoof Avatar",State=getgenv().__DevKageConfig.spoofAvatar==true,Callback=function(value)
+local config=getgenv().__DevKageConfig
+config.spoofAvatar=value==true
+if value then
+local ok,err=SpooferState.ApplyAvatarIdOnly(config.victim)
+if not ok then warn("[DevKage Avatar] "..tostring(err)) end
+else
+SpooferState.StopAvatarIdOnly(true)
+end
+end})
 spooferExtraControls.anonymousToggle=flagsSection:CreateToggle({Name="Anonymous Mode",State=getgenv().__DevKageConfig.anonymousMode==true,Callback=function(value) getgenv().__DevKageConfig.anonymousMode=value==true end})
 spooferExtraControls.displayNameInput=flagsSection:CreateInput({Name="Display Name",Default=tostring(getgenv().__DevKageConfig.displayNameOverride or ""),Placeholder="Optional display name",MaxLength=32,Callback=function(value) getgenv().__DevKageConfig.displayNameOverride=tostring(value or ""):sub(1,32) end})
 spooferExtraControls.displayNameToggle=flagsSection:CreateToggle({Name="Spoof Display Name",State=getgenv().__DevKageConfig.displayNameOverrideEnabled==true,Callback=function(value) getgenv().__DevKageConfig.displayNameOverrideEnabled=value==true end})
@@ -15824,7 +15779,7 @@ rainbowAuraDensitySlider=rainbowAuraDensitySlider, rainbowAuraPulseSlider=rainbo
 rainbowAuraGroundToggle=rainbowAuraGroundToggle, rainbowAuraTrailsToggle=rainbowAuraTrailsToggle,
 rainbowAuraRebuildButton=rainbowAuraRebuildButton,
 platformDrop=platformDrop, premiumToggle=premiumToggle, verifiedToggle=verifiedToggle,
-unlockToggle=unlockToggle,
+emotesToggle=spooferExtraControls.emotesToggle,weaponsToggle=spooferExtraControls.weaponsToggle,
 streamerRuntime=StreamerHUDRuntime,streamerHudToggle=streamerHudToggle,streamerPositionDrop=streamerPositionDrop,streamerStyleDrop=streamerStyleDrop,
 streamerLabelInput=streamerLabelInput,streamerModeInput=streamerModeInput,streamerShowMode=streamerShowMode,streamerShowFPS=streamerShowFPS,
 streamerShowPing=streamerShowPing,streamerShowClock=streamerShowClock,streamerAccentPicker=streamerAccentPicker,
@@ -17150,6 +17105,45 @@ local PlayerESPSkyboxMoods={
 local PlayerESPSkyboxNames = {}
 for name in pairs(PlayerESPSkyboxes) do PlayerESPSkyboxNames[#PlayerESPSkyboxNames+1]=name end
 table.sort(PlayerESPSkyboxNames,function(a,b) return tostring(a):lower()<tostring(b):lower() end)
+PlayerESPUtilityRuntime.skyboxAssetIds={
+["DevKage Skybox"]="rbxassetid://11363682343",
+Heaven="rbxassetid://15359965253",
+["Ethereal Heaven"]="rbxassetid://15359965253",
+}
+PlayerESPUtilityRuntime.skyboxFaces={"SkyboxBk","SkyboxDn","SkyboxFt","SkyboxLf","SkyboxRt","SkyboxUp"}
+PlayerESPUtilityRuntime.LoadSkyboxAsset=function(presetName)
+local function findSky(asset)
+if not asset then return nil end
+if asset:IsA("Sky") then return asset end
+for _,descendant in ipairs(asset:GetDescendants()) do if descendant:IsA("Sky") then return descendant end end
+return nil
+end
+local assetId=PlayerESPUtilityRuntime.skyboxAssetIds[presetName]
+if not assetId then return nil end
+PlayerESPUtilityRuntime.assetSkyTextures=PlayerESPUtilityRuntime.assetSkyTextures or {}
+local cached=PlayerESPUtilityRuntime.assetSkyTextures[presetName]
+if cached then return cached end
+local ok,objects=pcall(function() return game:GetObjects(assetId) end)
+if not ok or type(objects)~="table" then return nil end
+local extracted=nil
+for _,assetObject in ipairs(objects) do
+local sourceSky=findSky(assetObject)
+if sourceSky and not extracted then
+local textures={}
+local valid=true
+for _,property in ipairs(PlayerESPUtilityRuntime.skyboxFaces) do
+local value=""
+pcall(function() value=sourceSky[property] end)
+if type(value)~="string" or value=="" then valid=false; break end
+textures[property]=value
+end
+if valid then extracted=textures end
+end
+end
+for _,assetObject in ipairs(objects) do pcall(function() assetObject:Destroy() end) end
+if extracted then PlayerESPUtilityRuntime.assetSkyTextures[presetName]=extracted end
+return extracted
+end
 
 local function capturePlayerESPOriginalSky()
 if PlayerESPUtilityRuntime.originalSkyCaptured then return end
@@ -17220,27 +17214,14 @@ sky.Name="DevKage_PlayerESP_Sky"
 sky.Parent=Lighting
 PlayerESPUtilityRuntime.sky=sky
 end
-local heavenApplied=false
-if VisualsState.skybox_preset=="Heaven" or VisualsState.skybox_preset=="Ethereal Heaven" then
-local ok,objects=pcall(function() return game:GetObjects("rbxassetid://15359965253") end)
-if ok and type(objects)=="table" then
-for _,asset in ipairs(objects) do
-local source=nil
-if asset:IsA("Sky") then source=asset elseif asset.FindFirstChildOfClass then source=asset:FindFirstChildOfClass("Sky") end
-if source then
-for _,property in ipairs({"SkyboxBk","SkyboxDn","SkyboxFt","SkyboxLf","SkyboxRt","SkyboxUp"}) do
-pcall(function() sky[property]=source[property] end)
-end
-heavenApplied=true
-end
-pcall(function() asset:Destroy() end)
-if heavenApplied then break end
-end
-end
-end
-if not heavenApplied then
-for property,value in pairs(textures) do pcall(function() sky[property]=value end) end
-end
+local assetTextures=PlayerESPUtilityRuntime.LoadSkyboxAsset(VisualsState.skybox_preset)
+local selectedTextures=assetTextures or textures
+for property,value in pairs(selectedTextures) do pcall(function() sky[property]=value end) end
+task.defer(function()
+if not sky.Parent then return end
+local contentProvider=game:GetService("ContentProvider")
+pcall(function() contentProvider:PreloadAsync({sky}) end)
+end)
 applyPlayerESPSkyMood(sky,VisualsState.skybox_preset)
 end
 
@@ -20555,7 +20536,8 @@ aaDisplaySection:CreateButton({Name="Apply as Spoof Avatar",Callback=function()
     getgenv().__DevKageConfig = getgenv().__DevKageConfig or {}
     getgenv().__DevKageConfig.victim = tostring(math.floor(uid))
     getgenv().__DevKageConfig.spoofAvatar = true
-    if StartSpoofer then StartSpoofer(getgenv().__DevKageConfig) end
+    local ok,err=SpooferState.ApplyAvatarIdOnly(math.floor(uid))
+    if not ok then warn("[DevKage Avatar] "..tostring(err)) end
 end})
 task.defer(function()
     if vp3D.Parent then vp3_loadUserId(avatarIdInput:Get()) end
@@ -26371,7 +26353,8 @@ config.duelMap=spooferDropdownValue(extra.duelMap,config.duelMap or "Arena")
 config.platform=spooferDropdownValue(controls.platformDrop,config.platform or "DESKTOP")
 local premium=spooferControlValue(controls.premiumToggle); if premium~=nil then config.premium=premium==true end
 local verified=spooferControlValue(controls.verifiedToggle); if verified~=nil then config.verified=verified==true end
-local unlock=spooferControlValue(controls.unlockToggle); if unlock~=nil then config.unlockall=unlock==true end
+local emotes=spooferControlValue(controls.emotesToggle); if emotes~=nil then config.unlockEmotes=emotes==true end
+local weapons=spooferControlValue(controls.weaponsToggle); if weapons~=nil then config.unlockWeapons=weapons==true end
 
 for _,binding in ipairs({
 {"streamerHudToggle","streamerHudEnabled"},{"streamerShowMode","streamerHudShowMode"},
@@ -26467,7 +26450,8 @@ if extra.duelMap then setSpooferControl(extra.duelMap,optionIndex(extra.duelMap.
 setSpooferControl(controls.platformDrop,optionIndex(controls.platformDrop.Options,config.platform))
 setSpooferControl(controls.premiumToggle,config.premium==true)
 setSpooferControl(controls.verifiedToggle,config.verified==true)
-setSpooferControl(controls.unlockToggle,config.unlockall==true)
+setSpooferControl(controls.emotesToggle,config.unlockEmotes==true)
+setSpooferControl(controls.weaponsToggle,config.unlockWeapons==true)
 setSpooferControl(controls.streamerWidthModeDrop,optionIndex(controls.streamerWidthModeDrop.Options,config.streamerHudWidthMode))
 setSpooferControl(controls.streamerAlignmentDrop,optionIndex(controls.streamerAlignmentDrop.Options,config.streamerHudTextAlignment))
 setSpooferControl(controls.streamerWidthSlider,math.clamp(tonumber(config.streamerHudWidth) or 660,260,1800))
@@ -26498,19 +26482,7 @@ getgenv().__DevKageConfig.rankDisplay="Use Spoofed ELO"
 if SpooferState.savedELO~=nil then getgenv().__DevKageConfig.elo=normalizeSpoofELO(SpooferState.savedELO) end
 end
 
-if type(data.ua_equipped)=="table" then
-table.clear(UA.equipped)
-for weapon,cosmetics in pairs(data.ua_equipped) do
-UA.equipped[weapon]={}
-for cosmeticType,cosmeticData in pairs(cosmetics) do
-if type(cosmeticData)=="table" then
-local cloned=ua_cloneCosmetic(cosmeticData.name,cosmeticType,{inverted=cosmeticData.inverted})
-if cloned then cloned.Seed=cosmeticData.seed; UA.equipped[weapon][cosmeticType]=cloned end
-end
-end
-end
-end
-if type(data.ua_favorites)=="table" then UA.favorites=data.ua_favorites end
+if type(data.ua_emote_loadout)=="table" then UA.ImportEmoteLoadout(data.ua_emote_loadout) end
 
 applyRuntimeState(VisualsState,data.visuals)
 applyRuntimeState(VisualsState,data)
@@ -27690,4 +27662,4 @@ print("[DevKage] Both Mask Shards always on; Knife combat controls integrated.")
 
 -- END OF FILE
 
-]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,49,57,45,115,105,120,45,115,101,99,111,110,100,45,115,107,121,98,111,120,45,50,48,50,54,48,57,48,54)_b._a=_a pcall(function()if type(writefile)~=string.char(102,117,110,99,116,105,111,110)or type(readfile)~=string.char(102,117,110,99,116,105,111,110)then return end local _c=string.char(68,101,118,75,97,103,101,95,67,111,110,102,105,103,115)local _d=_c..string.char(47,95,115,99,114,105,112,116,95,115,101,116,116,105,110,103,115,46,106,115,111,110)local _e=_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,101,110,97,98,108,101,100,46,102,108,97,103)local _f=false local _g,_h=pcall(readfile,_d)if _g and type(_h)==string.char(115,116,114,105,110,103)and _h~=""then local _i,_j=pcall(game.GetService,game,string.char(72,116,116,112,83,101,114,118,105,99,101))if _i and _j then local _k,_l=pcall(_j.JSONDecode,_j,_h)if _k and type(_l)==string.char(116,97,98,108,101)and _l.AutoLoad==true then _f=true end end end if not _f then if type(isfile)==string.char(102,117,110,99,116,105,111,110)then local _m,_n=pcall(isfile,_e)_f=_m and _n==true else local _m=pcall(readfile,_e)_f=_m end end if not _f then return end if type(makefolder)==string.char(102,117,110,99,116,105,111,110)then pcall(makefolder,_c)end local _o=_a local _p=_b.__DEVKAGE_PACKAGE_BUILD local _q=string.char(45,45,32,68,69,86,75,65,71,69,95,65,85,84,79,76,79,65,68,95,66,85,73,76,68,58).._p..string.char(10).._o pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,57,46,108,117,97),_q)for _r,_s in ipairs({string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,56,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,55,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,54,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,50,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,49,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,48,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,57,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,56,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,55,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,54,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,51,46,108,117,97),})do pcall(writefile,_c..string.char(47).._s,_q)end pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,46,108,117,97),_q)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,99,117,114,114,101,110,116,46,116,120,116),_p)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,98,117,105,108,100,46,116,120,116),_p)pcall(writefile,_e,_p)_b.__DEVKAGE_AUTOLOAD_BUILD=_p _b.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT=os.clock()end)task.spawn(function()local _t,_u=pcall(function()local _v=game:GetService(string.char(80,108,97,121,101,114,115))local _w=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while tostring(game.JobId)==""do task.wait(0.1)end while not _v.LocalPlayer do task.wait(0.1)end local _x=_v.LocalPlayer while _x and not _x:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_x=_v.LocalPlayer end while not _w.CurrentCamera do task.wait(0.1)end local _y=_x:FindFirstChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115))if not _y then _y=_x:WaitForChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115),10)end if _y then _y:WaitForChild(string.char(67,111,110,116,114,111,108,108,101,114,115),8)_y:WaitForChild(string.char(77,111,100,117,108,101,115),8)end _w:WaitForChild(string.char(86,105,101,119,77,111,100,101,108,115),8)_b.__DEVKAGE_LATE_BOOT_WAITING=true local _z=tonumber(rawget(_b,string.char(95,95,68,69,86,75,65,71,69,95,76,65,84,69,95,66,79,79,84,95,68,69,76,65,89)))or 6 if _z<5 then _z=5 end task.wait(_z)_b.__DEVKAGE_LATE_BOOT_WAITING=nil local _A=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)if _b.__DEVKAGE_AUTO_STARTING_JOB==_A then local _B=_b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD local _C=tonumber(_b.__DEVKAGE_AUTO_STARTING_AT)or 0 local _D=_C>0 and(os.clock()-_C)or math.huge if _B==_b.__DEVKAGE_PACKAGE_BUILD and _D>=0 and _D<45 then return end _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end if _b.__DEVKAGE_AUTO_STARTED_JOB==_A and _b.__DEVKAGE_AUTOLOADED_BUILD==_b.__DEVKAGE_PACKAGE_BUILD then return end _b.__DEVKAGE_AUTO_STARTING_JOB=_A _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_AT=os.clock()task.wait()local _E=loadstring or load if type(_E)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _F,_H=_E(_a)if not _F then error(_H)end local _I,_J=pcall(_F)if not _I then error(_J)end _b.__DEVKAGE_AUTO_STARTED_JOB=_A _b.__DEVKAGE_AUTOLOADED_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end)if not _t then _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil _b.__DEVKAGE_LATE_BOOT_WAITING=nil warn(string.char(91,68,101,118,75,97,103,101,32,80,97,99,107,97,103,101,32,66,111,111,116,93,32)..tostring(_u))end end)return nil
+]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,50,48,45,105,110,118,101,110,116,111,114,121,45,97,118,97,116,97,114,45,115,107,121,98,111,120,45,50,48,50,54,48,57,48,54)_b._a=_a pcall(function()if type(writefile)~=string.char(102,117,110,99,116,105,111,110)or type(readfile)~=string.char(102,117,110,99,116,105,111,110)then return end local _c=string.char(68,101,118,75,97,103,101,95,67,111,110,102,105,103,115)local _d=_c..string.char(47,95,115,99,114,105,112,116,95,115,101,116,116,105,110,103,115,46,106,115,111,110)local _e=_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,101,110,97,98,108,101,100,46,102,108,97,103)local _f=false local _g,_h=pcall(readfile,_d)if _g and type(_h)==string.char(115,116,114,105,110,103)and _h~=""then local _i,_j=pcall(game.GetService,game,string.char(72,116,116,112,83,101,114,118,105,99,101))if _i and _j then local _k,_l=pcall(_j.JSONDecode,_j,_h)if _k and type(_l)==string.char(116,97,98,108,101)and _l.AutoLoad==true then _f=true end end end if not _f then if type(isfile)==string.char(102,117,110,99,116,105,111,110)then local _m,_n=pcall(isfile,_e)_f=_m and _n==true else local _m=pcall(readfile,_e)_f=_m end end if not _f then return end if type(makefolder)==string.char(102,117,110,99,116,105,111,110)then pcall(makefolder,_c)end local _o=_a local _p=_b.__DEVKAGE_PACKAGE_BUILD local _q=string.char(45,45,32,68,69,86,75,65,71,69,95,65,85,84,79,76,79,65,68,95,66,85,73,76,68,58).._p..string.char(10).._o pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,50,48,46,108,117,97),_q)for _r,_s in ipairs({string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,57,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,56,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,55,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,54,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,50,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,49,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,48,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,57,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,56,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,55,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,54,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,51,46,108,117,97),})do pcall(writefile,_c..string.char(47).._s,_q)end pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,46,108,117,97),_q)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,99,117,114,114,101,110,116,46,116,120,116),_p)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,98,117,105,108,100,46,116,120,116),_p)pcall(writefile,_e,_p)_b.__DEVKAGE_AUTOLOAD_BUILD=_p _b.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT=os.clock()end)task.spawn(function()local _t,_u=pcall(function()local _v=game:GetService(string.char(80,108,97,121,101,114,115))local _w=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while tostring(game.JobId)==""do task.wait(0.1)end while not _v.LocalPlayer do task.wait(0.1)end local _x=_v.LocalPlayer while _x and not _x:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_x=_v.LocalPlayer end while not _w.CurrentCamera do task.wait(0.1)end local _y=_x:FindFirstChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115))if not _y then _y=_x:WaitForChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115),10)end if _y then _y:WaitForChild(string.char(67,111,110,116,114,111,108,108,101,114,115),8)_y:WaitForChild(string.char(77,111,100,117,108,101,115),8)end _w:WaitForChild(string.char(86,105,101,119,77,111,100,101,108,115),8)_b.__DEVKAGE_LATE_BOOT_WAITING=true local _z=tonumber(rawget(_b,string.char(95,95,68,69,86,75,65,71,69,95,76,65,84,69,95,66,79,79,84,95,68,69,76,65,89)))or 6 if _z<5 then _z=5 end task.wait(_z)_b.__DEVKAGE_LATE_BOOT_WAITING=nil local _A=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)if _b.__DEVKAGE_AUTO_STARTING_JOB==_A then local _B=_b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD local _C=tonumber(_b.__DEVKAGE_AUTO_STARTING_AT)or 0 local _D=_C>0 and(os.clock()-_C)or math.huge if _B==_b.__DEVKAGE_PACKAGE_BUILD and _D>=0 and _D<45 then return end _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end if _b.__DEVKAGE_AUTO_STARTED_JOB==_A and _b.__DEVKAGE_AUTOLOADED_BUILD==_b.__DEVKAGE_PACKAGE_BUILD then return end _b.__DEVKAGE_AUTO_STARTING_JOB=_A _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_AT=os.clock()task.wait()local _E=loadstring or load if type(_E)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _F,_H=_E(_a)if not _F then error(_H)end local _I,_J=pcall(_F)if not _I then error(_J)end _b.__DEVKAGE_AUTO_STARTED_JOB=_A _b.__DEVKAGE_AUTOLOADED_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end)if not _t then _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil _b.__DEVKAGE_LATE_BOOT_WAITING=nil warn(string.char(91,68,101,118,75,97,103,101,32,80,97,99,107,97,103,101,32,66,111,111,116,93,32)..tostring(_u))end end)return nil
