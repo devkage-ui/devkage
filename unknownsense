@@ -461,17 +461,40 @@ end
 -- === EXPOSE TO GLOBAL ===
 getgenv().__DevKageMaskShard = MaskShard
 
--- DevKage startup compatibility:
--- Keep the supplied Mask Shard source intact, but prevent its destructive
--- environment/debug/network routines from running before DevKage initializes.
--- The object remains exposed and reports Active for compatibility with the UI.
-MaskShard._DevKageSuppliedActivate = MaskShard.Activate
+-- DevKage coexistence compatibility lifecycle.
+-- The supplied v9.7 source remains above for reference, but its destructive
+-- activation/deactivation entry points are intentionally replaced here so a
+-- second script cannot trigger remote/metatable/memory cleanup through the
+-- shared __DevKageMaskShard object.  This follows the non-destructive lifecycle
+-- used by the supplied v5.2.14 compatibility core.
+MaskShard._DevKageSuppliedActivate = nil
+MaskShard._DevKageSuppliedDeactivate = nil
+MaskShard.AlwaysOn = true
 MaskShard.Activate = function(self)
-    if self.Active then return true end
-    self.Active = true
-    self.Token = (tonumber(self.Token) or 0) + 1
+    if not self.Active then
+        self.Active = true
+        self.Token = (tonumber(self.Token) or 0) + 1
+    end
     self.Runtime = self.Runtime or {}
     self.Runtime.CompatibilityOnly = true
+    self.Runtime.frameCounter = 0
+    return true
+end
+MaskShard.Deactivate = function(self, force)
+    if self.AlwaysOn and force ~= maskShardShutdownKey then
+        self:Activate()
+        return false
+    end
+    self.Active = false
+    self.Token = (tonumber(self.Token) or 0) + 1
+    if force == maskShardShutdownKey and type(self.Connections) == "table" then
+        for _, connection in ipairs(self.Connections) do
+            pcall(function() connection:Disconnect() end)
+        end
+        table.clear(self.Connections)
+    end
+    self.Runtime = self.Runtime or {}
+    self.Runtime.CompatibilityOnly = false
     self.Runtime.frameCounter = 0
     return true
 end
@@ -4231,12 +4254,46 @@ local UA = {
     replayingEmotes = false,
     constructingWeapon = nil,
     lastUsedWeapon = nil,
+    disabled = false,
+    namecallBusy = false,
+    saveBusy = false,
+    saveQueued = false,
+    saveScheduled = false,
+    lastSaveAt = 0,
+    replicatePending = {},
+    replicateScheduled = false,
+    compatibilityWatcherStarted = false,
 }
 
 do
 
 local function ua_environment()
     return (type(getgenv) == "function" and getgenv()) or _G
+end
+
+local function ua_isActiveInstance()
+    local environment = ua_environment()
+    return not UA.disabled and environment.__DevKageInventoryActive == UA
+end
+
+local function ua_requestReplicate(key)
+    key = tostring(key or "")
+    if key == "" then return end
+    UA.replicatePending[key] = true
+    if UA.replicateScheduled then return end
+    UA.replicateScheduled = true
+    task.delay(0.12, function()
+        UA.replicateScheduled = false
+        if not ua_isActiveInstance() or not UA.ready or not UA.DataController or not UA.DataController.CurrentData then
+            table.clear(UA.replicatePending)
+            return
+        end
+        local pending = UA.replicatePending
+        UA.replicatePending = {}
+        for replicateKey in pairs(pending) do
+            pcall(function() UA.DataController.CurrentData:Replicate(replicateKey) end)
+        end
+    end)
 end
 
 local function ua_config()
@@ -4451,7 +4508,7 @@ function UA.ImportFavorites(source)
     UA.weaponFavorites = ua_cloneTable(source)
     ua_environment().__DevKageWeaponFavorites = UA.weaponFavorites
     if UA.ready and ua_weaponsEnabled() then
-        task.defer(function() pcall(function() UA.DataController.CurrentData:Replicate("FavoritedCosmetics") end) end)
+        ua_requestReplicate("FavoritedCosmetics")
     end
 end
 
@@ -4468,6 +4525,26 @@ end
 
 function UA.save()
     if type(writefile) ~= "function" then return false end
+    if not ua_isActiveInstance() then return false end
+
+    local now = os.clock()
+    local remaining = 0.18 - (now - (UA.lastSaveAt or 0))
+    if UA.saveBusy or remaining > 0 then
+        UA.saveQueued = true
+        if not UA.saveScheduled then
+            UA.saveScheduled = true
+            task.delay(math.max(remaining, 0.05), function()
+                UA.saveScheduled = false
+                if UA.saveQueued and ua_isActiveInstance() then
+                    UA.saveQueued = false
+                    UA.save()
+                end
+            end)
+        end
+        return true
+    end
+
+    UA.saveBusy = true
     local ok = pcall(function()
         if type(makefolder) == "function" then
             local folderExists = false
@@ -4478,12 +4555,23 @@ function UA.save()
             if not folderExists then pcall(makefolder, "devkage_inventory") end
         end
         writefile(UA.saveFile, HttpService:JSONEncode({
-            schemaVersion = 3,
+            schemaVersion = 4,
             weaponLoadout = UA.ExportWeaponLoadout(),
             weaponFavorites = UA.ExportFavorites(),
             emoteLoadout = UA.ExportEmoteLoadout(),
         }))
     end)
+    UA.lastSaveAt = os.clock()
+    UA.saveBusy = false
+
+    if UA.saveQueued and not UA.saveScheduled then
+        UA.saveQueued = false
+        UA.saveScheduled = true
+        task.delay(0.18, function()
+            UA.saveScheduled = false
+            if ua_isActiveInstance() then UA.save() end
+        end)
+    end
     return ok
 end
 
@@ -4512,6 +4600,10 @@ local function ua_installOwnershipSpoof()
     UA.originalOwnsCosmeticForWeapon = CosmeticLibrary.OwnsCosmeticForWeapon
 
     CosmeticLibrary.OwnsCosmetic = function(self, inventory, name, weapon)
+        if not ua_isActiveInstance() then
+            if UA.originalOwnsCosmetic then return UA.originalOwnsCosmetic(self, inventory, name, weapon) end
+            return false
+        end
         if type(name) == "string" and name:find("MISSING_", 1, true) and UA.originalOwnsCosmetic then
             return UA.originalOwnsCosmetic(self, inventory, name, weapon)
         end
@@ -4521,18 +4613,30 @@ local function ua_installOwnershipSpoof()
     end
 
     CosmeticLibrary.OwnsCosmeticNormally = function(self, inventory, name, weapon)
+        if not ua_isActiveInstance() then
+            if UA.originalOwnsCosmeticNormally then return UA.originalOwnsCosmeticNormally(self, inventory, name, weapon) end
+            return false
+        end
         if ua_shouldSpoofCosmetic(name) then return true end
         if UA.originalOwnsCosmeticNormally then return UA.originalOwnsCosmeticNormally(self, inventory, name, weapon) end
         return false
     end
 
     CosmeticLibrary.OwnsCosmeticUniversally = function(self, inventory, name, weapon)
+        if not ua_isActiveInstance() then
+            if UA.originalOwnsCosmeticUniversally then return UA.originalOwnsCosmeticUniversally(self, inventory, name, weapon) end
+            return false
+        end
         if ua_shouldSpoofCosmetic(name) then return true end
         if UA.originalOwnsCosmeticUniversally then return UA.originalOwnsCosmeticUniversally(self, inventory, name, weapon) end
         return false
     end
 
     CosmeticLibrary.OwnsCosmeticForWeapon = function(self, inventory, name, weapon)
+        if not ua_isActiveInstance() then
+            if UA.originalOwnsCosmeticForWeapon then return UA.originalOwnsCosmeticForWeapon(self, inventory, name, weapon) end
+            return false
+        end
         if ua_shouldSpoofCosmetic(name) then return true end
         if UA.originalOwnsCosmeticForWeapon then return UA.originalOwnsCosmeticForWeapon(self, inventory, name, weapon) end
         return false
@@ -4547,6 +4651,7 @@ local function ua_installDataSpoof()
     UA.originalGetWeaponData = DataController.GetWeaponData
 
     DataController.Get = function(self, key)
+        if not ua_isActiveInstance() then return UA.originalDataGet(self, key) end
         local data = UA.originalDataGet(self, key)
         if key == "CosmeticInventory" then
             local proxy = {}
@@ -4583,6 +4688,7 @@ local function ua_installDataSpoof()
 
     if type(UA.originalGetWeaponData) == "function" then
         DataController.GetWeaponData = function(self, weaponName)
+            if not ua_isActiveInstance() then return UA.originalGetWeaponData(self, weaponName) end
             local data = UA.originalGetWeaponData(self, weaponName)
             if not data then return nil end
 
@@ -4614,6 +4720,7 @@ local function ua_installEmoteController()
     UA.emoteControllerInstalled = true
     UA.originalGetEmotes = UA.EmoteController.GetEmotes
     UA.EmoteController.GetEmotes = function(self, ...)
+        if not ua_isActiveInstance() then return UA.originalGetEmotes(self, ...) end
         local emotes = UA.originalGetEmotes(self, ...)
         if not ua_emotesEnabled() or type(emotes) ~= "table" then return emotes end
         for name, cosmetic in pairs(UA.CosmeticLibrary.Cosmetics or {}) do
@@ -4677,11 +4784,9 @@ local function ua_recordEmote(args)
         end
         ua_environment().__DevKageEmoteLoadout = UA.emoteLoadout
         ua_environment().__DevKageEmoteEquipped = UA.emoteEquipped
-        task.defer(function()
-            pcall(function() UA.DataController.CurrentData:Replicate("WeaponInventory") end)
-            pcall(function() UA.DataController.CurrentData:Replicate("EmoteInventory") end)
-            UA.save()
-        end)
+        ua_requestReplicate("WeaponInventory")
+        ua_requestReplicate("EmoteInventory")
+        task.defer(UA.save)
         return
     end
 
@@ -4708,97 +4813,138 @@ local function ua_recordEmote(args)
     ua_environment().__DevKageEmoteLoadout = UA.emoteLoadout
     ua_environment().__DevKageEmoteEquipped = UA.emoteEquipped
 
-    task.defer(function()
-        pcall(function() UA.DataController.CurrentData:Replicate("WeaponInventory") end)
-        pcall(function() UA.DataController.CurrentData:Replicate("EmoteInventory") end)
-        UA.save()
-    end)
+    ua_requestReplicate("WeaponInventory")
+    ua_requestReplicate("EmoteInventory")
+    task.defer(UA.save)
 end
 
 local function ua_installRemoteHooks()
     if UA.remoteHooksInstalled or type(hookmetamethod) ~= "function" or type(getnamecallmethod) ~= "function" then return end
     UA.remoteHooksInstalled = true
+
+    local baselineNamecall = nil
+    if type(getrawmetatable) == "function" then
+        pcall(function()
+            local mt = getrawmetatable(game)
+            if mt and type(mt.__namecall) == "function" then
+                baselineNamecall = mt.__namecall
+            end
+        end)
+    end
+
     local oldNamecall
-    local callback = function(self, ...)
-        if getnamecallmethod() ~= "FireServer" then return oldNamecall(self, ...) end
-        local args = {...}
+    local inDevKageNamecall = false
 
-        if UA.UseItemRemote and self == UA.UseItemRemote then
-            local objectID = args[1]
-            if UA.FighterController then
-                pcall(function()
-                    local fighter = UA.FighterController:GetFighter(LocalPlayer)
-                    if fighter and fighter.Items then
-                        for _, item in pairs(fighter.Items) do
-                            if item:Get("ObjectID") == objectID then UA.lastUsedWeapon = item.Name break end
-                        end
-                    end
-                end)
-            end
-            return oldNamecall(self, ...)
+    local function escapeNamecall(self, ...)
+        -- If another script's hook causes our hook to be entered again while we
+        -- are already inside it, never call back into the hook chain.  Use the
+        -- pre-DevKage baseline when available; this is the freeze breaker.
+        if baselineNamecall and baselineNamecall ~= oldNamecall then
+            local ok, a, b, c, d, e = pcall(baselineNamecall, self, ...)
+            if ok then return a, b, c, d, e end
         end
-
-        if UA.EquipRemote and self == UA.EquipRemote then
-            local weaponName, cosmeticType, cosmeticName, options = args[1], args[2], args[3], args[4] or {}
-            if ua_isEmote(cosmeticType, cosmeticName) then
-                if ua_emotesEnabled() and ua_isNotFinisher(cosmeticName) then
-                    if not UA.replayingEmotes then ua_recordEmote(args) end
-
-                    local rawCosmetics = ua_rawData("CosmeticInventory")
-                    local rawEmotes = ua_rawData("EmoteInventory")
-                    local genuinelyOwned =
-                        ua_inventoryContains(rawCosmetics, tostring(cosmeticName or ""))
-                        or ua_inventoryContains(rawEmotes, tostring(cosmeticName or ""))
-
-                    if genuinelyOwned then
-                        return oldNamecall(self, ...)
-                    end
-
-                    -- Spoofed emote: local state is already updated above.
-                    -- Do not ask the server to validate an unowned cosmetic.
-                    return
-                end
-                return oldNamecall(self, ...)
-            end
-
-            if ua_weaponsEnabled() and cosmeticType and ua_isNotFinisher(cosmeticType) and ua_isNotFinisher(cosmeticName) then
-                if cosmeticName and cosmeticName ~= "None" and cosmeticName ~= "" then
-                    local inventory = ua_rawData("CosmeticInventory")
-                    if ua_inventoryContains(inventory, tostring(cosmeticName)) then
-                        ua_syncWeaponEntry(weaponName, cosmeticType, cosmeticName, options)
-                        local result = {oldNamecall(self, ...)}
-                        task.defer(UA.save)
-                        return table.unpack(result)
-                    end
-                end
-                ua_syncWeaponEntry(weaponName, cosmeticType, cosmeticName, options)
-                task.defer(function()
-                    pcall(function() UA.DataController.CurrentData:Replicate("WeaponInventory") end)
-                    task.wait(0.2)
-                    UA.save()
-                end)
-                return
-            end
-            return oldNamecall(self, ...)
-        end
-
-        if UA.FavoriteRemote and self == UA.FavoriteRemote then
-            local cosmeticName = args[2]
-            if ua_weaponsEnabled() and cosmeticName and ua_isNotFinisher(cosmeticName) and not ua_isEmote(nil, cosmeticName) then
-                UA.weaponFavorites[args[1]] = UA.weaponFavorites[args[1]] or {}
-                UA.weaponFavorites[args[1]][cosmeticName] = args[3] or nil
-                ua_environment().__DevKageWeaponFavorites = UA.weaponFavorites
-                task.defer(UA.save)
-                task.defer(function() pcall(function() UA.DataController.CurrentData:Replicate("FavoritedCosmetics") end) end)
-                return
-            end
-            return oldNamecall(self, ...)
-        end
-
         return oldNamecall(self, ...)
     end
-    if type(newcclosure) == "function" then callback = newcclosure(callback) end
+
+    local function callback(self, ...)
+        if inDevKageNamecall then
+            return escapeNamecall(self, ...)
+        end
+        if not ua_isActiveInstance() then
+            return oldNamecall(self, ...)
+        end
+        if getnamecallmethod() ~= "FireServer" then
+            return oldNamecall(self, ...)
+        end
+
+        -- Ignore every unrelated remote before entering any DevKage logic.
+        if self ~= UA.EquipRemote and self ~= UA.FavoriteRemote and self ~= UA.UseItemRemote then
+            return oldNamecall(self, ...)
+        end
+
+        inDevKageNamecall = true
+        UA.namecallBusy = true
+        local args = table.pack(...)
+        local swallow = false
+
+        local ok = pcall(function()
+            if UA.UseItemRemote and self == UA.UseItemRemote then
+                local objectID = args[1]
+                if UA.FighterController then
+                    pcall(function()
+                        local fighter = UA.FighterController:GetFighter(LocalPlayer)
+                        if fighter and fighter.Items then
+                            for _, item in pairs(fighter.Items) do
+                                if item:Get("ObjectID") == objectID then
+                                    UA.lastUsedWeapon = item.Name
+                                    break
+                                end
+                            end
+                        end
+                    end)
+                end
+                return
+            end
+
+            if UA.EquipRemote and self == UA.EquipRemote then
+                local weaponName, cosmeticType, cosmeticName, options = args[1], args[2], args[3], args[4] or {}
+
+                if ua_isEmote(cosmeticType, cosmeticName) then
+                    if ua_emotesEnabled() and ua_isNotFinisher(cosmeticName) then
+                        if not UA.replayingEmotes then ua_recordEmote(args) end
+                        local rawCosmetics = ua_rawData("CosmeticInventory")
+                        local rawEmotes = ua_rawData("EmoteInventory")
+                        local genuinelyOwned =
+                            ua_inventoryContains(rawCosmetics, tostring(cosmeticName or ""))
+                            or ua_inventoryContains(rawEmotes, tostring(cosmeticName or ""))
+                        if not genuinelyOwned then swallow = true end
+                    end
+                    return
+                end
+
+                if ua_weaponsEnabled() and cosmeticType and ua_isNotFinisher(cosmeticType) and ua_isNotFinisher(cosmeticName) then
+                    local genuinelyOwned = false
+                    if cosmeticName and cosmeticName ~= "None" and cosmeticName ~= "" then
+                        genuinelyOwned = ua_inventoryContains(ua_rawData("CosmeticInventory"), tostring(cosmeticName))
+                    end
+                    ua_syncWeaponEntry(weaponName, cosmeticType, cosmeticName, options)
+                    if genuinelyOwned then
+                        task.defer(UA.save)
+                    else
+                        ua_requestReplicate("WeaponInventory")
+                        task.defer(UA.save)
+                        swallow = true
+                    end
+                    return
+                end
+            end
+
+            if UA.FavoriteRemote and self == UA.FavoriteRemote then
+                local cosmeticName = args[2]
+                if ua_weaponsEnabled() and cosmeticName and ua_isNotFinisher(cosmeticName) and not ua_isEmote(nil, cosmeticName) then
+                    UA.weaponFavorites[args[1]] = UA.weaponFavorites[args[1]] or {}
+                    UA.weaponFavorites[args[1]][cosmeticName] = args[3] or nil
+                    ua_environment().__DevKageWeaponFavorites = UA.weaponFavorites
+                    ua_requestReplicate("FavoritedCosmetics")
+                    task.defer(UA.save)
+                    swallow = true
+                end
+            end
+        end)
+
+        UA.namecallBusy = false
+        inDevKageNamecall = false
+
+        if not ok then
+            return oldNamecall(self, table.unpack(args, 1, args.n))
+        end
+        if swallow then return end
+        return oldNamecall(self, table.unpack(args, 1, args.n))
+    end
+
     oldNamecall = hookmetamethod(game, "__namecall", callback)
+    UA.previousNamecall = oldNamecall
+    UA.baselineNamecall = baselineNamecall
 end
 
 local function ua_installWeaponViewmodelHooks()
@@ -4808,6 +4954,7 @@ local function ua_installWeaponViewmodelHooks()
     if UA.ClientItem and UA.ClientItem._CreateViewModel then
         UA.originalCreateViewModel = UA.ClientItem._CreateViewModel
         UA.ClientItem._CreateViewModel = function(self, viewmodelRef)
+            if not ua_isActiveInstance() then return UA.originalCreateViewModel(self, viewmodelRef) end
             local weaponName = self.Name
             local weaponPlayer = self.ClientFighter and self.ClientFighter.Player
             UA.constructingWeapon = (weaponPlayer == LocalPlayer) and weaponName or nil
@@ -4835,6 +4982,7 @@ local function ua_installWeaponViewmodelHooks()
     if UA.ClientViewModel and UA.ClientViewModel.new then
         UA.originalClientViewModelNew = UA.ClientViewModel.new
         UA.ClientViewModel.new = function(replicatedData, clientItem)
+            if not ua_isActiveInstance() then return UA.originalClientViewModelNew(replicatedData, clientItem) end
             local weaponPlayer = clientItem.ClientFighter and clientItem.ClientFighter.Player
             local weaponName = UA.constructingWeapon or clientItem.Name
             if ua_weaponsEnabled() and weaponPlayer == LocalPlayer and UA.weaponEquipped[weaponName] then
@@ -4857,6 +5005,7 @@ local function ua_installWeaponViewmodelHooks()
         if UA.ClientViewModel.GetCharm then
             UA.originalGetCharm = UA.ClientViewModel.GetCharm
             UA.ClientViewModel.GetCharm = function(self)
+                if not ua_isActiveInstance() then return UA.originalGetCharm(self) end
                 local weaponName = self.ClientItem and self.ClientItem.Name
                 local weaponPlayer = self.ClientItem and self.ClientItem.ClientFighter and self.ClientItem.ClientFighter.Player
                 if ua_weaponsEnabled() and weaponName and weaponPlayer == LocalPlayer and UA.weaponEquipped[weaponName] and UA.weaponEquipped[weaponName].Charm then
@@ -4869,6 +5018,7 @@ local function ua_installWeaponViewmodelHooks()
         if UA.ClientViewModel.GetWrap then
             UA.originalGetWrap = UA.ClientViewModel.GetWrap
             UA.ClientViewModel.GetWrap = function(self)
+                if not ua_isActiveInstance() then return UA.originalGetWrap(self) end
                 local weaponName = self.ClientItem and self.ClientItem.Name
                 local weaponPlayer = self.ClientItem and self.ClientItem.ClientFighter and self.ClientItem.ClientFighter.Player
                 if ua_weaponsEnabled() and weaponName and weaponPlayer == LocalPlayer and UA.weaponEquipped[weaponName] and UA.weaponEquipped[weaponName].Wrap then
@@ -4882,6 +5032,7 @@ local function ua_installWeaponViewmodelHooks()
     if UA.ItemLibrary and UA.ItemLibrary.GetViewModelImageFromWeaponData then
         UA.originalGetViewModelImage = UA.ItemLibrary.GetViewModelImageFromWeaponData
         UA.ItemLibrary.GetViewModelImageFromWeaponData = function(self, weaponData, highRes)
+            if not ua_isActiveInstance() then return UA.originalGetViewModelImage(self, weaponData, highRes) end
             if not weaponData then return UA.originalGetViewModelImage(self, weaponData, highRes) end
             local weaponName = weaponData.Name
             if ua_weaponsEnabled() and UA.weaponEquipped[weaponName] and UA.weaponEquipped[weaponName].Skin then
@@ -4892,6 +5043,11 @@ local function ua_installWeaponViewmodelHooks()
         end
     end
 end
+
+
+-- Coexistence rule: do not poll or reconcile another script's wrapped
+-- GetWeaponData implementation.  DevKage records only the state it owns.
+
 
 function UA.RefreshOwnedCatalogs()
     local emotes, weapons = {}, {}
@@ -4913,7 +5069,7 @@ end
 function UA.ApplySavedWeapons()
     if not ua_weaponsEnabled() or not UA.ready then return false end
     ua_materializeWeaponLoadout()
-    pcall(function() UA.DataController.CurrentData:Replicate("WeaponInventory") end)
+    ua_requestReplicate("WeaponInventory")
     return true
 end
 
@@ -4921,8 +5077,8 @@ function UA.ApplySavedEmotes()
     if not ua_emotesEnabled() or not UA.ready or UA.replayingEmotes then return false end
     UA.replayingEmotes = true
     ua_materializeEmoteLoadout()
-    pcall(function() UA.DataController.CurrentData:Replicate("WeaponInventory") end)
-    pcall(function() UA.DataController.CurrentData:Replicate("EmoteInventory") end)
+    ua_requestReplicate("WeaponInventory")
+    ua_requestReplicate("EmoteInventory")
     UA.replayingEmotes = false
     return true
 end
@@ -4930,6 +5086,13 @@ end
 function UA.Initialize()
     if UA.ready or UA.initializing then return UA.ready end
     UA.initializing = true
+    local environment = ua_environment()
+    local previous = environment.__DevKageInventoryActive
+    if type(previous) == "table" and previous ~= UA then
+        previous.disabled = true
+    end
+    environment.__DevKageInventoryActive = UA
+    UA.disabled = false
     local ok, err = pcall(function()
         local playerScripts = LocalPlayer:WaitForChild("PlayerScripts", 10)
         local controllers = playerScripts and playerScripts:WaitForChild("Controllers", 10)
@@ -4990,7 +5153,7 @@ function UA.SetFeatureEnabled(feature, enabled)
         if UA.Initialize() then
             UA.RefreshOwnedCatalogs()
             if feature == "Weapons" then
-                pcall(function() UA.DataController.CurrentData:Replicate("WeaponInventory") end)
+                ua_requestReplicate("WeaponInventory")
                 if enabled then UA.ApplySavedWeapons() end
             elseif feature == "Emotes" and enabled then
                 UA.ApplySavedEmotes()
@@ -5000,7 +5163,23 @@ function UA.SetFeatureEnabled(feature, enabled)
     end)
 end
 
+function UA.Deactivate()
+    UA.disabled = true
+    UA.namecallBusy = false
+    UA.replayingEmotes = false
+    table.clear(UA.replicatePending)
+    local environment = ua_environment()
+    if environment.__DevKageInventoryActive == UA then
+        environment.__DevKageInventoryActive = nil
+    end
+end
+
 local environment = ua_environment()
+local previousBridge = environment.__DevKageInventoryBridge
+if type(previousBridge) == "table" and previousBridge ~= UA and type(previousBridge.Deactivate) == "function" then
+    pcall(function() previousBridge:Deactivate() end)
+end
+environment.__DevKageInventoryActive = UA
 environment.__DevKageInventoryBridge = UA
 environment.__DevKageEmoteSave = UA.save
 environment.__DevKageEmoteLoad = UA.load
@@ -5016,7 +5195,9 @@ environment.__DevKageWeaponFavorites = UA.weaponFavorites
 task.spawn(function()
     task.wait()
     UA.load()
-    UA.Initialize()
+    if ua_weaponsEnabled() or ua_emotesEnabled() then
+        UA.Initialize()
+    end
 end)
 end
 local defaultConfig = {
