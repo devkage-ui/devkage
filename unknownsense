@@ -4265,6 +4265,9 @@ local UA = {
     compatibilityWatcherStarted = false,
     externalStackDetected = false,
     externalDetectorStarted = false,
+    blackBoxMode = true,
+    emoteSnapshotStarted = false,
+    emoteLastTable = nil,
 }
 
 do
@@ -4389,7 +4392,9 @@ local function ua_shouldSpoofCosmetic(name)
     local cosmetic = UA.CosmeticLibrary.Cosmetics[name]
     if not cosmetic then return false end
     if ua_isEmote(cosmetic.Type, name) then
-        return ua_emotesEnabled()
+        -- Emotes intentionally do not use the shared cosmetic ownership
+        -- spoof. Another Unlock-All script may already own that hook.
+        return false
     end
     return ua_weaponsEnabled()
 end
@@ -4753,16 +4758,6 @@ local function ua_installDataSpoof()
                 end
             })
         end
-        if key == "EmoteInventory" and ua_emotesEnabled() then
-            local proxy = {}
-            if type(data) == "table" then for k, v in pairs(data) do proxy[k] = v end end
-            for name, cosmetic in pairs(UA.CosmeticLibrary.Cosmetics or {}) do
-                if cosmetic and ua_isNotFinisher(name) and ua_isEmote(cosmetic.Type, name) and proxy[name] == nil then
-                    proxy[name] = true
-                end
-            end
-            return proxy
-        end
         if key == "FavoritedCosmetics" and ua_weaponsEnabled() then
             local result = type(data) == "table" and ua_cloneTable(data) or {}
             for weapon, favs in pairs(UA.weaponFavorites) do
@@ -4790,8 +4785,7 @@ local function ua_installDataSpoof()
             if not data then return nil end
 
             local weaponCosmetics = ua_weaponsEnabled() and UA.weaponEquipped[weaponName] or nil
-            local emoteCosmetics = ua_emotesEnabled() and UA.emoteEquipped[weaponName] or nil
-            if not weaponCosmetics and not emoteCosmetics then return data end
+            if not weaponCosmetics then return data end
 
             local merged = {}
             for key, value in pairs(data) do merged[key] = value end
@@ -4802,11 +4796,6 @@ local function ua_installDataSpoof()
                     merged[cosmeticType] = cosmeticData
                 end
             end
-            if emoteCosmetics then
-                for cosmeticType, cosmeticData in pairs(emoteCosmetics) do
-                    merged[cosmeticType] = cosmeticData
-                end
-            end
             return merged
         end
         DataController.GetWeaponData = weaponDataWrapper
@@ -4814,22 +4803,12 @@ local function ua_installDataSpoof()
     end
 end
 
-local function ua_installEmoteController()
-    if UA.emoteControllerInstalled or not UA.EmoteController or type(UA.EmoteController.GetEmotes) ~= "function" then return end
-    UA.emoteControllerInstalled = true
-    UA.originalGetEmotes = UA.EmoteController.GetEmotes
-    local getEmotesWrapper
-    getEmotesWrapper = function(self, ...)
-        if UA.EmoteController.GetEmotes ~= getEmotesWrapper then
-            ua_markExternalStack()
-            return UA.originalGetEmotes(self, ...)
-        end
-        if not ua_isActiveInstance() then return UA.originalGetEmotes(self, ...) end
-        local emotes = UA.originalGetEmotes(self, ...)
-        if not ua_emotesEnabled() or type(emotes) ~= "table" then return emotes end
-        for name, cosmetic in pairs(UA.CosmeticLibrary.Cosmetics or {}) do
-            if cosmetic and ua_isNotFinisher(name) and ua_isEmote(cosmetic.Type, name) and not emotes[name] then
-                emotes[name] = {
+local function ua_rebuildEmoteCatalog()
+    local catalog = {}
+    if UA.CosmeticLibrary and UA.CosmeticLibrary.Cosmetics then
+        for name, cosmetic in pairs(UA.CosmeticLibrary.Cosmetics) do
+            if cosmetic and ua_isNotFinisher(name) and ua_isEmote(cosmetic.Type, name) then
+                catalog[name] = {
                     Name = name,
                     Type = cosmetic.Type,
                     ObjectID = cosmetic.ObjectID,
@@ -4837,10 +4816,85 @@ local function ua_installEmoteController()
                 }
             end
         end
-        return emotes
     end
-    UA.EmoteController.GetEmotes = getEmotesWrapper
-    UA.getEmotesWrapper = getEmotesWrapper
+    UA.emoteCatalog = catalog
+    UA.emoteAugmentedTables = setmetatable({}, {__mode = "k"})
+    return catalog
+end
+
+local function ua_applyEmoteSnapshot()
+    if not ua_emotesEnabled() or not UA.EmoteController or not UA.CosmeticLibrary then return false end
+
+    local catalog = UA.emoteCatalog
+    if not catalog or not next(catalog) then
+        catalog = ua_rebuildEmoteCatalog()
+    end
+
+    -- Do not replace GetEmotes. Ask the current controller (including any
+    -- protected script's current state) for its live table and augment it.
+    local ok, emotes = pcall(function()
+        local getter = UA.EmoteController.GetEmotes
+        if type(getter) ~= "function" then return nil end
+        return getter(UA.EmoteController)
+    end)
+
+    if ok and type(emotes) == "table" then
+        for name, entry in pairs(catalog) do
+            if emotes[name] == nil then
+                pcall(function() emotes[name] = entry end)
+            end
+        end
+        UA.emoteLastTable = emotes
+    end
+
+    -- Best-effort ownership without wrapping DataController.Get.  Some games
+    -- expose their live inventory tables directly; when they do, augment them
+    -- in place.  If another script returns a proxy/readonly table, pcall keeps
+    -- this harmless.
+    if UA.DataController and type(UA.DataController.Get) == "function" then
+        for _, key in ipairs({"CosmeticInventory", "EmoteInventory"}) do
+            local got, inventory = pcall(function()
+                return UA.DataController:Get(key)
+            end)
+            if got and type(inventory) == "table" then
+                for name in pairs(catalog) do
+                    if inventory[name] == nil then
+                        pcall(function() inventory[name] = true end)
+                    end
+                end
+            end
+        end
+    end
+
+    return ok and type(emotes) == "table"
+end
+
+local function ua_startEmoteSnapshotLoop()
+    if UA.emoteSnapshotStarted then
+        return
+    end
+    UA.emoteSnapshotStarted = true
+
+    task.spawn(function()
+        while ua_isActiveInstance() do
+            if ua_emotesEnabled() and UA.ready then
+                pcall(ua_applyEmoteSnapshot)
+            end
+            task.wait(1)
+        end
+        UA.emoteSnapshotStarted = false
+    end)
+end
+
+local function ua_installEmoteController()
+    -- Black-box coexistence mode never replaces EmoteController.GetEmotes.
+    -- It only augments the live table returned by whatever implementation is
+    -- current after the protected script loads.
+    if not UA.EmoteController then return end
+    UA.emoteControllerInstalled = true
+    ua_rebuildEmoteCatalog()
+    ua_startEmoteSnapshotLoop()
+    pcall(ua_applyEmoteSnapshot)
 end
 
 local function ua_syncWeaponEntry(weaponName, cosmeticType, cosmeticName, options)
@@ -4959,15 +5013,9 @@ local function ua_installRemoteHooks()
                 local options = type(args[4]) == "table" and args[4] or {}
 
                 if ua_isEmote(cosmeticType, cosmeticName) then
-                    if ua_emotesEnabled() and ua_isNotFinisher(cosmeticName) then
-                        if not UA.replayingEmotes then
-                            ua_recordEmote(args)
-                        end
-                        -- Local cosmetic unlocks never need a server round-trip.
-                        -- If another script is above us in the hook chain, it may
-                        -- handle the call first; if it delegates here, we stop here.
-                        handled = true
-                    end
+                    -- Emotes are catalog-only in DevKage's coexistence path.
+                    -- Never swallow or rewrite EquipCosmetic here; let the next
+                    -- hook (including the user's other Unlock-All script) own it.
                     return
                 end
 
@@ -5155,14 +5203,14 @@ end
 
 function UA.RefreshOwnedCatalogs()
     local emotes, weapons = {}, {}
-    if UA.CosmeticLibrary and UA.CosmeticLibrary.Cosmetics then
+    if ua_emotesEnabled() then
+        local catalog = ua_rebuildEmoteCatalog()
+        for name, entry in pairs(catalog) do emotes[name] = entry end
+    end
+    if ua_weaponsEnabled() and UA.CosmeticLibrary and UA.CosmeticLibrary.Cosmetics then
         for name, cosmetic in pairs(UA.CosmeticLibrary.Cosmetics) do
-            if cosmetic and ua_isNotFinisher(name) then
-                if ua_isEmote(cosmetic.Type, name) then
-                    if ua_emotesEnabled() then emotes[name] = cosmetic end
-                elseif ua_weaponsEnabled() then
-                    weapons[name] = cosmetic
-                end
+            if cosmetic and ua_isNotFinisher(name) and not ua_isEmote(cosmetic.Type, name) then
+                weapons[name] = cosmetic
             end
         end
     end
@@ -5181,14 +5229,20 @@ function UA.ApplySavedEmotes()
     if not ua_emotesEnabled() or not UA.ready or UA.replayingEmotes then return false end
     UA.replayingEmotes = true
     ua_materializeEmoteLoadout()
-    ua_requestReplicate("WeaponInventory")
-    ua_requestReplicate("EmoteInventory")
     UA.replayingEmotes = false
     return true
 end
 
 function UA.Initialize()
-    if UA.ready or UA.initializing then return UA.ready end
+    if UA.ready then
+        if ua_emotesEnabled() then
+            ua_installEmoteController()
+            pcall(ua_applyEmoteSnapshot)
+        end
+        return true
+    end
+    if UA.initializing then return false end
+
     UA.initializing = true
     local environment = ua_environment()
     local previous = environment.__DevKageInventoryActive
@@ -5196,53 +5250,51 @@ function UA.Initialize()
         previous.disabled = true
     end
     environment.__DevKageInventoryActive = UA
+    environment.__DevKageInventoryBlackBoxMode = true
     UA.disabled = false
+
     local ok, err = pcall(function()
         local playerScripts = LocalPlayer:WaitForChild("PlayerScripts", 10)
         local controllers = playerScripts and playerScripts:WaitForChild("Controllers", 10)
         local modules = ReplicatedStorage:FindFirstChild("Modules")
-        if not controllers or not modules then error("native inventory controllers are unavailable") end
+        if not controllers or not modules then
+            error("native inventory controllers are unavailable")
+        end
 
         UA.Controllers = controllers
-        UA.EnumLibrary = require(modules:WaitForChild("EnumLibrary", 10))
-        if UA.EnumLibrary then UA.EnumLibrary:WaitForEnumBuilder() end
+        pcall(function()
+            UA.EnumLibrary = require(modules:WaitForChild("EnumLibrary", 10))
+            if UA.EnumLibrary and UA.EnumLibrary.WaitForEnumBuilder then
+                UA.EnumLibrary:WaitForEnumBuilder()
+            end
+        end)
         UA.CosmeticLibrary = require(modules:WaitForChild("CosmeticLibrary", 10))
-        UA.ItemLibrary = require(modules:WaitForChild("ItemLibrary", 10))
+        pcall(function() UA.ItemLibrary = require(modules:WaitForChild("ItemLibrary", 10)) end)
         UA.DataController = require(controllers:WaitForChild("PlayerDataController", 10))
 
-        local emoteModule = controllers:FindFirstChild("EmoteController") or controllers:WaitForChild("EmoteController", 3)
-        if emoteModule then pcall(function() UA.EmoteController = require(emoteModule) end) end
-        pcall(function() UA.FighterController = require(controllers:WaitForChild("FighterController", 10)) end)
+        local emoteModule = controllers:FindFirstChild("EmoteController")
+            or controllers:WaitForChild("EmoteController", 3)
+        if emoteModule then
+            pcall(function() UA.EmoteController = require(emoteModule) end)
+        end
 
-        local clientItemModule = playerScripts.Modules.ClientReplicatedClasses.ClientFighter.ClientItem
-        pcall(function() UA.ClientItem = require(clientItemModule) end)
-        local viewModelModule = clientItemModule and clientItemModule:FindFirstChild("ClientViewModel")
-        if viewModelModule then pcall(function() UA.ClientViewModel = require(viewModelModule) end) end
-
-        local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-        local dataRemotes = remotes and remotes:FindFirstChild("Data")
-        UA.EquipRemote = dataRemotes and dataRemotes:FindFirstChild("EquipCosmetic")
-        UA.FavoriteRemote = dataRemotes and dataRemotes:FindFirstChild("FavoriteCosmetic")
-        UA.UseItemRemote = nil
-
-        ua_installOwnershipSpoof()
-        ua_installDataSpoof()
-        ua_installEmoteController()
-        ua_materializeWeaponLoadout()
-        ua_materializeEmoteLoadout()
-        ua_installRemoteHooks()
-        ua_installWeaponViewmodelHooks()
-        ua_startExternalDetector()
+        -- IMPORTANT: no ownership hooks, no DataController wrappers,
+        -- no __namecall hook, no weapon-viewmodel wrappers, and no external
+        -- function-reference detector in black-box mode.
         UA.ready = true
         UA.RefreshOwnedCatalogs()
+
+        if ua_emotesEnabled() then
+            ua_installEmoteController()
+            pcall(ua_applyEmoteSnapshot)
+        end
     end)
+
     UA.initializing = false
     if not ok then
         warn("[DevKage Inventory] " .. tostring(err))
         return false
     end
-    if ua_weaponsEnabled() then task.defer(UA.ApplySavedWeapons) end
-    if ua_emotesEnabled() then task.defer(UA.ApplySavedEmotes) end
     return true
 end
 
@@ -5252,17 +5304,26 @@ function UA.SetFeatureEnabled(feature, enabled)
         if feature == "Emotes" then config.unlockEmotes = enabled == true end
         if feature == "Weapons" then config.unlockWeapons = enabled == true end
     end
+
     task.spawn(function()
-        if UA.Initialize() then
-            UA.RefreshOwnedCatalogs()
-            if feature == "Weapons" then
-                ua_requestReplicate("WeaponInventory")
-                if enabled then UA.ApplySavedWeapons() end
-            elseif feature == "Emotes" and enabled then
-                UA.ApplySavedEmotes()
+        if not UA.Initialize() then return end
+
+        if feature == "Emotes" then
+            if enabled then
+                ua_rebuildEmoteCatalog()
+                ua_installEmoteController()
+                pcall(ua_applyEmoteSnapshot)
+            else
+                UA.emoteLastTable = nil
             end
-            UA.save()
+        elseif feature == "Weapons" then
+            -- In black-box coexistence mode, the protected Unlock-All script
+            -- remains the sole owner of weapon cosmetic hooks. DevKage does
+            -- not install a competing implementation.
+            UA.ownedWeapons = {}
         end
+
+        UA.save()
     end)
 end
 
@@ -5290,6 +5351,13 @@ environment.__DevKageApplySavedEmotes = UA.ApplySavedEmotes
 environment.__DevKageApplySavedWeapons = UA.ApplySavedWeapons
 environment.__DevKageOwnedEmotes = function() UA.RefreshOwnedCatalogs(); return UA.ownedEmotes end
 environment.__DevKageOwnedWeapons = function() UA.RefreshOwnedCatalogs(); return UA.ownedWeapons end
+environment.__DevKageRefreshEmotesBlackBox = function()
+    if UA.Initialize() then
+        ua_rebuildEmoteCatalog()
+        return ua_applyEmoteSnapshot()
+    end
+    return false
+end
 environment.__DevKageEmoteLoadout = UA.emoteLoadout
 environment.__DevKageEmoteEquipped = UA.emoteEquipped
 environment.__DevKageWeaponLoadout = UA.weaponLoadout
@@ -23197,6 +23265,23 @@ local library = context.Library
 local UI = context.UI
 local MaskShard = context.MaskShard
 
+-- Hot-path caches: these are stable Roblox/executor objects or immutable values.
+-- Caching them avoids repeated service/global lookups without changing aim behavior.
+local Environment = getgenv()
+local Workspace = workspace
+local GuiService = game:GetService("GuiService")
+local ZeroVector2 = Vector2.zero
+local ZeroCFrame = CFrame.new()
+local WeaponOffsetCFrame = CFrame.new(0.43, 0.25, 0.42)
+local PayloadKey0 = utf8.char(0)
+local PayloadKey1 = utf8.char(1)
+local PayloadKey2 = utf8.char(2)
+local PayloadKey3 = utf8.char(3)
+local VisibilityParams = RaycastParams.new()
+VisibilityParams.IgnoreWater = true
+VisibilityParams.FilterType = Enum.RaycastFilterType.Exclude
+local VisibilityCharacter = nil
+
 -- MASK SHARD + KNIFE COMBAT (integrated; no standalone ScreenGui)
 
 
@@ -23211,6 +23296,8 @@ local KnifeCombatRuntime = {
     LastAttempt = 0,
     LastTargetScan = 0,
     LastStatusUpdate = 0,
+    LastAppliedStatus = nil,
+    LastStatusControl = nil,
     CurrentTarget = nil,
     CurrentPart = nil,
     Utility = nil,
@@ -23227,10 +23314,15 @@ local KnifeCombatRuntime = {
 }
 
 KnifeCombatRuntime.SetStatus = function(text)
-    KnifeCombatRuntime.LastStatus = tostring(text or "")
+    local value = tostring(text or "")
+    KnifeCombatRuntime.LastStatus = value
     local control = KnifeCombatRuntime.StatusControl
-    if control and type(control.SetText) == "function" then
-        control:SetText(KnifeCombatRuntime.LastStatus)
+    if control and type(control.SetText) == "function"
+        and (KnifeCombatRuntime.LastStatusControl ~= control
+            or KnifeCombatRuntime.LastAppliedStatus ~= value) then
+        control:SetText(value)
+        KnifeCombatRuntime.LastStatusControl = control
+        KnifeCombatRuntime.LastAppliedStatus = value
     end
 end
 
@@ -23248,7 +23340,7 @@ KnifeCombatRuntime.IsRivals = function()
 end
 
 KnifeCombatRuntime.IsTeammate = function(player)
-    local config = getgenv().__DevKageConfig
+    local config = Environment.__DevKageConfig
     if type(config) ~= "table" or config.aimTeamCheck ~= true then return false end
     if player == LocalPlayer then return true end
     local localTeamId, targetTeamId
@@ -23260,25 +23352,32 @@ KnifeCombatRuntime.IsTeammate = function(player)
     return LocalPlayer.Team ~= nil and LocalPlayer.Team == player.Team
 end
 
-KnifeCombatRuntime.ResolvePart = function(character)
+KnifeCombatRuntime.ResolvePart = function(character, wanted, camera)
     if not character then return nil end
-    local config = getgenv().__DevKageConfig
-    local wanted = tostring(type(config) == "table" and config.aimTargetPart or "Head")
+    if wanted == nil then
+        local config = Environment.__DevKageConfig
+        wanted = tostring(type(config) == "table" and config.aimTargetPart or "Head")
+    end
     if wanted == "Closest" then
-        local camera = workspace.CurrentCamera
+        camera = camera or Workspace.CurrentCamera
         if not camera then return character:FindFirstChild("HumanoidRootPart") end
+        local cameraCFrame = camera.CFrame
+        local cameraPosition = cameraCFrame.Position
+        local lookVector = cameraCFrame.LookVector
         local best, score
         for _, object in ipairs(character:GetChildren()) do
             if object:IsA("BasePart") then
-                local offset = object.Position - camera.CFrame.Position
-                if offset.Magnitude > 0.001 then
-                    local candidate = 1 - camera.CFrame.LookVector:Dot(offset.Unit)
+                local offset = object.Position - cameraPosition
+                local magnitudeSquared = offset:Dot(offset)
+                if magnitudeSquared > 0.000001 then
+                    local candidate = 1 - (lookVector:Dot(offset) / math.sqrt(magnitudeSquared))
                     if score == nil or candidate < score then best, score = object, candidate end
                 end
             end
         end
         return best or character:FindFirstChild("HumanoidRootPart")
     elseif wanted == "Random" then
+        -- Keep the original table + one-random-call behavior exactly.
         local parts = {}
         for _, object in ipairs(character:GetChildren()) do
             if object:IsA("BasePart") then parts[#parts + 1] = object end
@@ -23293,48 +23392,86 @@ KnifeCombatRuntime.ResolvePart = function(character)
         or character:FindFirstChild("HumanoidRootPart")
 end
 
-KnifeCombatRuntime.IsVisible = function(part)
-    local config = getgenv().__DevKageConfig
-    if type(config) ~= "table" or config.aimVisibleCheck ~= true then return true end
-    local camera = workspace.CurrentCamera
+KnifeCombatRuntime.IsVisible = function(part, camera, visibleCheck)
+    if visibleCheck == nil then
+        local config = Environment.__DevKageConfig
+        visibleCheck = type(config) == "table" and config.aimVisibleCheck == true
+    end
+    if not visibleCheck then return true end
+    camera = camera or Workspace.CurrentCamera
     if not camera or not part or not part.Parent then return false end
-    local parameters = RaycastParams.new()
-    parameters.IgnoreWater = true
-    parameters.FilterType = Enum.RaycastFilterType.Exclude
-    parameters.FilterDescendantsInstances = LocalPlayer.Character and {LocalPlayer.Character} or {}
-    local result = workspace:Raycast(camera.CFrame.Position, part.Position - camera.CFrame.Position, parameters)
+
+    local character = LocalPlayer.Character
+    if VisibilityCharacter ~= character then
+        VisibilityCharacter = character
+        VisibilityParams.FilterDescendantsInstances = character and {character} or {}
+    end
+
+    local origin = camera.CFrame.Position
+    local result = Workspace:Raycast(origin, part.Position - origin, VisibilityParams)
     return result == nil or (result.Instance and result.Instance:IsDescendantOf(part.Parent))
 end
 
 KnifeCombatRuntime.FindTarget = function()
-    local camera = workspace.CurrentCamera
+    local camera = Workspace.CurrentCamera
     if not camera then return nil, nil end
-    local config = getgenv().__DevKageConfig
+
+    local config = Environment.__DevKageConfig
     local radius = math.clamp(tonumber(type(config) == "table" and config.silentAimRadius) or 150, 25, 1000)
+    local radiusSquared = radius * radius
+    local wanted = tostring(type(config) == "table" and config.aimTargetPart or "Head")
+    local visibleCheck = type(config) == "table" and config.aimVisibleCheck == true
+    local teamCheck = type(config) == "table" and config.aimTeamCheck == true
+    local localTeamId = teamCheck and LocalPlayer:GetAttribute("TeamID") or nil
+    local localTeam = teamCheck and LocalPlayer.Team or nil
+
     local mousePosition = UserInputService:GetMouseLocation()
-    local inset = Vector2.zero
-    pcall(function() inset = game:GetService("GuiService"):GetGuiInset() end)
+    local inset = ZeroVector2
+    local insetOk, liveInset = pcall(GuiService.GetGuiInset, GuiService)
+    if insetOk and liveInset then inset = liveInset end
     local center = mousePosition - inset
-    local bestPlayer, bestPart, bestDistance
+
+    local bestPlayer, bestPart, bestDistanceSquared
     for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and not KnifeCombatRuntime.IsTeammate(player) then
-            local character = player.Character
-            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-            if humanoid and humanoid.Health > 0 and not character:FindFirstChildOfClass("ForceField") then
-                local part = KnifeCombatRuntime.ResolvePart(character)
-                if part and part:IsDescendantOf(workspace) and KnifeCombatRuntime.IsVisible(part) then
-                    local point, onScreen = camera:WorldToViewportPoint(part.Position)
-                    if onScreen and point.Z > 0 then
-                        local dx, dy = point.X - center.X, point.Y - center.Y
-                        local distance = math.sqrt(dx * dx + dy * dy)
-                        if distance <= radius and (bestDistance == nil or distance < bestDistance) then
-                            bestPlayer, bestPart, bestDistance = player, part, distance
+        if player ~= LocalPlayer then
+            local teammate = false
+            if teamCheck then
+                local targetTeamId = player:GetAttribute("TeamID")
+                if localTeamId ~= nil or targetTeamId ~= nil then
+                    teammate = localTeamId ~= nil and localTeamId == targetTeamId
+                else
+                    teammate = localTeam ~= nil and localTeam == player.Team
+                end
+            end
+
+            if not teammate then
+                local character = player.Character
+                local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+                if humanoid and humanoid.Health > 0 and not character:FindFirstChildOfClass("ForceField") then
+                    local part = KnifeCombatRuntime.ResolvePart(character, wanted, camera)
+                    if part and part:IsDescendantOf(Workspace) then
+                        -- Projection/FOV rejection is much cheaper than a raycast.
+                        -- Only raycast if this candidate can actually become the winner.
+                        local point, onScreen = camera:WorldToViewportPoint(part.Position)
+                        if onScreen and point.Z > 0 then
+                            local dx = point.X - center.X
+                            local dy = point.Y - center.Y
+                            local distanceSquared = dx * dx + dy * dy
+                            if distanceSquared <= radiusSquared
+                                and (bestDistanceSquared == nil or distanceSquared < bestDistanceSquared)
+                                and KnifeCombatRuntime.IsVisible(part, camera, visibleCheck) then
+                                bestPlayer = player
+                                bestPart = part
+                                bestDistanceSquared = distanceSquared
+                            end
                         end
                     end
                 end
             end
         end
     end
+
+    local bestDistance = bestDistanceSquared and math.sqrt(bestDistanceSquared) or nil
     return bestPlayer, bestPart, bestDistance, center
 end
 
@@ -23351,7 +23488,7 @@ KnifeCombatRuntime.UninstallNoSpread = function()
 end
 
 KnifeCombatRuntime.InstallNoSpread = function()
-    local config = getgenv().__DevKageConfig
+    local config = Environment.__DevKageConfig
     if not KnifeCombatRuntime.Alive or type(config) ~= "table"
         or config.noSpreadEnabled ~= true then
         KnifeCombatRuntime.UninstallNoSpread()
@@ -23366,10 +23503,10 @@ KnifeCombatRuntime.InstallNoSpread = function()
     local original = gameplay.GetSpread
     local wrapper
     wrapper = function(...)
-        local liveConfig = getgenv().__DevKageConfig
+        local liveConfig = Environment.__DevKageConfig
         if KnifeCombatRuntime.Alive and type(liveConfig) == "table"
             and liveConfig.noSpreadEnabled == true then
-            return CFrame.new()
+            return ZeroCFrame
         end
         return original(...)
     end
@@ -23468,11 +23605,11 @@ KnifeCombatRuntime.FireAt = function(part)
     local aim = CFrame.lookAt(root.Position, part.Position)
     local okFire = pcall(function()
         local data = {
-            [utf8.char(1)] = {
-                [utf8.char(0)] = utility:EncodeCFrame(aim),
-                [utf8.char(1)] = utility:EncodeCFrame(aim),
-                [utf8.char(2)] = part,
-                [utf8.char(3)] = utility:EncodeCFrame(CFrame.new(0.43, 0.25, 0.42)),
+            [PayloadKey1] = {
+                [PayloadKey0] = utility:EncodeCFrame(aim),
+                [PayloadKey1] = utility:EncodeCFrame(aim),
+                [PayloadKey2] = part,
+                [PayloadKey3] = utility:EncodeCFrame(WeaponOffsetCFrame),
             },
         }
         remote:FireServer(objectId, enumLibrary:ToEnum("StartShooting"), data, nil)
@@ -23482,12 +23619,12 @@ end
 
 KnifeCombatRuntime.MoveMouseTo = function(part, center)
     if type(mousemoverel) ~= "function" or not part then return false end
-    local camera = workspace.CurrentCamera
+    local camera = Workspace.CurrentCamera
     if not camera then return false end
     local point, onScreen = camera:WorldToViewportPoint(part.Position)
     if not onScreen or point.Z <= 0 then return false end
     center = center or UserInputService:GetMouseLocation()
-    local config = getgenv().__DevKageConfig
+    local config = Environment.__DevKageConfig
     local smoothing = math.clamp(tonumber(type(config) == "table" and config.aimSmoothing) or 0, 0, 100)
     local factor = smoothing <= 0 and 1 or math.clamp(1 / (1 + smoothing * 0.12), 0.04, 1)
     local dx, dy = (point.X - center.X) * factor, (point.Y - center.Y) * factor
@@ -23499,7 +23636,7 @@ end
 
 KnifeCombatRuntime.Step = function()
     if not KnifeCombatRuntime.Alive then return end
-    local config = getgenv().__DevKageConfig
+    local config = Environment.__DevKageConfig
     if type(config) ~= "table" then return end
     local now = os.clock()
     if config.noSpreadEnabled == true
@@ -23552,37 +23689,37 @@ KnifeCombatRuntime.MaskStatusControl = KnifeCombatRuntime.StatusControl
 
 KnifeCombatRuntime.Controls.SilentAim = rapidFireSection:CreateToggle({
     Name = "Silent Aim",
-    State = getgenv().__DevKageConfig.silentAimEnabled == true,
+    State = Environment.__DevKageConfig.silentAimEnabled == true,
     Flag = "knife.silentAimEnabled",
     Callback = function(value)
-        getgenv().__DevKageConfig.silentAimEnabled = value == true
+        Environment.__DevKageConfig.silentAimEnabled = value == true
         if value then KnifeCombatRuntime.QueueModuleLoad(true)
         else KnifeCombatRuntime.CurrentTarget, KnifeCombatRuntime.CurrentPart = nil, nil end
     end
 })
 KnifeCombatRuntime.Controls.HitChance = rapidFireSection:CreateSlider({
     Name = "Hit Chance",
-    State = tonumber(getgenv().__DevKageConfig.silentAimHitChance) or 85,
+    State = tonumber(Environment.__DevKageConfig.silentAimHitChance) or 85,
     Min = 0,
     Max = 100,
     Decimals = 0,
     Suffix = "%",
     Flag = "knife.silentAimHitChance",
     Callback = function(value)
-        getgenv().__DevKageConfig.silentAimHitChance =
+        Environment.__DevKageConfig.silentAimHitChance =
             math.clamp(math.floor((tonumber(value) or 85) + 0.5), 0, 100)
     end
 })
 KnifeCombatRuntime.Controls.Radius = rapidFireSection:CreateSlider({
     Name = "FOV Radius",
-    State = tonumber(getgenv().__DevKageConfig.silentAimRadius) or 150,
+    State = tonumber(Environment.__DevKageConfig.silentAimRadius) or 150,
     Min = 25,
     Max = 1000,
     Decimals = 0,
     Suffix = " px",
     Flag = "knife.silentAimRadius",
     Callback = function(value)
-        getgenv().__DevKageConfig.silentAimRadius =
+        Environment.__DevKageConfig.silentAimRadius =
             math.clamp(math.floor((tonumber(value) or 150) + 0.5), 25, 1000)
     end
 })
@@ -23591,64 +23728,64 @@ KnifeCombatRuntime.Controls.TargetPart = rapidFireSection:CreateDropdown({
     Options = {"Head", "HumanoidRootPart", "Torso", "Closest", "Random"},
     State = table.find(
         {"Head", "HumanoidRootPart", "Torso", "Closest", "Random"},
-        tostring(getgenv().__DevKageConfig.aimTargetPart or "Head")
+        tostring(Environment.__DevKageConfig.aimTargetPart or "Head")
     ) or 1,
     Flag = "knife.aimTargetPart",
     Callback = function(index)
         local options = {"Head", "HumanoidRootPart", "Torso", "Closest", "Random"}
-        getgenv().__DevKageConfig.aimTargetPart = options[index] or "Head"
+        Environment.__DevKageConfig.aimTargetPart = options[index] or "Head"
     end
 })
 KnifeCombatRuntime.Controls.TeamCheck = rapidFireSection:CreateToggle({
     Name = "Team Check",
-    State = getgenv().__DevKageConfig.aimTeamCheck ~= false,
+    State = Environment.__DevKageConfig.aimTeamCheck ~= false,
     Flag = "knife.aimTeamCheck",
-    Callback = function(value) getgenv().__DevKageConfig.aimTeamCheck = value == true end
+    Callback = function(value) Environment.__DevKageConfig.aimTeamCheck = value == true end
 })
 KnifeCombatRuntime.Controls.WallCheck = rapidFireSection:CreateToggle({
     Name = "Wall Check",
-    State = getgenv().__DevKageConfig.aimVisibleCheck ~= false,
+    State = Environment.__DevKageConfig.aimVisibleCheck ~= false,
     Flag = "knife.aimVisibleCheck",
-    Callback = function(value) getgenv().__DevKageConfig.aimVisibleCheck = value == true end
+    Callback = function(value) Environment.__DevKageConfig.aimVisibleCheck = value == true end
 })
 KnifeCombatRuntime.Controls.AutoShoot = rapidFireSection:CreateToggle({
     Name = "Auto Shoot",
-    State = getgenv().__DevKageConfig.silentAimAutoShoot == true,
+    State = Environment.__DevKageConfig.silentAimAutoShoot == true,
     Flag = "knife.silentAimAutoShoot",
-    Callback = function(value) getgenv().__DevKageConfig.silentAimAutoShoot = value == true end
+    Callback = function(value) Environment.__DevKageConfig.silentAimAutoShoot = value == true end
 })
 KnifeCombatRuntime.Controls.Smoothing = rapidFireSection:CreateSlider({
     Name = "Fallback Smoothing",
-    State = tonumber(getgenv().__DevKageConfig.aimSmoothing) or 0,
+    State = tonumber(Environment.__DevKageConfig.aimSmoothing) or 0,
     Min = 0,
     Max = 100,
     Decimals = 0,
     Suffix = "%",
     Flag = "knife.aimSmoothing",
     Callback = function(value)
-        getgenv().__DevKageConfig.aimSmoothing =
+        Environment.__DevKageConfig.aimSmoothing =
             math.clamp(math.floor((tonumber(value) or 0) + 0.5), 0, 100)
     end
 })
 KnifeCombatRuntime.Controls.Interval = rapidFireSection:CreateSlider({
     Name = "Shot Interval",
-    State = tonumber(getgenv().__DevKageConfig.silentAimFireInterval) or 0.05,
+    State = tonumber(Environment.__DevKageConfig.silentAimFireInterval) or 0.05,
     Min = 0.02,
     Max = 0.5,
     Decimals = 2,
     Suffix = " s",
     Flag = "knife.silentAimFireInterval",
     Callback = function(value)
-        getgenv().__DevKageConfig.silentAimFireInterval =
+        Environment.__DevKageConfig.silentAimFireInterval =
             math.clamp(tonumber(value) or 0.05, 0.02, 0.5)
     end
 })
 KnifeCombatRuntime.Controls.NoSpread = rapidFireSection:CreateToggle({
     Name = "No Spread",
-    State = getgenv().__DevKageConfig.noSpreadEnabled == true,
+    State = Environment.__DevKageConfig.noSpreadEnabled == true,
     Flag = "knife.noSpreadEnabled",
     Callback = function(value)
-        getgenv().__DevKageConfig.noSpreadEnabled = value == true
+        Environment.__DevKageConfig.noSpreadEnabled = value == true
         if value then KnifeCombatRuntime.QueueModuleLoad(true)
         else KnifeCombatRuntime.UninstallNoSpread() end
     end
@@ -23682,7 +23819,7 @@ table.insert(library.CleanupCallbacks, function()
 end)
 
 do
-    local config = getgenv().__DevKageConfig
+    local config = Environment.__DevKageConfig
     if type(config) == "table"
         and (config.silentAimEnabled == true or config.noSpreadEnabled == true) then
         KnifeCombatRuntime.QueueModuleLoad(true)
