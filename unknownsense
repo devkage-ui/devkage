@@ -1,312 +1,115 @@
 local _a=[============[
--- ============================================================
--- MASK SHARD v9.6.0 — STABLE BYPASS (AUG 2026 UPDATE)
--- ============================================================
--- Built on the stable v9.4.3 foundation.
--- Added: AccountAge spoof, improved RemoteEvent/Function hooks,
--- throttled memory wipe, silent error handling.
--- ============================================================
 
-local MaskShard = {
-    Version = "9.6.0",
-    Active = false,
-    Token = 0,
-    Patches = {},
-    Hooks = {},
-    Originals = {},
-    Runtime = { frameCounter = 0 },
-    Obfuscation = { keyMap = {}, seed = os.time() },
-    Connections = {},
-}
 
--- === OBFUSCATION ENGINE ===
-local function obfuscateString(str)
-    local encoded = ""
-    for i = 1, #str do
-        local char = string.byte(str, i)
-        local offset = math.random(1, 255)
-        encoded = encoded .. string.char(char + offset) .. string.char(offset)
-    end
-    return encoded
-end
 
-local function deobfuscateString(encoded)
-    local decoded = ""
-    for i = 1, #encoded, 2 do
-        local char = string.byte(encoded, i) - string.byte(encoded, i + 1)
-        decoded = decoded .. string.char(char)
-    end
-    return decoded
-end
 
-local function randomVarName()
-    local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    local name = ""
-    for i = 1, math.random(8, 16) do
-        name = name .. string.sub(chars, math.random(1, #chars), math.random(1, #chars))
-    end
-    return name
-end
 
-local function buildObfuscationTable(originalTable)
-    local obfTable = {}
-    local keyMap = {}
-    for key, value in pairs(originalTable) do
-        local newKey = randomVarName()
-        keyMap[key] = newKey
-        obfTable[newKey] = value
-    end
-    return obfTable, keyMap
-end
 
--- === MEMORY GUARD ===
-local function protectMemory()
-    if type(sethiddenproperty) == "function" then
-        pcall(function()
-            sethiddenproperty(game, "IsLoaded", true)
-            sethiddenproperty(game, "IsRunning", true)
-            sethiddenproperty(game, "IsPaused", false)
-            sethiddenproperty(game, "IsStudio", false)
-            sethiddenproperty(game, "IsVr", false)
-        end)
-    end
+local maskShardShutdownKey = {}
 
-    if type(setreadonly) == "function" then
-        pcall(function()
-            for _, obj in ipairs(game:GetDescendants()) do
-                if obj:IsA("Script") or obj:IsA("LocalScript") then
-                    setreadonly(obj, true)
-                end
-            end
-        end)
-    end
-end
-
--- === NETWORK SPOOFER (IMPROVED) ===
-local function hookRemoteEvents()
-    local remotes = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes")
-    if not remotes then return end
-
-    local function spoofRemote(remote)
-        if MaskShard.Hooks[remote] then return end
-        MaskShard.Hooks[remote] = true
-
-        local originalFire = remote.FireServer
-        local originalInvoke = remote.InvokeServer
-
-        if originalFire then
-            remote.FireServer = function(self, ...)
-                local args = {...}
-                local spoofer = getgenv().__DevKageConfig
-                if spoofer and spoofer.victim then
-                    args[1] = tostring(spoofer.victim)
-                end
-                return originalFire(self, unpack(args))
-            end
-        end
-
-        if originalInvoke then
-            remote.InvokeServer = function(self, ...)
-                local args = {...}
-                local spoofer = getgenv().__DevKageConfig
-                if spoofer and spoofer.victim then
-                    args[1] = tostring(spoofer.victim)
-                end
-                return originalInvoke(self, unpack(args))
-            end
-        end
-    end
-
-    for _, remote in ipairs(remotes:GetDescendants()) do
-        if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
-            spoofRemote(remote)
-        end
-    end
-end
-
--- === DRAWING MASKER ===
-local function maskDrawingObjects()
-    local Drawing = _G.Drawing
-    if not Drawing then return end
-
-    local originals = {}
-    for _, method in ipairs({"new", "Remove", "Destroy"}) do
-        originals[method] = Drawing[method]
-    end
-
-    local drawCache = {}
-    Drawing.new = function(typeName)
-        local obj = originals.new(typeName)
-        if obj then
-            obj._masked = true
-            drawCache[obj] = true
-            if type(obj.Set) == "function" then
-                local originalSet = obj.Set
-                obj.Set = function(self, key, value)
-                    if key == "Visible" or key == "Transparency" or key == "Color" then
-                        return originalSet(self, key, value)
-                    end
-                    return originalSet(self, key, value)
-                end
-            end
-        end
-        return obj
-    end
-
-    Drawing.Remove = function(obj)
-        if drawCache[obj] then drawCache[obj] = nil end
-        return originals.Remove(obj)
-    end
-
-    Drawing.Destroy = function(obj)
-        if drawCache[obj] then drawCache[obj] = nil end
-        return originals.Destroy(obj)
-    end
-end
-
--- === METATABLE HOOKS (UPDATED) ===
-local function hookMetatables()
-    if not hookmetamethod then return end
-
-    local oldIndex = hookmetamethod(game, "__index", function(self, key)
-        local spoofer = getgenv().__DevKageConfig
-        if spoofer and spoofer.victim then
-            if self == game.Players.LocalPlayer then
-                if key == "UserId" then
-                    return tonumber(spoofer.victim) or self.UserId
-                elseif key == "Name" then
-                    return tostring(spoofer.helper) or self.Name
-                elseif key == "DisplayName" then
-                    return tostring(spoofer.helper) or self.DisplayName
-                elseif key == "MembershipType" and spoofer.premium then
-                    return Enum.MembershipType.Premium
-                elseif key == "HasVerifiedBadge" and spoofer.verified then
-                    return true
-                elseif key == "AccountAge" then
-                    return math.random(365, 2000) -- NEW: spoof account age
-                end
-            end
-        end
-        return oldIndex(self, key)
-    end)
-
-    local oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-        local method = getnamecallmethod()
-        if method == "FireServer" or method == "InvokeServer" then
-            local args = {...}
-            local spoofer = getgenv().__DevKageConfig
-            if spoofer and spoofer.victim then
-                args[1] = tostring(spoofer.victim)
-            end
-            return oldNamecall(self, unpack(args))
-        end
-        return oldNamecall(self, ...)
-    end)
-end
-
--- === SCRIPT SANDBOX ESCAPE ===
-local function escapeSandbox()
-    local env = getfenv()
-    local allowed = {
-        "print", "warn", "error", "pcall", "xpcall", "loadstring",
-        "require", "task", "game", "workspace", "script", "Instance",
-        "Vector3", "CFrame", "Color3", "UDim2", "UDim", "Rect",
-        "TweenInfo", "NumberSequence", "ColorSequence", "Ray",
-        "BrickColor", "Enum", "math", "table", "string", "os",
-        "coroutine", "debug", "unpack", "setmetatable", "getmetatable",
-        "rawequal", "rawset", "rawget", "select", "next", "pairs",
-        "ipairs", "tonumber", "tostring", "type", "typeof", "type",
-        "assert", "collectgarbage", "require", "gcinfo", "newproxy",
+local function createCompatibilityMaskShard(name, version, role)
+    local shard = {
+        Name = name,
+        Version = version,
+        Active = false,
+        AlwaysOn = true,
+        Token = 0,
+        Patches = {},
+        Hooks = {},
+        Originals = {},
+        Runtime = {
+            CompatibilityOnly = true,
+            Role = role,
+            frameCounter = 0,
+        },
+        Connections = {},
     }
 
-    for key, value in pairs(env) do
-        if not table.find(allowed, key) then
-            env[key] = nil
+    function shard:RegisterConnection(connection)
+        if connection then self.Connections[#self.Connections + 1] = connection end
+        return connection
+    end
+
+    function shard:Activate()
+        if not self.Active then
+            self.Active = true
+            self.Token = self.Token + 1
         end
+        self.Runtime.CompatibilityOnly = true
+        self.Runtime.frameCounter = 0
+        return true
     end
 
-    env._G = env
-    setfenv(0, env)
+    function shard:Deactivate(force)
+        if self.AlwaysOn and force ~= maskShardShutdownKey then
+            self:Activate()
+            return false
+        end
+        self.Active = false
+        self.Token = self.Token + 1
+        if force == maskShardShutdownKey then
+            for _, connection in ipairs(self.Connections) do
+                pcall(function() connection:Disconnect() end)
+            end
+            table.clear(self.Connections)
+        end
+        self.Runtime.CompatibilityOnly = false
+        self.Runtime.frameCounter = 0
+        return true
+    end
+
+    function shard:IsActive()
+        return self.Active == true
+    end
+
+    return shard
 end
 
--- === MEMORY WIPER (THROTTLED) ===
-local function wipeMemory()
-    collectgarbage("collect")
-    if type(closememory) == "function" then
-        pcall(closememory)
-    end
-    if type(memoryrelease) == "function" then
-        pcall(memoryrelease)
-    end
-    if type(wipe) == "function" then
-        pcall(wipe)
-    end
-end
+local MaskShard = createCompatibilityMaskShard(
+    "Integrated Mask Shard",
+    "4.0.0-integrated",
+    "DevKage feature ownership"
+)
+local MaskShardV96 = createCompatibilityMaskShard(
+    "Mask Shard v9.6.0",
+    "9.6.0",
+    "Supplied v9.6 compatibility lifecycle"
+)
 
--- === STACK CLEANER ===
-local function clearStackTrace()
-    if type(debug) == "table" and type(debug.traceback) == "function" then
-        debug.traceback = function() return "" end
-    end
-end
+local maskShardEnvironment = (type(getgenv) == "function" and getgenv()) or _G
+maskShardEnvironment.__DevKageMaskShard = MaskShard
+maskShardEnvironment.__DevKageMaskShardV96 = MaskShardV96
+maskShardEnvironment.__DevKageMaskShards = {
+    Integrated = MaskShard,
+    V96 = MaskShardV96,
+}
+MaskShard:Activate()
+MaskShardV96:Activate()
 
--- === START MASK SHARD ===
-function MaskShard:Activate()
-    if self.Active then return true end
-    self.Active = true
-    self.Token = self.Token + 1
 
-    -- Coexistence mode: keep the MaskShard lifecycle/API available without
-    -- mutating executor-wide remotes, Drawing methods, metatables, debug state,
-    -- the running environment, or forcing memory collection.
-    self.Runtime.CompatibilityOnly = true
-    self.Runtime.frameCounter = 0
 
-    print("[Mask Shard] v" .. self.Version .. " compatibility mode active.")
-    return true
-end
 
--- === DEACTIVATE ===
-function MaskShard:Deactivate()
-    self.Active = false
-    self.Token = self.Token + 1
-    for _, conn in ipairs(self.Connections) do
-        pcall(function() conn:Disconnect() end)
-    end
-    self.Connections = {}
-    self.Runtime.CompatibilityOnly = false
-    self.Runtime.frameCounter = 0
-    print("[Mask Shard] compatibility mode deactivated.")
-    return true
-end
 
--- === EXPOSE TO GLOBAL ===
-getgenv().__DevKageMaskShard = MaskShard
 
--- ============================================================
--- ORIGINAL DEVKAGE SOURCE CODE (FULL, UNMODIFIED)
--- ============================================================
--- The complete 13,809-line DevKage source code is below.
--- I am embedding it exactly as provided, without any changes.
--- The Mask Shard will wrap and protect every feature automatically.
--- ============================================================
 
--- [START OF ORIGINAL DEVKAGE SOURCE]
--- This is the exact code you provided in the file "DevKage_movement_freeze_collision_fixed.lua".
--- It is 13,809 lines long. I am including every single line.
--- For this chat window, I will provide the full source code.
 
--- ============================================================
--- DEVKAGE UI LIBRARY (RightShift + dropdown/colorpicker + crosshair pass)
+
+
+
+
+
+
+
+
 local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
--- COMPATIBILITY MARKER: DevKage-v5.2-current-only-20260822
--- Keep this marker so the older v5.2 cleaner recognizes v5.2.1 as a safe successor
--- instead of deleting it when both copies exist in executor Auto Execute.
+
+
+
 __devkageEnv.__DEVKAGE_RUNTIME_VERSION = "dual-script-autoload-v5"
 local __devkageMultiInjectAutoBoot = __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT == true
--- ============================================================
--- DEVKAGE UI LIBRARY (control, state and fade reliability pass)
--- ============================================================
+
+
+
 do
     local env = (type(getgenv) == "function" and getgenv()) or _G
     local previousWindow = env.__DevKageWindow
@@ -341,7 +144,7 @@ local tws = game:GetService("TweenService")
 local uis = game:GetService("UserInputService")
 local cre = game:GetService("CoreGui")
 
--- ── DevKage theme engine ─────────────────────────────────
+
 library.Theme = library.Theme or {
     UI = Color3.fromRGB(23, 23, 23),
     Toggle = Color3.fromRGB(175, 205, 75),
@@ -547,7 +350,7 @@ function library:SetThemeColor(kind, color)
     return true
 end
 
--- ── RenderObject ─────────────────────────────────────────
+
 function utility:RenderObject(RenderType, RenderProperties, RenderHidden)
     local Render = Instance.new(RenderType)
     if RenderProperties and typeof(RenderProperties) == "table" then
@@ -628,7 +431,7 @@ function utility:Sort(Table1, Table2)
     return Table3
 end
 
--- ── CreateWindow ─────────────────────────────────────────
+
 function library:CreateWindow(Properties)
     Properties = Properties or {}
     local Window = {
@@ -652,10 +455,10 @@ function library:CreateWindow(Properties)
         Window.Root = ScreenGui
         library.ThemeRoot = ScreenGui
 
-        -- A zero-size Modal TextButton is the same first-person mouse-release
-        -- technique used by the supplied working UI.  MouseBehavior=Default
-        -- alone is not enough in every first-person camera controller; Modal
-        -- keeps Roblox's real GUI hover/click pointer active while DevKage is open.
+
+
+
+
         local MenuModalRelease = Instance.new("TextButton")
         MenuModalRelease.Name = "DevKage_MouseModalRelease"
         MenuModalRelease.BackgroundTransparency = 1
@@ -706,8 +509,8 @@ function library:CreateWindow(Properties)
                 MenuModalRelease.Modal = true
             end)
 
-            -- First-person/camera scripts can restore LockCenter every frame.
-            -- DevKage owns the cursor only while its own menu is visible.
+
+
             pcall(function()
                 if uis.MouseBehavior ~= Enum.MouseBehavior.Default then
                     uis.MouseBehavior = Enum.MouseBehavior.Default
@@ -724,10 +527,10 @@ function library:CreateWindow(Properties)
             MenuInputRuntime.Guarding = false
         end
 
-        -- First-person games can write LockCenter again outside the normal
-        -- camera render priority. Keep the menu pointer released whenever the
-        -- DevKage UI is open, without changing gameplay mouse behavior while
-        -- the menu is closed.
+
+
+
+
         local menuMouseBehaviorGuard = uis:GetPropertyChangedSignal("MouseBehavior"):Connect(function()
             if MenuInputRuntime.Guarding or not Window.Enabled then return end
             if uis.MouseBehavior ~= Enum.MouseBehavior.Default then
@@ -792,10 +595,10 @@ function library:CreateWindow(Properties)
         end
 
         function Window:SetCursorControlMode(mode)
-            -- DevKage cursor control is always the physical mouse.  Legacy
-            -- "Free Cursor"/"Cursor Lock" config values are intentionally
-            -- normalized to Mouse so the custom cursor never switches to a
-            -- screen-center control source.
+
+
+
+
             local previousMode = Window.CursorControlMode
             mode = "Mouse"
             Window.CursorControlMode = mode
@@ -813,10 +616,10 @@ function library:CreateWindow(Properties)
             return Window.CursorControlMode
         end
 
-        -- The important part from the supplied working cursor implementation:
-        -- run after normal camera/first-person updates so the menu cursor stays
-        -- free while DevKage is visible. One late binding is enough; avoid the
-        -- old property-change feedback loops and duplicate RenderStepped loop.
+
+
+
+
         pcall(function()
             MenuRunService:BindToRenderStep(
                 MenuMouseBindName,
@@ -1139,11 +942,11 @@ function library:CreateWindow(Properties)
             return Window.Enabled
         end
 
-        -- Reliable menu hotkey, including auto-loaded/silent-loaded sessions.
-        -- ContextActionService receives the configured key even when a game has
-        -- its own high-frequency input controller.  Only the newest DevKage
-        -- window owns the action, preventing duplicate auto-load instances from
-        -- double-toggling the menu.
+
+
+
+
+
         local MenuContextActionService = game:GetService("ContextActionService")
         local MenuToggleActionName = "DevKage_MenuToggle_Current"
         local MenuLastToggleAt = 0
@@ -1168,9 +971,9 @@ function library:CreateWindow(Properties)
                         return Enum.ContextActionResult.Pass
                     end
 
-                    -- A stale key-capture state must never permanently block the
-                    -- main UI hotkey after an auto-load.  Preserve active capture
-                    -- only while its bind menu is actually visible.
+
+
+
                     local manager = library and library.KeybindManager
                     if manager and manager.CaptureControl then
                         if not manager.Menu or manager.Menu.Visible ~= true then
@@ -1201,8 +1004,8 @@ function library:CreateWindow(Properties)
                 end)
             end
         else
-            -- Executor/client fallback if ContextActionService binding is not
-            -- available for any reason.
+
+
             utility:CreateConnection(uis.InputBegan, function(Input)
                 if not Input.KeyCode or Input.KeyCode ~= Window.Key then return end
                 local env = (type(getgenv) == "function" and getgenv()) or _G
@@ -1217,7 +1020,7 @@ function library:CreateWindow(Properties)
     return setmetatable(Window, library)
 end
 
--- ── Notifications ─────────────────────────────────────────
+
 function library:Notify(Properties)
     Properties = Properties or {}
     local description = tostring(Properties.description or Properties.Description or Properties.message or Properties.Message or "Notification")
@@ -1302,7 +1105,7 @@ function library:Notify(Properties)
     return frame
 end
 
--- ── CreatePage ───────────────────────────────────────────
+
 function library:CreatePage(Properties)
     Properties = Properties or {}
     local Page = {
@@ -1525,7 +1328,7 @@ function library:CreatePage(Properties)
     return setmetatable(Page, pages)
 end
 
--- ── CreateSection ────────────────────────────────────────
+
 function pages:CreateSection(Properties)
     Properties = Properties or {}
     local Section = {
@@ -1772,7 +1575,7 @@ function pages:CreateSection(Properties)
     return setmetatable(Section, sections)
 end
 
--- ── Content elements ─────────────────────────────────────
+
 library.KeybindManager = library.KeybindManager or {
     Controls = {},
     Order = {},
@@ -1806,7 +1609,7 @@ local BindShortNames = {
 }
 
 local function bindRainbowBar(parent, zindex)
-    -- Match the main DevKage top strip exactly: same Roblox image asset and inset.
+
     local holder = Instance.new("Frame")
     holder.Name = "RainbowTopBarShadow"
     holder.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
@@ -2196,8 +1999,8 @@ function BindManager:SetModAlert(active, window, durationSeconds)
     active = active == true
     if active then
         local duration = math.max(tonumber(durationSeconds) or 240, 1)
-        -- Do not keep extending the timer on every 15-second detector scan.
-        -- A fresh detection/test starts one approximately four-minute flash.
+
+
         if not self.ModAlertActive or (tonumber(self.ModAlertExpiresAt) or 0) <= os.clock() then
             self.ModAlertExpiresAt = os.clock() + duration
         end
@@ -2641,9 +2444,9 @@ function sections:CreateSlider(Properties)
             Active              = true,
             ZIndex              = 20
         })
-        -- Universal fine-step controls for every DevKage slider. These use
-        -- the slider's own Step/Decimals rules, so +/- always matches the same
-        -- value precision as dragging the bar.
+
+
+
         local SliderButtonY = Content.Name and 14 or 1
         local Content_Holder_Minus = utility:RenderObject("TextButton", {
             BackgroundTransparency = 1,
@@ -3983,9 +3786,9 @@ warn("UI Library failed to load:", Statement)
 return
 end
 
--- ============================================================
--- SERVICES & GLOBALS
--- ============================================================
+
+
+
 local Players           = game:GetService("Players")
 local HttpService       = game:GetService("HttpService")
 local RunService        = game:GetService("RunService")
@@ -3997,11 +3800,11 @@ local Lighting          = game:GetService("Lighting")
 local StarterGui        = game:GetService("StarterGui")
 local Camera            = workspace.CurrentCamera
 
--- Clean up effects left by an earlier DevKage execution.
+
 do
 local devNames = {
 "DevKage_ColorCorrection", "DevKage_Bloom", "DevKage_SunRays",
-"DevKage_DepthOfField", "DevKage_Atmosphere", "DevKage_MotionBlur"
+"DevKage_DepthOfField", "DevKage_Atmosphere", "DevKage_AtmosphereGlow", "DevKage_MotionBlur"
 }
 for _, name in ipairs(devNames) do
 local obj = Lighting:FindFirstChild(name)
@@ -4009,9 +3812,9 @@ if obj then pcall(function() obj:Destroy() end) end
 end
 end
 
--- ============================================================
--- UNLOCK ALL — full implementation with config save pipeline
--- ============================================================
+
+
+
 local UA = {}
 UA.equipped         = {}
 UA.favorites        = {}
@@ -4103,8 +3906,8 @@ getgenv().__DevKageUnlockAllLoad   = function() UA.load() end
 getgenv().__DevKageUnlockAllEquipped = UA.equipped
 
 task.spawn(function()
--- Defer module/metamethod patching until Unlock All is actually enabled.
--- This prevents startup collisions with another script that patches the same modules.
+
+
 while not ua_isEnabled() do task.wait(0.5) end
 local ok, err = pcall(function()
 local playerScripts    = LocalPlayer.PlayerScripts
@@ -4389,9 +4192,9 @@ end)
 if not ok then warn("[UnlockAll] Hook error:", err) end
 end)
 
--- ============================================================
--- SPOOFER CONFIG
--- ============================================================
+
+
+
 local defaultConfig = {
 victim   = "123456789",
 helper   = "",
@@ -4547,6 +4350,11 @@ rapidFireEnabled = false,
 rapidFireDefaultRate = 25,
 rapidFireSelectedWeapon = "",
 rapidFireRates = {},
+silentAimHitChance = 85,
+silentAimRadius = 150,
+silentAimAutoShoot = false,
+silentAimFireInterval = 0.05,
+noSpreadEnabled = false,
 luaCode = "",
 luaAutoExecute = false
 }
@@ -4942,9 +4750,9 @@ end
 controller.Get=bridge.Wrapper
 environment.__DevKagePlayerDataBridge=bridge
 elseif controller.Get~=bridge.Wrapper then
--- Another script currently owns the outer wrapper. Do not re-wrap it.
--- If that script chained the previous function, DevKage remains inside
--- the chain without creating a circular wrapper dependency.
+
+
+
 bridge.ExternalWrapper=controller.Get
 end
 bridge.Owner=SpooferState
@@ -5221,8 +5029,8 @@ end
 seasonLibrary.FormatSeasonRankCharm=bridge.Wrapper
 environment.__DevKageSeasonRankBridge=bridge
 elseif seasonLibrary.FormatSeasonRankCharm~=bridge.Wrapper then
--- Preserve the outer wrapper installed by another script. Reclaiming it
--- after it captured bridge.Wrapper can form an infinite wrapper cycle.
+
+
 bridge.ExternalWrapper=seasonLibrary.FormatSeasonRankCharm
 end
 SpoofRankRuntime.BridgeOwner=SpoofRankRuntime.BridgeOwner or {}
@@ -5436,9 +5244,9 @@ function SpooferState.SaveAutoLoad(enabled)
 
     local savedConfig=SpooferState.BuildAutoLoadConfig(config)
 
-    -- Live ELO Auto Load has its own persistence file. Do not mirror or
-    -- overwrite it from the full Spoofer Auto Load path; keeping one owner
-    -- removes the startup/config race that could flip ELO autoload on/off.
+
+
+
 
     local payload = {
         Enabled = config.autoLoadSpoofer,
@@ -5560,9 +5368,9 @@ do
         local config=getgenv().__DevKageConfig
         if type(config)~="table" then return end
 
-        -- The dedicated ELO autoload file is authoritative. Named configs may
-        -- contain older ELO/autoload values, but they must not overwrite the
-        -- separately persisted live-ELO choice or value.
+
+
+
         if SpooferState.savedELOAutoLoad ~= true then
             watcher.LastSignature="off"
             return
@@ -5722,7 +5530,7 @@ local function restoreLocalSpoofVisuals(keepPrivacy)
 end
 
 -- Complete avatar loading and attachment helpers shared by live appearances
--- and viewports. Preserve face decals, dynamic-head data, meshes and clothing.
+
 SpooferState.AvatarAssets = {Cache = {}, CacheOrder = {}, Limit = 3, Unloaded = false}
 
 function SpooferState.AvatarAssets.TryMethods(object, names, ...)
@@ -5794,7 +5602,7 @@ function SpooferState.AvatarAssets.LoadModel(userId, rigType)
     end
     if assets.Unloaded then model:Destroy(); return nil, "Avatar loader stopped" end
     if preloadOk and failedAssets == 0 then
-        -- Two yielding requests for the same avatar may finish together.
+
         if assets.Cache[key] then assets.Cache[key]:Destroy() end
         local previous = table.find(assets.CacheOrder, key)
         if previous then table.remove(assets.CacheOrder, previous) end
@@ -5846,8 +5654,8 @@ function SpooferState.AvatarAssets.AttachAccessory(character, humanoid, accessor
             part.Massless, part.LocalTransparencyModifier = true, 0
         end
     end
-    -- A cloned accessory can retain a weld to the temporary template's head.
-    -- Retarget that external endpoint BEFORE the temporary model is destroyed.
+
+
     for _, joint in ipairs(accessory:GetDescendants()) do
         if joint:IsA("JointInstance") or joint:IsA("WeldConstraint") then
             for _, field in ipairs({"Part0", "Part1"}) do
@@ -6061,7 +5869,7 @@ function SpooferState.AvatarAssets.RepairAppearance(character, humanoid, templat
                 faceCopies[#faceCopies + 1] = object:Clone()
             end
         end
-        -- Inspect by class rather than requiring the case-sensitive name "face".
+
         for _, object in ipairs(liveHead:GetChildren()) do
             if object:IsA("Decal") or object:IsA("SpecialMesh") or object:IsA("SurfaceAppearance") or object:IsA("FaceControls") then object:Destroy() end
         end
@@ -6156,8 +5964,8 @@ local function createLocalSpoofVisual(player, userId)
         template:Destroy(); return false, "superseded"
     end
     local applied = false
-    -- A native description request can finish after Stop/Start cancels this job.
-    -- Keep an independent restore copy until that yielding operation finishes.
+
+
     local cancellationBackup = assets.Backup and assets.Backup:Clone()
     if description then
         applied = assets.TryMethods(humanoid,
@@ -7108,7 +6916,7 @@ if avatarUserId and avatarUserId > 0 then
                     warn("[DevKage Avatar] " .. tostring(err))
                 end
             end
-            -- Always release this job, even when an avatar API throws.
+
             if SpooferState.avatarJob == job then
                 SpooferState.avatarApplyBusy, SpooferState.avatarJob = false, nil
             end
@@ -7136,10 +6944,10 @@ if type(SpooferState.RefreshProfileStats) == "function" then
     task.defer(SpooferState.RefreshProfileStats)
 end
 
--- Keep only lightweight local presentation updates during a multi-inject
--- autoexec boot. Persistent module bridges and repeated leaderboard/season
--- refreshes are intentionally deferred until the user interacts with those
--- features after startup.
+
+
+
+
 if not multiInjectBoot then
 do
 local heartbeat=RunService.Heartbeat:Connect(function(deltaTime)
@@ -7288,10 +7096,10 @@ task.defer(function()
     end
 end)
 
--- ============================================================
--- LIVE ELO SYNC AUTO-LOAD
--- Lightweight ELO-only runtime when full Spoofer Auto Load is off.
--- ============================================================
+
+
+
+
 local ELOAutoLoadRuntime = {
     Connection = nil,
     Elapsed = 0,
@@ -7314,8 +7122,8 @@ function ELOAutoLoadRuntime:ApplyOnce(forcePresentation)
     local persistedEnabled = SpooferState.savedELOAutoLoad == true
     if config.eloLiveSyncAutoLoad ~= true and not persistedEnabled then return false end
 
-    -- A named config can load after spoofer_autoload.json. Reassert only the
-    -- dedicated Live ELO auto-load fields that the user explicitly persisted.
+
+
     if persistedEnabled then
         config.eloLiveSyncAutoLoad = true
         if SpooferState.savedELO ~= nil then
@@ -7329,8 +7137,8 @@ function ELOAutoLoadRuntime:ApplyOnce(forcePresentation)
     config.elo = normalizeSpoofELO(config.elo)
     SpooferState.localActive = true
 
-    -- Keep the game's own PlayerDataController view of rating/MMR/ELO in the
-    -- same state as the visible player attributes/leaderstats.
+
+
     pcall(SpooferState.InstallDataBridge)
     pcall(SpooferState.RefreshClientData)
 
@@ -7339,9 +7147,9 @@ function ELOAutoLoadRuntime:ApplyOnce(forcePresentation)
         pcall(applySpoofELOValues, SpooferState.targetPlayer, config.elo)
     end
 
-    -- Use the same existing presentation refreshers as manual Live ELO Sync.
-    -- Profile labels are lightweight enough to refresh every ELO pass; the
-    -- broader leaderboard/season refresh is throttled below.
+
+
+
     if type(SpooferState.RefreshProfileStats) == "function" then
         task.defer(SpooferState.RefreshProfileStats)
     end
@@ -7374,9 +7182,9 @@ function ELOAutoLoadRuntime:SetEnabled(enabled)
     config.eloLiveSync = true
     self:ApplyOnce(true)
 
-    -- Keep this runtime alive even when full Spoofer Auto Load is also enabled.
-    -- That makes the Live ELO autoload toggle independent and prevents an
-    -- auto-execute/multi-inject startup from skipping its heartbeat.
+
+
+
     self.Connection = RunService.Heartbeat:Connect(function(deltaTime)
         local current = getgenv().__DevKageConfig
         if type(current) ~= "table" then return end
@@ -7445,9 +7253,9 @@ task.defer(function()
     end
 end)
 
--- ============================================================
--- WORLD VISUALS STATE
--- ============================================================
+
+
+
 local VisualsState = {
 esp_enabled         = true,
 teamcheck           = false,
@@ -8354,9 +8162,9 @@ function library.ExtraVisualRuntime:RememberViewPart(part)
         self.ViewOriginals[part] = saved
     end
 
-    -- First-person weapons in this game use MeshPart textures,
-    -- SurfaceAppearance and decals.  Save each layer before hiding it so the
-    -- original viewmodel is restored exactly when appearance/chams are off.
+
+
+
     for _, visual in ipairs(part:GetDescendants()) do
         if saved.Visuals[visual] == nil then
             if visual:IsA("Texture") or visual:IsA("Decal") then
@@ -8556,9 +8364,9 @@ function library.ExtraVisualRuntime:RefreshViewmodel()
         end
     end
 
-    -- RIVALS/this game's live first-person weapon models are under
-    -- workspace.ViewModels.FirstPerson.  Scan that hierarchy directly rather
-    -- than assuming the gun is parented to CurrentCamera.
+
+
+
     if firstPerson then
         for _, object in ipairs(firstPerson:GetDescendants()) do
             if object:IsA("BasePart") and object.Name ~= "HumanoidRootPart" then
@@ -8568,8 +8376,8 @@ function library.ExtraVisualRuntime:RefreshViewmodel()
         end
     end
 
-    -- Keep the old camera path as a fallback for games/items that do parent
-    -- their viewmodel to CurrentCamera.
+
+
     if camera then
         for _, object in ipairs(camera:GetDescendants()) do
             if object:IsA("BasePart") and object.Name ~= "HumanoidRootPart" then
@@ -9761,14 +9569,22 @@ colorCorrectionEnabled=false, tintColor=Color3.fromRGB(255,255,255), brightness=
 bloomEnabled=false, bloomIntensity=1, bloomSize=24, bloomThreshold=1,
 sunRaysEnabled=false, sunIntensity=0.1, sunSpread=0.2,
 depthOfFieldEnabled=false, focusDistance=50, focusRadius=10, nearBlur=0, farBlur=0,
-atmosphereEnabled=false, atmosphereProfile="Custom", atmosphereDensity=0.25, atmosphereOffset=0,
-atmosphereColor=Color3.fromRGB(199,199,199), atmosphereDecay=Color3.fromRGB(106,112,125),
-atmosphereGlare=0, atmosphereHaze=0,
-clockTime=getLightingProperty("ClockTime",14), exposure=getLightingProperty("ExposureCompensation",0),
-globalShadows=getLightingProperty("GlobalShadows",true), shadowSoftness=getLightingProperty("ShadowSoftness",0.2),
+atmosphereEnabled=false, atmosphereProfile="Custom", atmosphereDensity=0.30, atmosphereOffset=0.07,
+atmosphereColor=Color3.fromRGB(175,195,225), atmosphereDecay=Color3.fromRGB(85,125,195),
+atmosphereGlare=0.15, atmosphereHaze=0.78,
+atmosphereGlow=nil, atmosphereGlowEnabled=false, atmosphereGlowIntensity=1,
+clockTimeEnabled=false, clockTime=getLightingProperty("ClockTime",14), exposure=getLightingProperty("ExposureCompensation",0),
+globalShadowsEnabled=false, globalShadows=getLightingProperty("GlobalShadows",true), shadowSoftnessEnabled=false, shadowSoftness=getLightingProperty("ShadowSoftness",0.2),
 reflectionQuality=5,
 ambientEnabled=false, ambientColor=getLightingProperty("Ambient",Color3.fromRGB(128,128,128)), ambientStrength=getLightingProperty("Brightness",2),
 blueSkyEnabled=false, blueSkyStrength=1,
+outdoorAmbientEnabled=false, outdoorAmbientColor=getLightingProperty("OutdoorAmbient",Color3.fromRGB(128,128,128)),
+sunColorEnabled=false, sunColor=Color3.fromRGB(255,255,255),
+colorShiftTopEnabled=false, colorShiftTop=getLightingProperty("ColorShift_Top",Color3.fromRGB(0,0,0)),
+colorShiftBottomEnabled=false, colorShiftBottom=getLightingProperty("ColorShift_Bottom",Color3.fromRGB(0,0,0)),
+geographicLatitudeEnabled=false, geographicLatitude=getLightingProperty("GeographicLatitude",41.8),
+environmentDiffuseEnabled=false, environmentDiffuseScale=getLightingProperty("EnvironmentDiffuseScale",1),
+environmentSpecularEnabled=false, environmentSpecularScale=getLightingProperty("EnvironmentSpecularScale",1),
 fogEnabled=false, fogColor=getLightingProperty("FogColor",Color3.fromRGB(192,192,192)), fogDensity=0.35,
 fogStart=0, fogEnd=100000,
 snowEnabled=false, snowAmount=650, snowSpeed=55, snowSize=0.45, snowWind=0,
@@ -9789,6 +9605,7 @@ ColorShift_Top=getLightingProperty("ColorShift_Top",Color3.fromRGB(0,0,0)),
 ColorShift_Bottom=getLightingProperty("ColorShift_Bottom",Color3.fromRGB(0,0,0)),
 Technology=getLightingProperty("Technology",nil),
 ClockTime=getLightingProperty("ClockTime",14),
+GeographicLatitude=getLightingProperty("GeographicLatitude",41.8),
 ExposureCompensation=getLightingProperty("ExposureCompensation",0),
 GlobalShadows=getLightingProperty("GlobalShadows",true),
 ShadowSoftness=getLightingProperty("ShadowSoftness",0.2),
@@ -9871,51 +9688,116 @@ end
 e.Enabled=true; e.FocusDistance=focus; e.InFocusRadius=radius; e.NearIntensity=nearIntensity; e.FarIntensity=farIntensity
 elseif AdvancedLighting.depthOfField then AdvancedLighting.depthOfField.Enabled=false end
 end
-local function setAtmosphere(enabled,density,offset,color,decay,glare,haze)
-local atmosphereOn=enabled==true
-local fogOn=AdvancedLighting.fogEnabled==true
 
--- Atmosphere and classic Fog are separate systems.  Turning Atmosphere OFF now
--- really removes DevKage's Atmosphere object; Fog continues through
--- Lighting.FogColor/FogStart/FogEnd and does not depend on Atmosphere existing.
+
+
+local WorldLightingRuntime=assert(loadstring([======[
+return function(context)
+local LightingService=context.LightingService
+local AdvancedLighting=context.AdvancedLighting
+local getOrCreateEffect=context.GetOrCreateEffect
+local WorldLightingRuntime={Suspended={}}
+
+WorldLightingRuntime.SnapshotMapAtmosphere=function(object)
+local snapshot=WorldLightingRuntime.Suspended[object]
+if snapshot then return snapshot end
+snapshot={
+Parent=object.Parent,
+Density=object.Density,
+Offset=object.Offset,
+Color=object.Color,
+Decay=object.Decay,
+Glare=object.Glare,
+Haze=object.Haze,
+}
+WorldLightingRuntime.Suspended[object]=snapshot
+return snapshot
+end
+
+WorldLightingRuntime.SuspendMapAtmospheres=function()
+for _,object in ipairs(LightingService:GetChildren()) do
+if object:IsA("Atmosphere") and tostring(object.Name)~="DevKage_Atmosphere" then
+WorldLightingRuntime.SnapshotMapAtmosphere(object)
+pcall(function() object.Parent=nil end)
+end
+end
+for object in pairs(WorldLightingRuntime.Suspended) do
+if object and object.Parent==LightingService then
+pcall(function() object.Parent=nil end)
+end
+end
+end
+
+WorldLightingRuntime.RestoreMapAtmospheres=function()
+for object,snapshot in pairs(WorldLightingRuntime.Suspended) do
+pcall(function()
+object.Density=snapshot.Density
+object.Offset=snapshot.Offset
+object.Color=snapshot.Color
+object.Decay=snapshot.Decay
+object.Glare=snapshot.Glare
+object.Haze=snapshot.Haze
+object.Parent=snapshot.Parent or LightingService
+end)
+WorldLightingRuntime.Suspended[object]=nil
+end
+end
+
+WorldLightingRuntime.DestroyDevKageAtmosphere=function()
+local object=AdvancedLighting.atmosphere
+if object then pcall(function() object:Destroy() end) end
+AdvancedLighting.atmosphere=nil
+local glow=AdvancedLighting.atmosphereGlow
+if glow then pcall(function() glow.Enabled=false end) end
+end
+
+WorldLightingRuntime.SetAtmosphereGlow=function(enabled,intensity)
+local glowOn=enabled==true and AdvancedLighting.atmosphereEnabled==true and AdvancedLighting.fogEnabled~=true
+local e=AdvancedLighting.atmosphereGlow
+if glowOn then
+if not e or not e.Parent or not e:IsA("BloomEffect") then
+e=getOrCreateEffect("BloomEffect","DevKage_AtmosphereGlow")
+AdvancedLighting.atmosphereGlow=e
+end
+e.Enabled=true
+e.Intensity=math.clamp(tonumber(intensity) or 1,0,5)
+e.Size=36
+e.Threshold=0.82
+elseif e then
+e.Enabled=false
+end
+end
+
+WorldLightingRuntime.SetAtmosphere=function(enabled,density,offset,color,decay,glare,haze)
+local atmosphereOn=enabled==true and AdvancedLighting.fogEnabled~=true
 if atmosphereOn then
+WorldLightingRuntime.SuspendMapAtmospheres()
 local e=AdvancedLighting.atmosphere
 if not e or not e.Parent or not e:IsA("Atmosphere") then
 e=getOrCreateEffect("Atmosphere","DevKage_Atmosphere")
 AdvancedLighting.atmosphere=e
 end
-
-local baseDensity=math.clamp(tonumber(density) or 0,0,1)
-local baseOffset=math.clamp(tonumber(offset) or 0,-1,1)
-local baseColor=typeof(color)=="Color3" and color or AdvancedLighting.atmosphereColor
-local baseDecay=typeof(decay)=="Color3" and decay or AdvancedLighting.atmosphereDecay
-local baseGlare=math.clamp(tonumber(glare) or 0,0,10)
-local baseHaze=math.clamp(tonumber(haze) or 0,0,10)
-
--- When both are enabled they can visually blend, but Fog never needs this
--- contribution to function by itself.
-if fogOn then
-local fogDensity=math.clamp(tonumber(AdvancedLighting.fogDensity) or 0,0,1)
-local fogCurve=1-math.exp(-6.0*fogDensity)
-baseDensity=math.clamp(baseDensity+(fogCurve*0.22),0,1)
-baseHaze=math.clamp(baseHaze+(fogCurve*1.75),0,10)
-baseOffset=math.clamp(baseOffset-(fogCurve*0.07),-1,1)
-local blend=math.clamp(fogCurve*0.14,0,0.14)
-baseColor=baseColor:Lerp(AdvancedLighting.fogColor,blend)
-baseDecay=baseDecay:Lerp(AdvancedLighting.fogColor,blend*0.50)
+e.Density=math.clamp(tonumber(density) or 0,0,1)
+e.Offset=math.clamp(tonumber(offset) or 0,-1,1)
+e.Color=typeof(color)=="Color3" and color or AdvancedLighting.atmosphereColor
+e.Decay=typeof(decay)=="Color3" and decay or AdvancedLighting.atmosphereDecay
+e.Glare=math.clamp(tonumber(glare) or 0,0,10)
+e.Haze=math.clamp(tonumber(haze) or 0,0,10)
+else
+WorldLightingRuntime.DestroyDevKageAtmosphere()
+if AdvancedLighting.fogEnabled then WorldLightingRuntime.SuspendMapAtmospheres() else WorldLightingRuntime.RestoreMapAtmospheres() end
+end
+WorldLightingRuntime.SetAtmosphereGlow(atmosphereOn and AdvancedLighting.atmosphereGlowEnabled,AdvancedLighting.atmosphereGlowIntensity)
 end
 
-e.Density=baseDensity
-e.Offset=baseOffset
-e.Color=baseColor
-e.Decay=baseDecay
-e.Glare=baseGlare
-e.Haze=baseHaze
-elseif AdvancedLighting.atmosphere then
-pcall(function() AdvancedLighting.atmosphere:Destroy() end)
-AdvancedLighting.atmosphere=nil
+return WorldLightingRuntime
 end
-end
+]======], "@DevKage/WorldAtmosphereRuntime"))()({
+LightingService=LightingService,
+AdvancedLighting=AdvancedLighting,
+GetOrCreateEffect=getOrCreateEffect,
+})
+
 local function setLightingProperty(name,value) pcall(function() LightingService[name]=value end) end
 local function setColorShift(enabled,topColor,bottomColor)
 if enabled then
@@ -9938,10 +9820,11 @@ pcall(sethiddenproperty,LightingService,"Technology",enabled and Enum.Technology
 end
 end
 
-local ReflectionRuntime = {originalQuality=nil}
+local ReflectionRuntime = {originalQuality=nil,active=false}
 local function setReflectionQuality(enabled, quality)
 quality = math.clamp(math.floor((tonumber(quality) or 5)+0.5),1,21)
 if enabled then
+ReflectionRuntime.active=true
 setLightingProperty("EnvironmentSpecularScale", math.clamp(quality/10,0,1))
 setLightingProperty("EnvironmentDiffuseScale", math.clamp(0.35 + quality/16,0,1))
 pcall(function()
@@ -9951,6 +9834,7 @@ local enumName = string.format("Level%02d",quality)
 if Enum.QualityLevel[enumName] then rendering.QualityLevel = Enum.QualityLevel[enumName] end
 end)
 else
+ReflectionRuntime.active=false
 setLightingProperty("EnvironmentSpecularScale",AdvancedLighting.original.EnvironmentSpecularScale)
 setLightingProperty("EnvironmentDiffuseScale",AdvancedLighting.original.EnvironmentDiffuseScale)
 if ReflectionRuntime.originalQuality ~= nil then
@@ -9987,6 +9871,151 @@ if not AdvancedLighting.ambientEnabled then setLightingProperty("OutdoorAmbient"
 end
 end
 
+
+assert(loadstring([======[
+return function(context)
+local WorldLightingRuntime=context.Runtime
+local AdvancedLighting=context.AdvancedLighting
+local VisualsState=context.VisualsState
+local setLightingProperty=context.SetLightingProperty
+local ReflectionRuntime=context.ReflectionRuntime
+local setReflectionQuality=context.SetReflectionQuality
+
+WorldLightingRuntime.BlueSkyTop=function(strength)
+local t=math.clamp((tonumber(strength) or 1)/5,0,1)
+return Color3.fromRGB(80,150,255):Lerp(Color3.fromRGB(165,215,255),t)
+end
+
+WorldLightingRuntime.BlueSkyBottom=function(strength)
+local t=math.clamp((tonumber(strength) or 1)/5,0,1)
+return Color3.fromRGB(15,40,90):Lerp(Color3.fromRGB(70,120,190),t)
+end
+
+WorldLightingRuntime.BlueSkyOutdoor=function(strength)
+local t=math.clamp((tonumber(strength) or 1)/5,0,1)
+return Color3.fromRGB(85,120,175):Lerp(Color3.fromRGB(150,190,235),t)
+end
+
+WorldLightingRuntime.OutdoorBase=function()
+if AdvancedLighting.outdoorAmbientEnabled then return AdvancedLighting.outdoorAmbientColor end
+if AdvancedLighting.ambientEnabled then return AdvancedLighting.ambientColor end
+if AdvancedLighting.blueSkyEnabled then return WorldLightingRuntime.BlueSkyOutdoor(AdvancedLighting.blueSkyStrength) end
+return AdvancedLighting.original.OutdoorAmbient
+end
+
+WorldLightingRuntime.RestoreOutdoor=function()
+setLightingProperty("OutdoorAmbient",WorldLightingRuntime.OutdoorBase())
+end
+
+WorldLightingRuntime.RestoreTopShift=function()
+if AdvancedLighting.sunColorEnabled then
+setLightingProperty("ColorShift_Top",AdvancedLighting.sunColor)
+elseif AdvancedLighting.colorShiftTopEnabled then
+setLightingProperty("ColorShift_Top",AdvancedLighting.colorShiftTop)
+elseif VisualsState.color_shift then
+setLightingProperty("ColorShift_Top",VisualsState.color_shift_top)
+elseif AdvancedLighting.blueSkyEnabled then
+setLightingProperty("ColorShift_Top",WorldLightingRuntime.BlueSkyTop(AdvancedLighting.blueSkyStrength))
+else
+setLightingProperty("ColorShift_Top",AdvancedLighting.original.ColorShift_Top)
+end
+end
+
+WorldLightingRuntime.RestoreBottomShift=function()
+if AdvancedLighting.colorShiftBottomEnabled then
+setLightingProperty("ColorShift_Bottom",AdvancedLighting.colorShiftBottom)
+elseif VisualsState.color_shift then
+setLightingProperty("ColorShift_Bottom",VisualsState.color_shift_bottom)
+elseif AdvancedLighting.blueSkyEnabled then
+setLightingProperty("ColorShift_Bottom",WorldLightingRuntime.BlueSkyBottom(AdvancedLighting.blueSkyStrength))
+else
+setLightingProperty("ColorShift_Bottom",AdvancedLighting.original.ColorShift_Bottom)
+end
+end
+
+WorldLightingRuntime.SetOutdoorAmbient=function(enabled,color)
+if enabled then setLightingProperty("OutdoorAmbient",color)
+else WorldLightingRuntime.RestoreOutdoor() end
+end
+
+WorldLightingRuntime.SetSunColor=function(enabled,color)
+if enabled then
+setLightingProperty("ColorShift_Top",color)
+setLightingProperty("OutdoorAmbient",WorldLightingRuntime.OutdoorBase():Lerp(color,0.55))
+else
+WorldLightingRuntime.RestoreTopShift()
+WorldLightingRuntime.RestoreOutdoor()
+end
+end
+
+WorldLightingRuntime.SetColorShiftTop=function(enabled,color)
+if AdvancedLighting.sunColorEnabled then setLightingProperty("ColorShift_Top",AdvancedLighting.sunColor)
+elseif enabled then setLightingProperty("ColorShift_Top",color)
+else WorldLightingRuntime.RestoreTopShift() end
+end
+
+WorldLightingRuntime.SetColorShiftBottom=function(enabled,color)
+if enabled then setLightingProperty("ColorShift_Bottom",color)
+else WorldLightingRuntime.RestoreBottomShift() end
+end
+
+WorldLightingRuntime.SetGeographicLatitude=function(enabled,value)
+setLightingProperty("GeographicLatitude",enabled and math.clamp(tonumber(value) or 0,-90,90) or AdvancedLighting.original.GeographicLatitude)
+end
+
+WorldLightingRuntime.SetGlobalShadows=function(enabled,value)
+if enabled then setLightingProperty("GlobalShadows",value==true)
+else setLightingProperty("GlobalShadows",AdvancedLighting.original.GlobalShadows) end
+end
+
+WorldLightingRuntime.SetShadowSoftness=function(enabled,value)
+setLightingProperty("ShadowSoftness",enabled and math.clamp(tonumber(value) or 0.2,0,1) or AdvancedLighting.original.ShadowSoftness)
+end
+
+WorldLightingRuntime.SetClockTime=function(enabled,value)
+setLightingProperty("ClockTime",enabled and math.clamp(tonumber(value) or 12,0,24) or AdvancedLighting.original.ClockTime)
+end
+
+WorldLightingRuntime.SetEnvironmentDiffuse=function(enabled,value)
+if enabled then setLightingProperty("EnvironmentDiffuseScale",math.clamp(tonumber(value) or 1,0,1))
+elseif ReflectionRuntime.active then setReflectionQuality(true,AdvancedLighting.reflectionQuality)
+else setLightingProperty("EnvironmentDiffuseScale",AdvancedLighting.original.EnvironmentDiffuseScale) end
+end
+
+WorldLightingRuntime.SetEnvironmentSpecular=function(enabled,value)
+if enabled then setLightingProperty("EnvironmentSpecularScale",math.clamp(tonumber(value) or 1,0,1))
+elseif ReflectionRuntime.active then setReflectionQuality(true,AdvancedLighting.reflectionQuality)
+else setLightingProperty("EnvironmentSpecularScale",AdvancedLighting.original.EnvironmentSpecularScale) end
+end
+
+WorldLightingRuntime.RefreshExtended=function()
+if AdvancedLighting.globalShadowsEnabled then WorldLightingRuntime.SetGlobalShadows(true,AdvancedLighting.globalShadows) end
+if AdvancedLighting.shadowSoftnessEnabled then WorldLightingRuntime.SetShadowSoftness(true,AdvancedLighting.shadowSoftness) end
+if AdvancedLighting.clockTimeEnabled then WorldLightingRuntime.SetClockTime(true,AdvancedLighting.clockTime) end
+if AdvancedLighting.geographicLatitudeEnabled then WorldLightingRuntime.SetGeographicLatitude(true,AdvancedLighting.geographicLatitude) end
+if AdvancedLighting.environmentDiffuseEnabled then WorldLightingRuntime.SetEnvironmentDiffuse(true,AdvancedLighting.environmentDiffuseScale) end
+if AdvancedLighting.environmentSpecularEnabled then WorldLightingRuntime.SetEnvironmentSpecular(true,AdvancedLighting.environmentSpecularScale) end
+if AdvancedLighting.outdoorAmbientEnabled then WorldLightingRuntime.SetOutdoorAmbient(true,AdvancedLighting.outdoorAmbientColor) end
+if AdvancedLighting.sunColorEnabled then
+WorldLightingRuntime.SetSunColor(true,AdvancedLighting.sunColor)
+elseif AdvancedLighting.colorShiftTopEnabled then
+WorldLightingRuntime.SetColorShiftTop(true,AdvancedLighting.colorShiftTop)
+end
+if AdvancedLighting.colorShiftBottomEnabled then WorldLightingRuntime.SetColorShiftBottom(true,AdvancedLighting.colorShiftBottom) end
+end
+
+return WorldLightingRuntime
+end
+]======], "@DevKage/WorldLightingExtensions"))()({
+Runtime=WorldLightingRuntime,
+AdvancedLighting=AdvancedLighting,
+VisualsState=VisualsState,
+SetLightingProperty=setLightingProperty,
+ReflectionRuntime=ReflectionRuntime,
+SetReflectionQuality=setReflectionQuality,
+})
+
+
 local function getCustomFogTargets()
 local configuredStart=math.max(0,tonumber(AdvancedLighting.fogStart) or 0)
 local configuredEnd=math.max(configuredStart+1,tonumber(AdvancedLighting.fogEnd) or 100000)
@@ -9994,9 +10023,9 @@ local density=math.clamp(tonumber(AdvancedLighting.fogDensity) or 0,0,1)
 local effectiveEnd=configuredEnd
 
 if density>0.001 then
--- Classic Fog is now strong enough on its own.  This curve deliberately makes
--- low/mid slider values useful even with Atmosphere OFF:
--- 0.10 ~= 717 studs, 0.15 ~= 552, 0.25 ~= 329, 0.35 ~= 199, 0.50 ~= 99.
+
+
+
 local visibilityDistance=18+(1200*math.exp(-5.4*density))
 effectiveEnd=math.min(configuredEnd,configuredStart+visibilityDistance)
 effectiveEnd=math.max(configuredStart+1,effectiveEnd)
@@ -10007,6 +10036,8 @@ end
 
 local function refreshCustomFog()
 if AdvancedLighting.fogEnabled then
+WorldLightingRuntime.DestroyDevKageAtmosphere()
+WorldLightingRuntime.SuspendMapAtmospheres()
 local configuredStart,effectiveEnd=getCustomFogTargets()
 setLightingProperty("FogColor",AdvancedLighting.fogColor)
 setLightingProperty("FogStart",configuredStart)
@@ -10015,19 +10046,12 @@ else
 setLightingProperty("FogColor",AdvancedLighting.original.FogColor)
 setLightingProperty("FogStart",AdvancedLighting.original.FogStart)
 setLightingProperty("FogEnd",AdvancedLighting.original.FogEnd)
+if AdvancedLighting.atmosphereEnabled then
+WorldLightingRuntime.SetAtmosphere(true,AdvancedLighting.atmosphereDensity,AdvancedLighting.atmosphereOffset,AdvancedLighting.atmosphereColor,AdvancedLighting.atmosphereDecay,AdvancedLighting.atmosphereGlare,AdvancedLighting.atmosphereHaze)
+else
+WorldLightingRuntime.RestoreMapAtmospheres()
 end
-
--- Recompose one DevKage atmosphere layer.  Fog never disables Atmosphere and
--- Atmosphere never disables classic Fog; both contribute to the final image.
-setAtmosphere(
-AdvancedLighting.atmosphereEnabled,
-AdvancedLighting.atmosphereDensity,
-AdvancedLighting.atmosphereOffset,
-AdvancedLighting.atmosphereColor,
-AdvancedLighting.atmosphereDecay,
-AdvancedLighting.atmosphereGlare,
-AdvancedLighting.atmosphereHaze
-)
+end
 end
 
 local SnowRuntime = {folder=nil, layers={}, connection=nil}
@@ -10129,9 +10153,9 @@ end
 end
 
 local PremiumWeatherRuntime={Folder=nil,Layers={},Connection=nil,BuildToken=0,Type=nil,Quality=nil}
--- Every weather type has its own motion, silhouette, density curve and camera
--- origin.  All textures are packaged Roblox resources so the renderer does not
--- depend on a creator-owned asset being permitted by the current experience.
+
+
+
 local PremiumWeatherProfiles={
 Rain={Style="Rain",Texture="rbxasset://textures/particles/sparkles_main.dds",Origin="Above",Rise=false,Speed=1.00,Lifetime=1.12,Size=0.16,Spread=7,Emission=0.22,Transparency=0.02,Acceleration=-22,RateScale=1,Depth=1,Orientation="Velocity",Squash=7.5,Drag=0,Rotation=0,RotSpeed=0,Tint=Color3.fromRGB(185,220,255),TintBlend=0.55},
 Embers={Style="Embers",Texture="rbxasset://textures/particles/fire_main.dds",Origin="Below",Rise=true,Speed=0.30,Lifetime=2.35,Size=0.30,Spread=32,Emission=1,Transparency=0.08,Acceleration=5.5,RateScale=0.30,Depth=9,Orientation="Facing",Squash=-0.12,Drag=1.2,Rotation=180,RotSpeed=115,Tint=Color3.fromRGB(255,92,25),TintBlend=0.78},
@@ -10293,7 +10317,7 @@ Neutral={Tint=Color3.fromRGB(255,255,255),Brightness=0,Contrast=0,Saturation=0,B
 Tint=Color3.fromRGB(226,229,255),Brightness=0.075,Contrast=0.08,Saturation=0.24,
 Bloom=true,BloomIntensity=1.42,BloomSize=48,BloomThreshold=0.55,Exposure=0.18,Clock=nil,
 AtmosphereProfile="DevKage Atmosphere",
-Atmosphere={Density=0.34,Offset=-0.18,Color=Color3.fromRGB(238,244,255),Decay=Color3.fromRGB(177,151,238),Glare=0.22,Haze=2.45},
+Atmosphere={Density=0.30,Offset=0.07,Color=Color3.fromRGB(175,195,225),Decay=Color3.fromRGB(85,125,195),Glare=0.15,Haze=0.78},
 SunRays={Intensity=0.075,Spread=0.86},
 Ambient={Color=Color3.fromRGB(118,116,168),Outdoor=Color3.fromRGB(165,172,225),Strength=2.70},
 DepthOfField={FocusDistance=80,InFocusRadius=55,NearIntensity=0,FarIntensity=0.055},
@@ -10329,11 +10353,13 @@ setBloom(AdvancedLighting.bloomEnabled,AdvancedLighting.bloomIntensity,AdvancedL
 setLightingProperty("ExposureCompensation",AdvancedLighting.exposure)
 if profile.Clock~=nil then setLightingProperty("ClockTime",AdvancedLighting.clockTime) end
 
--- DevKage Worlds is a complete authored lighting look.  Optional profile fields
--- below deliberately compose with the existing Fog system instead of disabling
--- it, so Fog/Atmosphere/Bloom/DOF/SunRays can all remain active together.
+
+
+
 if profile.Atmosphere then
 local a=profile.Atmosphere
+AdvancedLighting.fogEnabled=false
+if LightingControls and LightingControls.fogEnabled then LightingControls.fogEnabled:Set(false,true) end
 AdvancedLighting.atmosphereEnabled=true
 AdvancedLighting.atmosphereProfile=profile.AtmosphereProfile or "Custom"
 AdvancedLighting.atmosphereDensity=a.Density
@@ -10342,7 +10368,7 @@ AdvancedLighting.atmosphereColor=a.Color
 AdvancedLighting.atmosphereDecay=a.Decay
 AdvancedLighting.atmosphereGlare=a.Glare
 AdvancedLighting.atmosphereHaze=a.Haze
-setAtmosphere(true,a.Density,a.Offset,a.Color,a.Decay,a.Glare,a.Haze)
+WorldLightingRuntime.SetAtmosphere(true,a.Density,a.Offset,a.Color,a.Decay,a.Glare,a.Haze)
 end
 if profile.SunRays then
 AdvancedLighting.sunRaysEnabled=true
@@ -10388,10 +10414,10 @@ end
 end
 end
 
--- DEVKAGE ANTI-AIM V3: integrated replacement for the supplied v3 system.
--- All controls are saved with named configs; default master toggle is off.
--- API references: https://create.roblox.com/docs/reference/engine/classes/RunService
--- https://create.roblox.com/docs/reference/engine/classes/Humanoid
+
+
+
+
 local AntiAimState = {
     schema_version = 3,
     enabled = false,
@@ -10533,8 +10559,8 @@ AntiAimState.core = {
     PascalFields = {["Enabled"] = "enabled", ["YawMode"] = "yaw_mode", ["PitchMode"] = "pitch_mode", ["Preset"] = "preset", ["StaticYawOffset"] = "static_yaw_offset", ["PitchDown"] = "pitch_down", ["PitchUp"] = "pitch_up", ["PitchZero"] = "pitch_zero", ["PitchJitterRange"] = "pitch_jitter_range", ["PitchJitterSpeed"] = "pitch_jitter_speed", ["PitchDownOverride"] = "pitch_down_override", ["PitchUpOverride"] = "pitch_up_override", ["JitterRange"] = "jitter_range", ["JitterSpeed"] = "jitter_speed", ["Jitter180Base"] = "jitter_180_base", ["Jitter180Range"] = "jitter_180_range", ["Jitter180Speed"] = "jitter_180_speed", ["MicroJitterRange"] = "micro_jitter_range", ["MicroJitterSpeed"] = "micro_jitter_speed", ["JitterSafeBase"] = "safe_jitter_base", ["JitterSafeRange"] = "safe_jitter_range", ["JitterSafeSpeed"] = "safe_jitter_speed", ["SpinSpeed"] = "spin_speed", ["OffsetSpinSpeed"] = "offset_spin_speed", ["OffsetSpinPitch"] = "offset_spin_pitch", ["SwayAmplitude"] = "sway_range", ["SwayFrequency"] = "sway_speed", ["RandomInterval"] = "random_interval", ["RandomRange"] = "random_range", ["FreestandBase"] = "freestand_base", ["FreestandFlipAngle"] = "freestand_flip_angle", ["VelocitySnapEnabled"] = "velocity_snap_enabled", ["VelocityThreshold"] = "velocity_threshold", ["VelocitySnapMode"] = "velocity_slow_mode", ["VelocityMoveMode"] = "velocity_move_mode", ["OppositeStrafeOffset"] = "opposite_strafe_offset", ["DesyncEnabled"] = "desync_enabled", ["DesyncDelta"] = "desync_delta", ["DesyncAlternate"] = "desync_alternate", ["FakeLagEnabled"] = "fake_lag_enabled", ["FakeLagInterval"] = "fake_lag_interval", ["SmoothEnabled"] = "smooth_enabled", ["SmoothSpeed"] = "smooth_speed", ["BodyOnlyMode"] = "body_only_mode", ["ToggleKey"] = "toggle_key", ["YawCycleKey"] = "yaw_cycle_key", ["PitchCycleKey"] = "pitch_cycle_key", ["PresetCycleKey"] = "preset_cycle_key", ["FreestandKey"] = "freestand_key"},
 }
 
--- Runtime and configuration are kept separate so saved profiles never contain
--- connections, render bindings, character references, or animation clocks.
+
+
 do
     local core = AntiAimState.core
     core.PersistentKeys = {}
@@ -10578,7 +10604,7 @@ function AntiAimState.Normalize()
     AntiAimState.pitch_mode = AntiAimState.CanonicalMode(AntiAimState.pitch_mode, core.PitchModes, core.PitchAliases, "Down")
     AntiAimState.velocity_slow_mode = AntiAimState.CanonicalMode(AntiAimState.velocity_slow_mode, core.VelocityModes, core.YawAliases, "Safe Jitter")
     AntiAimState.velocity_move_mode = AntiAimState.CanonicalMode(AntiAimState.velocity_move_mode, core.VelocityModes, core.YawAliases, "Jitter")
-    -- A velocity submode must never recurse into the velocity resolver.
+
     if AntiAimState.velocity_slow_mode == "Velocity Snap" then AntiAimState.velocity_slow_mode = "Safe Jitter" end
     if AntiAimState.velocity_move_mode == "Velocity Snap" then AntiAimState.velocity_move_mode = "Jitter" end
     if not table.find(core.YawBases, AntiAimState.yaw_base) then AntiAimState.yaw_base = "Camera" end
@@ -10664,7 +10690,7 @@ function AntiAimState.Import(source, legacy)
             values.smooth_enabled = (tonumber(source.yaw_smoothing) or 0) > 0
             values.smooth_speed = math.max(0.1, tonumber(source.yaw_smoothing) or 18)
         end
-        -- Retired additive jitter/spin settings are translated into v3 modes.
+
         if source.spin_speed and tonumber(source.spin_speed) ~= 0 and values.yaw_mode ~= "Offset Spin" then
             values.yaw_mode = "Spin"
         elseif (tonumber(source.jitter_angle) or 0) > 0 or source.jitter == true or legacy.aa_jitter == true then
@@ -10673,8 +10699,8 @@ function AntiAimState.Import(source, legacy)
         end
         if oldPitch == "Look Up" then values.pitch_up = -70 end
         if oldPitch == "Look Down" then values.pitch_down = 70 end
-        -- Old profiles rotated the neck and did not include these new effects.
-        -- PascalCase CFG imports instead retain the supplied v3 defaults.
+
+
         if source.Enabled == nil and source.YawMode == nil then
             if source.body_only_mode == nil then values.body_only_mode = false end
             if source.desync_enabled == nil then values.desync_enabled = false end
@@ -10722,8 +10748,8 @@ end
 
 function AntiAimState.RestorePose(character, release)
     local runtime = AntiAimState.core.Runtime
-    -- Restoration must invalidate the cached pose before property signals fire.
-    -- Otherwise our own priority listener can undo a restore during a rig swap.
+
+
     runtime.desiredRotation, runtime.desiredPitch, runtime.desiredRoll = nil, nil, nil
     for humanoid, original in pairs(runtime.savedHumanoids) do
         if not character or humanoid.Parent == character then
@@ -10740,8 +10766,8 @@ function AntiAimState.RestorePose(character, release)
     for root, originalRotation in pairs(runtime.savedRoots) do
         if not character or root.Parent == character then
             if root.Parent and not root.Anchored then
-                -- Restore orientation at the CURRENT position; never teleport
-                -- back to the position where the feature was enabled.
+
+
                 pcall(function() root.CFrame = CFrame.new(root.Position) * originalRotation end)
             end
             if release then runtime.savedRoots[root] = nil end
@@ -10774,7 +10800,7 @@ function AntiAimState.BindCharacter(character, root, humanoid)
     if not character or not character.Parent then return false end
     humanoid = humanoid or character:FindFirstChildOfClass("Humanoid")
     root = root or character:FindFirstChild("HumanoidRootPart")
-    -- Render callbacks never yield while a respawn is still assembling.
+
     if not humanoid or not root or humanoid.Health <= 0 then return false end
     if runtime.character == character and runtime.humanoid == humanoid and runtime.root == root
         and runtime.playerCharacter == LocalPlayer.Character then return true end
@@ -10797,7 +10823,7 @@ function AntiAimState.BindCharacter(character, root, humanoid)
             local now = os.clock()
             if now - runtime.lastDamageFlip >= AntiAimState.Number("freestand_hit_cooldown") then
                 runtime.lastDamageFlip = now
-                -- Health changes reveal a hit, not an attack direction.
+
                 AntiAimState.freestand_direction = AntiAimState.freestand_direction == "Right" and "Left" or "Right"
                 AntiAimState.SyncControls()
             end
@@ -10929,7 +10955,7 @@ function AntiAimState.ComputeAngles(dt, elapsed, baseYaw, root, humanoid)
     elseif yawMode == "Freestanding" then
         yaw = n("freestand_base") + n("freestand_flip_angle") * (AntiAimState.freestand_direction == "Right" and 1 or -1)
     elseif yawMode == "Opposite Strafe" then
-        -- Resolve left/right in the selected yaw base, not from world-Z signs.
+
         local direction = humanoid.MoveDirection
         local lateral = direction.X * math.cos(baseYaw) - direction.Z * math.sin(baseYaw)
         if math.abs(lateral) > 0.01 then yaw = 180 + n("opposite_strafe_offset") * (lateral > 0 and -1 or 1) end
@@ -10979,7 +11005,7 @@ function AntiAimState.Step(dt)
     local playerCharacter = LocalPlayer.Character
     local character, resolvedRoot, resolvedHumanoid = AntiAimState.ResolveCharacter()
     if runtime.initialCharacter and runtime.initialCharacter ~= playerCharacter and not AntiAimState.respawn_reapply then
-        -- Disabling on the first replacement keeps the toggle and runtime honest.
+
         if core.Apply then core.Apply(false) end
         return
     end
@@ -11013,8 +11039,8 @@ function AntiAimState.Step(dt)
     runtime.smoothYaw = AntiAimState.LerpAngle(runtime.smoothYaw or desiredYaw, desiredYaw, alpha)
     runtime.smoothPitch = (runtime.smoothPitch or pitch) + (pitch - (runtime.smoothPitch or pitch)) * alpha
     runtime.smoothRoll = (runtime.smoothRoll or roll) + (roll - (runtime.smoothRoll or roll)) * alpha
-    -- The clock and smooth/spin motion advance EVERY frame. Throttling only
-    -- controls CFrame writes, so Fake Lag does not slow down degrees/second.
+
+
     if AntiAimState.fake_lag_enabled and runtime.lastPush and runtime.elapsed - runtime.lastPush + 0.0000001 < n("fake_lag_interval") then
         AntiAimState.UpdateStatus(false)
         return
@@ -11027,8 +11053,8 @@ function AntiAimState.Step(dt)
         end
     end
     local appliedPitch, appliedRoll = runtime.smoothPitch, runtime.smoothRoll
-    -- This is a client-side yaw offset effect; no network packets are spoofed.
-    -- Only the final orientation is written, once per permitted update.
+
+
     runtime.desiredRotation = AntiAimState.body_only_mode
         and CFrame.fromEulerAnglesYXZ(-math.rad(appliedPitch), appliedYaw, math.rad(appliedRoll))
         or CFrame.Angles(0, appliedYaw, 0)
@@ -11063,7 +11089,7 @@ local function aa_apply(enabled)
             if generation ~= runtime.generation then return end
             if not AntiAimState.respawn_reapply and runtime.initialCharacter then aa_apply(false); return end
             runtime.initialCharacter = character
-            -- Step retries without yielding until both Humanoid and root exist.
+
         end)
         local ok, bindError = pcall(function()
             RunService:BindToRenderStep(runtime.bindName, math.floor(AntiAimState.Number("render_priority")), function(dt)
@@ -11106,9 +11132,9 @@ library.CleanupCallbacks[#library.CleanupCallbacks + 1] = function()
     end
 end
 
--- Match integration is grounded in the supplied Instance script:
--- PlayerScripts.Controllers.FighterController.LocalFighter.Entity.RootPart.
--- No remote payload formats or server-side rotation APIs are guessed.
+
+
+
 function AntiAimState.RefreshMatchController()
     local core = AntiAimState.core
     if not AntiAimState.use_match_character or core.Unloaded then return end
@@ -11179,9 +11205,9 @@ function AntiAimState.RegisterPoseTargets(character, root, humanoid)
         if not AntiAimState.override_other_anti_aim then return end
         local function repair()
             if generation ~= runtime.generation or not AntiAimState.enabled or runtime.enforcing then return end
-            -- Compare orientation before writing: a position update is allowed.
-            -- This also prevents a deferred notification from our OWN write
-            -- from recursively scheduling another write.
+
+
+
             local ok, err = pcall(AntiAimState.WritePose, true)
             if not ok then AntiAimState.core.lastError = tostring(err) end
         end
@@ -11193,8 +11219,8 @@ function AntiAimState.RegisterPoseTargets(character, root, humanoid)
         end
     end
     addTarget(character, root, humanoid)
-    -- The supplied second script also writes LocalPlayer.Character on
-    -- Heartbeat. Cover both roots when a match controller uses a distinct rig.
+
+
     local localCharacter = LocalPlayer.Character
     if localCharacter and localCharacter ~= character then
         addTarget(localCharacter, localCharacter:FindFirstChild("HumanoidRootPart"),
@@ -11983,11 +12009,11 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_12.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_19.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOLOAD_ENABLED_FILE = CONFIG_FOLDER .. "/_devkage_autoload_enabled.flag"
 local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_AutoLoad_LAST.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.13-match-avatar-20260902"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.19-six-second-skybox-20260906"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -12019,7 +12045,7 @@ return false,tostring(err)
 end
 end
 
--- Some executors create intermediate workspace folders on writefile().
+
 if type(writefile) == "function" then return true end
 return false,"This executor cannot create config folders"
 end
@@ -12073,11 +12099,11 @@ end
 return output
 end
 
--- REGISTER-SAFE CONFIG HELPERS
--- These helpers intentionally live on getgenv() instead of as persistent locals.
--- DevKage's packaged source is close to Luau's per-function local-register ceiling,
--- so keeping helper names out of the giant outer chunk prevents executor compile failures.
--- Behavior is unchanged: named configs still capture and replay flagged controls.
+
+
+
+
+
 getgenv().__DevKageSerialiseControlValues = function()
 local output = {}
 for flag, control in pairs(library.Controls or {}) do
@@ -12369,8 +12395,8 @@ if type(data.keybinds) == "table" then
     end
 end
 if type(data.controlValues) == "table" and getgenv then
-    -- Named config auto-load happens before every UI control exists. Hold the
-    -- flagged values until the UI has finished constructing, then apply them.
+
+
     getgenv().__DevKagePendingControlValues = data.controlValues
 end
 
@@ -12453,7 +12479,7 @@ if data.fov_changer          ~= nil then VisualsState.fov_changer          = dat
 if data.fov_value            ~= nil then VisualsState.fov_value            = data.fov_value            end
 if data.fog_remove           ~= nil then VisualsState.fog_remove           = data.fog_remove           end
 
--- Anti-aim aliases were migrated above, with modern settings taking precedence.
+
 
 return true, data
 end
@@ -12534,34 +12560,45 @@ return true
 end
 end
 
--- Some executors create the path automatically on writefile().
+
 return type(writefile) == "function"
 end
 
--- AUTO LOAD FIX (reference-compatible)
---
--- The reference build writes the currently executing DevKage source directly to
--- the payload file and lets the executor autoexec/teleport queue read that file
--- on the next boot.  Keep that behavior here.  The old v15 build-marker files
--- are still accepted for compatibility, but they are no longer a hard gate that
--- can prevent a perfectly valid current payload from starting.
---
--- This section intentionally does not touch named-config serialization, feature
--- state, UI controls, Spoofer auto-load, or any runtime outside script auto-load.
+
+
+
+
+
+
+
+
+
+
+local SCRIPT_AUTOLOAD_MARKER_PREFIX = "-- DEVKAGE_AUTOLOAD_BUILD:"
+
+local function script_autoload_payload_build(source)
+    if type(source) ~= "string"
+        or source:sub(1, #SCRIPT_AUTOLOAD_MARKER_PREFIX) ~= SCRIPT_AUTOLOAD_MARKER_PREFIX then
+        return nil
+    end
+
+    local newline = source:find("\n", 1, true)
+    if not newline then return nil end
+    return source:sub(#SCRIPT_AUTOLOAD_MARKER_PREFIX + 1, newline - 1)
+end
+
 local function normalize_script_autoload_source(source)
     if type(source) ~= "string" or source == "" then
         return nil
     end
 
-    -- v15 previously stored a first-line build marker in the payload.  Strip it
-    -- when using an old payload as the embedded source so future saves use the
-    -- same raw-source format as the supplied reference autoload implementation.
-    local markerPrefix = "-- DEVKAGE_AUTOLOAD_BUILD:"
-    if source:sub(1, #markerPrefix) == markerPrefix then
+
+
+
+    if source:sub(1, #SCRIPT_AUTOLOAD_MARKER_PREFIX) == SCRIPT_AUTOLOAD_MARKER_PREFIX then
         local newline = source:find("\n", 1, true)
-        if newline then
-            source = source:sub(newline + 1)
-        end
+        if not newline then return nil end
+        source = source:sub(newline + 1)
     end
 
     if source == "" then
@@ -12590,9 +12627,9 @@ task.spawn(function()
             return
         end
 
-        -- Prefer the normal JSON setting. If that file was truncated/corrupted by
-        -- an interrupted executor write, fall back to the dedicated Auto Load
-        -- marker instead of silently disabling DevKage forever.
+
+
+
         local autoLoadEnabled = nil
         local settingsOk, rawSettings = pcall(readfile, SETTINGS_FILE)
         if settingsOk and type(rawSettings) == "string" and rawSettings ~= "" then
@@ -12625,10 +12662,10 @@ task.spawn(function()
             end
         end
 
-        -- Auto-execute can run before Roblox has finished creating the client
-        -- objects that DevKage stores in locals during startup.  Do not use an
-        -- arbitrary timeout here: if LocalPlayer/PlayerGui/CurrentCamera are nil
-        -- when the payload starts, those locals stay nil and later features fail.
+
+
+
+
         if not game:IsLoaded() then
             game.Loaded:Wait()
         end
@@ -12647,12 +12684,12 @@ task.spawn(function()
             task.wait(0.1)
         end
 
-        -- LATE-BOOT AUTOEXEC COEXISTENCE (v5.2.3)
-        --
-        -- queue_on_teleport can run before an executor starts its native Auto
-        -- Execute folder.  DevKage must deliberately be the late script so it
-        -- cannot initialize hooks/input/UI while another Auto Execute script or
-        -- the match's own controllers are still booting.
+
+
+
+
+
+
         local playerScripts = localPlayer:FindFirstChild("PlayerScripts")
         if not playerScripts then
             playerScripts = localPlayer:WaitForChild("PlayerScripts", 10)
@@ -12664,18 +12701,18 @@ task.spawn(function()
         Workspace:WaitForChild("ViewModels", 8)
 
         env.__DEVKAGE_LATE_BOOT_WAITING = true
-        local lateDelay = tonumber(rawget(env, "__DEVKAGE_LATE_BOOT_DELAY")) or 13.8
+        local lateDelay = tonumber(rawget(env, "__DEVKAGE_LATE_BOOT_DELAY")) or 6
         if lateDelay < 5 then lateDelay = 5 end
         task.wait(lateDelay)
         env.__DEVKAGE_LATE_BOOT_WAITING = nil
 
-        -- Claim the job only AFTER the grace window.  Until this point DevKage
-        -- owns nothing and the executor/game/other scripts are free to finish.
+
+
         local jobKey = tostring(game.PlaceId) .. ":" .. tostring(game.JobId)
 
-        -- A previous interrupted boot can leave the in-progress flag behind.
-        -- Only honor a fresh lock from this same build; stale or older-build
-        -- locks are cleared so Auto Load can recover on its own.
+
+
+
         if env.__DEVKAGE_AUTO_STARTING_JOB == jobKey then
             local lockBuild = env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD
             local lockAt = tonumber(env.__DEVKAGE_AUTO_STARTING_AT) or 0
@@ -12697,13 +12734,13 @@ task.spawn(function()
         env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = BUILD_LABEL
         env.__DEVKAGE_AUTO_STARTING_AT = os.clock()
 
-        -- Match the supplied reference behavior: give the game and executor a
-        -- short startup window, then read the payload again immediately before
-        -- compiling it.  This avoids holding a stale copy captured at autoexec.
-        task.wait(2.5)
 
-        -- Retry a few times because some executor file APIs briefly expose a
-        -- loader before the freshly-written payload becomes readable.
+
+
+        task.wait()
+
+
+
         local payloadOk, source = false, nil
         for _ = 1, 5 do
             local readOk, candidate = pcall(readfile, PAYLOAD_FILE)
@@ -12720,18 +12757,25 @@ task.spawn(function()
             return
         end
 
-        -- Backward compatibility for payloads produced by the older v15 marker
-        -- format.  The marker is only a comment for compilation, but it must not
-        -- become part of __DEVKAGE_EMBEDDED_SOURCE or get duplicated on resave.
-        local embeddedSource = source
+
+
+
         local markerPrefix = "-- DEVKAGE_AUTOLOAD_BUILD:"
-        if embeddedSource:sub(1, #markerPrefix) == markerPrefix then
-            local newline = embeddedSource:find("\n", 1, true)
-            if newline then
-                embeddedSource = embeddedSource:sub(newline + 1)
-            end
+        local newline = source:find("\n", 1, true)
+        local payloadBuild = nil
+        if newline and source:sub(1, #markerPrefix) == markerPrefix then
+            payloadBuild = source:sub(#markerPrefix + 1, newline - 1)
         end
 
+        if payloadBuild ~= BUILD_LABEL then
+            env.__DEVKAGE_AUTO_STARTING_JOB = nil
+            env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+            env.__DEVKAGE_AUTO_STARTING_AT = nil
+            warn("[DevKage AutoLoad] Refused stale payload: " .. tostring(payloadBuild or "unversioned"))
+            return
+        end
+
+        local embeddedSource = source:sub(newline + 1)
         if embeddedSource == "" then
             env.__DEVKAGE_AUTO_STARTING_JOB = nil
             env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
@@ -12765,9 +12809,9 @@ task.spawn(function()
             error(runError)
         end
 
-        -- Mark the job complete only after the payload actually ran.  This keeps
-        -- a failed compile/runtime from permanently blocking a retry in the same
-        -- server session.
+
+
+
         env.__DEVKAGE_AUTO_STARTED_JOB = jobKey
         env.__DEVKAGE_AUTOLOADED_BUILD = BUILD_LABEL
         env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
@@ -12822,20 +12866,20 @@ if type(writefile) ~= "function" then return false, {} end
 local installed = {}
 local seen = {}
 
--- CURRENT-ONLY AUTOEXEC CLEANUP
---
--- Older DevKage builds all used the same payload and loader name.  If a user
--- had more than one full DevKage build in an executor's Auto Execute folder,
--- those copies could race each other and an older one could rewrite the shared
--- payload after the current build had already refreshed it.  Clean only files
--- inside known autoexec folders that identify themselves as DevKage and do not
--- contain this build's unique label.  Unrelated executor scripts are untouched.
+
+
+
+
+
+
+
+
 local function cleanLegacyDevKageAutoexec(folder)
-    -- COEXISTENCE SAFETY (v5.2.3)
-    -- Never enumerate, inspect, or delete sibling executor Auto Execute files.
-    -- Another script may legitimately share this folder, and DevKage must not
-    -- decide ownership based on source-text matches.  The canonical DevKage
-    -- loader is replaced in-place by writefile() below; nothing else is touched.
+
+
+
+
+
     return true
 end
 
@@ -12846,8 +12890,8 @@ seen[folder] = true
 if not ensure_autoexec_folder(folder) then return end
 cleanLegacyDevKageAutoexec(folder)
 
--- Remove only DevKage's previous exact canonical loader.  This is not a
--- sibling scan and cannot touch the user's other Auto Execute scripts.
+
+
 if type(delfile) == "function" then
     local legacyPath = folder .. "/DevKage_AutoLoad.lua"
     local deleteLegacy = true
@@ -12865,18 +12909,18 @@ installed[#installed+1] = path
 end
 end
 
--- Prefer exactly one executor folder that already exists.  Writing the same
--- loader into every capitalization/alias can make some executors run DevKage
--- multiple times during the same teleport.
+
+
+
 for _, folder in ipairs(existing_autoexec_folders()) do
     tryWrite(folder)
     if #installed > 0 then break end
 end
 
--- If the executor does not expose its Auto Execute folder through isfolder(),
--- still install one canonical cold-start loader. A working teleport queue only
--- covers teleports in the current client; it must not suppress persistent
--- executor Auto Execute installation.
+
+
+
+
 if #installed == 0 then
     for _, folder in ipairs(AUTOEXEC_FOLDERS) do
         tryWrite(folder)
@@ -12905,18 +12949,18 @@ local function configure_script_autoload(enabled, bootRefresh)
 local settings = read_script_settings()
 enabled = enabled == true
 
--- Follow the supplied reference implementation here: persist the user's choice
--- first.  If a manual enable cannot be installed, roll it back below.  During a
--- boot refresh, leave the saved setting enabled so a later compatible executor
--- startup can retry instead of silently forgetting the user's choice.
+
+
+
+
 settings.AutoLoad = enabled
 local saved, saveError = write_script_settings(settings)
 if not saved then
     return false, saveError
 end
 
--- Keep a tiny independent enable marker so a partially-written/corrupt JSON
--- settings file cannot randomly kill Auto Load on the next executor launch.
+
+
 if enabled and type(writefile) == "function" then
     pcall(writefile, SCRIPT_AUTOLOAD_ENABLED_FILE, SCRIPT_AUTOLOAD_BUILD)
 elseif not enabled and type(delfile) == "function" then
@@ -12938,6 +12982,10 @@ if not enabled then
     if type(delfile) == "function" then
         for _, path in ipairs({
             SCRIPT_PAYLOAD_FILE,
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_18.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_17.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_16.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_12.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_11.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_10.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_9.lua",
@@ -12970,21 +13018,21 @@ end
 local env = (type(getgenv) == "function" and getgenv()) or _G
 local source = normalize_script_autoload_source(env.__DEVKAGE_EMBEDDED_SOURCE)
 
--- Reference-compatible fallback: if the current packaged source is not exposed
--- by the executor environment, reuse the already-saved payload rather than
--- immediately breaking Auto Load.  Old marker-prefixed v15 payloads are safely
--- normalized by normalize_script_autoload_source().
+
+
+
+
 if not source and type(readfile) == "function" then
     if type(isfile) ~= "function" then
         local ok, existing = pcall(readfile, SCRIPT_PAYLOAD_FILE)
-        if ok then
+        if ok and script_autoload_payload_build(existing) == SCRIPT_AUTOLOAD_BUILD then
             source = normalize_script_autoload_source(existing)
         end
     else
         local checked, exists = pcall(isfile, SCRIPT_PAYLOAD_FILE)
         if not checked or exists == true then
             local ok, existing = pcall(readfile, SCRIPT_PAYLOAD_FILE)
-            if ok then
+            if ok and script_autoload_payload_build(existing) == SCRIPT_AUTOLOAD_BUILD then
                 source = normalize_script_autoload_source(existing)
             end
         end
@@ -13007,20 +13055,25 @@ if not folderOk then
     return false, folderError
 end
 
--- Save the raw current source, matching the known-working reference file.  This
--- is the full embedded DevKage program, so every feature/config path remains in
--- the payload rather than trying to reconstruct a partial script at boot.
-local payloadOk, payloadErr = pcall(writefile, SCRIPT_PAYLOAD_FILE, source)
+
+
+
+local payloadSource = SCRIPT_AUTOLOAD_MARKER_PREFIX .. SCRIPT_AUTOLOAD_BUILD .. "\n" .. source
+local payloadOk, payloadErr = pcall(writefile, SCRIPT_PAYLOAD_FILE, payloadSource)
 if not payloadOk then
     rollback_manual_enable()
     return false, tostring(payloadErr)
 end
 
--- Current-build migration bridge. Keep every known older DevKage payload
--- filename synchronized to THIS source.  A stale installed loader can therefore
--- only resolve to the current v5.2.12 source instead of resurrecting an older
--- UI/build.
+
+
+
+
 for _, legacyName in ipairs({
+    "_devkage_autoload_payload_v5_2_18.lua",
+    "_devkage_autoload_payload_v5_2_17.lua",
+    "_devkage_autoload_payload_v5_2_16.lua",
+    "_devkage_autoload_payload_v5_2_12.lua",
     "_devkage_autoload_payload_v5_2_11.lua",
     "_devkage_autoload_payload_v5_2_10.lua",
     "_devkage_autoload_payload_v5_2_9.lua",
@@ -13029,16 +13082,16 @@ for _, legacyName in ipairs({
     "_devkage_autoload_payload_v5_2_6.lua",
     "_devkage_autoload_payload_v5_2_3.lua",
 }) do
-    pcall(writefile, CONFIG_FOLDER .. "/" .. legacyName, source)
+    pcall(writefile, CONFIG_FOLDER .. "/" .. legacyName, payloadSource)
 end
 
--- Verify the canonical payload immediately. A few executor file systems can
--- report a successful write before the file is actually readable.
+
+
 if type(readfile) == "function" then
     local verified = false
     for _ = 1, 4 do
         local readOk, savedSource = pcall(readfile, SCRIPT_PAYLOAD_FILE)
-        if readOk and type(savedSource) == "string" and #savedSource == #source then
+        if readOk and savedSource == payloadSource then
             verified = true
             break
         end
@@ -13050,16 +13103,15 @@ if type(readfile) == "function" then
     end
 end
 
--- Keep the old shared payload fresh as a compatibility redirect.  Very old
--- DevKage stubs require the v15 first-line marker and build file; newer legacy
--- stubs strip that marker before compiling.  Writing the CURRENT source here
--- means either kind of stale queued loader still resolves to this newest build.
-local legacyPayload = "-- DEVKAGE_AUTOLOAD_BUILD:DevKage-v15-reference-cursor-rapidfire-current\n" .. source
-pcall(writefile, CONFIG_FOLDER .. "/_devkage_autoload_payload.lua", legacyPayload)
-pcall(writefile, SCRIPT_BUILD_FILE, "DevKage-v15-reference-cursor-rapidfire-current")
 
--- Record the unique current build separately for diagnostics/current-only
--- ownership.  This file is not required for execution.
+
+
+
+pcall(writefile, CONFIG_FOLDER .. "/_devkage_autoload_payload.lua", payloadSource)
+pcall(writefile, SCRIPT_BUILD_FILE, SCRIPT_AUTOLOAD_BUILD)
+
+
+
 pcall(writefile, CONFIG_FOLDER .. "/_devkage_autoload_current.txt", SCRIPT_AUTOLOAD_BUILD)
 
 local stub = build_script_autoload_stub()
@@ -13092,8 +13144,8 @@ end
 local _script_boot_settings = read_script_settings()
 
 if _script_boot_settings.AutoLoad == true then
-    -- The reference file defers the refresh so normal DevKage initialization is
-    -- not blocked by folder probing, file writes, or a teleport-queue provider.
+
+
     task.spawn(function()
         local ok, err = configure_script_autoload(true, true)
         if not ok then
@@ -13111,9 +13163,9 @@ if _autoload_target and _autoload_target ~= "" then
 pcall(load_config_file, _autoload_target)
 end
 
--- The named config system and Live ELO Auto Load are separate. If Live ELO
--- was explicitly persisted, restore those ELO-only fields after the named
--- config has finished loading and restart its dedicated sync runtime.
+
+
+
 do
 local config = getgenv().__DevKageConfig
 if type(config) == "table" then
@@ -15476,11 +15528,11 @@ if ok and tonumber(value) then return math.max(0,tonumber(value)) end
 return 0
 end
 
--- Streamer HUD owns its rainbow-strip constructor locally.  Do not rely on the
--- earlier keybind helper's lexical scope: some executor compilers close that
--- helper with the keybind block, which made Ensure() call nil and stopped the
--- remaining tabs from being constructed.  The appearance is intentionally the
--- same as DevKage's main/keybind top strip.
+
+
+
+
+
 local function streamerBindRainbowBar(parent,zindex)
 if not parent then return nil end
 local holder=Instance.new("Frame")
@@ -15548,8 +15600,8 @@ stroke.Transparency=1
 stroke.Thickness=1
 stroke.Parent=root
 
--- Use the exact DevKage top rainbow strip helper used by the keybind overlay.
--- This keeps the HUD tied to Theme.TopBar, its transparency, and asset 8508019876.
+
+
 local topLine=streamerBindRainbowBar(root,42)
 local topLineHolder=topLine and topLine.Parent or nil
 
@@ -15619,9 +15671,9 @@ local alpha=math.clamp(tonumber(config.streamerHudBackgroundAlpha) or 0.03,0,0.9
 local themeUI=(library.Theme and library.Theme.UI) or Color3.fromRGB(23,23,23)
 local themeText=(library.Theme and library.Theme.Text) or Color3.fromRGB(205,205,205)
 
--- Keep every streamer style inside the DevKage visual language.  Variants only
--- adjust transparency/border presence; they no longer swap to a different font
--- or unrelated neon/glass palette.
+
+
+
 self.Root.BackgroundColor3=themeUI
 self.Root.BackgroundTransparency=style=="Minimal" and math.max(alpha,0.46) or (style=="Glass" and math.max(alpha,0.18) or alpha)
 self.Root.BorderColor3=Color3.fromRGB(5,5,5)
@@ -15834,10 +15886,10 @@ local categories={
 {Name="Client",Label="Client Visuals",IconKind="Client"},
 }
 
--- The reference category strip uses simple monochrome silhouettes rather than
--- unrelated catalog thumbnails.  These icons are built from native GUI
--- primitives, so they remain sharp at every DPI and do not depend on an asset
--- being public, cached, or permitted by the current experience.
+
+
+
+
 local function createCategoryVectorIcon(parent,kind)
 local root=Instance.new("Frame")
 root.Name="Category"..tostring(kind).."Icon"
@@ -16264,9 +16316,9 @@ for _,arrow in pairs(self.Arrows) do if arrow then arrow.Visible=false end end
 return
 end
 
--- The ragdoll-only path does not require the aim/arrow ScreenGui.  Previously
--- Update() could reach self.AimCircle.Visible while AimCircle was nil, which is
--- the console crash shown by the executor.
+
+
+
 if (needAim or needArrows) and not self:EnsureGui() then return end
 
 local camera=workspace.CurrentCamera
@@ -16570,8 +16622,8 @@ end
 RadarRuntime.Connection=utility:CreateConnection(RunService.RenderStepped,function(dt) RadarRuntime:Update(dt) end)
 table.insert(library.CleanupCallbacks,function() RadarRuntime:Destroy() end)
 
--- This overlay owns a namespaced GUI and a complete cleanup path so it can
--- coexist with Mask Shard or another visual script without sharing objects.
+
+
 local ThreatCompassRuntime={Gui=nil,Bar=nil,Heading=nil,Markers=setmetatable({}, {__mode="k"}),Alert=nil,Connection=nil,Elapsed=0,AlertTimes=setmetatable({}, {__mode="k"})}
 
 function ThreatCompassRuntime:Destroy()
@@ -17043,6 +17095,7 @@ killFeedTexts = setmetatable({}, {__mode="k"})
 }
 local PlayerESPSkyboxes = {
 Default = {SkyboxBk="rbxassetid://91458024",SkyboxDn="rbxassetid://91457980",SkyboxFt="rbxassetid://91458024",SkyboxLf="rbxassetid://91458024",SkyboxRt="rbxassetid://91458024",SkyboxUp="rbxassetid://91458002"},
+["DevKage Skybox"] = {SkyboxBk="rbxassetid://11363682343",SkyboxDn="rbxassetid://11363682343",SkyboxFt="rbxassetid://11363682343",SkyboxLf="rbxassetid://11363682343",SkyboxRt="rbxassetid://11363682343",SkyboxUp="rbxassetid://11363682343"},
 Neptune = {SkyboxBk="rbxassetid://218955819",SkyboxDn="rbxassetid://218953419",SkyboxFt="rbxassetid://218954524",SkyboxLf="rbxassetid://218958493",SkyboxRt="rbxassetid://218957134",SkyboxUp="rbxassetid://218950090"},
 ["Among Us"] = {SkyboxBk="rbxassetid://5752463190",SkyboxDn="rbxassetid://5752463190",SkyboxFt="rbxassetid://5752463190",SkyboxLf="rbxassetid://5752463190",SkyboxRt="rbxassetid://5752463190",SkyboxUp="rbxassetid://5752463190"},
 Nebula = {SkyboxBk="rbxassetid://159454299",SkyboxDn="rbxassetid://159454296",SkyboxFt="rbxassetid://159454293",SkyboxLf="rbxassetid://159454286",SkyboxRt="rbxassetid://159454300",SkyboxUp="rbxassetid://159454288"},
@@ -17394,9 +17447,9 @@ if sound.IsLoaded then
 playWhenReady()
 else
 setCombatSoundStatus("Loading "..((kind=="hit") and "hit" or "kill").." sound…")
--- Sound:Play queues playback for assets that are still loading.  Preloading in
--- parallel and allowing one verified retry covers both local packaged sounds
--- and permission-gated custom IDs without ever treating a pcall as audible.
+
+
+
 requestPlayback()
 task.spawn(function()
 pcall(function() PlayerESPContentProvider:PreloadAsync({sound}) end)
@@ -17424,9 +17477,9 @@ end
 end
 end)
 
--- Capped clips clean up shortly after their requested length.  Uncapped
--- custom IDs keep enough lifetime to finish naturally while Ended still
--- performs the normal immediate cleanup.
+
+
+
 PlayerESPDebris:AddItem(sound,requestedLengthCap>0 and math.max(12,requestedLengthCap+4) or 120)
 return true
 end
@@ -18782,7 +18835,7 @@ visualSlider(creatorSection,"creator_vignette_strength","Vignette Strength",0,10
 visualToggle(creatorSection,"creator_center_dot","Recording Center Dot",function() CreatorOverlayRuntime:ApplyLayout() end)
 visualToggle(creatorSection,"creator_hide_when_menu_open","Hide Overlay With Menu")
 
-local lightingSection = visualsPage:CreateSection({Name="Advanced Lighting",Side="Right",Size=1300})
+local lightingSection = visualsPage:CreateSection({Name="Advanced Lighting",Side="Right",Size=1965})
 LightingControls = {}
 local function lightingToggle(key,name,changed)
 LightingControls[key]=lightingSection:CreateToggle({Name=name,State=AdvancedLighting[key],Flag="lighting."..key,Callback=function(value) AdvancedLighting[key]=value; changed(value) end})
@@ -18823,7 +18876,7 @@ lightingSlider("bloomThreshold","Bloom Threshold",0,10,2,"",refreshBloom)
 lightingSlider("bloomIntensity","Bloom Intensity",0,20,2,"",refreshBloom)
 lightingSlider("bloomSize","Bloom Size",0,100,0,"",refreshBloom)
 
-lightingSlider("reflectionQuality","Reflection Quality",1,21,0,"",function(v) setReflectionQuality(true,v) end)
+lightingSlider("reflectionQuality","Reflection Quality",1,21,0,"",function(v) setReflectionQuality(true,v); WorldLightingRuntime.RefreshExtended() end)
 lightingToggle("ambientEnabled","Ambient",function(v)
 setAdvancedAmbient(v,AdvancedLighting.ambientColor,AdvancedLighting.ambientStrength)
 if not v and AdvancedLighting.blueSkyEnabled then setBlueSky(true,AdvancedLighting.blueSkyStrength) end
@@ -18834,16 +18887,101 @@ lightingSlider("ambientStrength","Ambient Strength",0,10,2,"",function(v) if Adv
 lightingToggle("blueSkyEnabled","Blue Sky",function(v) setBlueSky(v,AdvancedLighting.blueSkyStrength) end)
 lightingSlider("blueSkyStrength","Blue Sky Strength",0,5,2,"",function(v) if AdvancedLighting.blueSkyEnabled then setBlueSky(true,v) end end)
 
-lightingToggle("fogEnabled","Fog",function() refreshCustomFog() end)
+assert(loadstring([======[
+return function(context)
+local AdvancedLighting=context.AdvancedLighting
+local WorldLightingRuntime=context.Runtime
+local lightingToggle=context.LightingToggle
+local lightingColor=context.LightingColor
+local lightingSlider=context.LightingSlider
+local setLightingProperty=context.SetLightingProperty
+
+lightingToggle("outdoorAmbientEnabled","Custom Outdoor Ambient",function(value)
+WorldLightingRuntime.SetOutdoorAmbient(value,AdvancedLighting.outdoorAmbientColor)
+end)
+lightingColor("outdoorAmbientColor","Outdoor Ambient Color",function(value)
+if AdvancedLighting.outdoorAmbientEnabled then WorldLightingRuntime.SetOutdoorAmbient(true,value) end
+end)
+lightingToggle("globalShadowsEnabled","Global Shadows Override",function(value)
+WorldLightingRuntime.SetGlobalShadows(value,AdvancedLighting.globalShadows)
+end)
+lightingToggle("globalShadows","Global Shadows",function(value)
+if AdvancedLighting.globalShadowsEnabled then setLightingProperty("GlobalShadows",value==true) end
+end)
+lightingToggle("shadowSoftnessEnabled","Custom Shadow Softness",function(value)
+WorldLightingRuntime.SetShadowSoftness(value,AdvancedLighting.shadowSoftness)
+end)
+lightingSlider("shadowSoftness","Shadow Softness",0,1,2,"",function(value)
+if AdvancedLighting.shadowSoftnessEnabled then WorldLightingRuntime.SetShadowSoftness(true,value) end
+end)
+lightingToggle("sunColorEnabled","Custom Sun Color",function(value)
+WorldLightingRuntime.SetSunColor(value,AdvancedLighting.sunColor)
+end)
+lightingColor("sunColor","Sun Color",function(value)
+if AdvancedLighting.sunColorEnabled then WorldLightingRuntime.SetSunColor(true,value) end
+end)
+lightingToggle("colorShiftTopEnabled","Color Shift Top",function(value)
+WorldLightingRuntime.SetColorShiftTop(value,AdvancedLighting.colorShiftTop)
+end)
+lightingColor("colorShiftTop","Top Shift Color",function(value)
+if AdvancedLighting.colorShiftTopEnabled then WorldLightingRuntime.SetColorShiftTop(true,value) end
+end)
+lightingToggle("colorShiftBottomEnabled","Color Shift Bottom",function(value)
+WorldLightingRuntime.SetColorShiftBottom(value,AdvancedLighting.colorShiftBottom)
+end)
+lightingColor("colorShiftBottom","Bottom Shift Color",function(value)
+if AdvancedLighting.colorShiftBottomEnabled then WorldLightingRuntime.SetColorShiftBottom(true,value) end
+end)
+lightingToggle("clockTimeEnabled","Custom Time",function(value)
+WorldLightingRuntime.SetClockTime(value,AdvancedLighting.clockTime)
+end)
+lightingSlider("clockTime","Clock Time",0,24,2,"h",function(value)
+if AdvancedLighting.clockTimeEnabled then WorldLightingRuntime.SetClockTime(true,value) end
+end)
+lightingToggle("geographicLatitudeEnabled","Custom Geographic Latitude",function(value)
+WorldLightingRuntime.SetGeographicLatitude(value,AdvancedLighting.geographicLatitude)
+end)
+lightingSlider("geographicLatitude","Geographic Latitude",-90,90,1,"°",function(value)
+if AdvancedLighting.geographicLatitudeEnabled then WorldLightingRuntime.SetGeographicLatitude(true,value) end
+end)
+lightingToggle("environmentDiffuseEnabled","Custom Diffuse Scale",function(value)
+WorldLightingRuntime.SetEnvironmentDiffuse(value,AdvancedLighting.environmentDiffuseScale)
+end)
+lightingSlider("environmentDiffuseScale","Diffuse Scale",0,1,2,"",function(value)
+if AdvancedLighting.environmentDiffuseEnabled then WorldLightingRuntime.SetEnvironmentDiffuse(true,value) end
+end)
+lightingToggle("environmentSpecularEnabled","Custom Specular Scale",function(value)
+WorldLightingRuntime.SetEnvironmentSpecular(value,AdvancedLighting.environmentSpecularScale)
+end)
+lightingSlider("environmentSpecularScale","Specular Scale",0,1,2,"",function(value)
+if AdvancedLighting.environmentSpecularEnabled then WorldLightingRuntime.SetEnvironmentSpecular(true,value) end
+end)
+end
+]======], "@DevKage/WorldLightingControls"))()({
+AdvancedLighting=AdvancedLighting,
+Runtime=WorldLightingRuntime,
+LightingToggle=lightingToggle,
+LightingColor=lightingColor,
+LightingSlider=lightingSlider,
+SetLightingProperty=setLightingProperty,
+})
+
+lightingToggle("fogEnabled","Fog",function(value)
+if value and AdvancedLighting.atmosphereEnabled then
+AdvancedLighting.atmosphereEnabled=false
+if LightingControls.atmosphereEnabled then LightingControls.atmosphereEnabled:Set(false,true) end
+end
+refreshCustomFog()
+end)
 lightingColor("fogColor","Fog Color",function() if AdvancedLighting.fogEnabled then refreshCustomFog() end end)
 lightingSlider("fogDensity","Fog Density",0,1,2,"",function() if AdvancedLighting.fogEnabled then refreshCustomFog() end end)
 lightingSlider("fogStart","Fog Start",0,100000,0," studs",function() if AdvancedLighting.fogEnabled then refreshCustomFog() end end)
 lightingSlider("fogEnd","Fog End",1,250000,0," studs",function() if AdvancedLighting.fogEnabled then refreshCustomFog() end end)
 
--- Premium Atmosphere controls.  These never toggle Fog off or rewrite FogColor.
--- DevKage Atmosphere is tuned for a smooth cool-white haze with violet decay.
+
+
 local AtmosphereProfiles={
-["DevKage Atmosphere"]={Density=0.34,Offset=-0.18,Color=Color3.fromRGB(238,244,255),Decay=Color3.fromRGB(177,151,238),Glare=0.22,Haze=2.45},
+["DevKage Atmosphere"]={Density=0.30,Offset=0.07,Color=Color3.fromRGB(175,195,225),Decay=Color3.fromRGB(85,125,195),Glare=0.15,Haze=0.78},
 ["Cinematic"]={Density=0.24,Offset=-0.05,Color=Color3.fromRGB(190,210,235),Decay=Color3.fromRGB(92,108,138),Glare=0.18,Haze=1.15},
 ["Clean"]={Density=0.10,Offset=0.08,Color=Color3.fromRGB(225,238,248),Decay=Color3.fromRGB(175,190,205),Glare=0.10,Haze=0.35},
 ["Dreamy"]={Density=0.31,Offset=-0.10,Color=Color3.fromRGB(221,204,245),Decay=Color3.fromRGB(120,103,170),Glare=0.32,Haze=1.85},
@@ -18862,7 +19000,7 @@ end
 })
 
 local function refreshAtmosphere()
-setAtmosphere(
+WorldLightingRuntime.SetAtmosphere(
 AdvancedLighting.atmosphereEnabled,
 AdvancedLighting.atmosphereDensity,
 AdvancedLighting.atmosphereOffset,
@@ -18879,19 +19017,34 @@ local control=LightingControls.atmosphereProfile
 if control and control.Set then control:Set(optionIndex(AtmosphereProfileNames,"Custom"),true) end
 end
 
-lightingToggle("atmosphereEnabled","Atmosphere",function() refreshAtmosphere() end)
+lightingToggle("atmosphereEnabled","Atmosphere",function(value)
+if value and AdvancedLighting.fogEnabled then
+AdvancedLighting.fogEnabled=false
+if LightingControls.fogEnabled then LightingControls.fogEnabled:Set(false,true) end
+refreshCustomFog()
+end
+refreshAtmosphere()
+end)
 lightingSlider("atmosphereDensity","Atmosphere Density",0,1,2,"",function() markAtmosphereCustom(); refreshAtmosphere() end)
 lightingSlider("atmosphereHaze","Atmosphere Haze",0,10,2,"",function() markAtmosphereCustom(); refreshAtmosphere() end)
 lightingSlider("atmosphereGlare","Atmosphere Glare",0,10,2,"",function() markAtmosphereCustom(); refreshAtmosphere() end)
 lightingSlider("atmosphereOffset","Atmosphere Offset",-1,1,2,"",function() markAtmosphereCustom(); refreshAtmosphere() end)
 lightingColor("atmosphereColor","Atmosphere Color",function() markAtmosphereCustom(); refreshAtmosphere() end)
 lightingColor("atmosphereDecay","Atmosphere Decay",function() markAtmosphereCustom(); refreshAtmosphere() end)
+lightingToggle("atmosphereGlowEnabled","Atmosphere Glow",function() refreshAtmosphere() end)
+lightingSlider("atmosphereGlowIntensity","Glow Intensity",0,5,2,"",function() if AdvancedLighting.atmosphereGlowEnabled then refreshAtmosphere() end end)
+lightingSection:CreateLabel({Text="Fog and Atmosphere are separate modes; the last one enabled takes control."})
 
 applyAtmosphereProfile=function(name)
 local profile=AtmosphereProfiles[name]
 if not profile then
 AdvancedLighting.atmosphereProfile="Custom"
 return
+end
+if AdvancedLighting.fogEnabled then
+AdvancedLighting.fogEnabled=false
+if LightingControls.fogEnabled then LightingControls.fogEnabled:Set(false,true) end
+refreshCustomFog()
 end
 AdvancedLighting.atmosphereEnabled=true
 AdvancedLighting.atmosphereDensity=profile.Density
@@ -18913,14 +19066,16 @@ end
 lightingSection:CreateButton({Name="Reset Atmosphere",Callback=function()
 AdvancedLighting.atmosphereProfile="Custom"
 AdvancedLighting.atmosphereEnabled=false
-AdvancedLighting.atmosphereDensity=0.25
-AdvancedLighting.atmosphereOffset=0
-AdvancedLighting.atmosphereColor=Color3.fromRGB(199,199,199)
-AdvancedLighting.atmosphereDecay=Color3.fromRGB(106,112,125)
-AdvancedLighting.atmosphereGlare=0
-AdvancedLighting.atmosphereHaze=0
+AdvancedLighting.atmosphereDensity=0.30
+AdvancedLighting.atmosphereOffset=0.07
+AdvancedLighting.atmosphereColor=Color3.fromRGB(175,195,225)
+AdvancedLighting.atmosphereDecay=Color3.fromRGB(85,125,195)
+AdvancedLighting.atmosphereGlare=0.15
+AdvancedLighting.atmosphereHaze=0.78
+AdvancedLighting.atmosphereGlowEnabled=false
+AdvancedLighting.atmosphereGlowIntensity=1
 if LightingControls.atmosphereProfile then LightingControls.atmosphereProfile:Set(optionIndex(AtmosphereProfileNames,"Custom"),true) end
-for _,key in ipairs({"atmosphereEnabled","atmosphereDensity","atmosphereHaze","atmosphereGlare","atmosphereOffset","atmosphereColor","atmosphereDecay"}) do
+for _,key in ipairs({"atmosphereEnabled","atmosphereDensity","atmosphereHaze","atmosphereGlare","atmosphereOffset","atmosphereColor","atmosphereDecay","atmosphereGlowEnabled","atmosphereGlowIntensity"}) do
 local control=LightingControls[key]
 local value=AdvancedLighting[key]
 if control and control.Set then
@@ -18940,9 +19095,7 @@ lightingSlider("focusDistance","Focus Distance",1,2000,0," studs",refreshDepthOf
 lightingSlider("focusRadius","Focus Radius",0,500,0," studs",refreshDepthOfField)
 lightingSlider("nearBlur","Near Blur",0,1,2,"",refreshDepthOfField)
 lightingSlider("farBlur","Far Blur",0,1,2,"",refreshDepthOfField)
-lightingSlider("clockTime","Clock Time",0,24,2,"h",function(v) setLightingProperty("ClockTime",v) end)
 lightingSlider("exposure","Exposure",-5,5,2,"",function(v) setLightingProperty("ExposureCompensation",v) end)
-lightingSlider("shadowSoftness","Shadow Softness",0,1,2,"",function(v) setLightingProperty("ShadowSoftness",v) end)
 
 local snowSection = visualsPage:CreateSection({Name="Ultra Snow",Side="Left",Size=360})
 local function snowToggle(key,name,changed)
@@ -19092,6 +19245,8 @@ AdvancedLighting.ambientStrength=profile.AmbientStrength
 AdvancedLighting.sunRaysEnabled=true
 AdvancedLighting.sunIntensity=profile.SunIntensity
 AdvancedLighting.sunSpread=profile.SunSpread
+AdvancedLighting.fogEnabled=false
+if LightingControls and LightingControls.fogEnabled then LightingControls.fogEnabled:Set(false,true) end
 AdvancedLighting.atmosphereEnabled=true
 AdvancedLighting.atmosphereDensity=profile.AtmosphereDensity
 AdvancedLighting.atmosphereOffset=profile.AtmosphereOffset
@@ -19105,7 +19260,7 @@ AdvancedLighting.atmosphereProfile="Custom"
 setColorCorrection(true,profile.Tint,profile.Brightness,profile.Contrast,profile.Saturation)
 setBloom(true,profile.BloomIntensity,profile.BloomSize,profile.BloomThreshold)
 setSunRays(true,profile.SunIntensity,profile.SunSpread)
-setAtmosphere(true,profile.AtmosphereDensity,profile.AtmosphereOffset,profile.AtmosphereColor,profile.AtmosphereDecay,profile.AtmosphereGlare,profile.AtmosphereHaze)
+WorldLightingRuntime.SetAtmosphere(true,profile.AtmosphereDensity,profile.AtmosphereOffset,profile.AtmosphereColor,profile.AtmosphereDecay,profile.AtmosphereGlare,profile.AtmosphereHaze)
 setAdvancedAmbient(true,profile.Ambient,profile.AmbientStrength)
 setLightingProperty("OutdoorAmbient",profile.OutdoorAmbient)
 setLightingProperty("ExposureCompensation",profile.Exposure)
@@ -19139,13 +19294,13 @@ devkagePresetSection:CreateButton({Name="Reapply Selected Look",Callback=functio
 devkagePresetStatus=devkagePresetSection:CreateLabel({Text="Night uses Heaven with a violet cinematic grade • Day uses bright warm dream clouds"})
 UI.applyDevKageWorldPreset=applyDevKageWorldPreset
 
--- ============================================================
--- WORLD VISUAL RELIABILITY GUARD
--- ============================================================
--- Many experiences continuously rewrite Lighting or recreate post effects.
--- DevKage only reasserts visual settings that the user currently has enabled.
--- Foreign map effects are preserved and restored when the matching DevKage
--- override is no longer active.
+
+
+
+
+
+
+
 local WorldVisualGuard={
 Snapshots=setmetatable({}, {__mode="k"}),
 LastScan=0,
@@ -19157,8 +19312,8 @@ local WorldVisualHttpService=game:GetService("HttpService")
 local WorldVisualBindName="DevKageWorldVisualGuard_"..WorldVisualHttpService:GenerateGUID(false):gsub("%-","")
 
 local function worldVisualClassActive(className)
-if className=="Atmosphere" then return AdvancedLighting.atmosphereEnabled==true or AdvancedLighting.fogEnabled==true end
-if className=="BloomEffect" then return AdvancedLighting.bloomEnabled==true end
+if className=="Atmosphere" then return false end
+if className=="BloomEffect" then return AdvancedLighting.bloomEnabled==true or (AdvancedLighting.atmosphereEnabled==true and AdvancedLighting.atmosphereGlowEnabled==true and AdvancedLighting.fogEnabled~=true) end
 if className=="SunRaysEffect" then return AdvancedLighting.sunRaysEnabled==true end
 if className=="DepthOfFieldEffect" then return AdvancedLighting.depthOfFieldEnabled==true end
 if className=="ColorCorrectionEffect" then return AdvancedLighting.colorCorrectionEnabled==true end
@@ -19169,6 +19324,7 @@ local function worldVisualOwned(object)
 if not object then return false end
 local name=tostring(object.Name or "")
 return name=="DevKage_Atmosphere"
+or name=="DevKage_AtmosphereGlow"
 or name=="DevKage_Bloom"
 or name=="DevKage_SunRays"
 or name=="DevKage_DepthOfField"
@@ -19202,22 +19358,18 @@ end)
 end
 
 local function reconcileForeignLightingEffects()
+if AdvancedLighting.atmosphereEnabled or AdvancedLighting.fogEnabled then
+WorldLightingRuntime.SuspendMapAtmospheres()
+else
+WorldLightingRuntime.RestoreMapAtmospheres()
+end
+
 for _,object in ipairs(LightingService:GetChildren()) do
-if not worldVisualOwned(object) then
+if not worldVisualOwned(object) and not object:IsA("Atmosphere") then
 local className=object.ClassName
 if worldVisualClassActive(className) then
 local snapshot=snapshotForeignEffect(object)
-pcall(function()
-if className=="Atmosphere" and object:IsA("Atmosphere") then
--- A map Atmosphere can completely wash out classic Fog.  Neutralize it only
--- while DevKage Fog/Atmosphere is active; its exact values are restored later.
-object.Density=0
-object.Haze=0
-object.Glare=0
-elseif snapshot.Enabled~=nil then
-object.Enabled=false
-end
-end)
+pcall(function() if snapshot.Enabled~=nil then object.Enabled=false end end)
 end
 end
 end
@@ -19304,7 +19456,7 @@ end)
 end
 
 if AdvancedLighting.atmosphereEnabled or AdvancedLighting.fogEnabled or AdvancedLighting.atmosphere then
-pcall(setAtmosphere,
+pcall(WorldLightingRuntime.SetAtmosphere,
 AdvancedLighting.atmosphereEnabled,
 AdvancedLighting.atmosphereDensity,
 AdvancedLighting.atmosphereOffset,
@@ -19322,9 +19474,10 @@ end
 if AdvancedLighting.blueSkyEnabled then
 pcall(setBlueSky,true,AdvancedLighting.blueSkyStrength)
 end
+pcall(WorldLightingRuntime.RefreshExtended)
 
--- Preset-owned properties are also reasserted because time-of-day/lighting
--- controllers commonly overwrite these every frame on individual maps.
+
+
 local visualProfile=LightingPresetProfiles[AdvancedLighting.visualPreset]
 if AdvancedLighting.visualPreset~="Neutral" and visualProfile then
 setLightingProperty("ExposureCompensation",AdvancedLighting.exposure)
@@ -19351,8 +19504,8 @@ if now-WorldVisualGuard.LastScan>=0.45 then
 WorldVisualGuard.LastScan=now
 reconcileForeignLightingEffects()
 
--- Some maps destroy/recreate the selected Sky.  Reapply only when the user has
--- explicitly enabled DevKage's skybox system.
+
+
 if VisualsState.skybox_enabled then pcall(applyPlayerESPSkybox) end
 end
 end
@@ -19372,6 +19525,7 @@ for object,snapshot in pairs(WorldVisualGuard.Snapshots) do
 restoreForeignEffect(object,snapshot)
 end
 table.clear(WorldVisualGuard.Snapshots)
+WorldLightingRuntime.RestoreMapAtmospheres()
 end
 
 UI.WorldVisualGuard=WorldVisualGuard
@@ -19971,8 +20125,8 @@ local pitchModes = AntiAimState.core.PitchModes
 UI.AntiAimYawBaseModes = AntiAimState.core.YawBases
 UI.AntiAimBacktrackMaterials = {"ForceField","Neon","Glass","SmoothPlastic"}
 UI.AntiAimIndicatorPositions = {"Follow Target","Top Center","Bottom Center","Center"}
--- All settings callbacks use this shared path. Configuration replay sets
--- Syncing so presets and the master toggle cannot race the remaining fields.
+
+
 AntiAimState.core.Controls = AntiAimControls
 
 function AntiAimState.SelectPreset(name)
@@ -20076,8 +20230,8 @@ AntiAimState.core.InputConnection = uis.InputBegan:Connect(function(input, proce
     elseif key == AntiAimState.freestand_key then core.Actions.FlipSide() end
 end)
 
--- Ordered sections: primary controls, pitch, yaw patterns, timing,
--- conditions, velocity, keybinds, freestanding, and movement tools.
+
+
 do
     local core = AntiAimState.core
     core.Syncing = true
@@ -20352,8 +20506,8 @@ local function vp3_loadUserId(userId)
             local camera = Instance.new("Camera")
             camera.FieldOfView = 35
             local bounds, size = char:GetBoundingBox()
-            -- Commit only after all yielding work completes. An older request
-            -- cannot clear a newer avatar or mark the newer request finished.
+
+
             for _, key in ipairs({"model","cam","world"}) do
                 if VP3[key] then VP3[key]:Destroy() end
             end
@@ -21087,17 +21241,17 @@ end)
 if __devkageMultiInjectAutoBoot then task.wait() end
 local ragePage = window:CreatePage({Icon="rbxassetid://8547258459",Glyph="R",Size=UDim2.new(0,36,0,36)})
 
--- ============================================================
--- RIVALS RAPID FIRE
--- ItemLibrary-based cooldown scaling.
---
--- Fire Rate slider semantics:
---     1%   = fastest  (1% of the weapon's original cooldown)
---     100% = slowest  (the weapon's original cooldown)
---
--- This modifies only cooldown-like values in RIVALS ItemLibrary.Items.
--- It does NOT change spread, recoil, accuracy, remotes or metatables.
--- ============================================================
+
+
+
+
+
+
+
+
+
+
+
 local RapidFireRuntime = {
     GameId = 6035872082,
     Items = nil,
@@ -21203,14 +21357,14 @@ end
 local function rapidFireRelevantFields(data)
     local fields = {}
 
-    -- Melee fields first because this feature is primarily intended for melee.
+
     for _, field in ipairs(RAPID_FIRE_MELEE_FIELDS) do
         if rapidFireHasNumericField(data, field) then
             fields[#fields + 1] = field
         end
     end
 
-    -- Gun cooldown support remains available without touching accuracy/recoil.
+
     for _, field in ipairs(RAPID_FIRE_GUN_FIELDS) do
         if rapidFireHasNumericField(data, field) then
             fields[#fields + 1] = field
@@ -21229,9 +21383,9 @@ local function rapidFireDelayPercent(weaponName)
     local saved = tonumber(config.rapidFireRates[tostring(weaponName or "")])
     local fallback = tonumber(config.rapidFireDefaultRate) or 25
 
-    -- While Rapid Fire is enabled the rate is intentionally global: every
-    -- weapon uses the same current slider percentage. Per-weapon saved values
-    -- are kept only for compatibility when the feature is off.
+
+
+
     local resolved = config.rapidFireEnabled == true and fallback or (saved or fallback)
     return math.clamp(math.floor(resolved + 0.5), 1, 100)
 end
@@ -21244,20 +21398,20 @@ local function rapidFireScaledCooldown(originalValue, percent)
 
     percent = math.clamp(tonumber(percent) or 100, 1, 100)
 
-    -- 100% is exactly the game's original value.
+
     if percent >= 100 then
         return originalValue
     end
 
-    -- Lower percentage = lower cooldown = faster.
-    -- Keep a tiny positive floor so code expecting a positive cooldown
-    -- does not receive zero.
+
+
+
     return math.max(0.001, originalValue * (percent / 100))
 end
 
--- REGISTER-SAFE RAPID FIRE HELPERS
--- Keep the universal weapon hooks on the existing runtime table so they do not
--- consume additional persistent locals inside the very large DevKage UI function.
+
+
+
 RapidFireRuntime.WeaponNameFromInfo = function(info)
     if type(info) ~= "table" then return nil end
 
@@ -21490,9 +21644,9 @@ local function rapidFireRestoreWeapon(weaponName)
     for field, originalValue in pairs(snapshot) do
         local lastApplied = type(applied) == "table" and applied[field] or nil
 
-        -- Coexistence-safe restore:
-        -- only restore a value if it is still the exact value DevKage applied.
-        -- If another script changed it afterward, leave that external value alone.
+
+
+
         if lastApplied == nil or data[field] == lastApplied then
             data[field] = originalValue
         end
@@ -21526,8 +21680,8 @@ local function rapidFireApplyWeapon(weaponName, percent)
         return false, 0, "No supported cooldown fields"
     end
 
-    -- Always restore our previous patch before recalculating from the
-    -- original RIVALS values. This keeps slider changes deterministic.
+
+
     rapidFireRestoreWeapon(weaponName)
 
     local snapshot = rapidFireSnapshotWeapon(weaponName, data)
@@ -21571,10 +21725,10 @@ local function rapidFireApplyConfigured()
         return
     end
 
-    -- Hook the game's shared Gun/Melee item-type modules as a live fallback.
-    -- That path follows self.Info for whatever weapon is actually firing, so
-    -- newly equipped weapons are covered even if ItemLibrary has not been
-    -- refreshed since the toggle was enabled.
+
+
+
+
     pcall(RapidFireRuntime.InstallTypeHooks)
 
     local items = rapidFireLoadItems()
@@ -21584,8 +21738,8 @@ local function rapidFireApplyConfigured()
         config.rapidFireRates = {}
     end
 
-    -- Rapid Fire is global when enabled: every supported ItemLibrary weapon
-    -- receives either its own saved percentage or the current default rate.
+
+
     for weaponName, data in pairs(items) do
         if type(data) == "table" and #rapidFireRelevantFields(data) > 0 then
             pcall(
@@ -21651,7 +21805,7 @@ end
 local rapidFireSection = ragePage:CreateSection({
     Name = "Rapid Fire",
     Side = "Right",
-    Size = 265
+    Size = 675
 })
 
 local rapidFireStatus = rapidFireSection:CreateLabel({
@@ -21737,8 +21891,8 @@ local rapidFireToggle = rapidFireSection:CreateToggle({
         config.rapidFireEnabled = value == true
 
         if value then
-            -- ItemLibrary is loaded lazily when the feature is actually used,
-            -- which avoids adding another ModuleScript require to DevKage boot.
+
+
             RapidFireRuntime.LoadAttempted = false
             rapidFireLoadItems()
             refreshRapidFireWeapons(false, true)
@@ -21820,8 +21974,8 @@ rapidFireRateSlider = rapidFireSection:CreateSlider({
             and weaponName ~= ""
             and weaponName ~= "Equipped Weapon" then
 
-            -- Keep the selected weapon's explicit rate, then refresh the full
-            -- global Rapid Fire patch so every other weapon remains active too.
+
+
             local ok, changed, kind =
                 rapidFireApplyWeapon(weaponName, percent)
             rapidFireApplyConfigured()
@@ -21848,6 +22002,526 @@ rapidFireRateSlider = rapidFireSection:CreateSlider({
     end
 })
 
+local KnifeCombatRuntime = assert(loadstring([======[
+return function(context)
+local rapidFireSection = context.RapidFireSection
+local ReplicatedStorage = context.ReplicatedStorage
+local LocalPlayer = context.LocalPlayer
+local UserInputService = context.UserInputService
+local Players = context.Players
+local RunService = context.RunService
+local window = context.Window
+local library = context.Library
+local UI = context.UI
+local MaskShard = context.MaskShard
+
+-- MASK SHARD + KNIFE COMBAT (integrated; no standalone ScreenGui)
+
+
+
+local KnifeCombatRuntime = {
+    GameId = 6035872082,
+    Alive = true,
+    Connections = {},
+    Loading = false,
+    Loaded = false,
+    NextLoadAttempt = 0,
+    LastAttempt = 0,
+    LastTargetScan = 0,
+    LastStatusUpdate = 0,
+    CurrentTarget = nil,
+    CurrentPart = nil,
+    Utility = nil,
+    EnumLibrary = nil,
+    FighterController = nil,
+    GameplayUtility = nil,
+    UseItemRemote = nil,
+    OriginalGetSpread = nil,
+    SpreadWrapper = nil,
+    SpreadInstalled = false,
+    StatusControl = nil,
+    MaskStatusControl = nil,
+    Controls = {},
+}
+
+KnifeCombatRuntime.SetStatus = function(text)
+    KnifeCombatRuntime.LastStatus = tostring(text or "")
+    local control = KnifeCombatRuntime.StatusControl
+    if control and type(control.SetText) == "function" then
+        control:SetText(KnifeCombatRuntime.LastStatus)
+    end
+end
+
+KnifeCombatRuntime.Track = function(connection)
+    if not connection then return connection end
+    KnifeCombatRuntime.Connections[#KnifeCombatRuntime.Connections + 1] = connection
+    if type(MaskShard) == "table" and type(MaskShard.Connections) == "table" then
+        MaskShard.Connections[#MaskShard.Connections + 1] = connection
+    end
+    return connection
+end
+
+KnifeCombatRuntime.IsRivals = function()
+    return tonumber(game.GameId) == KnifeCombatRuntime.GameId
+end
+
+KnifeCombatRuntime.IsTeammate = function(player)
+    local config = getgenv().__DevKageConfig
+    if type(config) ~= "table" or config.aimTeamCheck ~= true then return false end
+    if player == LocalPlayer then return true end
+    local localTeamId, targetTeamId
+    pcall(function() localTeamId = LocalPlayer:GetAttribute("TeamID") end)
+    pcall(function() targetTeamId = player:GetAttribute("TeamID") end)
+    if localTeamId ~= nil or targetTeamId ~= nil then
+        return localTeamId ~= nil and localTeamId == targetTeamId
+    end
+    return LocalPlayer.Team ~= nil and LocalPlayer.Team == player.Team
+end
+
+KnifeCombatRuntime.ResolvePart = function(character)
+    if not character then return nil end
+    local config = getgenv().__DevKageConfig
+    local wanted = tostring(type(config) == "table" and config.aimTargetPart or "Head")
+    if wanted == "Closest" then
+        local camera = workspace.CurrentCamera
+        if not camera then return character:FindFirstChild("HumanoidRootPart") end
+        local best, score
+        for _, object in ipairs(character:GetChildren()) do
+            if object:IsA("BasePart") then
+                local offset = object.Position - camera.CFrame.Position
+                if offset.Magnitude > 0.001 then
+                    local candidate = 1 - camera.CFrame.LookVector:Dot(offset.Unit)
+                    if score == nil or candidate < score then best, score = object, candidate end
+                end
+            end
+        end
+        return best or character:FindFirstChild("HumanoidRootPart")
+    elseif wanted == "Random" then
+        local parts = {}
+        for _, object in ipairs(character:GetChildren()) do
+            if object:IsA("BasePart") then parts[#parts + 1] = object end
+        end
+        return #parts > 0 and parts[math.random(1, #parts)] or nil
+    elseif wanted == "Torso" then
+        return character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
+            or character:FindFirstChild("HumanoidRootPart")
+    end
+    local part = character:FindFirstChild(wanted)
+    return part and part:IsA("BasePart") and part
+        or character:FindFirstChild("HumanoidRootPart")
+end
+
+KnifeCombatRuntime.IsVisible = function(part)
+    local config = getgenv().__DevKageConfig
+    if type(config) ~= "table" or config.aimVisibleCheck ~= true then return true end
+    local camera = workspace.CurrentCamera
+    if not camera or not part or not part.Parent then return false end
+    local parameters = RaycastParams.new()
+    parameters.IgnoreWater = true
+    parameters.FilterType = Enum.RaycastFilterType.Exclude
+    parameters.FilterDescendantsInstances = LocalPlayer.Character and {LocalPlayer.Character} or {}
+    local result = workspace:Raycast(camera.CFrame.Position, part.Position - camera.CFrame.Position, parameters)
+    return result == nil or (result.Instance and result.Instance:IsDescendantOf(part.Parent))
+end
+
+KnifeCombatRuntime.FindTarget = function()
+    local camera = workspace.CurrentCamera
+    if not camera then return nil, nil end
+    local config = getgenv().__DevKageConfig
+    local radius = math.clamp(tonumber(type(config) == "table" and config.silentAimRadius) or 150, 25, 1000)
+    local mousePosition = UserInputService:GetMouseLocation()
+    local inset = Vector2.zero
+    pcall(function() inset = game:GetService("GuiService"):GetGuiInset() end)
+    local center = mousePosition - inset
+    local bestPlayer, bestPart, bestDistance
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and not KnifeCombatRuntime.IsTeammate(player) then
+            local character = player.Character
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health > 0 and not character:FindFirstChildOfClass("ForceField") then
+                local part = KnifeCombatRuntime.ResolvePart(character)
+                if part and part:IsDescendantOf(workspace) and KnifeCombatRuntime.IsVisible(part) then
+                    local point, onScreen = camera:WorldToViewportPoint(part.Position)
+                    if onScreen and point.Z > 0 then
+                        local dx, dy = point.X - center.X, point.Y - center.Y
+                        local distance = math.sqrt(dx * dx + dy * dy)
+                        if distance <= radius and (bestDistance == nil or distance < bestDistance) then
+                            bestPlayer, bestPart, bestDistance = player, part, distance
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return bestPlayer, bestPart, bestDistance, center
+end
+
+KnifeCombatRuntime.UninstallNoSpread = function()
+    if KnifeCombatRuntime.SpreadInstalled
+        and type(KnifeCombatRuntime.GameplayUtility) == "table"
+        and KnifeCombatRuntime.GameplayUtility.GetSpread == KnifeCombatRuntime.SpreadWrapper
+        and type(KnifeCombatRuntime.OriginalGetSpread) == "function" then
+        KnifeCombatRuntime.GameplayUtility.GetSpread = KnifeCombatRuntime.OriginalGetSpread
+    end
+    KnifeCombatRuntime.SpreadInstalled = false
+    KnifeCombatRuntime.SpreadWrapper = nil
+    KnifeCombatRuntime.OriginalGetSpread = nil
+end
+
+KnifeCombatRuntime.InstallNoSpread = function()
+    local config = getgenv().__DevKageConfig
+    if not KnifeCombatRuntime.Alive or type(config) ~= "table"
+        or config.noSpreadEnabled ~= true then
+        KnifeCombatRuntime.UninstallNoSpread()
+        return false
+    end
+    local gameplay = KnifeCombatRuntime.GameplayUtility
+    if type(gameplay) ~= "table" or type(gameplay.GetSpread) ~= "function" then return false end
+    if KnifeCombatRuntime.SpreadInstalled and gameplay.GetSpread == KnifeCombatRuntime.SpreadWrapper then
+        return true
+    end
+    KnifeCombatRuntime.UninstallNoSpread()
+    local original = gameplay.GetSpread
+    local wrapper
+    wrapper = function(...)
+        local liveConfig = getgenv().__DevKageConfig
+        if KnifeCombatRuntime.Alive and type(liveConfig) == "table"
+            and liveConfig.noSpreadEnabled == true then
+            return CFrame.new()
+        end
+        return original(...)
+    end
+    KnifeCombatRuntime.OriginalGetSpread = original
+    KnifeCombatRuntime.SpreadWrapper = wrapper
+    gameplay.GetSpread = wrapper
+    KnifeCombatRuntime.SpreadInstalled = true
+    return true
+end
+
+KnifeCombatRuntime.LoadModules = function()
+    if not KnifeCombatRuntime.Alive or not KnifeCombatRuntime.IsRivals() then return false end
+    local modules = ReplicatedStorage:FindFirstChild("Modules")
+    local utilityModule = modules and modules:FindFirstChild("Utility")
+    local enumModule = modules and modules:FindFirstChild("EnumLibrary")
+    local gameplayModule = modules and modules:FindFirstChild("GameplayUtility")
+    local playerScripts = LocalPlayer:FindFirstChild("PlayerScripts")
+    local controllers = playerScripts and playerScripts:FindFirstChild("Controllers")
+    local fighterModule = controllers and controllers:FindFirstChild("FighterController")
+    if utilityModule and utilityModule:IsA("ModuleScript") then
+        local ok, value = pcall(require, utilityModule)
+        if ok and type(value) == "table" then KnifeCombatRuntime.Utility = value end
+    end
+    if enumModule and enumModule:IsA("ModuleScript") then
+        local ok, value = pcall(require, enumModule)
+        if ok and type(value) == "table" then KnifeCombatRuntime.EnumLibrary = value end
+    end
+    if gameplayModule and gameplayModule:IsA("ModuleScript") then
+        local ok, value = pcall(require, gameplayModule)
+        if ok and type(value) == "table" then KnifeCombatRuntime.GameplayUtility = value end
+    end
+    if fighterModule and fighterModule:IsA("ModuleScript") then
+        local ok, value = pcall(require, fighterModule)
+        if ok and type(value) == "table" then KnifeCombatRuntime.FighterController = value end
+    end
+    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    local replication = remotes and remotes:FindFirstChild("Replication")
+    local fighterRemotes = replication and replication:FindFirstChild("Fighter")
+    local useItem = fighterRemotes and fighterRemotes:FindFirstChild("UseItem")
+    KnifeCombatRuntime.UseItemRemote =
+        useItem and useItem:IsA("RemoteEvent") and useItem or nil
+    KnifeCombatRuntime.Loaded =
+        type(KnifeCombatRuntime.Utility) == "table"
+        and type(KnifeCombatRuntime.EnumLibrary) == "table"
+        and type(KnifeCombatRuntime.FighterController) == "table"
+        and KnifeCombatRuntime.UseItemRemote ~= nil
+    KnifeCombatRuntime.InstallNoSpread()
+    return KnifeCombatRuntime.Loaded
+end
+
+KnifeCombatRuntime.QueueModuleLoad = function(force)
+    if KnifeCombatRuntime.Loading or not KnifeCombatRuntime.Alive then return end
+    local now = os.clock()
+    if not force and now < KnifeCombatRuntime.NextLoadAttempt then return end
+    KnifeCombatRuntime.NextLoadAttempt = now + 1
+    KnifeCombatRuntime.Loading = true
+    task.spawn(function()
+        local ok, loaded = pcall(KnifeCombatRuntime.LoadModules)
+        KnifeCombatRuntime.Loading = false
+        if not KnifeCombatRuntime.Alive then return end
+        if not ok then
+            KnifeCombatRuntime.SetStatus("Combat modules failed to load")
+        elseif loaded then
+            KnifeCombatRuntime.SetStatus("RIVALS silent aim ready")
+        elseif KnifeCombatRuntime.IsRivals() then
+            KnifeCombatRuntime.SetStatus("Waiting for RIVALS match modules")
+        else
+            KnifeCombatRuntime.SetStatus("Fallback mouse aim ready")
+        end
+    end)
+end
+
+KnifeCombatRuntime.GetLocalFighter = function()
+    local controller = KnifeCombatRuntime.FighterController
+    return type(controller) == "table" and controller.LocalFighter or nil
+end
+
+KnifeCombatRuntime.FireAt = function(part)
+    if not KnifeCombatRuntime.Loaded or not part or not part.Parent then return false end
+    local fighter = KnifeCombatRuntime.GetLocalFighter()
+    local equipped = fighter and fighter.EquippedItem
+    if not equipped or type(equipped.Get) ~= "function" then return false end
+    local ok, objectId = pcall(equipped.Get, equipped, "ObjectID")
+    if not ok or objectId == nil then return false end
+    local entityRoot = fighter.Entity and fighter.Entity.RootPart
+    local character = LocalPlayer.Character
+    local root = entityRoot or (character and character:FindFirstChild("HumanoidRootPart"))
+    if not root then return false end
+    local utility, enumLibrary, remote =
+        KnifeCombatRuntime.Utility,
+        KnifeCombatRuntime.EnumLibrary,
+        KnifeCombatRuntime.UseItemRemote
+    if type(utility.EncodeCFrame) ~= "function"
+        or type(enumLibrary.ToEnum) ~= "function"
+        or not remote or not remote.Parent then return false end
+    local aim = CFrame.lookAt(root.Position, part.Position)
+    local okFire = pcall(function()
+        local data = {
+            [utf8.char(1)] = {
+                [utf8.char(0)] = utility:EncodeCFrame(aim),
+                [utf8.char(1)] = utility:EncodeCFrame(aim),
+                [utf8.char(2)] = part,
+                [utf8.char(3)] = utility:EncodeCFrame(CFrame.new(0.43, 0.25, 0.42)),
+            },
+        }
+        remote:FireServer(objectId, enumLibrary:ToEnum("StartShooting"), data, nil)
+    end)
+    return okFire
+end
+
+KnifeCombatRuntime.MoveMouseTo = function(part, center)
+    if type(mousemoverel) ~= "function" or not part then return false end
+    local camera = workspace.CurrentCamera
+    if not camera then return false end
+    local point, onScreen = camera:WorldToViewportPoint(part.Position)
+    if not onScreen or point.Z <= 0 then return false end
+    center = center or UserInputService:GetMouseLocation()
+    local config = getgenv().__DevKageConfig
+    local smoothing = math.clamp(tonumber(type(config) == "table" and config.aimSmoothing) or 0, 0, 100)
+    local factor = smoothing <= 0 and 1 or math.clamp(1 / (1 + smoothing * 0.12), 0.04, 1)
+    local dx, dy = (point.X - center.X) * factor, (point.Y - center.Y) * factor
+    pcall(mousemoverel,
+        math.floor(dx + (dx >= 0 and 0.5 or -0.5)),
+        math.floor(dy + (dy >= 0 and 0.5 or -0.5)))
+    return true
+end
+
+KnifeCombatRuntime.Step = function()
+    if not KnifeCombatRuntime.Alive then return end
+    local config = getgenv().__DevKageConfig
+    if type(config) ~= "table" then return end
+    local now = os.clock()
+    if config.noSpreadEnabled == true
+        and (not KnifeCombatRuntime.SpreadInstalled
+            or type(KnifeCombatRuntime.GameplayUtility) ~= "table"
+            or KnifeCombatRuntime.GameplayUtility.GetSpread ~= KnifeCombatRuntime.SpreadWrapper) then
+        KnifeCombatRuntime.QueueModuleLoad(false)
+        KnifeCombatRuntime.InstallNoSpread()
+    end
+    if config.silentAimEnabled ~= true then
+        KnifeCombatRuntime.CurrentTarget, KnifeCombatRuntime.CurrentPart = nil, nil
+        return
+    end
+    if window.Enabled then return end
+    local autoShoot = config.silentAimAutoShoot == true
+    if not autoShoot and not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then return end
+    local interval = math.clamp(tonumber(config.silentAimFireInterval) or 0.05, 0.02, 1)
+    if now - KnifeCombatRuntime.LastAttempt < interval then return end
+    KnifeCombatRuntime.LastAttempt = now
+    local chance = math.clamp(math.floor((tonumber(config.silentAimHitChance) or 85) + 0.5), 0, 100)
+    if chance <= 0 or (chance < 100 and math.random(1, 100) > chance) then return end
+    local target, part, _, center = KnifeCombatRuntime.FindTarget()
+    KnifeCombatRuntime.CurrentTarget, KnifeCombatRuntime.CurrentPart = target, part
+    if not part then
+        if now - KnifeCombatRuntime.LastStatusUpdate > 0.5 then
+            KnifeCombatRuntime.LastStatusUpdate = now
+            KnifeCombatRuntime.SetStatus("Silent aim: no target in FOV")
+        end
+        return
+    end
+    local fired = KnifeCombatRuntime.FireAt(part)
+    if not fired then
+        KnifeCombatRuntime.QueueModuleLoad(false)
+        KnifeCombatRuntime.MoveMouseTo(part, center)
+    end
+    if now - KnifeCombatRuntime.LastStatusUpdate > 0.25 then
+        KnifeCombatRuntime.LastStatusUpdate = now
+        KnifeCombatRuntime.SetStatus(
+            (fired and "Silent aim" or "Mouse aim fallback")
+            .. " • " .. tostring(target and target.Name or part.Parent.Name)
+            .. " • " .. tostring(part.Name)
+        )
+    end
+end
+
+KnifeCombatRuntime.StatusControl = rapidFireSection:CreateLabel({
+    Text = "Mask Shard: Always On"
+})
+KnifeCombatRuntime.MaskStatusControl = KnifeCombatRuntime.StatusControl
+
+KnifeCombatRuntime.Controls.SilentAim = rapidFireSection:CreateToggle({
+    Name = "Silent Aim",
+    State = getgenv().__DevKageConfig.silentAimEnabled == true,
+    Flag = "knife.silentAimEnabled",
+    Callback = function(value)
+        getgenv().__DevKageConfig.silentAimEnabled = value == true
+        if value then KnifeCombatRuntime.QueueModuleLoad(true)
+        else KnifeCombatRuntime.CurrentTarget, KnifeCombatRuntime.CurrentPart = nil, nil end
+    end
+})
+KnifeCombatRuntime.Controls.HitChance = rapidFireSection:CreateSlider({
+    Name = "Hit Chance",
+    State = tonumber(getgenv().__DevKageConfig.silentAimHitChance) or 85,
+    Min = 0,
+    Max = 100,
+    Decimals = 0,
+    Suffix = "%",
+    Flag = "knife.silentAimHitChance",
+    Callback = function(value)
+        getgenv().__DevKageConfig.silentAimHitChance =
+            math.clamp(math.floor((tonumber(value) or 85) + 0.5), 0, 100)
+    end
+})
+KnifeCombatRuntime.Controls.Radius = rapidFireSection:CreateSlider({
+    Name = "FOV Radius",
+    State = tonumber(getgenv().__DevKageConfig.silentAimRadius) or 150,
+    Min = 25,
+    Max = 1000,
+    Decimals = 0,
+    Suffix = " px",
+    Flag = "knife.silentAimRadius",
+    Callback = function(value)
+        getgenv().__DevKageConfig.silentAimRadius =
+            math.clamp(math.floor((tonumber(value) or 150) + 0.5), 25, 1000)
+    end
+})
+KnifeCombatRuntime.Controls.TargetPart = rapidFireSection:CreateDropdown({
+    Name = "Target Part",
+    Options = {"Head", "HumanoidRootPart", "Torso", "Closest", "Random"},
+    State = table.find(
+        {"Head", "HumanoidRootPart", "Torso", "Closest", "Random"},
+        tostring(getgenv().__DevKageConfig.aimTargetPart or "Head")
+    ) or 1,
+    Flag = "knife.aimTargetPart",
+    Callback = function(index)
+        local options = {"Head", "HumanoidRootPart", "Torso", "Closest", "Random"}
+        getgenv().__DevKageConfig.aimTargetPart = options[index] or "Head"
+    end
+})
+KnifeCombatRuntime.Controls.TeamCheck = rapidFireSection:CreateToggle({
+    Name = "Team Check",
+    State = getgenv().__DevKageConfig.aimTeamCheck ~= false,
+    Flag = "knife.aimTeamCheck",
+    Callback = function(value) getgenv().__DevKageConfig.aimTeamCheck = value == true end
+})
+KnifeCombatRuntime.Controls.WallCheck = rapidFireSection:CreateToggle({
+    Name = "Wall Check",
+    State = getgenv().__DevKageConfig.aimVisibleCheck ~= false,
+    Flag = "knife.aimVisibleCheck",
+    Callback = function(value) getgenv().__DevKageConfig.aimVisibleCheck = value == true end
+})
+KnifeCombatRuntime.Controls.AutoShoot = rapidFireSection:CreateToggle({
+    Name = "Auto Shoot",
+    State = getgenv().__DevKageConfig.silentAimAutoShoot == true,
+    Flag = "knife.silentAimAutoShoot",
+    Callback = function(value) getgenv().__DevKageConfig.silentAimAutoShoot = value == true end
+})
+KnifeCombatRuntime.Controls.Smoothing = rapidFireSection:CreateSlider({
+    Name = "Fallback Smoothing",
+    State = tonumber(getgenv().__DevKageConfig.aimSmoothing) or 0,
+    Min = 0,
+    Max = 100,
+    Decimals = 0,
+    Suffix = "%",
+    Flag = "knife.aimSmoothing",
+    Callback = function(value)
+        getgenv().__DevKageConfig.aimSmoothing =
+            math.clamp(math.floor((tonumber(value) or 0) + 0.5), 0, 100)
+    end
+})
+KnifeCombatRuntime.Controls.Interval = rapidFireSection:CreateSlider({
+    Name = "Shot Interval",
+    State = tonumber(getgenv().__DevKageConfig.silentAimFireInterval) or 0.05,
+    Min = 0.02,
+    Max = 0.5,
+    Decimals = 2,
+    Suffix = " s",
+    Flag = "knife.silentAimFireInterval",
+    Callback = function(value)
+        getgenv().__DevKageConfig.silentAimFireInterval =
+            math.clamp(tonumber(value) or 0.05, 0.02, 0.5)
+    end
+})
+KnifeCombatRuntime.Controls.NoSpread = rapidFireSection:CreateToggle({
+    Name = "No Spread",
+    State = getgenv().__DevKageConfig.noSpreadEnabled == true,
+    Flag = "knife.noSpreadEnabled",
+    Callback = function(value)
+        getgenv().__DevKageConfig.noSpreadEnabled = value == true
+        if value then KnifeCombatRuntime.QueueModuleLoad(true)
+        else KnifeCombatRuntime.UninstallNoSpread() end
+    end
+})
+KnifeCombatRuntime.StatusControl = rapidFireSection:CreateLabel({
+    Text = KnifeCombatRuntime.IsRivals()
+        and "Combat modules load when needed"
+        or "Universal mouse-aim fallback"
+})
+
+KnifeCombatRuntime.Track(RunService.Heartbeat:Connect(KnifeCombatRuntime.Step))
+
+if type(MaskShard) == "table" and type(MaskShard.Runtime) == "table" then
+    MaskShard.Runtime.KnifeCombat = KnifeCombatRuntime
+end
+
+UI.KnifeCombat = KnifeCombatRuntime
+
+table.insert(library.CleanupCallbacks, function()
+    KnifeCombatRuntime.Alive = false
+    for _, connection in ipairs(KnifeCombatRuntime.Connections) do
+        pcall(function() connection:Disconnect() end)
+    end
+    table.clear(KnifeCombatRuntime.Connections)
+    KnifeCombatRuntime.UninstallNoSpread()
+    KnifeCombatRuntime.CurrentTarget, KnifeCombatRuntime.CurrentPart = nil, nil
+    if type(MaskShard) == "table" and type(MaskShard.Runtime) == "table"
+        and MaskShard.Runtime.KnifeCombat == KnifeCombatRuntime then
+        MaskShard.Runtime.KnifeCombat = nil
+    end
+end)
+
+do
+    local config = getgenv().__DevKageConfig
+    if type(config) == "table"
+        and (config.silentAimEnabled == true or config.noSpreadEnabled == true) then
+        KnifeCombatRuntime.QueueModuleLoad(true)
+    end
+end
+
+return KnifeCombatRuntime
+end
+]======], "@DevKage/KnifeCombat"))()({
+    RapidFireSection = rapidFireSection,
+    ReplicatedStorage = ReplicatedStorage,
+    LocalPlayer = LocalPlayer,
+    UserInputService = UserInputService,
+    Players = Players,
+    RunService = RunService,
+    Window = window,
+    Library = library,
+    UI = UI,
+    MaskShard = MaskShard,
+})
+
 rapidFireSection:CreateButton({
     Name = "Use Equipped Weapon",
     Callback = function()
@@ -21872,7 +22546,7 @@ rapidFireSection:CreateButton({
     end
 })
 
--- Restore every ItemLibrary value DevKage changed when the UI unloads.
+
 table.insert(library.CleanupCallbacks, function()
     rapidFireRestoreAll()
     RapidFireRuntime.UninstallTypeHooks()
@@ -21884,8 +22558,8 @@ table.insert(library.CleanupCallbacks, function()
     end
 end)
 
--- Expose only lifecycle/runtime ownership to the compatibility-safe
--- Mask Shard. No global hook or anti-detection behavior is installed.
+
+
 if type(MaskShard) == "table" and type(MaskShard.Runtime) == "table" then
     MaskShard.Runtime.RapidFire = RapidFireRuntime
 end
@@ -21900,9 +22574,9 @@ UI.RapidFire = {
     RestoreAll = rapidFireRestoreAll,
 }
 
--- Do not require ItemLibrary during normal DevKage startup.
--- Populate from equipped/backpack Tools first. If Rapid Fire was restored
--- enabled from config, load/apply after the rest of the UI has yielded.
+
+
+
 refreshRapidFireWeapons(false, false)
 
 task.defer(function()
@@ -21916,10 +22590,10 @@ task.defer(function()
     end
 end)
 
--- Universal server/session utilities.
--- Deliberately self-contained: no remote hooks, metatable hooks, combat state,
--- or executor-wide mutation.  This keeps the tools compatible with MaskShard's
--- coexistence-only runtime while leaving MaskShard itself unchanged.
+
+
+
+
 local universalSection = ragePage:CreateSection({
     Name = "Universal Tools",
     Side = "Right",
@@ -22016,9 +22690,9 @@ local function universalClipboard(value, label)
 end
 
 local function universalHttpGet(url)
-    -- Prefer Roblox's normal HttpGet path, then fall back to commonly exposed
-    -- executor request functions.  This is only used for Roblox's public server
-    -- listing endpoint and does not touch remotes or gameplay state.
+
+
+
     local ok, body = pcall(function()
         return game:HttpGet(url)
     end)
@@ -22394,8 +23068,8 @@ end)
 
 universalRefreshInfo()
 
--- MaskShard compatibility registration only.  This is lifecycle ownership,
--- not concealment or anti-detection behavior.
+
+
 if type(MaskShard) == "table" and type(MaskShard.Runtime) == "table" then
     MaskShard.Runtime.UniversalTools = UniversalToolsRuntime
 end
@@ -22961,31 +23635,31 @@ table.insert(library.CleanupCallbacks,function()
     cursorBridge.MainHeartbeat=0
 end)
 
--- ============================================================
--- DEVKAGE INTEGRATED CURSOR RENDERER
---
--- This renderer is based on the exact visual/animation model from the
--- supplied DevKage cursor:
---
---   * 25x25 default rotating aim container
---   * four rectangular cardinal lines
---   * one-pixel black line outlines
---   * Arcade cursor text
---   * TextScaled labels
---   * squared sine pulse
---   * per-rotation slowdown near the end of the cycle
---   * original DevKage sine-wave rainbow
---   * cursor text offset below the mouse
---
--- The existing Crosshair page remains the settings source. No controls,
--- labels, profile tables, config names or callbacks are replaced here.
---
--- The only additions around the reference look are optional behaviors
--- already exposed by the existing Cursor tab (profiles, extra arm counts,
--- glow, secondary text, position mode, etc.). With the default DevKage
--- cursor settings, the renderer follows the supplied cursor geometry and
--- animation values exactly.
--- ============================================================
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 local ReferenceCursorRuntime = {
     Protocol = "DevKage.MaskShard.Cursor/1",
@@ -23004,8 +23678,8 @@ local ReferenceCursorRuntime = {
     Settings = {},
     Revision = -1,
 
-    -- These are the same animation-state variables used by the supplied
-    -- cursor code.
+
+
     time = 0,
     rotationProgress = 0,
     currentRotationSpeed = 0.8,
@@ -23042,9 +23716,9 @@ do
         ReferenceCursorRuntime
 end
 
--- ============================================================
--- SETTINGS
--- ============================================================
+
+
+
 
 local function referenceCursorNumber(value, fallback, minimum, maximum)
     value = tonumber(value)
@@ -23069,9 +23743,9 @@ local function referenceCursorReadSettings()
     target.Enabled =
         source.Enabled ~= false
 
-    -- Mouse is the single source of truth for both cursor position and
-    -- cursor control.  This keeps the DevKage pointer on the real mouse even
-    -- when a first-person camera previously wrote LockCenter.
+
+
+
     target.PositionMode = "Mouse"
     target.ControlMode = "Mouse"
 
@@ -23273,9 +23947,9 @@ local function referenceCursorReadSettings()
     return target
 end
 
--- ============================================================
--- ORIGINAL CURSOR RAINBOW / ANIMATION MATH
--- ============================================================
+
+
+
 
 local function referenceGetRainbowColor(t)
     local r =
@@ -23340,9 +24014,9 @@ local function referenceSmoothPulse(t, speed)
         * rawPulse
 end
 
--- ============================================================
--- COLOR MODES
--- ============================================================
+
+
+
 
 local function referenceColorLerp(a, b, alpha)
     return
@@ -23397,9 +24071,9 @@ local function referenceResolveColor(settings, now, index, count)
             / math.max(count, 1)
         ) * spread
 
-    -- The supplied cursor always used the sine-wave rainbow. The existing
-    -- Rainbow Speed setting scales time so the default 7.2 value reproduces
-    -- the source cursor's original rainbow timing exactly.
+
+
+
     if settings.Rainbow == true then
         local rainbowScale =
             referenceCursorNumber(
@@ -23553,7 +24227,7 @@ local function referenceResolveColor(settings, now, index, count)
             )
     end
 
-    -- Legacy = the exact sine-wave color from the supplied cursor.
+
     return
         referenceGetRainbowColor(
             now
@@ -23561,16 +24235,16 @@ local function referenceResolveColor(settings, now, index, count)
         )
 end
 
--- ============================================================
--- GUI CREATION
--- ============================================================
+
+
+
 
 local function referenceDestroyCursorGui()
     local runtime = ReferenceCursorRuntime
 
-    -- The cursor can temporarily live inside DevKage's ScreenGui while the menu
-    -- is open, so destroy routed GuiObjects explicitly before destroying the
-    -- dedicated gameplay ScreenGui.
+
+
+
     for _, object in ipairs({runtime.AimContainer, runtime.MainText, runtime.SecondText}) do
         if object then pcall(function() object:Destroy() end) end
     end
@@ -23596,7 +24270,7 @@ local function referenceCreateLine(parent, name)
 
     frame.Name = name
 
-    -- These are the exact default source-cursor line values.
+
     frame.Size =
         UDim2.new(
             0,
@@ -23709,18 +24383,18 @@ local function referenceCreateTextLabel(parent, name)
             1
         )
 
-    -- EXACT font from the supplied cursor.
+
     label.Font =
         Enum.Font.Arcade
 
-    -- EXACT scaling behavior from the supplied cursor.
+
     label.TextScaled = true
 
     label.BackgroundTransparency = 1
     label.Active = false
     label.Selectable = false
 
-    -- EXACT default source-cursor label dimensions.
+
     label.Size =
         UDim2.new(
             0,
@@ -23758,11 +24432,11 @@ local function referenceCreateTextLabel(parent, name)
 end
 
 local function referenceResolveGuiHost()
-    -- The supplied cursor used PlayerGui. DevKage's menu is in CoreGui,
-    -- though, so to make this exact cursor remain visible ON TOP of the
-    -- DevKage menu we first use the same CoreGui host as the menu.
-    --
-    -- This changes only layering, not the cursor's geometry or animation.
+
+
+
+
+
     if cre then
         return cre
     end
@@ -23792,19 +24466,19 @@ local function referenceCreateCursorGui()
     local screenGui =
         Instance.new("ScreenGui")
 
-    -- Keep the original cursor GUI name.
+
     screenGui.Name = "AimSightGUI"
 
     screenGui.ResetOnSpawn = false
 
-    -- DevKage's menu ScreenGui uses DisplayOrder 9999. This higher order is
-    -- what makes the supplied cursor visible directly on the mouse while the
-    -- DevKage UI itself is open.
+
+
+
     screenGui.DisplayOrder = 2147483000
 
     screenGui.IgnoreGuiInset = true
 
-    -- Keep the custom pointer above DevKage's own UI and CoreGui blur layers.
+
     pcall(function() screenGui.OnTopOfCoreBlur = true end)
     pcall(function() screenGui.ClipToDeviceSafeArea = false end)
 
@@ -23850,7 +24524,7 @@ local function referenceCreateCursorGui()
 
     aimContainer.BackgroundTransparency = 1
 
-    -- EXACT source-cursor default container dimensions.
+
     aimContainer.Size =
         UDim2.new(
             0,
@@ -23912,9 +24586,9 @@ local function referenceCreateCursorGui()
     return true
 end
 
--- ============================================================
--- REFERENCE FOUR-ARM LAYOUT
--- ============================================================
+
+
+
 
 local function referenceApplyFourArmLayout(
     settings,
@@ -23965,7 +24639,7 @@ local function referenceApplyFourArmLayout(
             )
     end
 
-    -- These four formulas are the supplied cursor's original pulse layout.
+
     top.Size =
         UDim2.new(
             0,
@@ -24031,13 +24705,13 @@ local function referenceApplyFourArmLayout(
         )
 end
 
--- ============================================================
--- OPTIONAL EXTRA-ARM SUPPORT
---
--- The source cursor itself had four arms. The existing DevKage Cursor tab
--- already exposes Arm Count, so counts other than four are supported without
--- changing the exact four-arm default.
--- ============================================================
+
+
+
+
+
+
+
 
 local function referenceEnsureExtraArmCount(count)
     local runtime =
@@ -24161,9 +24835,9 @@ local function referenceApplyRadialLayout(
     end
 end
 
--- ============================================================
--- GLOW
--- ============================================================
+
+
+
 
 local function referenceCopyFrameGeometry(source, target)
     target.AnchorPoint =
@@ -24262,20 +24936,20 @@ local function referenceApplyGlow(
     glow.Visible = true
 end
 
--- ============================================================
--- CURSOR POSITION
--- ============================================================
+
+
+
 
 local function referenceCursorPosition(settings)
-    -- Always follow the real mouse.  Do not fall back to screen center or a
-    -- crosshair position: the DevKage cursor is the UI mouse pointer.
+
+
     local mousePosition = uis:GetMouseLocation()
     return Vector2.new(mousePosition.X, mousePosition.Y)
 end
 
--- ============================================================
--- TEXT
--- ============================================================
+
+
+
 
 local function referenceApplyText(
     settings,
@@ -24323,14 +24997,14 @@ local function referenceApplyText(
         and secondValue ~= ""
         and secondValue ~= "None"
 
-    -- Keep the supplied cursor's exact font every frame.
+
     main.Font =
         Enum.Font.Arcade
 
     second.Font =
         Enum.Font.Arcade
 
-    -- Keep TextScaled exactly like the supplied cursor.
+
     main.TextScaled = true
     second.TextScaled = true
 
@@ -24356,8 +25030,8 @@ local function referenceApplyText(
     local secondScale =
         secondSize / 15
 
-    -- At the default Main Text Size (20), these are the exact source values:
-    -- Size = 150x23 and Position = mouse.X - 70, mouse.Y + 50.
+
+
     main.Size =
         UDim2.new(
             0,
@@ -24442,9 +25116,9 @@ local function referenceApplyText(
     end
 end
 
--- ============================================================
--- BRIDGE / NATIVE MOUSE OWNERSHIP
--- ============================================================
+
+
+
 
 local function referenceSetBridgeOwnership(enabled)
     local runtime =
@@ -24486,7 +25160,7 @@ local function referenceApplyNativeMouseState(enabled)
             runtime.OwnsMouseIcon = true
         end
 
-        -- Keep the custom DevKage cursor as the visible mouse cursor.
+
         if uis.MouseIconEnabled == true then
             pcall(function()
                 uis.MouseIconEnabled = false
@@ -24502,9 +25176,9 @@ local function referenceApplyNativeMouseState(enabled)
     end
 end
 
--- ============================================================
--- SPIN
--- ============================================================
+
+
+
 
 local function referenceUpdateRotation(settings, deltaTime)
     local runtime =
@@ -24528,10 +25202,10 @@ local function referenceUpdateRotation(settings, deltaTime)
             angleOffset
     end
 
-    -- Existing Cursor tab expresses speed in degrees/second.
-    -- The supplied source used progress-per-second and default 0.8:
-    --     288 deg/s / 360 = 0.8
-    -- so the default remains exactly the same animation speed.
+
+
+
+
     local baseRotationSpeed =
         referenceCursorNumber(
             settings.SpinSpeed,
@@ -24553,8 +25227,8 @@ local function referenceUpdateRotation(settings, deltaTime)
         and -1
         or 1
 
-    -- Same ordering as the supplied cursor:
-    -- advance progress first, then calculate the slowed speed for next frame.
+
+
     runtime.rotationProgress =
         (
             runtime.rotationProgress
@@ -24621,16 +25295,16 @@ local function referenceUpdateRotation(settings, deltaTime)
                 ) / step
             ) * step
     else
-        -- Static = the supplied cursor's normal continuous rotation.
+
         targetRotation =
             angleOffset
             + runtime.rotationProgress
                 * spinRange
     end
 
-    -- The source cursor used smoothing = 1, meaning no altered easing.
-    -- Keep that exact default. Existing Smooth Spin can deliberately soften
-    -- it when the user enables that Cursor-tab setting.
+
+
+
     local smoothing =
         settings.SmoothSpin == true
         and math.clamp(
@@ -24651,19 +25325,19 @@ local function referenceUpdateRotation(settings, deltaTime)
         runtime.smoothedRotation
 end
 
--- ============================================================
--- MENU OVERLAY ROUTING
--- ============================================================
+
+
+
 
 local function referenceRouteCursorLayer()
     local runtime = ReferenceCursorRuntime
     if not runtime.ScreenGui or not runtime.AimContainer then return end
 
-    -- Some executor/CoreGui combinations ignore DisplayOrder between sibling
-    -- ScreenGuis.  While the DevKage menu is open, put the cursor GuiObjects
-    -- inside the SAME ScreenGui as the menu and give them a higher ZIndex.
-    -- When the menu closes, move them back to the dedicated cursor ScreenGui
-    -- so the pointer remains visible in normal gameplay.
+
+
+
+
+
     local menuGui = window and window.ScreenGui
     local target = (window and window.Enabled == true and menuGui and menuGui.Parent)
         and menuGui
@@ -24676,9 +25350,9 @@ local function referenceRouteCursorLayer()
     end
 end
 
--- ============================================================
--- RENDER LOOP
--- ============================================================
+
+
+
 
 local function referenceCursorRender(deltaTime)
     local runtime =
@@ -24739,10 +25413,10 @@ local function referenceCursorRender(deltaTime)
 
     referenceRouteCursorLayer()
 
-    -- When DevKage is open in first person, the game camera may attempt to
-    -- restore LockCenter after the menu's normal input pass. Release it again
-    -- here in the cursor render path so the DevKage cursor can actually move
-    -- over and interact with the UI.
+
+
+
+
     if window and window.Enabled == true then
         pcall(function()
             if uis.MouseBehavior ~= Enum.MouseBehavior.Default then
@@ -24807,7 +25481,7 @@ local function referenceCursorRender(deltaTime)
             2
         )
 
-    -- Default CenterRadius 12.5 gives the exact supplied 25x25 container.
+
     runtime.AimContainer.Size =
         UDim2.new(
             0,
@@ -24858,13 +25532,13 @@ local function referenceCursorRender(deltaTime)
         )
         or 0
 
-    -- The source cursor used:
-    --     minLength = -10
-    --     maxLength = -30
-    -- with LineLength conceptually 25.
-    --
-    -- Scale those exact ratios so Line Length in the existing Cursor tab
-    -- changes the same shape without replacing the animation.
+
+
+
+
+
+
+
     local minLength =
         -(lineLength * 0.4)
 
@@ -24943,9 +25617,9 @@ local function referenceCursorRender(deltaTime)
     )
 end
 
--- ============================================================
--- LIFECYCLE
--- ============================================================
+
+
+
 
 function ReferenceCursorRuntime:Stop()
     if not self.Running then
@@ -24981,8 +25655,8 @@ end
 referenceCursorReadSettings()
 referenceCreateCursorGui()
 
--- Set ownership immediately so the DevKage menu's existing mouse code knows
--- the custom cursor is attached before the first render.
+
+
 referenceSetBridgeOwnership(
     ReferenceCursorRuntime.Settings.Enabled ~= false
 )
@@ -24993,8 +25667,8 @@ local referenceCursorRenderConnection =
         referenceCursorRender
     )
 
--- Recreate/validate the cursor after respawn, matching the supplied cursor's
--- CharacterAdded lifecycle without starting another render loop.
+
+
 local referenceCursorCharacterConnection =
     utility:CreateConnection(
         LocalPlayer.CharacterAdded,
@@ -25068,13 +25742,13 @@ table.insert(
     end
 )
 
--- ============================================================
--- REFERENCE CURSOR SELF-CHECK METADATA
---
--- These values are descriptive only. They are deliberately kept next to the
--- renderer so future DevKage cursor work can validate the intended baseline
--- without silently changing its look again.
--- ============================================================
+
+
+
+
+
+
+
 
 ReferenceCursorRuntime.ReferenceVisual = {
     GuiName = "AimSightGUI",
@@ -25124,9 +25798,9 @@ ReferenceCursorRuntime.ReferenceVisual = {
     MaskShardCompatibilityOnly = true,
 }
 
--- ============================================================
--- END DEVKAGE REFERENCE CURSOR RENDERER
--- ============================================================
+
+
+
 
 local function addToggle(section,key,name)
     local control=section:CreateToggle({Name=name,State=VisualsState[key],Flag="visuals."..key,Callback=function(v) syncCursorSetting(key,v) end})
@@ -25859,6 +26533,7 @@ VisualsState.animation_start_percent=math.clamp(tonumber(VisualsState.animation_
 VisualsState.animation_end_percent=math.clamp(tonumber(VisualsState.animation_end_percent) or 100,1,100)
 if VisualsState.animation_end_percent<=VisualsState.animation_start_percent then VisualsState.animation_end_percent=math.min(100,VisualsState.animation_start_percent+1) end
 applyRuntimeState(AdvancedLighting,data.lighting)
+if AdvancedLighting.fogEnabled and AdvancedLighting.atmosphereEnabled then AdvancedLighting.atmosphereEnabled=false end
 applyRuntimeState(library.Theme,data.theme)
 library:ApplyTheme()
 if UI.ThemeControls then
@@ -26009,9 +26684,9 @@ AntiAimState.core.Syncing = false
 AntiAimState.Normalize()
 AntiAimState.SyncControls()
 
--- Final flagged-control pass: this makes the values actually stored in the
--- selected config authoritative, including controls whose feature callback
--- is not represented by one of the older hand-written config bindings.
+
+
+
 getgenv().__DevKageApplySavedControlValues(data.controlValues)
 
 aa_apply(AntiAimState.enabled)
@@ -26520,8 +27195,8 @@ end
 local selectPlayerButton=makePlayerActionButton("Blacklist",463)
 local clearPlayerButton=makePlayerActionButton("Whitelist",507)
 
--- Short blacklist confirmation flash, contained completely inside the
--- Blacklist/Whitelist action area so it never spills outside the Players box.
+
+
 local blacklistFlashToken=0
 local blacklistFlashFrame=Instance.new("Frame")
 blacklistFlashFrame.Name="BlacklistFlash"
@@ -26899,8 +27574,8 @@ pcall(function() VisualsState.highlights_table[player]:Destroy() end)
 end
 for player in pairs(VisualsState.chams_table) do destroyChams(player) end
 apply_fov(false); apply_fullbright(false); apply_ambient(false); apply_fog(false); setMotionBlur(false,0)
-setColorCorrection(false,AdvancedLighting.tintColor,0,0,0); setBloom(false,0,0,0); setSunRays(false,0,0); setDepthOfField(false,0,0,0,0); setAtmosphere(false,0,0,Color3.new(),Color3.new(),0,0)
-AdvancedLighting.fogEnabled=false; refreshCustomFog()
+setColorCorrection(false,AdvancedLighting.tintColor,0,0,0); setBloom(false,0,0,0); setSunRays(false,0,0); setDepthOfField(false,0,0,0,0); WorldLightingRuntime.SetAtmosphere(false,0,0,Color3.new(),Color3.new(),0,0)
+AdvancedLighting.fogEnabled=false; refreshCustomFog(); WorldLightingRuntime.RestoreMapAtmospheres()
 setBlueSky(false,AdvancedLighting.blueSkyStrength); setAdvancedAmbient(false,AdvancedLighting.ambientColor,AdvancedLighting.ambientStrength); setReflectionQuality(false,AdvancedLighting.reflectionQuality)
 setColorShift(false); setLightingStyle(false)
 for property,value in pairs(AdvancedLighting.original) do
@@ -26941,11 +27616,12 @@ task.spawn(function()
     if AdvancedLighting.bloomEnabled then pcall(setBloom, true, AdvancedLighting.bloomIntensity, AdvancedLighting.bloomSize, AdvancedLighting.bloomThreshold) end
     if AdvancedLighting.sunRaysEnabled then pcall(setSunRays, true, AdvancedLighting.sunIntensity, AdvancedLighting.sunSpread) end
     if AdvancedLighting.depthOfFieldEnabled then pcall(setDepthOfField, true, AdvancedLighting.focusDistance, AdvancedLighting.focusRadius, AdvancedLighting.nearBlur, AdvancedLighting.farBlur) end
-    if AdvancedLighting.atmosphereEnabled then pcall(setAtmosphere, true, AdvancedLighting.atmosphereDensity, AdvancedLighting.atmosphereOffset, AdvancedLighting.atmosphereColor, AdvancedLighting.atmosphereDecay, AdvancedLighting.atmosphereGlare, AdvancedLighting.atmosphereHaze) end
+    if AdvancedLighting.atmosphereEnabled then pcall(WorldLightingRuntime.SetAtmosphere, true, AdvancedLighting.atmosphereDensity, AdvancedLighting.atmosphereOffset, AdvancedLighting.atmosphereColor, AdvancedLighting.atmosphereDecay, AdvancedLighting.atmosphereGlare, AdvancedLighting.atmosphereHaze) end
     if AdvancedLighting.fogEnabled then pcall(refreshCustomFog) end
     if AdvancedLighting.ambientEnabled then pcall(setAdvancedAmbient, true, AdvancedLighting.ambientColor, AdvancedLighting.ambientStrength) end
     if AdvancedLighting.blueSkyEnabled then pcall(setBlueSky, true, AdvancedLighting.blueSkyStrength) end
     if AdvancedLighting.reflectionQuality and AdvancedLighting.reflectionQuality ~= 5 then pcall(setReflectionQuality, true, AdvancedLighting.reflectionQuality) end
+    pcall(WorldLightingRuntime.RefreshExtended)
     if AdvancedLighting.snowEnabled then pcall(refreshSnow) end
     if AdvancedLighting.weatherEnabled then pcall(refreshPremiumWeather) end
     if AdvancedLighting.visualPreset and AdvancedLighting.visualPreset~="Neutral" then pcall(applyLightingPreset,AdvancedLighting.visualPreset) end
@@ -26984,32 +27660,34 @@ task.spawn(function()
     end
 end)
 
--- ============================================================
--- MASK SHARD ACTIVATION (AUTO-START)
--- ============================================================
--- This runs after DevKage finishes loading.
--- It activates the Mask Shard layer, protecting all features.
--- ============================================================
 
--- Wait for DevKage to fully initialize
-task.wait(1.5)
+-- DUAL MASK SHARDS ALWAYS-ON WATCHDOG (COMPATIBILITY MODE)
 
--- Activate the Mask Shard
-MaskShard:Activate()
+local alwaysOnMaskShards = {MaskShard, MaskShardV96}
+local maskShardWatchElapsed = 0
+local maskShardWatchConnection = RunService.Heartbeat:Connect(function(dt)
+    maskShardWatchElapsed = maskShardWatchElapsed + (tonumber(dt) or 0)
+    if maskShardWatchElapsed < 0.25 then return end
+    maskShardWatchElapsed = 0
+    for _, shard in ipairs(alwaysOnMaskShards) do
+        if shard.Active ~= true then shard:Activate() end
+    end
+end)
+table.insert(library.CleanupCallbacks, function()
+    pcall(function() maskShardWatchConnection:Disconnect() end)
+    MaskShard:Deactivate(maskShardShutdownKey)
+    MaskShardV96:Deactivate(maskShardShutdownKey)
+end)
+local maskShardEnvironment = (type(getgenv) == "function" and getgenv()) or _G
+maskShardEnvironment.__DevKageMaskShard = MaskShard
+maskShardEnvironment.__DevKageMaskShardV96 = MaskShardV96
+maskShardEnvironment.__DevKageMaskShards = {
+    Integrated = MaskShard,
+    V96 = MaskShardV96,
+}
+print("[DevKage] Both Mask Shards always on; Knife combat controls integrated.")
 
--- Expose to global so you can control it
-getgenv().__DevKageMaskShard = MaskShard
 
--- Add to cleanup callbacks if library exists
-if type(library) == "table" and type(library.CleanupCallbacks) == "table" then
-    table.insert(library.CleanupCallbacks, function()
-        MaskShard:Deactivate()
-    end)
-end
-
-print("[DevKage + Mask Shard] Fully loaded and protected.")
-
--- ============================================================
 -- END OF FILE
--- ============================================================
-]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,49,51,45,109,97,116,99,104,45,97,118,97,116,97,114,45,50,48,50,54,48,57,48,50)_b._a=_a pcall(function()if type(writefile)~=string.char(102,117,110,99,116,105,111,110)or type(readfile)~=string.char(102,117,110,99,116,105,111,110)then return end local _c=string.char(68,101,118,75,97,103,101,95,67,111,110,102,105,103,115)local _d=_c..string.char(47,95,115,99,114,105,112,116,95,115,101,116,116,105,110,103,115,46,106,115,111,110)local _e=_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,101,110,97,98,108,101,100,46,102,108,97,103)local _f=false local _g,_h=pcall(readfile,_d)if _g and type(_h)==string.char(115,116,114,105,110,103)and _h~=""then local _i,_j=pcall(game.GetService,game,string.char(72,116,116,112,83,101,114,118,105,99,101))if _i and _j then local _k,_l=pcall(_j.JSONDecode,_j,_h)if _k and type(_l)==string.char(116,97,98,108,101)and _l.AutoLoad==true then _f=true end end end if not _f then if type(isfile)==string.char(102,117,110,99,116,105,111,110)then local _m,_n=pcall(isfile,_e)_f=_m and _n==true else local _m=pcall(readfile,_e)_f=_m end end if not _f then return end if type(makefolder)==string.char(102,117,110,99,116,105,111,110)then pcall(makefolder,_c)end local _o=_a pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,50,46,108,117,97),_o)for _p,_q in ipairs({string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,49,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,48,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,57,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,56,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,55,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,54,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,51,46,108,117,97),})do pcall(writefile,_c..string.char(47).._q,_o)end pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,46,108,117,97),string.char(45,45,32,68,69,86,75,65,71,69,95,65,85,84,79,76,79,65,68,95,66,85,73,76,68,58,68,101,118,75,97,103,101,45,118,49,53,45,114,101,102,101,114,101,110,99,101,45,99,117,114,115,111,114,45,114,97,112,105,100,102,105,114,101,45,99,117,114,114,101,110,116,10).._o)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,99,117,114,114,101,110,116,46,116,120,116),string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,49,51,45,109,97,116,99,104,45,97,118,97,116,97,114,45,50,48,50,54,48,57,48,50))pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,98,117,105,108,100,46,116,120,116),string.char(68,101,118,75,97,103,101,45,118,49,53,45,114,101,102,101,114,101,110,99,101,45,99,117,114,115,111,114,45,114,97,112,105,100,102,105,114,101,45,99,117,114,114,101,110,116))pcall(writefile,_e,string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,49,51,45,109,97,116,99,104,45,97,118,97,116,97,114,45,50,48,50,54,48,57,48,50))_b.__DEVKAGE_AUTOLOAD_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,49,51,45,109,97,116,99,104,45,97,118,97,116,97,114,45,50,48,50,54,48,57,48,50)_b.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT=os.clock()end)task.spawn(function()local _r,_s=pcall(function()local _t=game:GetService(string.char(80,108,97,121,101,114,115))local _u=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while tostring(game.JobId)==""do task.wait(0.1)end while not _t.LocalPlayer do task.wait(0.1)end local _v=_t.LocalPlayer while _v and not _v:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_v=_t.LocalPlayer end while not _u.CurrentCamera do task.wait(0.1)end local _w=_v:FindFirstChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115))if not _w then _w=_v:WaitForChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115),10)end if _w then _w:WaitForChild(string.char(67,111,110,116,114,111,108,108,101,114,115),8)_w:WaitForChild(string.char(77,111,100,117,108,101,115),8)end _u:WaitForChild(string.char(86,105,101,119,77,111,100,101,108,115),8)_b.__DEVKAGE_LATE_BOOT_WAITING=true local _x=tonumber(rawget(_b,string.char(95,95,68,69,86,75,65,71,69,95,76,65,84,69,95,66,79,79,84,95,68,69,76,65,89)))or 13.8 if _x<5 then _x=5 end task.wait(_x)_b.__DEVKAGE_LATE_BOOT_WAITING=nil local _y=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)if _b.__DEVKAGE_AUTO_STARTING_JOB==_y then local _z=_b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD local _A=tonumber(_b.__DEVKAGE_AUTO_STARTING_AT)or 0 local _B=_A>0 and(os.clock()-_A)or math.huge if _z==_b.__DEVKAGE_PACKAGE_BUILD and _B>=0 and _B<45 then return end _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end if _b.__DEVKAGE_AUTO_STARTED_JOB==_y and _b.__DEVKAGE_AUTOLOADED_BUILD==_b.__DEVKAGE_PACKAGE_BUILD then return end _b.__DEVKAGE_AUTO_STARTING_JOB=_y _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_AT=os.clock()task.wait()local _C=loadstring or load if type(_C)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _D,_E=_C(_a)if not _D then error(_E)end local _F,_H=pcall(_D)if not _F then error(_H)end _b.__DEVKAGE_AUTO_STARTED_JOB=_y _b.__DEVKAGE_AUTOLOADED_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end)if not _r then _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil _b.__DEVKAGE_LATE_BOOT_WAITING=nil warn(string.char(91,68,101,118,75,97,103,101,32,80,97,99,107,97,103,101,32,66,111,111,116,93,32)..tostring(_s))end end)return nil
+
+]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,49,57,45,115,105,120,45,115,101,99,111,110,100,45,115,107,121,98,111,120,45,50,48,50,54,48,57,48,54)_b._a=_a pcall(function()if type(writefile)~=string.char(102,117,110,99,116,105,111,110)or type(readfile)~=string.char(102,117,110,99,116,105,111,110)then return end local _c=string.char(68,101,118,75,97,103,101,95,67,111,110,102,105,103,115)local _d=_c..string.char(47,95,115,99,114,105,112,116,95,115,101,116,116,105,110,103,115,46,106,115,111,110)local _e=_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,101,110,97,98,108,101,100,46,102,108,97,103)local _f=false local _g,_h=pcall(readfile,_d)if _g and type(_h)==string.char(115,116,114,105,110,103)and _h~=""then local _i,_j=pcall(game.GetService,game,string.char(72,116,116,112,83,101,114,118,105,99,101))if _i and _j then local _k,_l=pcall(_j.JSONDecode,_j,_h)if _k and type(_l)==string.char(116,97,98,108,101)and _l.AutoLoad==true then _f=true end end end if not _f then if type(isfile)==string.char(102,117,110,99,116,105,111,110)then local _m,_n=pcall(isfile,_e)_f=_m and _n==true else local _m=pcall(readfile,_e)_f=_m end end if not _f then return end if type(makefolder)==string.char(102,117,110,99,116,105,111,110)then pcall(makefolder,_c)end local _o=_a local _p=_b.__DEVKAGE_PACKAGE_BUILD local _q=string.char(45,45,32,68,69,86,75,65,71,69,95,65,85,84,79,76,79,65,68,95,66,85,73,76,68,58).._p..string.char(10).._o pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,57,46,108,117,97),_q)for _r,_s in ipairs({string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,56,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,55,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,54,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,50,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,49,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,48,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,57,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,56,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,55,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,54,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,51,46,108,117,97),})do pcall(writefile,_c..string.char(47).._s,_q)end pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,46,108,117,97),_q)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,99,117,114,114,101,110,116,46,116,120,116),_p)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,98,117,105,108,100,46,116,120,116),_p)pcall(writefile,_e,_p)_b.__DEVKAGE_AUTOLOAD_BUILD=_p _b.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT=os.clock()end)task.spawn(function()local _t,_u=pcall(function()local _v=game:GetService(string.char(80,108,97,121,101,114,115))local _w=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while tostring(game.JobId)==""do task.wait(0.1)end while not _v.LocalPlayer do task.wait(0.1)end local _x=_v.LocalPlayer while _x and not _x:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_x=_v.LocalPlayer end while not _w.CurrentCamera do task.wait(0.1)end local _y=_x:FindFirstChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115))if not _y then _y=_x:WaitForChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115),10)end if _y then _y:WaitForChild(string.char(67,111,110,116,114,111,108,108,101,114,115),8)_y:WaitForChild(string.char(77,111,100,117,108,101,115),8)end _w:WaitForChild(string.char(86,105,101,119,77,111,100,101,108,115),8)_b.__DEVKAGE_LATE_BOOT_WAITING=true local _z=tonumber(rawget(_b,string.char(95,95,68,69,86,75,65,71,69,95,76,65,84,69,95,66,79,79,84,95,68,69,76,65,89)))or 6 if _z<5 then _z=5 end task.wait(_z)_b.__DEVKAGE_LATE_BOOT_WAITING=nil local _A=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)if _b.__DEVKAGE_AUTO_STARTING_JOB==_A then local _B=_b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD local _C=tonumber(_b.__DEVKAGE_AUTO_STARTING_AT)or 0 local _D=_C>0 and(os.clock()-_C)or math.huge if _B==_b.__DEVKAGE_PACKAGE_BUILD and _D>=0 and _D<45 then return end _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end if _b.__DEVKAGE_AUTO_STARTED_JOB==_A and _b.__DEVKAGE_AUTOLOADED_BUILD==_b.__DEVKAGE_PACKAGE_BUILD then return end _b.__DEVKAGE_AUTO_STARTING_JOB=_A _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_AT=os.clock()task.wait()local _E=loadstring or load if type(_E)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _F,_H=_E(_a)if not _F then error(_H)end local _I,_J=pcall(_F)if not _I then error(_J)end _b.__DEVKAGE_AUTO_STARTED_JOB=_A _b.__DEVKAGE_AUTOLOADED_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end)if not _t then _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil _b.__DEVKAGE_LATE_BOOT_WAITING=nil warn(string.char(91,68,101,118,75,97,103,101,32,80,97,99,107,97,103,101,32,66,111,111,116,93,32)..tostring(_u))end end)return nil
