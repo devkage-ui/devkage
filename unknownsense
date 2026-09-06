@@ -4263,6 +4263,8 @@ local UA = {
     replicatePending = {},
     replicateScheduled = false,
     compatibilityWatcherStarted = false,
+    externalStackDetected = false,
+    externalDetectorStarted = false,
 }
 
 do
@@ -4274,6 +4276,57 @@ end
 local function ua_isActiveInstance()
     local environment = ua_environment()
     return not UA.disabled and environment.__DevKageInventoryActive == UA
+end
+
+local function ua_markExternalStack()
+    if UA.externalStackDetected then return end
+    UA.externalStackDetected = true
+    local environment = ua_environment()
+    environment.__DevKageInventoryExternalOwner = true
+end
+
+local function ua_startExternalDetector()
+    if UA.externalDetectorStarted then return end
+    UA.externalDetectorStarted = true
+    task.spawn(function()
+        while ua_isActiveInstance() and not UA.externalStackDetected do
+            local changed = false
+            pcall(function()
+                if UA.CosmeticLibrary then
+                    changed = changed
+                        or (UA.ownsCosmeticWrapper and UA.CosmeticLibrary.OwnsCosmetic ~= UA.ownsCosmeticWrapper)
+                        or (UA.ownsNormallyWrapper and UA.CosmeticLibrary.OwnsCosmeticNormally ~= UA.ownsNormallyWrapper)
+                        or (UA.ownsUniversalWrapper and UA.CosmeticLibrary.OwnsCosmeticUniversally ~= UA.ownsUniversalWrapper)
+                        or (UA.ownsForWeaponWrapper and UA.CosmeticLibrary.OwnsCosmeticForWeapon ~= UA.ownsForWeaponWrapper)
+                end
+                if UA.DataController then
+                    changed = changed
+                        or (UA.dataGetWrapper and UA.DataController.Get ~= UA.dataGetWrapper)
+                        or (UA.weaponDataWrapper and UA.DataController.GetWeaponData ~= UA.weaponDataWrapper)
+                end
+                if UA.EmoteController and UA.getEmotesWrapper then
+                    changed = changed or UA.EmoteController.GetEmotes ~= UA.getEmotesWrapper
+                end
+                if UA.ClientItem and UA.createViewModelWrapper then
+                    changed = changed or UA.ClientItem._CreateViewModel ~= UA.createViewModelWrapper
+                end
+                if UA.ClientViewModel then
+                    changed = changed
+                        or (UA.clientViewModelNewWrapper and UA.ClientViewModel.new ~= UA.clientViewModelNewWrapper)
+                        or (UA.getCharmWrapper and UA.ClientViewModel.GetCharm ~= UA.getCharmWrapper)
+                        or (UA.getWrapWrapper and UA.ClientViewModel.GetWrap ~= UA.getWrapWrapper)
+                end
+                if UA.ItemLibrary and UA.getViewModelImageWrapper then
+                    changed = changed or UA.ItemLibrary.GetViewModelImageFromWeaponData ~= UA.getViewModelImageWrapper
+                end
+            end)
+            if changed then
+                ua_markExternalStack()
+                break
+            end
+            task.wait(0.1)
+        end
+    end)
 end
 
 local function ua_requestReplicate(key)
@@ -4599,7 +4652,13 @@ local function ua_installOwnershipSpoof()
     UA.originalOwnsCosmeticUniversally = CosmeticLibrary.OwnsCosmeticUniversally
     UA.originalOwnsCosmeticForWeapon = CosmeticLibrary.OwnsCosmeticForWeapon
 
-    CosmeticLibrary.OwnsCosmetic = function(self, inventory, name, weapon)
+    local ownsCosmeticWrapper
+    ownsCosmeticWrapper = function(self, inventory, name, weapon)
+        if CosmeticLibrary.OwnsCosmetic ~= ownsCosmeticWrapper then
+            ua_markExternalStack()
+            if UA.originalOwnsCosmetic then return UA.originalOwnsCosmetic(self, inventory, name, weapon) end
+            return false
+        end
         if not ua_isActiveInstance() then
             if UA.originalOwnsCosmetic then return UA.originalOwnsCosmetic(self, inventory, name, weapon) end
             return false
@@ -4611,8 +4670,16 @@ local function ua_installOwnershipSpoof()
         if UA.originalOwnsCosmetic then return UA.originalOwnsCosmetic(self, inventory, name, weapon) end
         return false
     end
+    CosmeticLibrary.OwnsCosmetic = ownsCosmeticWrapper
+    UA.ownsCosmeticWrapper = ownsCosmeticWrapper
 
-    CosmeticLibrary.OwnsCosmeticNormally = function(self, inventory, name, weapon)
+    local ownsNormallyWrapper
+    ownsNormallyWrapper = function(self, inventory, name, weapon)
+        if CosmeticLibrary.OwnsCosmeticNormally ~= ownsNormallyWrapper then
+            ua_markExternalStack()
+            if UA.originalOwnsCosmeticNormally then return UA.originalOwnsCosmeticNormally(self, inventory, name, weapon) end
+            return false
+        end
         if not ua_isActiveInstance() then
             if UA.originalOwnsCosmeticNormally then return UA.originalOwnsCosmeticNormally(self, inventory, name, weapon) end
             return false
@@ -4621,8 +4688,16 @@ local function ua_installOwnershipSpoof()
         if UA.originalOwnsCosmeticNormally then return UA.originalOwnsCosmeticNormally(self, inventory, name, weapon) end
         return false
     end
+    CosmeticLibrary.OwnsCosmeticNormally = ownsNormallyWrapper
+    UA.ownsNormallyWrapper = ownsNormallyWrapper
 
-    CosmeticLibrary.OwnsCosmeticUniversally = function(self, inventory, name, weapon)
+    local ownsUniversalWrapper
+    ownsUniversalWrapper = function(self, inventory, name, weapon)
+        if CosmeticLibrary.OwnsCosmeticUniversally ~= ownsUniversalWrapper then
+            ua_markExternalStack()
+            if UA.originalOwnsCosmeticUniversally then return UA.originalOwnsCosmeticUniversally(self, inventory, name, weapon) end
+            return false
+        end
         if not ua_isActiveInstance() then
             if UA.originalOwnsCosmeticUniversally then return UA.originalOwnsCosmeticUniversally(self, inventory, name, weapon) end
             return false
@@ -4631,8 +4706,16 @@ local function ua_installOwnershipSpoof()
         if UA.originalOwnsCosmeticUniversally then return UA.originalOwnsCosmeticUniversally(self, inventory, name, weapon) end
         return false
     end
+    CosmeticLibrary.OwnsCosmeticUniversally = ownsUniversalWrapper
+    UA.ownsUniversalWrapper = ownsUniversalWrapper
 
-    CosmeticLibrary.OwnsCosmeticForWeapon = function(self, inventory, name, weapon)
+    local ownsForWeaponWrapper
+    ownsForWeaponWrapper = function(self, inventory, name, weapon)
+        if CosmeticLibrary.OwnsCosmeticForWeapon ~= ownsForWeaponWrapper then
+            ua_markExternalStack()
+            if UA.originalOwnsCosmeticForWeapon then return UA.originalOwnsCosmeticForWeapon(self, inventory, name, weapon) end
+            return false
+        end
         if not ua_isActiveInstance() then
             if UA.originalOwnsCosmeticForWeapon then return UA.originalOwnsCosmeticForWeapon(self, inventory, name, weapon) end
             return false
@@ -4641,6 +4724,8 @@ local function ua_installOwnershipSpoof()
         if UA.originalOwnsCosmeticForWeapon then return UA.originalOwnsCosmeticForWeapon(self, inventory, name, weapon) end
         return false
     end
+    CosmeticLibrary.OwnsCosmeticForWeapon = ownsForWeaponWrapper
+    UA.ownsForWeaponWrapper = ownsForWeaponWrapper
 end
 
 local function ua_installDataSpoof()
@@ -4650,7 +4735,12 @@ local function ua_installDataSpoof()
     UA.originalDataGet = DataController.Get
     UA.originalGetWeaponData = DataController.GetWeaponData
 
-    DataController.Get = function(self, key)
+    local dataGetWrapper
+    dataGetWrapper = function(self, key)
+        if DataController.Get ~= dataGetWrapper then
+            ua_markExternalStack()
+            return UA.originalDataGet(self, key)
+        end
         if not ua_isActiveInstance() then return UA.originalDataGet(self, key) end
         local data = UA.originalDataGet(self, key)
         if key == "CosmeticInventory" then
@@ -4685,9 +4775,16 @@ local function ua_installDataSpoof()
         end
         return data
     end
+    DataController.Get = dataGetWrapper
+    UA.dataGetWrapper = dataGetWrapper
 
     if type(UA.originalGetWeaponData) == "function" then
-        DataController.GetWeaponData = function(self, weaponName)
+        local weaponDataWrapper
+        weaponDataWrapper = function(self, weaponName)
+            if DataController.GetWeaponData ~= weaponDataWrapper then
+                ua_markExternalStack()
+                return UA.originalGetWeaponData(self, weaponName)
+            end
             if not ua_isActiveInstance() then return UA.originalGetWeaponData(self, weaponName) end
             local data = UA.originalGetWeaponData(self, weaponName)
             if not data then return nil end
@@ -4712,6 +4809,8 @@ local function ua_installDataSpoof()
             end
             return merged
         end
+        DataController.GetWeaponData = weaponDataWrapper
+        UA.weaponDataWrapper = weaponDataWrapper
     end
 end
 
@@ -4719,7 +4818,12 @@ local function ua_installEmoteController()
     if UA.emoteControllerInstalled or not UA.EmoteController or type(UA.EmoteController.GetEmotes) ~= "function" then return end
     UA.emoteControllerInstalled = true
     UA.originalGetEmotes = UA.EmoteController.GetEmotes
-    UA.EmoteController.GetEmotes = function(self, ...)
+    local getEmotesWrapper
+    getEmotesWrapper = function(self, ...)
+        if UA.EmoteController.GetEmotes ~= getEmotesWrapper then
+            ua_markExternalStack()
+            return UA.originalGetEmotes(self, ...)
+        end
         if not ua_isActiveInstance() then return UA.originalGetEmotes(self, ...) end
         local emotes = UA.originalGetEmotes(self, ...)
         if not ua_emotesEnabled() or type(emotes) ~= "table" then return emotes end
@@ -4735,6 +4839,8 @@ local function ua_installEmoteController()
         end
         return emotes
     end
+    UA.EmoteController.GetEmotes = getEmotesWrapper
+    UA.getEmotesWrapper = getEmotesWrapper
 end
 
 local function ua_syncWeaponEntry(weaponName, cosmeticType, cosmeticName, options)
@@ -4822,129 +4928,92 @@ local function ua_installRemoteHooks()
     if UA.remoteHooksInstalled or type(hookmetamethod) ~= "function" or type(getnamecallmethod) ~= "function" then return end
     UA.remoteHooksInstalled = true
 
-    local baselineNamecall = nil
-    if type(getrawmetatable) == "function" then
-        pcall(function()
-            local mt = getrawmetatable(game)
-            if mt and type(mt.__namecall) == "function" then
-                baselineNamecall = mt.__namecall
-            end
-        end)
-    end
-
     local oldNamecall
-    local inDevKageNamecall = false
+    local callback
 
-    local function escapeNamecall(self, ...)
-        -- If another script's hook causes our hook to be entered again while we
-        -- are already inside it, never call back into the hook chain.  Use the
-        -- pre-DevKage baseline when available; this is the freeze breaker.
-        if baselineNamecall and baselineNamecall ~= oldNamecall then
-            local ok, a, b, c, d, e = pcall(baselineNamecall, self, ...)
-            if ok then return a, b, c, d, e end
-        end
-        return oldNamecall(self, ...)
-    end
-
-    local function callback(self, ...)
-        if inDevKageNamecall then
-            return escapeNamecall(self, ...)
-        end
-        if not ua_isActiveInstance() then
-            return oldNamecall(self, ...)
-        end
+    callback = function(self, ...)
+        -- One-way chaining only.  Never inspect the raw metatable and never
+        -- jump around the current hook chain; those patterns can form cycles
+        -- when a second script installs another __namecall hook after DevKage.
         if getnamecallmethod() ~= "FireServer" then
             return oldNamecall(self, ...)
         end
 
-        -- Ignore every unrelated remote before entering any DevKage logic.
-        if self ~= UA.EquipRemote and self ~= UA.FavoriteRemote and self ~= UA.UseItemRemote then
+        -- Unrelated remotes go straight through with no DevKage work.
+        if self ~= UA.EquipRemote and self ~= UA.FavoriteRemote then
             return oldNamecall(self, ...)
         end
 
-        inDevKageNamecall = true
-        UA.namecallBusy = true
+        if not ua_isActiveInstance() or UA.externalStackDetected then
+            return oldNamecall(self, ...)
+        end
+
         local args = table.pack(...)
-        local swallow = false
+        local handled = false
 
         local ok = pcall(function()
-            if UA.UseItemRemote and self == UA.UseItemRemote then
-                local objectID = args[1]
-                if UA.FighterController then
-                    pcall(function()
-                        local fighter = UA.FighterController:GetFighter(LocalPlayer)
-                        if fighter and fighter.Items then
-                            for _, item in pairs(fighter.Items) do
-                                if item:Get("ObjectID") == objectID then
-                                    UA.lastUsedWeapon = item.Name
-                                    break
-                                end
-                            end
-                        end
-                    end)
-                end
-                return
-            end
-
-            if UA.EquipRemote and self == UA.EquipRemote then
-                local weaponName, cosmeticType, cosmeticName, options = args[1], args[2], args[3], args[4] or {}
+            if self == UA.EquipRemote then
+                local weaponName = args[1]
+                local cosmeticType = args[2]
+                local cosmeticName = args[3]
+                local options = type(args[4]) == "table" and args[4] or {}
 
                 if ua_isEmote(cosmeticType, cosmeticName) then
                     if ua_emotesEnabled() and ua_isNotFinisher(cosmeticName) then
-                        if not UA.replayingEmotes then ua_recordEmote(args) end
-                        local rawCosmetics = ua_rawData("CosmeticInventory")
-                        local rawEmotes = ua_rawData("EmoteInventory")
-                        local genuinelyOwned =
-                            ua_inventoryContains(rawCosmetics, tostring(cosmeticName or ""))
-                            or ua_inventoryContains(rawEmotes, tostring(cosmeticName or ""))
-                        if not genuinelyOwned then swallow = true end
+                        if not UA.replayingEmotes then
+                            ua_recordEmote(args)
+                        end
+                        -- Local cosmetic unlocks never need a server round-trip.
+                        -- If another script is above us in the hook chain, it may
+                        -- handle the call first; if it delegates here, we stop here.
+                        handled = true
                     end
                     return
                 end
 
-                if ua_weaponsEnabled() and cosmeticType and ua_isNotFinisher(cosmeticType) and ua_isNotFinisher(cosmeticName) then
-                    local genuinelyOwned = false
-                    if cosmeticName and cosmeticName ~= "None" and cosmeticName ~= "" then
-                        genuinelyOwned = ua_inventoryContains(ua_rawData("CosmeticInventory"), tostring(cosmeticName))
-                    end
+                if ua_weaponsEnabled()
+                    and cosmeticType
+                    and ua_isNotFinisher(cosmeticType)
+                    and ua_isNotFinisher(cosmeticName) then
                     ua_syncWeaponEntry(weaponName, cosmeticType, cosmeticName, options)
-                    if genuinelyOwned then
-                        task.defer(UA.save)
-                    else
-                        ua_requestReplicate("WeaponInventory")
-                        task.defer(UA.save)
-                        swallow = true
-                    end
+                    ua_requestReplicate("WeaponInventory")
+                    task.defer(UA.save)
+                    handled = true
                     return
                 end
             end
 
-            if UA.FavoriteRemote and self == UA.FavoriteRemote then
+            if self == UA.FavoriteRemote and ua_weaponsEnabled() then
+                local weaponName = args[1]
                 local cosmeticName = args[2]
-                if ua_weaponsEnabled() and cosmeticName and ua_isNotFinisher(cosmeticName) and not ua_isEmote(nil, cosmeticName) then
-                    UA.weaponFavorites[args[1]] = UA.weaponFavorites[args[1]] or {}
-                    UA.weaponFavorites[args[1]][cosmeticName] = args[3] or nil
+                if cosmeticName
+                    and ua_isNotFinisher(cosmeticName)
+                    and not ua_isEmote(nil, cosmeticName) then
+                    UA.weaponFavorites[weaponName] = UA.weaponFavorites[weaponName] or {}
+                    UA.weaponFavorites[weaponName][cosmeticName] = args[3] or nil
                     ua_environment().__DevKageWeaponFavorites = UA.weaponFavorites
                     ua_requestReplicate("FavoritedCosmetics")
                     task.defer(UA.save)
-                    swallow = true
+                    handled = true
                 end
             end
         end)
 
-        UA.namecallBusy = false
-        inDevKageNamecall = false
-
         if not ok then
+            -- Fail open to the next/original hook rather than retrying or
+            -- attempting a raw-metatable escape.
             return oldNamecall(self, table.unpack(args, 1, args.n))
         end
-        if swallow then return end
+
+        if handled then
+            return
+        end
         return oldNamecall(self, table.unpack(args, 1, args.n))
     end
 
     oldNamecall = hookmetamethod(game, "__namecall", callback)
     UA.previousNamecall = oldNamecall
-    UA.baselineNamecall = baselineNamecall
+    ua_environment().__DevKageInventoryNamecallHook = callback
 end
 
 local function ua_installWeaponViewmodelHooks()
@@ -4953,8 +5022,13 @@ local function ua_installWeaponViewmodelHooks()
 
     if UA.ClientItem and UA.ClientItem._CreateViewModel then
         UA.originalCreateViewModel = UA.ClientItem._CreateViewModel
-        UA.ClientItem._CreateViewModel = function(self, viewmodelRef)
-            if not ua_isActiveInstance() then return UA.originalCreateViewModel(self, viewmodelRef) end
+        local createViewModelWrapper
+        createViewModelWrapper = function(self, viewmodelRef)
+            if UA.ClientItem._CreateViewModel ~= createViewModelWrapper then
+                ua_markExternalStack()
+                return UA.originalCreateViewModel(self, viewmodelRef)
+            end
+            if not ua_isActiveInstance() or UA.externalStackDetected then return UA.originalCreateViewModel(self, viewmodelRef) end
             local weaponName = self.Name
             local weaponPlayer = self.ClientFighter and self.ClientFighter.Player
             UA.constructingWeapon = (weaponPlayer == LocalPlayer) and weaponName or nil
@@ -4977,12 +5051,19 @@ local function ua_installWeaponViewmodelHooks()
             UA.constructingWeapon = nil
             return result
         end
+        UA.ClientItem._CreateViewModel = createViewModelWrapper
+        UA.createViewModelWrapper = createViewModelWrapper
     end
 
     if UA.ClientViewModel and UA.ClientViewModel.new then
         UA.originalClientViewModelNew = UA.ClientViewModel.new
-        UA.ClientViewModel.new = function(replicatedData, clientItem)
-            if not ua_isActiveInstance() then return UA.originalClientViewModelNew(replicatedData, clientItem) end
+        local clientViewModelNewWrapper
+        clientViewModelNewWrapper = function(replicatedData, clientItem)
+            if UA.ClientViewModel.new ~= clientViewModelNewWrapper then
+                ua_markExternalStack()
+                return UA.originalClientViewModelNew(replicatedData, clientItem)
+            end
+            if not ua_isActiveInstance() or UA.externalStackDetected then return UA.originalClientViewModelNew(replicatedData, clientItem) end
             local weaponPlayer = clientItem.ClientFighter and clientItem.ClientFighter.Player
             local weaponName = UA.constructingWeapon or clientItem.Name
             if ua_weaponsEnabled() and weaponPlayer == LocalPlayer and UA.weaponEquipped[weaponName] then
@@ -5001,11 +5082,18 @@ local function ua_installWeaponViewmodelHooks()
             end
             return result
         end
+        UA.ClientViewModel.new = clientViewModelNewWrapper
+        UA.clientViewModelNewWrapper = clientViewModelNewWrapper
 
         if UA.ClientViewModel.GetCharm then
             UA.originalGetCharm = UA.ClientViewModel.GetCharm
-            UA.ClientViewModel.GetCharm = function(self)
-                if not ua_isActiveInstance() then return UA.originalGetCharm(self) end
+            local getCharmWrapper
+            getCharmWrapper = function(self)
+                if UA.ClientViewModel.GetCharm ~= getCharmWrapper then
+                    ua_markExternalStack()
+                    return UA.originalGetCharm(self)
+                end
+                if not ua_isActiveInstance() or UA.externalStackDetected then return UA.originalGetCharm(self) end
                 local weaponName = self.ClientItem and self.ClientItem.Name
                 local weaponPlayer = self.ClientItem and self.ClientItem.ClientFighter and self.ClientItem.ClientFighter.Player
                 if ua_weaponsEnabled() and weaponName and weaponPlayer == LocalPlayer and UA.weaponEquipped[weaponName] and UA.weaponEquipped[weaponName].Charm then
@@ -5013,12 +5101,19 @@ local function ua_installWeaponViewmodelHooks()
                 end
                 return UA.originalGetCharm(self)
             end
+            UA.ClientViewModel.GetCharm = getCharmWrapper
+            UA.getCharmWrapper = getCharmWrapper
         end
 
         if UA.ClientViewModel.GetWrap then
             UA.originalGetWrap = UA.ClientViewModel.GetWrap
-            UA.ClientViewModel.GetWrap = function(self)
-                if not ua_isActiveInstance() then return UA.originalGetWrap(self) end
+            local getWrapWrapper
+            getWrapWrapper = function(self)
+                if UA.ClientViewModel.GetWrap ~= getWrapWrapper then
+                    ua_markExternalStack()
+                    return UA.originalGetWrap(self)
+                end
+                if not ua_isActiveInstance() or UA.externalStackDetected then return UA.originalGetWrap(self) end
                 local weaponName = self.ClientItem and self.ClientItem.Name
                 local weaponPlayer = self.ClientItem and self.ClientItem.ClientFighter and self.ClientItem.ClientFighter.Player
                 if ua_weaponsEnabled() and weaponName and weaponPlayer == LocalPlayer and UA.weaponEquipped[weaponName] and UA.weaponEquipped[weaponName].Wrap then
@@ -5026,13 +5121,20 @@ local function ua_installWeaponViewmodelHooks()
                 end
                 return UA.originalGetWrap(self)
             end
+            UA.ClientViewModel.GetWrap = getWrapWrapper
+            UA.getWrapWrapper = getWrapWrapper
         end
     end
 
     if UA.ItemLibrary and UA.ItemLibrary.GetViewModelImageFromWeaponData then
         UA.originalGetViewModelImage = UA.ItemLibrary.GetViewModelImageFromWeaponData
-        UA.ItemLibrary.GetViewModelImageFromWeaponData = function(self, weaponData, highRes)
-            if not ua_isActiveInstance() then return UA.originalGetViewModelImage(self, weaponData, highRes) end
+        local getViewModelImageWrapper
+        getViewModelImageWrapper = function(self, weaponData, highRes)
+            if UA.ItemLibrary.GetViewModelImageFromWeaponData ~= getViewModelImageWrapper then
+                ua_markExternalStack()
+                return UA.originalGetViewModelImage(self, weaponData, highRes)
+            end
+            if not ua_isActiveInstance() or UA.externalStackDetected then return UA.originalGetViewModelImage(self, weaponData, highRes) end
             if not weaponData then return UA.originalGetViewModelImage(self, weaponData, highRes) end
             local weaponName = weaponData.Name
             if ua_weaponsEnabled() and UA.weaponEquipped[weaponName] and UA.weaponEquipped[weaponName].Skin then
@@ -5041,6 +5143,8 @@ local function ua_installWeaponViewmodelHooks()
             end
             return UA.originalGetViewModelImage(self, weaponData, highRes)
         end
+        UA.ItemLibrary.GetViewModelImageFromWeaponData = getViewModelImageWrapper
+        UA.getViewModelImageWrapper = getViewModelImageWrapper
     end
 end
 
@@ -5119,9 +5223,7 @@ function UA.Initialize()
         local dataRemotes = remotes and remotes:FindFirstChild("Data")
         UA.EquipRemote = dataRemotes and dataRemotes:FindFirstChild("EquipCosmetic")
         UA.FavoriteRemote = dataRemotes and dataRemotes:FindFirstChild("FavoriteCosmetic")
-        local replicationRemotes = remotes and remotes:FindFirstChild("Replication")
-        local fighterRemotes = replicationRemotes and replicationRemotes:FindFirstChild("Fighter")
-        UA.UseItemRemote = fighterRemotes and fighterRemotes:FindFirstChild("UseItem")
+        UA.UseItemRemote = nil
 
         ua_installOwnershipSpoof()
         ua_installDataSpoof()
@@ -5130,6 +5232,7 @@ function UA.Initialize()
         ua_materializeEmoteLoadout()
         ua_installRemoteHooks()
         ua_installWeaponViewmodelHooks()
+        ua_startExternalDetector()
         UA.ready = true
         UA.RefreshOwnedCatalogs()
     end)
