@@ -559,6 +559,12 @@ local utility = {}
 local pages   = {}
 local sections = {}
 
+-- Cooperative startup budget: constructing the full UI in one scheduler slice can
+-- stall the client, especially when DevKage is started beside another autoexec.
+-- Yield every N rendered objects only while the initial UI is being assembled.
+local __devkageStartupRenderBudget = __devkageMultiInjectAutoBoot and 60 or 140
+local __devkageStartupRenderCount = 0
+
 do
     library.__index  = library
     pages.__index    = pages
@@ -777,6 +783,12 @@ end
 
 
 function utility:RenderObject(RenderType, RenderProperties, RenderHidden)
+    if (__devkageStartupRenderBudget or 0) > 0 then
+        __devkageStartupRenderCount = __devkageStartupRenderCount + 1
+        if (__devkageStartupRenderCount % __devkageStartupRenderBudget) == 0 then
+            task.wait()
+        end
+    end
     local Render = Instance.new(RenderType)
     if RenderProperties and typeof(RenderProperties) == "table" then
         for Property, Value in pairs(RenderProperties) do
@@ -942,7 +954,10 @@ function library:CreateWindow(Properties)
                 end
             end)
 
-            local wantedIcon = not externalCursorAlive()
+            -- Always show the native cursor while the DevKage menu is open.
+            -- A custom cursor can be a few pixels off on some executors/inset modes,
+            -- which makes small keybind controls feel impossible to click.
+            local wantedIcon = true
             pcall(function()
                 if uis.MouseIconEnabled ~= wantedIcon then
                     uis.MouseIconEnabled = wantedIcon
@@ -2028,6 +2043,8 @@ library.KeybindManager = library.KeybindManager or {
     HackerAlertActive = false,
     HackerAlertFlashConnection = nil,
     HackerAlertExpiresAt = 0,
+    StartupBatch = true,
+    RefreshPending = false,
 }
 
 local BindManager = library.KeybindManager
@@ -2290,7 +2307,7 @@ function BindManager:EnsureUI(window)
     menu.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
     menu.BorderColor3 = Color3.fromRGB(5, 5, 5)
     menu.BorderSizePixel = 1
-    menu.Size = UDim2.fromOffset(184, 176)
+    menu.Size = UDim2.fromOffset(204, 194)
     menu.Visible = false
     menu.ZIndex = 50000
     menu.Parent = overlay
@@ -2360,7 +2377,7 @@ function BindManager:EnsureUI(window)
     keyButton.BorderColor3 = Color3.fromRGB(8, 8, 8)
     keyButton.BorderSizePixel = 1
     keyButton.Position = UDim2.new(0, 8, 0, 109)
-    keyButton.Size = UDim2.new(1, -16, 0, 21)
+    keyButton.Size = UDim2.new(1, -16, 0, 30)
     keyButton.Font = Enum.Font.Code
     keyButton.TextSize = 9
     keyButton.TextColor3 = Color3.fromRGB(205, 205, 205)
@@ -2381,8 +2398,8 @@ function BindManager:EnsureUI(window)
     clearButton.BackgroundColor3 = Color3.fromRGB(24, 24, 24)
     clearButton.BorderColor3 = Color3.fromRGB(8, 8, 8)
     clearButton.BorderSizePixel = 1
-    clearButton.Position = UDim2.new(0, 8, 0, 137)
-    clearButton.Size = UDim2.new(0.5, -10, 0, 24)
+    clearButton.Position = UDim2.new(0, 8, 0, 148)
+    clearButton.Size = UDim2.new(0.5, -10, 0, 28)
     clearButton.Font = Enum.Font.Code
     clearButton.TextSize = 9
     clearButton.TextColor3 = Color3.fromRGB(175, 175, 175)
@@ -2405,8 +2422,8 @@ function BindManager:EnsureUI(window)
     closeButton.BackgroundColor3 = Color3.fromRGB(24, 24, 24)
     closeButton.BorderColor3 = Color3.fromRGB(8, 8, 8)
     closeButton.BorderSizePixel = 1
-    closeButton.Position = UDim2.new(0.5, 2, 0, 137)
-    closeButton.Size = UDim2.new(0.5, -10, 0, 24)
+    closeButton.Position = UDim2.new(0.5, 2, 0, 148)
+    closeButton.Size = UDim2.new(0.5, -10, 0, 28)
     closeButton.Font = Enum.Font.Code
     closeButton.TextSize = 9
     closeButton.TextColor3 = Color3.fromRGB(175, 175, 175)
@@ -2547,6 +2564,11 @@ function BindManager:RefreshControl(control)
 end
 
 function BindManager:RefreshActive()
+    if self.StartupBatch == true then
+        self.RefreshPending = true
+        return
+    end
+    self.RefreshPending = false
     if not self.ActiveList or not self.ActiveFrame then return end
     for _, child in ipairs(self.ActiveList:GetChildren()) do
         if child.Name == "BindEntry" then child:Destroy() end
@@ -2835,6 +2857,18 @@ function sections:CreateToggle(Properties)
         local lastLeftClick = 0
         local leftClickToken = 0
         utility:CreateConnection(Content_Holder_Button.MouseButton1Click, function()
+            -- Single-click the right side / bind label to open the keybind menu.
+            -- The rest of the row keeps the normal single-click toggle behavior.
+            local mouse = uis:GetMouseLocation()
+            local holderPos = Content_Holder.AbsolutePosition
+            local holderSize = Content_Holder.AbsoluteSize
+            if mouse.X >= (holderPos.X + holderSize.X - 86) then
+                leftClickToken = leftClickToken + 1
+                lastLeftClick = 0
+                if library.KeybindManager then library.KeybindManager:ShowMenu(Content) end
+                return
+            end
+
             local now = os.clock()
             leftClickToken = leftClickToken + 1
             local token = leftClickToken
@@ -6658,10 +6692,8 @@ end
 SpooferState.LoadAutoLoad()
 SpooferState.LoadELOAutoLoad()
 
--- Preserve the saved files, but never execute them automatically this session.
-getgenv().__DevKageConfig.autoLoadSpoofer = false
-getgenv().__DevKageConfig.eloLiveSyncAutoLoad = false
-SpooferState.savedELOAutoLoad = false
+-- Keep the persisted auto-load state intact. Heavy startup is gated by
+-- __DevKagePassiveBoot and released after the UI/config restore is complete.
 
 do
     local environment=(type(getgenv)=="function" and getgenv()) or _G
@@ -13706,7 +13738,7 @@ local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_20
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOLOAD_ENABLED_FILE = CONFIG_FOLDER .. "/_devkage_autoload_enabled.flag"
 local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_AutoLoad_LAST.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.20-inventory-avatar-skybox-20260906"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.49-autoload-config-freeze-keybind-fix-20260907"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -13835,8 +13867,9 @@ end
 return output
 end
 
-getgenv().__DevKageApplySavedControlValues = function(savedValues)
+getgenv().__DevKageApplySavedControlValues = function(savedValues, silentRestore)
 if type(savedValues) ~= "table" then return end
+local silent = silentRestore == true
 local previousAntiAimSync = AntiAimState.core.Syncing
 AntiAimState.core.Syncing = true
 for flag, savedValue in pairs(savedValues) do
@@ -13855,11 +13888,11 @@ math.clamp(tonumber(savedValue.r) or 255, 0, 255),
 math.clamp(tonumber(savedValue.g) or 255, 0, 255),
 math.clamp(tonumber(savedValue.b) or 255, 0, 255)
 )
-pcall(control.Set, control, color, tonumber(savedValue.alpha), false)
+pcall(control.Set, control, color, tonumber(savedValue.alpha), silent)
 elseif type(savedValue) == "boolean"
 or type(savedValue) == "number"
 or type(savedValue) == "string" then
-pcall(control.Set, control, savedValue, false)
+pcall(control.Set, control, savedValue, silent)
 end
 end
 end
@@ -14839,9 +14872,11 @@ local DEFAULT_ANTI_AIM_STATE = serialiseRuntimeState(AntiAimState)
 local DEFAULT_LIGHTING_STATE = serialiseRuntimeState(AdvancedLighting)
 
 local _autoload_target = get_autoload()
-if _autoload_target and _autoload_target ~= ""
-and (((type(getgenv)=="function" and getgenv()) or _G).__DevKagePassiveBoot ~= true) then
-pcall(load_config_file, _autoload_target)
+if _autoload_target and _autoload_target ~= "" then
+local loadedOk, loadedResult = pcall(load_config_file, _autoload_target)
+local environment = (type(getgenv)=="function" and getgenv()) or _G
+environment.__DevKageAutoLoadedConfigName = _autoload_target
+environment.__DevKageAutoLoadedConfigOK = loadedOk and loadedResult ~= false
 end
 
 
@@ -14850,13 +14885,18 @@ end
 do
 local config = getgenv().__DevKageConfig
 if type(config) == "table" then
-config.eloLiveSyncAutoLoad = SpooferState.savedELOAutoLoad == true
-if SpooferState.savedELOAutoLoad == true then
+local wantsELOAutoLoad = config.eloLiveSyncAutoLoad == true or SpooferState.savedELOAutoLoad == true
+config.eloLiveSyncAutoLoad = wantsELOAutoLoad
+if wantsELOAutoLoad then
 config.eloLiveSync = true
 config.spoofELO = true
 config.rankDisplay = "Use Spoofed ELO"
 if SpooferState.savedELO ~= nil then config.elo = normalizeSpoofELO(SpooferState.savedELO) end
+-- During passive startup, the runtime is started once at the end of UI construction.
+local environment = (type(getgenv)=="function" and getgenv()) or _G
+if environment.__DevKagePassiveBoot ~= true then
 task.defer(function() ELOAutoLoadRuntime:SetEnabled(true) end)
+end
 end
 end
 end
@@ -29154,13 +29194,22 @@ local function referenceCursorRender(deltaTime)
     runtime.ScreenGui.Enabled =
         enabled
 
+    local menuOpen = window and window.Enabled == true
+
     referenceSetBridgeOwnership(
-        enabled
+        enabled and not menuOpen
     )
 
     referenceApplyNativeMouseState(
-        enabled
+        enabled and not menuOpen
     )
+
+    if runtime.AimContainer then runtime.AimContainer.Visible = enabled and not menuOpen end
+    if menuOpen then
+        if runtime.MainText then runtime.MainText.Visible = false end
+        if runtime.SecondText then runtime.SecondText.Visible = false end
+        return
+    end
 
     if not enabled then
         return
@@ -29935,7 +29984,12 @@ autoExecuteToggle=luaAutoExecuteToggle
 
 if getgenv().__DevKageConfig.luaAutoExecute==true
 and tostring(getgenv().__DevKageConfig.luaCode or ""):match("%S") then
-task.defer(executeLuaEditor)
+task.spawn(function()
+    local environment=(type(getgenv)=="function" and getgenv()) or _G
+    while environment.__DevKagePassiveBoot == true do task.wait() end
+    task.wait()
+    executeLuaEditor()
+end)
 end
 end)()
 
@@ -30218,8 +30272,10 @@ for key,value in pairs(profile) do
 if defaultConfig[key]~=nil then getgenv().__DevKageConfig[key]=value end
 end
 
-getgenv().__DevKageConfig.eloLiveSyncAutoLoad=SpooferState.savedELOAutoLoad == true
-if SpooferState.savedELOAutoLoad == true then
+getgenv().__DevKageConfig.eloLiveSyncAutoLoad =
+    getgenv().__DevKageConfig.eloLiveSyncAutoLoad == true
+    or SpooferState.savedELOAutoLoad == true
+if getgenv().__DevKageConfig.eloLiveSyncAutoLoad == true then
 getgenv().__DevKageConfig.eloLiveSync=true
 getgenv().__DevKageConfig.spoofELO=true
 getgenv().__DevKageConfig.rankDisplay="Use Spoofed ELO"
@@ -30407,25 +30463,8 @@ AntiAimState.SyncControls()
 
 getgenv().__DevKageApplySavedControlValues(data.controlValues)
 
-if (((type(getgenv)=="function" and getgenv()) or _G).__DevKagePassiveBoot == true) then
-local config=getgenv().__DevKageConfig
-config.autoLoadSpoofer=false
-config.eloLiveSyncAutoLoad=false
-config.eloLiveSync=false
-config.silentAimEnabled=false
-config.noRecoilEnabled=false
-config.noSpreadEnabled=false
-config.bunnyHopEnabled=false
-config.unlockEmotes=false
-config.unlockWeapons=false
-config.luaAutoExecute=false
-config.avatarModsEnabled=false
-config.rainbowAuraEnabled=false
-config.chinaHatEnabled=false
-VisualsState.esp_enabled=false
-VisualsState.hacker_detector_enabled=false
-AntiAimState.enabled=false
-end
+-- Passive startup now delays heavy activation instead of mutating the loaded
+-- configuration. This keeps manual and automatic config loads identical.
 
 aa_apply(AntiAimState.enabled)
 AntiAimMovement:SetNoClip(AntiAimState.noclip_enabled)
@@ -31323,15 +31362,46 @@ end)
 
 do
 if type(getgenv().__DevKagePendingControlValues)=="table" then
-pcall(getgenv().__DevKageApplySavedControlValues,getgenv().__DevKagePendingControlValues)
+pcall(getgenv().__DevKageApplySavedControlValues,getgenv().__DevKagePendingControlValues,true)
 getgenv().__DevKagePendingControlValues=nil
 end
+end
+
+-- Finish startup batching before enabling saved runtimes.
+__devkageStartupRenderBudget = 0
+if library.KeybindManager then
+    library.KeybindManager.StartupBatch = false
+    library.KeybindManager:RefreshActive()
+end
+do
+    local environment=(type(getgenv)=="function" and getgenv()) or _G
+    environment.__DevKagePassiveBoot = false
+    environment.__DevKageStartupPhase = false
 end
 
 rebuildConfigList()
 
 task.spawn(function()
     task.wait()
+
+    -- Start persisted heavy runtimes only after UI/config construction has yielded
+    -- and batching has been released. Stagger them so two autoexec scripts do not
+    -- hit the same frame with their most expensive startup work.
+    local bootConfig = getgenv().__DevKageConfig
+    if type(bootConfig) == "table" then
+        if bootConfig.autoLoadSpoofer == true and not SpooferState.IsActive() then
+            task.spawn(function()
+                task.wait(__devkageMultiInjectAutoBoot and 0.45 or 0.12)
+                pcall(StartSpoofer, getgenv().__DevKageConfig)
+            end)
+        end
+        if bootConfig.eloLiveSyncAutoLoad == true or SpooferState.savedELOAutoLoad == true then
+            task.spawn(function()
+                task.wait(__devkageMultiInjectAutoBoot and 0.75 or 0.22)
+                pcall(function() ELOAutoLoadRuntime:SetEnabled(true) end)
+            end)
+        end
+    end
 
     if VisualsState.esp_enabled and HighQualityESPRuntime.StartupReady then
         pcall(refreshDetailedESP)
@@ -31577,4 +31647,4 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
 
 -- END OF FILE
 
-]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,50,48,45,105,110,118,101,110,116,111,114,121,45,97,118,97,116,97,114,45,115,107,121,98,111,120,45,50,48,50,54,48,57,48,54)_b._a=_a pcall(function()if type(writefile)~=string.char(102,117,110,99,116,105,111,110)or type(readfile)~=string.char(102,117,110,99,116,105,111,110)then return end local _c=string.char(68,101,118,75,97,103,101,95,67,111,110,102,105,103,115)local _d=_c..string.char(47,95,115,99,114,105,112,116,95,115,101,116,116,105,110,103,115,46,106,115,111,110)local _e=_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,101,110,97,98,108,101,100,46,102,108,97,103)local _f=false local _g,_h=pcall(readfile,_d)if _g and type(_h)==string.char(115,116,114,105,110,103)and _h~=""then local _i,_j=pcall(game.GetService,game,string.char(72,116,116,112,83,101,114,118,105,99,101))if _i and _j then local _k,_l=pcall(_j.JSONDecode,_j,_h)if _k and type(_l)==string.char(116,97,98,108,101)and _l.AutoLoad==true then _f=true end end end if not _f then if type(isfile)==string.char(102,117,110,99,116,105,111,110)then local _m,_n=pcall(isfile,_e)_f=_m and _n==true else local _m=pcall(readfile,_e)_f=_m end end if not _f then return end if type(makefolder)==string.char(102,117,110,99,116,105,111,110)then pcall(makefolder,_c)end local _o=_a local _p=_b.__DEVKAGE_PACKAGE_BUILD local _q=string.char(45,45,32,68,69,86,75,65,71,69,95,65,85,84,79,76,79,65,68,95,66,85,73,76,68,58).._p..string.char(10).._o pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,50,48,46,108,117,97),_q)for _r,_s in ipairs({string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,57,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,56,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,55,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,54,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,50,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,49,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,48,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,57,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,56,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,55,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,54,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,51,46,108,117,97),})do pcall(writefile,_c..string.char(47).._s,_q)end pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,46,108,117,97),_q)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,99,117,114,114,101,110,116,46,116,120,116),_p)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,98,117,105,108,100,46,116,120,116),_p)pcall(writefile,_e,_p)_b.__DEVKAGE_AUTOLOAD_BUILD=_p _b.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT=os.clock()end)task.spawn(function()local _t,_u=pcall(function()local _v=game:GetService(string.char(80,108,97,121,101,114,115))local _w=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while tostring(game.JobId)==""do task.wait(0.1)end while not _v.LocalPlayer do task.wait(0.1)end local _x=_v.LocalPlayer while _x and not _x:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_x=_v.LocalPlayer end while not _w.CurrentCamera do task.wait(0.1)end local _y=_x:FindFirstChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115))if not _y then _y=_x:WaitForChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115),10)end if _y then _y:WaitForChild(string.char(67,111,110,116,114,111,108,108,101,114,115),8)_y:WaitForChild(string.char(77,111,100,117,108,101,115),8)end _w:WaitForChild(string.char(86,105,101,119,77,111,100,101,108,115),8)_b.__DEVKAGE_LATE_BOOT_WAITING=true local _z=tonumber(rawget(_b,string.char(95,95,68,69,86,75,65,71,69,95,76,65,84,69,95,66,79,79,84,95,68,69,76,65,89)))or 6 if _z<5 then _z=5 end task.wait(_z)_b.__DEVKAGE_LATE_BOOT_WAITING=nil local _A=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)if _b.__DEVKAGE_AUTO_STARTING_JOB==_A then local _B=_b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD local _C=tonumber(_b.__DEVKAGE_AUTO_STARTING_AT)or 0 local _D=_C>0 and(os.clock()-_C)or math.huge if _B==_b.__DEVKAGE_PACKAGE_BUILD and _D>=0 and _D<45 then return end _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end if _b.__DEVKAGE_AUTO_STARTED_JOB==_A and _b.__DEVKAGE_AUTOLOADED_BUILD==_b.__DEVKAGE_PACKAGE_BUILD then return end _b.__DEVKAGE_AUTO_STARTING_JOB=_A _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_AT=os.clock()task.wait()local _E=loadstring or load if type(_E)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _F,_H=_E(_a)if not _F then error(_H)end local _I,_J=pcall(_F)if not _I then error(_J)end _b.__DEVKAGE_AUTO_STARTED_JOB=_A _b.__DEVKAGE_AUTOLOADED_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end)if not _t then _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil _b.__DEVKAGE_LATE_BOOT_WAITING=nil warn(string.char(91,68,101,118,75,97,103,101,32,80,97,99,107,97,103,101,32,66,111,111,116,93,32)..tostring(_u))end end)return nil
+]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,52,57,45,97,117,116,111,108,111,97,100,45,99,111,110,102,105,103,45,102,114,101,101,122,101,45,107,101,121,98,105,110,100,45,102,105,120,45,50,48,50,54,48,57,48,55)_b._a=_a pcall(function()if type(writefile)~=string.char(102,117,110,99,116,105,111,110)or type(readfile)~=string.char(102,117,110,99,116,105,111,110)then return end local _c=string.char(68,101,118,75,97,103,101,95,67,111,110,102,105,103,115)local _d=_c..string.char(47,95,115,99,114,105,112,116,95,115,101,116,116,105,110,103,115,46,106,115,111,110)local _e=_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,101,110,97,98,108,101,100,46,102,108,97,103)local _f=false local _g,_h=pcall(readfile,_d)if _g and type(_h)==string.char(115,116,114,105,110,103)and _h~=""then local _i,_j=pcall(game.GetService,game,string.char(72,116,116,112,83,101,114,118,105,99,101))if _i and _j then local _k,_l=pcall(_j.JSONDecode,_j,_h)if _k and type(_l)==string.char(116,97,98,108,101)and _l.AutoLoad==true then _f=true end end end if not _f then if type(isfile)==string.char(102,117,110,99,116,105,111,110)then local _m,_n=pcall(isfile,_e)_f=_m and _n==true else local _m=pcall(readfile,_e)_f=_m end end if not _f then return end if type(makefolder)==string.char(102,117,110,99,116,105,111,110)then pcall(makefolder,_c)end local _o=_a local _p=_b.__DEVKAGE_PACKAGE_BUILD local _q=string.char(45,45,32,68,69,86,75,65,71,69,95,65,85,84,79,76,79,65,68,95,66,85,73,76,68,58).._p..string.char(10).._o pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,50,48,46,108,117,97),_q)for _r,_s in ipairs({string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,57,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,56,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,55,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,54,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,50,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,49,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,48,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,57,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,56,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,55,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,54,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,51,46,108,117,97),})do pcall(writefile,_c..string.char(47).._s,_q)end pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,46,108,117,97),_q)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,99,117,114,114,101,110,116,46,116,120,116),_p)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,98,117,105,108,100,46,116,120,116),_p)pcall(writefile,_e,_p)_b.__DEVKAGE_AUTOLOAD_BUILD=_p _b.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT=os.clock()end)task.spawn(function()local _t,_u=pcall(function()local _v=game:GetService(string.char(80,108,97,121,101,114,115))local _w=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while tostring(game.JobId)==""do task.wait(0.1)end while not _v.LocalPlayer do task.wait(0.1)end local _x=_v.LocalPlayer while _x and not _x:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_x=_v.LocalPlayer end while not _w.CurrentCamera do task.wait(0.1)end local _y=_x:FindFirstChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115))if not _y then _y=_x:WaitForChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115),10)end if _y then _y:WaitForChild(string.char(67,111,110,116,114,111,108,108,101,114,115),8)_y:WaitForChild(string.char(77,111,100,117,108,101,115),8)end _w:WaitForChild(string.char(86,105,101,119,77,111,100,101,108,115),8)_b.__DEVKAGE_LATE_BOOT_WAITING=true local _z=tonumber(rawget(_b,string.char(95,95,68,69,86,75,65,71,69,95,76,65,84,69,95,66,79,79,84,95,68,69,76,65,89)))or 6 if _z<5 then _z=5 end task.wait(_z)_b.__DEVKAGE_LATE_BOOT_WAITING=nil local _A=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)if _b.__DEVKAGE_AUTO_STARTING_JOB==_A then local _B=_b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD local _C=tonumber(_b.__DEVKAGE_AUTO_STARTING_AT)or 0 local _D=_C>0 and(os.clock()-_C)or math.huge if _B==_b.__DEVKAGE_PACKAGE_BUILD and _D>=0 and _D<45 then return end _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end if _b.__DEVKAGE_AUTO_STARTED_JOB==_A and _b.__DEVKAGE_AUTOLOADED_BUILD==_b.__DEVKAGE_PACKAGE_BUILD then return end _b.__DEVKAGE_AUTO_STARTING_JOB=_A _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_AT=os.clock()task.wait()local _E=loadstring or load if type(_E)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _F,_H=_E(_a)if not _F then error(_H)end local _I,_J=pcall(_F)if not _I then error(_J)end _b.__DEVKAGE_AUTO_STARTED_JOB=_A _b.__DEVKAGE_AUTOLOADED_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end)if not _t then _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil _b.__DEVKAGE_LATE_BOOT_WAITING=nil warn(string.char(91,68,101,118,75,97,103,101,32,80,97,99,107,97,103,101,32,66,111,111,116,93,32)..tostring(_u))end end)return nil
