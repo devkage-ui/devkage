@@ -2022,6 +2022,12 @@ library.KeybindManager = library.KeybindManager or {
     ModAlertActive = false,
     ModAlertFlashConnection = nil,
     ModAlertExpiresAt = 0,
+    HackerAlertFrame = nil,
+    HackerAlertLabel = nil,
+    HackerAlertStroke = nil,
+    HackerAlertActive = false,
+    HackerAlertFlashConnection = nil,
+    HackerAlertExpiresAt = 0,
 }
 
 local BindManager = library.KeybindManager
@@ -2213,6 +2219,69 @@ function BindManager:EnsureUI(window)
         end)
         if type(MaskShard) == "table" and type(MaskShard.Connections) == "table" then
             MaskShard.Connections[#MaskShard.Connections + 1] = self.ModAlertFlashConnection
+        end
+    end
+
+    local hackerAlert = Instance.new("Frame")
+    hackerAlert.Name = "HackerAlert"
+    hackerAlert.BackgroundColor3 = Color3.fromRGB(64, 48, 4)
+    hackerAlert.BorderSizePixel = 0
+    hackerAlert.Size = UDim2.new(1, 0, 0, 18)
+    hackerAlert.LayoutOrder = -99999
+    hackerAlert.Visible = false
+    hackerAlert.ZIndex = 40004
+    hackerAlert.Parent = activeList
+    self.HackerAlertFrame = hackerAlert
+
+    local hackerStroke = Instance.new("UIStroke")
+    hackerStroke.Color = Color3.fromRGB(245, 195, 45)
+    hackerStroke.Thickness = 1
+    hackerStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    hackerStroke.Parent = hackerAlert
+    self.HackerAlertStroke = hackerStroke
+
+    local hackerLabel = Instance.new("TextLabel")
+    hackerLabel.Name = "AlertText"
+    hackerLabel.BackgroundTransparency = 1
+    hackerLabel.Size = UDim2.fromScale(1, 1)
+    hackerLabel.Font = Enum.Font.Code
+    hackerLabel.Text = "!hacker!"
+    hackerLabel.TextColor3 = Color3.fromRGB(255, 220, 65)
+    hackerLabel.TextSize = 9
+    hackerLabel.TextStrokeColor3 = Color3.fromRGB(45, 32, 0)
+    hackerLabel.TextStrokeTransparency = 0.15
+    hackerLabel.TextXAlignment = Enum.TextXAlignment.Center
+    hackerLabel.ZIndex = 40005
+    hackerLabel.Parent = hackerAlert
+    self.HackerAlertLabel = hackerLabel
+
+    if not self.HackerAlertFlashConnection then
+        local hackerRunService = game:GetService("RunService")
+        self.HackerAlertFlashConnection = utility:CreateConnection(hackerRunService.RenderStepped, function()
+            if self.HackerAlertActive
+                and tonumber(self.HackerAlertExpiresAt)
+                and self.HackerAlertExpiresAt > 0
+                and os.clock() >= self.HackerAlertExpiresAt then
+                self.HackerAlertActive = false
+                self.HackerAlertExpiresAt = 0
+                if self.HackerAlertFrame then self.HackerAlertFrame.Visible = false end
+                self:RefreshActive()
+                return
+            end
+            if not self.HackerAlertActive or not self.HackerAlertFrame or not self.HackerAlertFrame.Parent then return end
+            local pulse = math.sin(os.clock() * 8.5) * 0.5 + 0.5
+            local dark = Color3.fromRGB(48, 34, 2)
+            local bright = Color3.fromRGB(130, 96, 8)
+            local textDark = Color3.fromRGB(225, 175, 25)
+            local textBright = Color3.fromRGB(255, 240, 105)
+            self.HackerAlertFrame.BackgroundColor3 = dark:Lerp(bright, pulse)
+            if self.HackerAlertLabel then self.HackerAlertLabel.TextColor3 = textDark:Lerp(textBright, pulse) end
+            if self.HackerAlertStroke then
+                self.HackerAlertStroke.Color = Color3.fromRGB(190, 135, 10):Lerp(Color3.fromRGB(255, 225, 70), pulse)
+            end
+        end)
+        if type(MaskShard) == "table" and type(MaskShard.Connections) == "table" then
+            MaskShard.Connections[#MaskShard.Connections + 1] = self.HackerAlertFlashConnection
         end
     end
 
@@ -2412,6 +2481,12 @@ function BindManager:EnsureUI(window)
             self.ModAlertActive = false
             self.ModAlertExpiresAt = 0
             self.ModAlertFlashConnection = nil
+            self.HackerAlertFrame = nil
+            self.HackerAlertLabel = nil
+            self.HackerAlertStroke = nil
+            self.HackerAlertActive = false
+            self.HackerAlertExpiresAt = 0
+            self.HackerAlertFlashConnection = nil
         end)
     end
 end
@@ -2441,6 +2516,24 @@ function BindManager:SetModAlert(active, window, durationSeconds)
     if self.ModAlertFrame then
         self.ModAlertFrame.Visible = self.ModAlertActive
     end
+    self:RefreshActive()
+end
+
+function BindManager:SetHackerAlert(active, window, durationSeconds)
+    if (not self.Overlay or not self.Overlay.Parent) and window then
+        self:EnsureUI(window)
+    end
+    active = active == true
+    if active then
+        local duration = math.max(tonumber(durationSeconds) or 12, 1)
+        self.HackerAlertExpiresAt = os.clock() + duration
+        self.HackerAlertActive = true
+    else
+        self.HackerAlertActive = false
+        self.HackerAlertExpiresAt = 0
+    end
+    if self.HackerAlertLabel then self.HackerAlertLabel.Text = "!hacker!" end
+    if self.HackerAlertFrame then self.HackerAlertFrame.Visible = self.HackerAlertActive end
     self:RefreshActive()
 end
 
@@ -2499,7 +2592,7 @@ function BindManager:RefreshActive()
             state.Parent = row
         end
     end
-    self.ActiveFrame.Visible = count > 0 or self.ModAlertActive == true
+    self.ActiveFrame.Visible = count > 0 or self.ModAlertActive == true or self.HackerAlertActive == true
 end
 
 function BindManager:RefreshMenu()
@@ -5515,7 +5608,7 @@ aimbotEnabled = false,
 silentAimEnabled = false,
 aimTargetPart = "Head",
 aimTeamCheck = true,
-aimVisibleCheck = true,
+aimVisibleCheck = false,
 aimRequireRMB = true,
 aimFOV = 90,
 aimSmoothing = 0.15,
@@ -5528,13 +5621,29 @@ rapidFireEnabled = false,
 rapidFireDefaultRate = 25,
 rapidFireSelectedWeapon = "",
 rapidFireRates = {},
-silentAimHitChance = 85,
-silentAimRadius = 150,
+silentAimHitChance = 100,
+silentAimRadius = 300,
+silentAimInfiniteFOV = false,
+silentAimFOVOrigin = "Screen Center",
+silentAimPriority = "FOV",
+silentAimTargetLock = true,
+silentAimTargetStickiness = 1.25,
 silentAimAutoShoot = false,
 silentAimFireInterval = 0.05,
 silentAimPrediction = 0,
+silentAimAutoPrediction = false,
+silentAimPredictionMultiplier = 1,
+silentAimProjectileSpeed = 3000,
 silentAimMaxDistance = 2500,
+silentAimHeadChance = 100,
+silentAimIgnoreDeflecting = true,
+silentAimIgnoreShielded = true,
+silentAimVulnerableOnly = false,
 noSpreadEnabled = false,
+noRecoilEnabled = false,
+bunnyHopEnabled = false,
+bunnyHopBoost = 0.4,
+bunnyHopMaxSpeed = 28,
 luaCode = "",
 luaAutoExecute = false
 }
@@ -5546,6 +5655,40 @@ existingConfig[key] = type(value) == "table" and table.clone(value) or value
 end
 end
 getgenv().__DevKageConfig = existingConfig
+
+-- Opiumware passive boot: persisted globals from an earlier injection must not
+-- auto-arm systems that mutate PlayerData, weapon modules, or replication
+-- while ReplicatedFirst is still initializing.
+assert(function()
+local config = getgenv().__DevKageConfig
+config.autoLoadSpoofer = false
+config.eloLiveSyncAutoLoad = false
+config.eloLiveSync = false
+config.spoofLevel = false
+config.spoofStreak = false
+config.spoofWins = false
+config.spoofKills = false
+config.spoofELO = false
+config.charmSpoofEnabled = false
+config.spoofWeaponKeys = false
+config.spoofDevice = false
+config.deviceSpam = false
+config.spoofAvatar = false
+config.unlockEmotes = false
+config.unlockWeapons = false
+config.luaAutoExecute = false
+config.silentAimEnabled = false
+config.aimVisibleCheck = false
+config.noRecoilEnabled = false
+config.noSpreadEnabled = false
+config.bunnyHopEnabled = false
+config.avatarModsEnabled = false
+config.rainbowAuraEnabled = false
+config.chinaHatEnabled = false
+local environment = (type(getgenv)=="function" and getgenv()) or _G
+environment.__DevKagePassiveBoot = true
+end)()
+
 do
 local legacyAvatarModType = tostring(getgenv().__DevKageConfig.avatarModsType or "")
 local legacyAvatarModMap = {
@@ -6514,6 +6657,11 @@ end
 
 SpooferState.LoadAutoLoad()
 SpooferState.LoadELOAutoLoad()
+
+-- Preserve the saved files, but never execute them automatically this session.
+getgenv().__DevKageConfig.autoLoadSpoofer = false
+getgenv().__DevKageConfig.eloLiveSyncAutoLoad = false
+SpooferState.savedELOAutoLoad = false
 
 do
     local environment=(type(getgenv)=="function" and getgenv()) or _G
@@ -8343,6 +8491,8 @@ return true
 end
 
 task.defer(function()
+    local environment=(type(getgenv)=="function" and getgenv()) or _G
+    if environment.__DevKagePassiveBoot == true then return end
     if getgenv().__DevKageConfig.autoLoadSpoofer == true then
         if not game:IsLoaded() then game.Loaded:Wait() end
         local environment=(type(getgenv)=="function" and getgenv()) or _G
@@ -8490,6 +8640,8 @@ table.insert(library.CleanupCallbacks, function()
 end)
 
 task.defer(function()
+    local environment=(type(getgenv)=="function" and getgenv()) or _G
+    if environment.__DevKagePassiveBoot == true then return end
     local config = getgenv().__DevKageConfig
     local shouldAutoLoad = type(config) == "table"
         and (config.eloLiveSyncAutoLoad == true or SpooferState.savedELOAutoLoad == true)
@@ -8512,7 +8664,8 @@ end)
 
 
 local VisualsState = {
-esp_enabled         = true,
+esp_enabled         = false,
+high_quality_esp    = true,
 teamcheck           = false,
 highlights          = true,
 show_only_highlights= false,
@@ -8743,6 +8896,9 @@ avatar_rotation_y             = 0,
 avatar_rotation_z             = 0,
 avatar_accessory_scale        = 1,
 mod_detector_enabled          = false,
+hacker_detector_enabled       = false,
+hacker_speed_threshold        = 180,
+hacker_speed_duration         = 0.75,
 devkage_cursor_enabled             = true,
 devkage_cursor_profile             = "Custom",
 devkage_cursor_position_mode       = "Mouse",
@@ -10362,6 +10518,277 @@ end
 return table.concat(flags, " | ")
 end
 
+local HighQualityESPRuntime = {
+    Gui = nil,
+    Players = setmetatable({}, {__mode="k"}),
+    Connection = nil,
+    Enabled = false,
+    StartupReady = false,
+    Cursor = 1,
+    EnabledAt = 0,
+}
+
+local HQSkeletonPairsR15 = {
+    {"Head","UpperTorso"},{"UpperTorso","LowerTorso"},{"LowerTorso","Root"},
+    {"UpperTorso","LeftShoulder"},{"LeftShoulder","LeftElbow"},{"LeftElbow","LeftHand"},
+    {"UpperTorso","RightShoulder"},{"RightShoulder","RightElbow"},{"RightElbow","RightHand"},
+    {"LowerTorso","LeftHip"},{"LeftHip","LeftKnee"},{"LeftKnee","LeftFoot"},
+    {"LowerTorso","RightHip"},{"RightHip","RightKnee"},{"RightKnee","RightFoot"},
+}
+local HQSkeletonPairsR6 = {
+    {"Head","UpperTorso"},{"UpperTorso","Root"},
+    {"UpperTorso","LeftShoulder"},{"LeftShoulder","LeftHand"},
+    {"UpperTorso","RightShoulder"},{"RightShoulder","RightHand"},
+    {"Root","LeftHip"},{"LeftHip","LeftFoot"},{"Root","RightHip"},{"RightHip","RightFoot"},
+}
+
+local function hqMakeLine(parent,z)
+    local outline=Instance.new("Frame")
+    outline.Name="Outline"; outline.AnchorPoint=Vector2.new(0.5,0.5); outline.BorderSizePixel=0
+    outline.BackgroundColor3=Color3.fromRGB(0,0,0); outline.Visible=false; outline.ZIndex=z; outline.Parent=parent
+    local line=Instance.new("Frame")
+    line.Name="Line"; line.AnchorPoint=Vector2.new(0.5,0.5); line.BorderSizePixel=0
+    line.BackgroundColor3=VisualsState.glow_color; line.Visible=false; line.ZIndex=z+1; line.Parent=parent
+    return {Line=line,Outline=outline}
+end
+
+local function hqUpdateLine(pair,p1,p2,color,thickness,alpha,outlineEnabled,outlineColor,outlineAlpha)
+    if not p1 or not p2 then pair.Line.Visible=false; pair.Outline.Visible=false; return end
+    local delta=p2-p1; local length=delta.Magnitude
+    if length<0.5 then pair.Line.Visible=false; pair.Outline.Visible=false; return end
+    local mid=(p1+p2)*0.5; local rot=math.deg(math.atan2(delta.Y,delta.X))
+    pair.Line.Position=UDim2.fromOffset(mid.X,mid.Y); pair.Line.Size=UDim2.fromOffset(length,math.max(1,thickness)); pair.Line.Rotation=rot
+    pair.Line.BackgroundColor3=color; pair.Line.BackgroundTransparency=math.clamp(alpha,0,1); pair.Line.Visible=true
+    pair.Outline.Position=pair.Line.Position; pair.Outline.Size=UDim2.fromOffset(length,math.max(2,thickness+2)); pair.Outline.Rotation=rot
+    pair.Outline.BackgroundColor3=outlineColor; pair.Outline.BackgroundTransparency=math.clamp(outlineAlpha,0,1); pair.Outline.Visible=outlineEnabled==true
+end
+
+function HighQualityESPRuntime:EnsureGui()
+    if self.Gui and self.Gui.Parent then return self.Gui end
+    local gui=Instance.new("ScreenGui")
+    gui.Name="DevKage_HighQualityESP"; gui.ResetOnSpawn=false; gui.IgnoreGuiInset=true
+    gui.DisplayOrder=10020; gui.ZIndexBehavior=Enum.ZIndexBehavior.Global; gui.Parent=cre
+    self.Gui=gui
+    return gui
+end
+
+function HighQualityESPRuntime:Remove(player)
+    local obj=self.Players[player]
+    if obj and obj.Holder then pcall(function() obj.Holder:Destroy() end) end
+    self.Players[player]=nil
+end
+
+function HighQualityESPRuntime:Create(player)
+    self:Remove(player)
+    local gui=self:EnsureGui()
+    local holder=Instance.new("Frame")
+    holder.Name="ESP_"..tostring(player.UserId); holder.BackgroundTransparency=1; holder.BorderSizePixel=0
+    holder.Size=UDim2.fromScale(1,1); holder.Visible=false; holder.ZIndex=100; holder.Parent=gui
+
+    local box=Instance.new("Frame")
+    box.Name="Box"; box.BackgroundColor3=VisualsState.filled_box_color; box.BackgroundTransparency=1
+    box.BorderSizePixel=0; box.ZIndex=104; box.Parent=holder
+    local outer=Instance.new("UIStroke"); outer.Name="Outer"; outer.Color=Color3.new(0,0,0); outer.Thickness=3; outer.Transparency=0.15; outer.Parent=box
+    local stroke=Instance.new("UIStroke"); stroke.Name="Main"; stroke.Color=VisualsState.bounding_box_color; stroke.Thickness=1; stroke.Parent=box
+
+    local corners={}
+    for i=1,8 do
+        local f=Instance.new("Frame"); f.Name="Corner"..i; f.BorderSizePixel=0; f.BackgroundColor3=VisualsState.bounding_box_color
+        f.ZIndex=108; f.Visible=false; f.Parent=holder; corners[i]=f
+    end
+
+    local function label(name,z,align)
+        local l=Instance.new("TextLabel"); l.Name=name; l.BackgroundTransparency=1; l.BorderSizePixel=0
+        l.Font=Enum.Font.Code; l.TextSize=13; l.TextColor3=Color3.fromRGB(245,245,245); l.TextStrokeColor3=Color3.new(0,0,0)
+        l.TextStrokeTransparency=0.15; l.TextXAlignment=align or Enum.TextXAlignment.Center; l.ZIndex=z; l.Parent=holder; return l
+    end
+    local name=label("Name",112,Enum.TextXAlignment.Center)
+    local bottom=label("Bottom",112,Enum.TextXAlignment.Center)
+    local flags=label("Flags",112,Enum.TextXAlignment.Left); flags.TextYAlignment=Enum.TextYAlignment.Top
+
+    local hpBack=Instance.new("Frame"); hpBack.Name="HealthBack"; hpBack.BorderSizePixel=0; hpBack.BackgroundColor3=Color3.new(0,0,0); hpBack.ZIndex=109; hpBack.Parent=holder
+    local hp=Instance.new("Frame"); hp.Name="Health"; hp.BorderSizePixel=0; hp.AnchorPoint=Vector2.new(0,1); hp.ZIndex=110; hp.Parent=hpBack
+
+    local headDot=Instance.new("Frame"); headDot.Name="HeadMarker"; headDot.AnchorPoint=Vector2.new(0.5,0.5); headDot.BorderSizePixel=0
+    headDot.Size=UDim2.fromOffset(6,6); headDot.BackgroundColor3=VisualsState.head_marker_color; headDot.ZIndex=115; headDot.Visible=false; headDot.Parent=holder
+    local headCorner=Instance.new("UICorner"); headCorner.CornerRadius=UDim.new(1,0); headCorner.Parent=headDot
+    local headStroke=Instance.new("UIStroke"); headStroke.Thickness=1; headStroke.Color=VisualsState.head_marker_outline_color; headStroke.Parent=headDot
+
+    local skeleton={}
+    for i=1,15 do skeleton[i]=hqMakeLine(holder,106) end
+    local tracer=hqMakeLine(holder,103)
+
+    local obj={Holder=holder,Box=box,BoxStroke=stroke,BoxOuter=outer,Corners=corners,Name=name,Bottom=bottom,Flags=flags,
+        HealthBack=hpBack,Health=hp,HeadDot=headDot,HeadStroke=headStroke,Skeleton=skeleton,Tracer=tracer,Points={}}
+    self.Players[player]=obj
+    return obj
+end
+
+function HighQualityESPRuntime:GetBounds(character,camera)
+    local ok,cf,size=pcall(character.GetBoundingBox,character)
+    if not ok or not cf then return nil end
+    local half=size*0.5
+    local minX,minY=math.huge,math.huge; local maxX,maxY=-math.huge,-math.huge; local count=0
+    for x=-1,1,2 do for y=-1,1,2 do for z=-1,1,2 do
+        local world=cf:PointToWorldSpace(Vector3.new(half.X*x,half.Y*y,half.Z*z))
+        local p=camera:WorldToViewportPoint(world)
+        if p.Z>0.05 then
+            count=count+1; minX=math.min(minX,p.X); maxX=math.max(maxX,p.X); minY=math.min(minY,p.Y); maxY=math.max(maxY,p.Y)
+        end
+    end end end
+    if count<2 or maxX-minX<2 or maxY-minY<3 then return nil end
+    return minX,minY,maxX,maxY
+end
+
+function HighQualityESPRuntime:Hide(obj)
+    if obj and obj.Holder then obj.Holder.Visible=false end
+end
+
+function HighQualityESPRuntime:UpdatePlayer(player,camera)
+    local obj=self.Players[player] or self:Create(player)
+    local char=player.Character; local hum=char and char:FindFirstChildOfClass("Humanoid")
+    local root=char and char:FindFirstChild("HumanoidRootPart"); local head=char and (char:FindFirstChild("Head") or char:FindFirstChild("HitboxHead"))
+    if not VisualsState.esp_enabled or not VisualsState.high_quality_esp or shouldSkipESPPlayer(player)
+        or not char or not hum or hum.Health<=0 or not root or not head then self:Hide(obj); return end
+    local minX,minY,maxX,maxY=self:GetBounds(char,camera)
+    if not minX then self:Hide(obj); return end
+    obj.Holder.Visible=true
+    local fade=getESPDistanceFade(player); local w=maxX-minX; local h=maxY-minY
+    local x=minX; local y=minY
+
+    obj.Box.Position=UDim2.fromOffset(x,y); obj.Box.Size=UDim2.fromOffset(w,h)
+    obj.Box.BackgroundColor3=VisualsState.filled_box_color
+    obj.Box.BackgroundTransparency=(VisualsState.filled_box and math.clamp(VisualsState.filled_box_alpha+fade,0,1)) or 1
+    local full=VisualsState.bounding_box and VisualsState.box_style=="Full"
+    obj.BoxStroke.Enabled=full; obj.BoxOuter.Enabled=full
+    obj.BoxStroke.Color=VisualsState.bounding_box_color; obj.BoxStroke.Transparency=math.clamp(VisualsState.bounding_box_alpha+fade,0,1)
+    obj.BoxStroke.Thickness=math.max(1,math.min(2.5,VisualsState.skeleton_thickness or 1))
+    obj.BoxOuter.Transparency=full and math.clamp(0.12+fade,0,1) or 1
+
+    local corner=math.max(6,math.min(w,h)*0.24); local thick=math.max(1,math.min(2.5,VisualsState.skeleton_thickness or 1))
+    local c=obj.Corners; local showCorners=VisualsState.bounding_box and VisualsState.box_style=="Corners"
+    local specs={{x,y,corner,thick},{x,y,thick,corner},{maxX-corner,y,corner,thick},{maxX-thick,y,thick,corner},
+        {x,maxY-thick,corner,thick},{x,maxY-corner,thick,corner},{maxX-corner,maxY-thick,corner,thick},{maxX-thick,maxY-corner,thick,corner}}
+    for i,f in ipairs(c) do local s=specs[i]; f.Position=UDim2.fromOffset(s[1],s[2]); f.Size=UDim2.fromOffset(s[3],s[4]); f.BackgroundColor3=VisualsState.bounding_box_color; f.BackgroundTransparency=math.clamp(VisualsState.bounding_box_alpha+fade,0,1); f.Visible=showCorners end
+
+    local textScale=math.clamp(tonumber(VisualsState.text_scale) or 1,0.75,1.75); local ts=math.floor(12*textScale+0.5)
+    obj.Name.Visible=VisualsState.name; obj.Name.Text=player.DisplayName.."  @"..player.Name; obj.Name.TextSize=ts
+    obj.Name.Position=UDim2.fromOffset(x-20,y-ts-4); obj.Name.Size=UDim2.fromOffset(w+40,ts+3)
+
+    local tool=getPlayerTool(player); local bottomParts={}
+    if VisualsState.weapon_text and tool then bottomParts[#bottomParts+1]=tool.Name end
+    if VisualsState.distance then bottomParts[#bottomParts+1]=string.format("%.0f studs",getESPWorldDistance(player)) end
+    obj.Bottom.Text=table.concat(bottomParts,"  •  "); obj.Bottom.Visible=#bottomParts>0; obj.Bottom.TextSize=math.max(9,ts-1)
+    obj.Bottom.Position=UDim2.fromOffset(x-25,maxY+2); obj.Bottom.Size=UDim2.fromOffset(w+50,ts+4)
+
+    local flagText=VisualsState.flags and getESPFlags(player) or ""
+    obj.Flags.Text=flagText; obj.Flags.Visible=flagText~=""; obj.Flags.TextSize=math.max(9,ts-2)
+    obj.Flags.Position=UDim2.fromOffset(maxX+5,y); obj.Flags.Size=UDim2.fromOffset(180,math.max(20,h))
+
+    local ratio=math.clamp(hum.Health/math.max(hum.MaxHealth,1),0,1)
+    obj.HealthBack.Visible=VisualsState.health_bar; obj.HealthBack.Position=UDim2.fromOffset(x-6,y); obj.HealthBack.Size=UDim2.fromOffset(3,h)
+    obj.Health.Position=UDim2.new(0,0,1,0); obj.Health.Size=UDim2.new(1,0,ratio,0)
+    obj.Health.BackgroundColor3=Color3.fromHSV(ratio*0.33,0.88,1); obj.Health.BackgroundTransparency=math.clamp(fade,0,0.85)
+
+    local hp=camera:WorldToViewportPoint(head.Position); local headVisible=hp.Z>0
+    obj.HeadDot.Visible=VisualsState.head_marker and headVisible; obj.HeadDot.Position=UDim2.fromOffset(hp.X,hp.Y)
+    obj.HeadDot.BackgroundColor3=VisualsState.head_marker_color; obj.HeadDot.BackgroundTransparency=math.clamp(VisualsState.head_marker_alpha+fade,0,1)
+    obj.HeadStroke.Enabled=VisualsState.head_marker_outline; obj.HeadStroke.Color=VisualsState.head_marker_outline_color; obj.HeadStroke.Transparency=math.clamp(VisualsState.head_marker_outline_alpha+fade,0,1)
+    local shape=tostring(VisualsState.head_marker_shape or "Dot")
+    if shape=="Ring" then obj.HeadDot.BackgroundTransparency=1; obj.HeadStroke.Enabled=true; obj.HeadStroke.Thickness=2
+    elseif shape=="Cross" then obj.HeadDot.Size=UDim2.fromOffset(7,7); obj.HeadDot.Rotation=45; obj.HeadStroke.Enabled=true
+    else obj.HeadDot.Size=UDim2.fromOffset(6,6); obj.HeadDot.Rotation=0 end
+
+    local pointMap=obj.Points
+    if VisualsState.skeletonRuntime then VisualsState.skeletonRuntime:ResolvePoints(char,pointMap) end
+    local pairsList=char:FindFirstChild("UpperTorso") and HQSkeletonPairsR15 or HQSkeletonPairsR6
+    for i,pair in ipairs(obj.Skeleton) do
+        local spec=pairsList[i]
+        if VisualsState.skeleton and spec and pointMap[spec[1]] and pointMap[spec[2]] then
+            local a,ao=camera:WorldToViewportPoint(pointMap[spec[1]]); local b,bo=camera:WorldToViewportPoint(pointMap[spec[2]])
+            if a.Z>0 and b.Z>0 then
+                hqUpdateLine(pair,Vector2.new(a.X,a.Y),Vector2.new(b.X,b.Y),VisualsState.glow_color,
+                    math.clamp(tonumber(VisualsState.skeleton_thickness) or 1,0.5,5),math.clamp(VisualsState.glow_alpha+fade,0,1),
+                    VisualsState.skeleton_outline,VisualsState.skeleton_outline_color,math.clamp(VisualsState.skeleton_outline_alpha+fade,0,1))
+            else pair.Line.Visible=false; pair.Outline.Visible=false end
+        else pair.Line.Visible=false; pair.Outline.Visible=false end
+    end
+
+    if VisualsState.tracers then
+        local viewport=camera.ViewportSize; local originY=viewport.Y
+        if VisualsState.tracer_origin=="Center" then originY=viewport.Y*0.5 elseif VisualsState.tracer_origin=="Top" then originY=0 end
+        local targetY=maxY; if VisualsState.tracer_target=="Center" then targetY=(minY+maxY)*0.5 elseif VisualsState.tracer_target=="Head" then targetY=hp.Y end
+        hqUpdateLine(obj.Tracer,Vector2.new(viewport.X*0.5,originY),Vector2.new((minX+maxX)*0.5,targetY),VisualsState.tracer_color,
+            math.max(1,tonumber(VisualsState.tracer_thickness) or 1),math.clamp(VisualsState.tracer_alpha+fade,0,1),VisualsState.tracer_outline,
+            VisualsState.tracer_outline_color,math.clamp(VisualsState.tracer_outline_alpha+fade,0,1))
+    else obj.Tracer.Line.Visible=false; obj.Tracer.Outline.Visible=false end
+end
+
+function HighQualityESPRuntime:SetEnabled(enabled)
+    self.Enabled = enabled == true
+    self.StartupReady = self.Enabled
+    self.EnabledAt = self.Enabled and os.clock() or 0
+    self.Cursor = 1
+    if not self.Enabled then
+        for _,obj in pairs(self.Players) do self:Hide(obj) end
+    end
+end
+
+function HighQualityESPRuntime:Update()
+    if not self.Enabled or not self.StartupReady or not VisualsState.high_quality_esp or not VisualsState.esp_enabled then
+        for _,obj in pairs(self.Players) do self:Hide(obj) end
+        return
+    end
+
+    local camera=workspace.CurrentCamera
+    if not camera then return end
+    local playersList=Players:GetPlayers()
+    local count=#playersList
+    if count<=1 then return end
+
+    -- Never construct/update every player's ESP in one frame. During the first
+    -- few seconds after enabling, process one player per tick; afterwards use
+    -- a small fixed budget. Visual quality is unchanged, only work scheduling.
+    local budget=(os.clock()-(self.EnabledAt or 0)<3) and 1 or 3
+    local processed=0
+    local attempts=0
+    while processed<budget and attempts<count do
+        if self.Cursor>count then self.Cursor=1 end
+        local player=playersList[self.Cursor]
+        self.Cursor=self.Cursor+1
+        attempts=attempts+1
+        if player and player~=LocalPlayer then
+            self:UpdatePlayer(player,camera)
+            processed=processed+1
+        end
+    end
+
+    -- Cheap stale cleanup; no character projection involved.
+    for player in pairs(self.Players) do
+        if not player.Parent then self:Remove(player) end
+    end
+end
+
+HighQualityESPRuntime.Connection=utility:CreateConnection(RunService.RenderStepped,function(dt)
+    if not HighQualityESPRuntime.Enabled then return end
+    HighQualityESPRuntime.Accumulator=(HighQualityESPRuntime.Accumulator or 0)+(tonumber(dt) or 0)
+    if HighQualityESPRuntime.Accumulator<(1/30) then return end
+    HighQualityESPRuntime.Accumulator=0
+    pcall(function() HighQualityESPRuntime:Update() end)
+end)
+
+if type(MaskShard)=="table" and type(MaskShard.Connections)=="table" then
+    MaskShard.Connections[#MaskShard.Connections+1]=HighQualityESPRuntime.Connection
+end
+
+-- UI is declared later in the main chunk. Publishing the runtime to UI here
+-- attempted to index a nil global and aborted DevKage startup. Use the
+-- environment bridge instead; the renderer itself does not depend on UI.
+do
+    local environment = (type(getgenv)=="function" and getgenv()) or _G
+    environment.__DevKageHighQualityESPRuntime = HighQualityESPRuntime
+end
+
 local function createSkeletonForPlayer(player, character, object)
 local function addBone(part0, part1)
 if not (part0 and part1 and part0:IsA("BasePart") and part1:IsA("BasePart")) then return end
@@ -10728,6 +11155,10 @@ object.labels.weapon.TextColor3 = VisualsState.glow_color
 end
 
 local function refreshDetailedESP()
+if VisualsState.high_quality_esp then
+for player in pairs(VisualsState.esp_objects) do destroyDetailedESP(player) end
+return
+end
 if not VisualsState.esp_enabled then
 for player in pairs(VisualsState.esp_objects) do
 destroyDetailedESP(player)
@@ -10758,6 +11189,7 @@ utility:CreateConnection(Players.PlayerRemoving, function(plr)
 if ESPAppearanceRuntime.characters[plr] then restoreCharacterAppearance(ESPAppearanceRuntime.characters[plr]); ESPAppearanceRuntime.characters[plr]=nil end
 destroyChams(plr)
 destroyDetailedESP(plr)
+if HighQualityESPRuntime then HighQualityESPRuntime:Remove(plr) end
 if VisualsState.highlights_table[plr] then
 pcall(function() VisualsState.highlights_table[plr]:Destroy() end)
 VisualsState.highlights_table[plr] = nil
@@ -10768,7 +11200,7 @@ if VisualsState.skeletonRuntime and VisualsState.skeletonRuntime.Supported then
 local skeletonElapsed=0
 local skeletonWasActive=false
 utility:CreateConnection(RunService.RenderStepped, function(dt)
-local active=VisualsState.esp_enabled and (VisualsState.skeleton or VisualsState.distance)
+local active=(not VisualsState.high_quality_esp) and VisualsState.esp_enabled and (VisualsState.skeleton or VisualsState.distance)
 if not active then
 if skeletonWasActive then pcall(function() VisualsState.skeletonRuntime:UpdateAll() end) end
 skeletonWasActive=false
@@ -10783,6 +11215,12 @@ pcall(function() VisualsState.skeletonRuntime:UpdateAll() end)
 end)
 table.insert(library.CleanupCallbacks,function()
 if VisualsState.skeletonRuntime then VisualsState.skeletonRuntime:DestroyAll() end
+end)
+table.insert(library.CleanupCallbacks,function()
+if HighQualityESPRuntime then
+for player in pairs(HighQualityESPRuntime.Players) do HighQualityESPRuntime:Remove(player) end
+if HighQualityESPRuntime.Gui then pcall(function() HighQualityESPRuntime.Gui:Destroy() end) end
+end
 end)
 end
 
@@ -13264,11 +13702,11 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_20.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_50.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOLOAD_ENABLED_FILE = CONFIG_FOLDER .. "/_devkage_autoload_enabled.flag"
-local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_AutoLoad_LAST.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.20-inventory-avatar-skybox-20260906"
+local SCRIPT_AUTOEXEC_NAME = "0000_DevKage_AutoLoad_CURRENT.lua"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.50-current-only-20260906"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -13509,6 +13947,7 @@ chinaHatAlpha = cfg.chinaHatAlpha,
     bounding_box_alpha   = VisualsState.bounding_box_alpha,
     glow_alpha           = VisualsState.glow_alpha,
     bounding_box         = VisualsState.bounding_box,
+    high_quality_esp     = VisualsState.high_quality_esp,
     health_bar           = VisualsState.health_bar,
     name                 = VisualsState.name,
     flags                = VisualsState.flags,
@@ -13532,6 +13971,9 @@ chinaHatAlpha = cfg.chinaHatAlpha,
     fov_changer          = VisualsState.fov_changer,
     fov_value            = VisualsState.fov_value,
     fog_remove           = VisualsState.fog_remove,
+    hacker_detector_enabled = VisualsState.hacker_detector_enabled,
+    hacker_speed_threshold = VisualsState.hacker_speed_threshold,
+    hacker_speed_duration = VisualsState.hacker_speed_duration,
     aa_enabled       = AntiAimState.enabled,
     aa_mode          = AntiAimState.yaw_mode,
     aa_custom_yaw   = AntiAimState.static_yaw_offset,
@@ -13672,6 +14114,10 @@ if data.ammo_bar ~= nil then VisualsState.ammo_bar=data.ammo_bar end
 if data.rank ~= nil then VisualsState.rank=data.rank end
 if data.winstreak ~= nil then VisualsState.winstreak=data.winstreak end
 if data.deflecting ~= nil then VisualsState.deflecting=data.deflecting end
+if data.high_quality_esp ~= nil then VisualsState.high_quality_esp=data.high_quality_esp end
+if data.hacker_detector_enabled ~= nil then VisualsState.hacker_detector_enabled=data.hacker_detector_enabled end
+if data.hacker_speed_threshold ~= nil then VisualsState.hacker_speed_threshold=math.clamp(tonumber(data.hacker_speed_threshold) or 180,50,500) end
+if data.hacker_speed_duration ~= nil then VisualsState.hacker_speed_duration=math.clamp(tonumber(data.hacker_speed_duration) or 0.75,0.1,5) end
 if data.chams ~= nil then VisualsState.chams=data.chams end
 if data.chams_color ~= nil then VisualsState.chams_color=configColorFromTable(data.chams_color,VisualsState.chams_color) end
 if data.chams_alpha ~= nil then VisualsState.chams_alpha=math.clamp(tonumber(data.chams_alpha) or VisualsState.chams_alpha,0,1) end
@@ -13844,6 +14290,7 @@ local function build_script_autoload_stub()
 return string.format([=[
 local env = (type(getgenv) == "function" and getgenv()) or _G
 local BUILD_LABEL = %q
+local BUILD_RANK = 50250
 local SETTINGS_FILE = %q
 local PAYLOAD_FILE = %q
 local ENABLED_FILE = %q
@@ -13859,8 +14306,11 @@ task.spawn(function()
             return
         end
 
-
-
+        local activeRank = tonumber(rawget(env, "__DEVKAGE_ACTIVE_VERSION")) or 0
+        if activeRank > BUILD_RANK then
+            warn("[DevKage AutoLoad] Refused older loader " .. BUILD_LABEL)
+            return
+        end
 
         local autoLoadEnabled = nil
         local settingsOk, rawSettings = pcall(readfile, SETTINGS_FILE)
@@ -14015,6 +14465,15 @@ task.spawn(function()
             return
         end
 
+        local newestRank = tonumber(rawget(env, "__DEVKAGE_ACTIVE_VERSION")) or 0
+        if newestRank > BUILD_RANK then
+            env.__DEVKAGE_AUTO_STARTING_JOB = nil
+            env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+            env.__DEVKAGE_AUTO_STARTING_AT = nil
+            warn("[DevKage AutoLoad] Newer DevKage already active; skipped " .. BUILD_LABEL)
+            return
+        end
+
         env.__DEVKAGE_AUTO_STARTED = true
         env.__DEVKAGE_EMBEDDED_SOURCE = embeddedSource
         env.__DEVKAGE_MULTI_INJECT_BOOT = true
@@ -14046,6 +14505,7 @@ task.spawn(function()
 
         env.__DEVKAGE_AUTO_STARTED_JOB = jobKey
         env.__DEVKAGE_AUTOLOADED_BUILD = BUILD_LABEL
+        env.__DEVKAGE_ACTIVE_VERSION = BUILD_RANK
         env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
         env.__DEVKAGE_AUTO_STARTING_AT = nil
     end)
@@ -14107,10 +14567,52 @@ local seen = {}
 
 
 local function cleanLegacyDevKageAutoexec(folder)
+    if type(delfile) ~= "function" then return true end
 
+    local currentPath = folder .. "/" .. SCRIPT_AUTOEXEC_NAME
 
+    -- Remove exact DevKage loader names from older releases.
+    for _, oldName in ipairs({
+        "DevKage_AutoLoad.lua",
+        "zzzz_DevKage_AutoLoad_LAST.lua",
+        "DevKage_AutoLoad_CURRENT.lua",
+    }) do
+        local path = folder .. "/" .. oldName
+        if path ~= currentPath then
+            local shouldDelete = true
+            if type(isfile) == "function" then
+                local ok, exists = pcall(isfile, path)
+                shouldDelete = ok and exists == true
+            end
+            if shouldDelete then pcall(delfile, path) end
+        end
+    end
 
-
+    -- If the executor can enumerate files, remove ONLY old DevKage-marked Lua
+    -- files. Other autoexec scripts are never touched.
+    if type(listfiles) == "function" and type(readfile) == "function" then
+        local okList, entries = pcall(listfiles, folder)
+        if okList and type(entries) == "table" then
+            for _, path in ipairs(entries) do
+                if type(path) == "string" and path ~= currentPath then
+                    local lower = string.lower(path)
+                    if lower:find("devkage", 1, true) and lower:sub(-4) == ".lua" then
+                        local okRead, body = pcall(readfile, path)
+                        if okRead and type(body) == "string" then
+                            local ours = body:find("DEVKAGE_AUTOLOAD_BUILD:", 1, true)
+                                or body:find("__DEVKAGE_PACKAGE_BUILD", 1, true)
+                                or body:find("__DEVKAGE_EMBEDDED_SOURCE", 1, true)
+                                or body:find("-- DEVKAGE v5.2.", 1, true)
+                            local isCurrent = body:find("DevKage-v5.2.50-current-only-20260906", 1, true)
+                            if ours and not isCurrent then
+                                pcall(delfile, path)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
 
     return true
 end
@@ -14165,7 +14667,12 @@ end
 local function remove_autoexec_stubs()
 if type(delfile) ~= "function" then return end
 for _, folder in ipairs(AUTOEXEC_FOLDERS) do
-    for _, loaderName in ipairs({SCRIPT_AUTOEXEC_NAME, "DevKage_AutoLoad.lua"}) do
+    for _, loaderName in ipairs({
+        SCRIPT_AUTOEXEC_NAME,
+        "DevKage_AutoLoad.lua",
+        "zzzz_DevKage_AutoLoad_LAST.lua",
+        "DevKage_AutoLoad_CURRENT.lua",
+    }) do
         local path = folder .. "/" .. loaderName
         local shouldDelete = true
         if type(isfile) == "function" then
@@ -14214,18 +14721,6 @@ if not enabled then
     if type(delfile) == "function" then
         for _, path in ipairs({
             SCRIPT_PAYLOAD_FILE,
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_19.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_18.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_17.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_16.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_12.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_11.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_10.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_9.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_8.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_7.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_6.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_3.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload.lua",
             SCRIPT_BUILD_FILE,
             SCRIPT_AUTOLOAD_ENABLED_FILE
@@ -14235,9 +14730,10 @@ if not enabled then
                 local ok, exists = pcall(isfile, path)
                 shouldDelete = not ok or exists == true
             end
-            if shouldDelete then
-                pcall(delfile, path)
-            end
+            if shouldDelete then pcall(delfile, path) end
+        end
+        for minor = 3, 49 do
+            pcall(delfile, CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_" .. tostring(minor) .. ".lua")
         end
     end
 
@@ -14302,21 +14798,12 @@ end
 
 
 
-for _, legacyName in ipairs({
-    "_devkage_autoload_payload_v5_2_19.lua",
-    "_devkage_autoload_payload_v5_2_18.lua",
-    "_devkage_autoload_payload_v5_2_17.lua",
-    "_devkage_autoload_payload_v5_2_16.lua",
-    "_devkage_autoload_payload_v5_2_12.lua",
-    "_devkage_autoload_payload_v5_2_11.lua",
-    "_devkage_autoload_payload_v5_2_10.lua",
-    "_devkage_autoload_payload_v5_2_9.lua",
-    "_devkage_autoload_payload_v5_2_8.lua",
-    "_devkage_autoload_payload_v5_2_7.lua",
-    "_devkage_autoload_payload_v5_2_6.lua",
-    "_devkage_autoload_payload_v5_2_3.lua",
-}) do
-    pcall(writefile, CONFIG_FOLDER .. "/" .. legacyName, payloadSource)
+for minor = 3, 49 do
+    pcall(
+        writefile,
+        CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_" .. tostring(minor) .. ".lua",
+        payloadSource
+    )
 end
 
 
@@ -14393,7 +14880,8 @@ local DEFAULT_ANTI_AIM_STATE = serialiseRuntimeState(AntiAimState)
 local DEFAULT_LIGHTING_STATE = serialiseRuntimeState(AdvancedLighting)
 
 local _autoload_target = get_autoload()
-if _autoload_target and _autoload_target ~= "" then
+if _autoload_target and _autoload_target ~= ""
+and (((type(getgenv)=="function" and getgenv()) or _G).__DevKagePassiveBoot ~= true) then
 pcall(load_config_file, _autoload_target)
 end
 
@@ -14594,6 +15082,8 @@ end)
 end
 
 task.defer(function()
+local environment=(type(getgenv)=="function" and getgenv()) or _G
+if environment.__DevKagePassiveBoot == true then return end
 if getgenv().__DevKageConfig.chinaHatEnabled then
 StartChinaHat()
 end
@@ -15430,6 +15920,8 @@ end
 end
 
 task.defer(function()
+local environment=(type(getgenv)=="function" and getgenv()) or _G
+if environment.__DevKagePassiveBoot == true then return end
 startRainbowAura()
 end)
 
@@ -15467,6 +15959,9 @@ runtimeEnv.__DevKageAvatarMods = (function()
         characterConnection = nil,
         buildToken = 0,
         refreshToken = 0,
+        assetCache = {},
+        haloSurfaces = {},
+        wingHighlights = {},
     }
 
     local VALID_TYPES = {
@@ -15600,6 +16095,8 @@ runtimeEnv.__DevKageAvatarMods = (function()
         state.lights = {}
         state.emitters = {}
         state.trails = {}
+        state.haloSurfaces = {}
+        state.wingHighlights = {}
         state.model = nil
         state.character = nil
     end
@@ -15782,176 +16279,342 @@ runtimeEnv.__DevKageAvatarMods = (function()
         state.trails[#state.trails + 1] = {Trail=trail,Index=index}
     end
 
-    local function buildWingSide(torso,side,profile,scale)
-        local sideName = side < 0 and "L" or "R"
-        local rootBone = makeInvisibleBone("WingRoot_" .. sideName,state.model)
-        local outerBone = makeInvisibleBone("WingOuter_" .. sideName,state.model)
+    local function findFirstBasePart(object)
+        if not object then return nil end
+        if object:IsA("BasePart") then return object end
+        if object:IsA("Accessory") then
+            local handle = object:FindFirstChild("Handle")
+            if handle and handle:IsA("BasePart") then return handle end
+        end
+        return object:FindFirstChildWhichIsA("BasePart",true)
+    end
 
-        local rootC0 = CFrame.new(side * 0.58 * scale,0.34 * scale,0.48 * scale)
-            * CFrame.Angles(math.rad(8),math.rad(side * 11),math.rad(side * -23))
+    local function catalogHandle(assetIds)
+        for _,assetId in ipairs(assetIds) do
+            local cached = state.assetCache[assetId]
+            if cached and cached.Parent == nil then
+                return cached:Clone(),assetId
+            end
 
-        local rootMotor = makeMotor("WingRootMotor_" .. sideName,torso,rootBone,rootC0)
-        local outerMotor = makeMotor(
-            "WingOuterMotor_" .. sideName,
+            local objects
+            local ok,result = pcall(function()
+                return game:GetObjects("rbxassetid://" .. tostring(assetId))
+            end)
+            if ok and type(result)=="table" then objects=result end
+
+            if (not objects or #objects==0) and type(GetObjects)=="function" then
+                local okGlobal,resultGlobal = pcall(GetObjects,"rbxassetid://" .. tostring(assetId))
+                if okGlobal and type(resultGlobal)=="table" then objects=resultGlobal end
+            end
+
+            if objects and #objects>0 then
+                for _,object in ipairs(objects) do
+                    local handle = findFirstBasePart(object)
+                    if handle then
+                        local template = handle:Clone()
+                        template.Parent = nil
+                        state.assetCache[assetId] = template
+                        for _,loaded in ipairs(objects) do safeDestroy(loaded) end
+                        return template:Clone(),assetId
+                    end
+                end
+                for _,loaded in ipairs(objects) do safeDestroy(loaded) end
+            end
+        end
+        return nil,nil
+    end
+
+    local function stripVisualTextures(part)
+        if not part then return end
+        pcall(function()
+            if part:IsA("MeshPart") then part.TextureID="" end
+        end)
+        for _,desc in ipairs(part:GetDescendants()) do
+            if desc:IsA("SurfaceAppearance") or desc:IsA("Texture") or desc:IsA("Decal") then
+                safeDestroy(desc)
+            elseif desc:IsA("SpecialMesh") then
+                pcall(function() desc.TextureId="" end)
+            end
+        end
+    end
+
+    local function scaleCatalogPart(part,scale)
+        if not part or not part:IsA("BasePart") then return end
+        local factor = math.max(0.2,tonumber(scale) or 1)
+        pcall(function() part.Size=part.Size*factor end)
+        for _,desc in ipairs(part:GetDescendants()) do
+            if desc:IsA("Attachment") then
+                desc.Position=desc.Position*factor
+            elseif desc:IsA("SpecialMesh") then
+                desc.Scale=desc.Scale*factor
+            end
+        end
+    end
+
+    local function prepareCatalogPart(part,name,color,scale,preserveTexture)
+        part.Name=name
+        part.Anchored=false
+        part.CanCollide=false
+        part.CanTouch=false
+        part.CanQuery=false
+        part.CastShadow=false
+        part.Massless=true
+        if preserveTexture ~= true then
+            stripVisualTextures(part)
+        end
+        scaleCatalogPart(part,scale)
+        part.Color=color
+        part.Material=featherMaterial()
+        part.Transparency=transparency()
+        part.Parent=state.model
+        remember(part)
+        return part
+    end
+
+    local function attachmentByNames(part,names)
+        for _,name in ipairs(names) do
+            local attachment=part:FindFirstChild(name,true)
+            if attachment and attachment:IsA("Attachment") then return attachment end
+        end
+        return part:FindFirstChildWhichIsA("Attachment",true)
+    end
+
+    local function fallbackWingSide(torso,side,profile,scale)
+        local sideName=side<0 and "L" or "R"
+        local rootBone=makeInvisibleBone("WingRoot_"..sideName,state.model)
+        local rootMotor=makeMotor(
+            "WingRootMotor_"..sideName,
+            torso,
             rootBone,
-            outerBone,
-            CFrame.new(side * 1.55 * scale,0.18 * scale,0.18 * scale)
-                * CFrame.Angles(math.rad(-4),math.rad(side * -10),math.rad(side * -18))
+            CFrame.new(side*0.42*scale,0.38*scale,0.72*scale)
         )
-
-        state.wingRigs[#state.wingRigs + 1] = {
-            Side=side,Root=rootBone,Outer=outerBone,
-            RootMotor=rootMotor,OuterMotor=outerMotor
+        state.wingRigs[#state.wingRigs+1]={
+            Side=side,RootMotor=rootMotor,OuterMotor=nil,Fallback=true
         }
 
-        local tipFeathers = {}
-
-        -- PRIMARY FLIGHT FEATHERS (long outer fan)
-        for i = 1,profile.primary do
-            local t = (i - 1) / math.max(profile.primary - 1,1)
-            local length = (3.15 + t * 2.15) * scale
-            local width = (0.82 - t * 0.20) * scale
-            local thickness = 0.115 * scale
-            local feather = makeFeather(
-                outerBone,
-                CFrame.new(
-                    side * (0.10 + t * 0.26) * scale,
-                    (0.28 - t * 0.74) * scale,
-                    (-0.18 - t * 1.82) * scale
-                ) * CFrame.Angles(
-                    math.rad(-7 + t * 11),
-                    math.rad(side * (9 + t * 58)),
-                    math.rad(side * (-15 - t * 9))
-                ),
-                width,length,thickness,"Primary",i,i >= profile.primary - 1
-            )
-            if i >= profile.primary - 1 then tipFeathers[#tipFeathers + 1] = feather end
+        local total=profile.primary+profile.secondary+profile.covert
+        local index=0
+        local function featherLayer(count,startX,endX,startY,endY,startZ,endZ,width,lengthMin,lengthMax,layer)
+            for i=1,count do
+                index=index+1
+                local t=(i-1)/math.max(count-1,1)
+                local base=Vector3.new(side*0.12*scale,(0.28-t*0.22)*scale,0)
+                local tip=Vector3.new(
+                    side*(startX+(endX-startX)*t)*scale,
+                    (startY+(endY-startY)*t)*scale,
+                    (startZ+(endZ-startZ)*t)*scale
+                )
+                local delta=tip-base
+                local length=math.max(delta.Magnitude,(lengthMin+(lengthMax-lengthMin)*t)*scale)
+                local middle=(base+tip)*0.5
+                local cf=CFrame.lookAt(middle,tip)
+                makeFeather(
+                    rootBone,cf,
+                    width*scale,length,0.095*scale,
+                    layer,i,layer=="Primary" and i>=count-1
+                )
+            end
         end
 
-        -- SECONDARY FEATHERS (overlapping inner wing)
-        for i = 1,profile.secondary do
-            local t = (i - 1) / math.max(profile.secondary - 1,1)
-            makeFeather(
-                rootBone,
-                CFrame.new(
-                    side * (0.04 + t * 0.42) * scale,
-                    (0.26 - t * 0.38) * scale,
-                    (0.18 - t * 1.08) * scale
-                ) * CFrame.Angles(
-                    math.rad(-3 + t * 7),
-                    math.rad(side * (4 + t * 27)),
-                    math.rad(side * (-10 - t * 11))
-                ),
-                (0.90 - t * 0.11) * scale,
-                (2.25 + t * 1.10) * scale,
-                0.125 * scale,
-                "Secondary",i,false
-            )
-        end
+        featherLayer(profile.primary,1.5,4.2,1.15,-1.8,0.9,2.4,0.48,2.5,4.7,"Primary")
+        featherLayer(profile.secondary,0.9,3.15,1.25,-0.65,0.72,1.75,0.58,1.8,3.25,"Secondary")
+        featherLayer(profile.covert,0.45,2.2,1.05,0.15,0.58,1.2,0.66,1.1,2.0,"Covert")
 
-        -- COVERT FEATHERS (short broad root layer)
-        for i = 1,profile.covert do
-            local t = (i - 1) / math.max(profile.covert - 1,1)
-            makeFeather(
-                rootBone,
-                CFrame.new(
-                    side * (0.04 + t * 0.38) * scale,
-                    (0.40 - t * 0.21) * scale,
-                    (0.38 - t * 0.34) * scale
-                ) * CFrame.Angles(
-                    math.rad(5 - t * 3),
-                    math.rad(side * (2 + t * 17)),
-                    math.rad(side * (-5 - t * 7))
-                ),
-                (0.98 - t * 0.10) * scale,
-                (1.25 + t * 0.68) * scale,
-                0.14 * scale,
-                "Covert",i,false
-            )
-        end
-
-        addLight(rootBone,primaryColor(),side < 0 and 1 or 2,0.72)
-        addEmitter(rootBone,side < 0 and 1 or 2,0.75)
-        if #tipFeathers > 0 then
-            addWingTrail(tipFeathers[#tipFeathers],side < 0 and 1 or 2)
-        end
+        addLight(rootBone,primaryColor(),side<0 and 1 or 2,0.72)
+        addEmitter(rootBone,side<0 and 1 or 2,0.65)
     end
 
     local function createWings(character,torso)
-        local profile = qualityProfile()
-        local scale = modSize()
-        buildWingSide(torso,-1,profile,scale)
-        buildWingSide(torso,1,profile,scale)
-    end
+        local scale=modSize()
+        -- Classic White Angel Wings is a real back-accessory mesh. Additional
+        -- IDs are fallbacks if Roblox asset delivery changes.
+        local handle=select(1,catalogHandle({4461505493,7241300525,15504166811}))
+        if handle then
+            prepareCatalogPart(handle,"HighQualityAngelWings",primaryColor(),scale,true)
 
-    local function createRingSegment(anchor,radius,thickness,theta,count,ringIndex,segmentIndex)
-        local arc = (2 * math.pi * radius) / count
-        local x = math.cos(theta) * radius
-        local z = math.sin(theta) * radius
+            local handleAttachment=attachmentByNames(handle,{
+                "BodyBackAttachment","WaistBackAttachment","BackAttachment"
+            })
+            local torsoAttachment=attachmentByNames(torso,{
+                "BodyBackAttachment","WaistBackAttachment","BackAttachment"
+            })
 
-        local segment = Instance.new("Part")
-        segment.Name = string.format("HaloSegment_%02d",segmentIndex)
-        segment.Size = Vector3.new(arc * 1.10,thickness,thickness)
-        segment.Material = Enum.Material.Neon
-        segment.Color = ringIndex == 2 and secondaryColor() or primaryColor()
-        segment.Transparency = transparency()
-        segment.CanCollide = false
-        segment.CanTouch = false
-        segment.CanQuery = false
-        segment.CastShadow = false
-        segment.Massless = true
-        segment.Anchored = false
-        segment.CFrame = anchor.CFrame
-            * CFrame.new(x,0,z)
-            * CFrame.Angles(0,-theta,0)
-        segment.Parent = state.model
-        remember(segment)
+            local motor=makeMotor(
+                "HighQualityWingMotor",
+                torso,
+                handle,
+                torsoAttachment and torsoAttachment.CFrame
+                    or CFrame.new(0,0.28*scale,0.72*scale)
+            )
+            motor.C1=handleAttachment and handleAttachment.CFrame or CFrame.new()
 
-        local mesh = Instance.new("SpecialMesh")
-        mesh.MeshType = Enum.MeshType.Sphere
-        mesh.Scale = Vector3.new(1,1,1)
-        mesh.Parent = segment
-        remember(mesh)
+            state.wingRigs[#state.wingRigs+1]={
+                Pair=true,Side=0,RootMotor=motor,OuterMotor=nil
+            }
+            state.feathers[#state.feathers+1]={
+                Part=handle,Layer="CatalogWing",Index=1,Tip=false
+            }
 
-        makeWeld(anchor,segment)
-        state.haloSegments[#state.haloSegments + 1] = {
-            Part=segment,Ring=ringIndex,Index=segmentIndex
-        }
+            local highlight=Instance.new("Highlight")
+            highlight.Name="DevKage_WingSoftGlow"
+            highlight.Adornee=handle
+            highlight.DepthMode=Enum.HighlightDepthMode.Occluded
+            highlight.FillColor=primaryColor()
+            highlight.FillTransparency=0.84
+            highlight.OutlineTransparency=1
+            highlight.Parent=state.model
+            remember(highlight)
+            state.wingHighlights[#state.wingHighlights+1]=highlight
+
+            addLight(handle,primaryColor(),1,0.82)
+            addEmitter(handle,1,0.72)
+            return
+        end
+
+        -- Offline/asset-delivery fallback: correctly back-facing symmetric fan.
+        local profile=qualityProfile()
+        fallbackWingSide(torso,-1,profile,scale)
+        fallbackWingSide(torso,1,profile,scale)
     end
 
     local function footOffset(root,humanoid)
-        local hip = humanoid and tonumber(humanoid.HipHeight) or nil
-        if hip and hip > 0 then return -(hip + root.Size.Y * 0.5 + 0.16) end
-        return -2.75
+        local hip=humanoid and tonumber(humanoid.HipHeight) or nil
+        if hip and hip>0 then return -(hip+root.Size.Y*0.5+0.12) end
+        return -2.72
     end
 
-    local function createHaloRig(attachmentPart,kind,baseRadius,yOffset,ringIndex)
-        local profile = qualityProfile()
-        local scale = modSize()
-        local radius = baseRadius * scale
-        local thickness = math.clamp(0.12 * scale,0.07,0.24)
-        local anchor = makeInvisibleBone(kind .. "_HaloRoot",state.model)
-        local motor = makeMotor(kind .. "_HaloMotor",attachmentPart,anchor,CFrame.new(0,yOffset,0))
+    local function makeHaloSurface(plate,face,ringIndex)
+        local gui=Instance.new("SurfaceGui")
+        gui.Name="DevKage_HaloSurface_"..face.Name
+        gui.Face=face
+        gui.AlwaysOnTop=true
+        gui.LightInfluence=0
+        gui.SizingMode=Enum.SurfaceGuiSizingMode.PixelsPerStud
+        gui.PixelsPerStud=180
+        gui.ClipsDescendants=false
+        gui.Parent=plate
+        remember(gui)
 
-        for i = 1,profile.haloSegments do
-            local theta = ((i - 1) / profile.haloSegments) * math.pi * 2
-            createRingSegment(anchor,radius,thickness,theta,profile.haloSegments,ringIndex,i)
-        end
+        local glowFrame=Instance.new("Frame")
+        glowFrame.Name="GlowRing"
+        glowFrame.AnchorPoint=Vector2.new(0.5,0.5)
+        glowFrame.Position=UDim2.fromScale(0.5,0.5)
+        glowFrame.Size=UDim2.fromScale(0.80,0.80)
+        glowFrame.BackgroundTransparency=1
+        glowFrame.ZIndex=1
+        glowFrame.Parent=gui
+        remember(glowFrame)
 
-        addLight(anchor,ringIndex == 2 and secondaryColor() or primaryColor(),ringIndex + 10,0.82)
-        addEmitter(anchor,ringIndex + 10,0.55)
+        local glowCorner=Instance.new("UICorner")
+        glowCorner.CornerRadius=UDim.new(1,0)
+        glowCorner.Parent=glowFrame
+        remember(glowCorner)
 
-        state.haloRigs[#state.haloRigs + 1] = {
-            Kind=kind,Anchor=anchor,Motor=motor,Ring=ringIndex
+        local glowStroke=Instance.new("UIStroke")
+        glowStroke.Name="HaloGlow"
+        glowStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
+        glowStroke.LineJoinMode=Enum.LineJoinMode.Round
+        glowStroke.Color=ringIndex==2 and secondaryColor() or primaryColor()
+        glowStroke.Thickness=26
+        glowStroke.Transparency=0.68
+        glowStroke.Parent=glowFrame
+        remember(glowStroke)
+
+        local coreFrame=Instance.new("Frame")
+        coreFrame.Name="CoreRing"
+        coreFrame.AnchorPoint=Vector2.new(0.5,0.5)
+        coreFrame.Position=UDim2.fromScale(0.5,0.5)
+        coreFrame.Size=UDim2.fromScale(0.80,0.80)
+        coreFrame.BackgroundTransparency=1
+        coreFrame.ZIndex=2
+        coreFrame.Parent=gui
+        remember(coreFrame)
+
+        local coreCorner=Instance.new("UICorner")
+        coreCorner.CornerRadius=UDim.new(1,0)
+        coreCorner.Parent=coreFrame
+        remember(coreCorner)
+
+        local coreStroke=Instance.new("UIStroke")
+        coreStroke.Name="HaloCore"
+        coreStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
+        coreStroke.LineJoinMode=Enum.LineJoinMode.Round
+        coreStroke.Color=ringIndex==2 and secondaryColor() or primaryColor()
+        coreStroke.Thickness=9
+        coreStroke.Transparency=transparency()
+        coreStroke.Parent=coreFrame
+        remember(coreStroke)
+
+        state.haloSurfaces[#state.haloSurfaces+1]={
+            Gui=gui,
+            Core=coreStroke,
+            Glow=glowStroke,
+            Ring=ringIndex,
+        }
+    end
+
+    local function createHaloRig(attachmentPart,kind,yOffset,ringIndex,sizeMultiplier)
+        local scale=modSize()*(sizeMultiplier or 1)
+        local radius=(kind=="Head" and 1.48 or 1.82)*scale
+        local diameter=radius*2.45
+
+        -- A transparent physical plate carries two high-DPI SurfaceGuis.
+        -- UICorner + UIStroke produces a mathematically perfect full circle,
+        -- with no visible segment seams and no catalog mesh orientation issues.
+        local plate=Instance.new("Part")
+        plate.Name=kind=="Head" and "HighQualityHeadHalo" or "HighQualityFeetHalo"
+        plate.Size=Vector3.new(diameter,0.035,diameter)
+        plate.Transparency=1
+        plate.Anchored=false
+        plate.CanCollide=false
+        plate.CanTouch=false
+        plate.CanQuery=false
+        plate.CastShadow=false
+        plate.Massless=true
+        plate.Parent=state.model
+        remember(plate)
+
+        local motor=makeMotor(
+            kind.."_PerfectHaloMotor",
+            attachmentPart,
+            plate,
+            CFrame.new(0,yOffset,0)
+        )
+
+        makeHaloSurface(plate,Enum.NormalId.Top,ringIndex)
+        makeHaloSurface(plate,Enum.NormalId.Bottom,ringIndex)
+
+        addLight(
+            plate,
+            ringIndex==2 and secondaryColor() or primaryColor(),
+            ringIndex+10,
+            0.92
+        )
+        addEmitter(plate,ringIndex+10,0.35)
+
+        state.haloRigs[#state.haloRigs+1]={
+            Kind=kind,Anchor=plate,Motor=motor,Ring=ringIndex,Surface=true
         }
     end
 
     local function createHeadHalo(head)
-        createHaloRig(head,"Head",1.48,head.Size.Y * 0.5 + 0.72 * modSize(),1)
+        createHaloRig(
+            head,
+            "Head",
+            head.Size.Y*0.5+0.72*modSize(),
+            1,
+            1
+        )
     end
 
     local function createFeetHalo(root,humanoid)
-        createHaloRig(root,"Feet",1.82,footOffset(root,humanoid),2)
+        createHaloRig(
+            root,
+            "Feet",
+            footOffset(root,humanoid),
+            2,
+            1.22
+        )
     end
 
     local function build(character)
@@ -16027,13 +16690,25 @@ runtimeEnv.__DevKageAvatarMods = (function()
             for _,rig in ipairs(state.wingRigs) do
                 local side = rig.Side
                 if rig.RootMotor and rig.RootMotor.Parent then
-                    local flap = math.sin(now * 2.55 * speed * motionRate + (side < 0 and 0 or 0.06))
-                    local breathe = math.sin(now * 1.15 * speed + 0.7) * 0.18
-                    rig.RootMotor.Transform = CFrame.Angles(
-                        math.rad((-1.8 + 2.2 * wave) * amplitude),
-                        0,
-                        math.rad((6.5 * flap + 2.0 * breathe) * amplitude) * -side
-                    )
+                    if rig.Pair then
+                        -- Real accessory mesh: subtle living motion without
+                        -- rotating the entire wing pair sideways.
+                        local breathe=math.sin(now*1.35*speed)*0.5+0.5
+                        local roll=math.sin(now*1.8*speed*motionRate)*math.rad(1.25)*amplitude
+                        rig.RootMotor.Transform=CFrame.Angles(
+                            math.rad((-0.75+1.5*breathe)*amplitude),
+                            0,
+                            roll
+                        )
+                    else
+                        local flap = math.sin(now * 2.55 * speed * motionRate + (side < 0 and 0 or 0.06))
+                        local breathe = math.sin(now * 1.15 * speed + 0.7) * 0.18
+                        rig.RootMotor.Transform = CFrame.Angles(
+                            math.rad((-1.8 + 2.2 * wave) * amplitude),
+                            0,
+                            math.rad((6.5 * flap + 2.0 * breathe) * amplitude) * -side
+                        )
+                    end
                 end
                 if rig.OuterMotor and rig.OuterMotor.Parent then
                     local fold = math.sin(now * 2.55 * speed * motionRate + 0.48)
@@ -16078,6 +16753,32 @@ runtimeEnv.__DevKageAvatarMods = (function()
                     local base = entry.Ring == 2 and secondaryColor() or primaryColor()
                     segment.Color = rainbowColor(now,i + entry.Ring * 17,base)
                     segment.Transparency = alpha
+                end
+            end
+
+            for i,entry in ipairs(state.haloSurfaces) do
+                local base=entry.Ring==2 and secondaryColor() or primaryColor()
+                local color=rainbowColor(now,i+entry.Ring*19,base)
+                if entry.Core and entry.Core.Parent then
+                    entry.Core.Color=color
+                    entry.Core.Transparency=alpha
+                    entry.Core.Thickness=math.clamp(7+glowBrightness()*0.8,7,16)
+                end
+                if entry.Glow and entry.Glow.Parent then
+                    entry.Glow.Color=color
+                    entry.Glow.Thickness=math.clamp(18+glowSize()*0.65,18,50)
+                    entry.Glow.Transparency=math.clamp(
+                        0.82-(glowBrightness()/18),
+                        0.28,
+                        0.82
+                    )
+                end
+            end
+
+            for i,highlight in ipairs(state.wingHighlights) do
+                if highlight and highlight.Parent then
+                    highlight.FillColor=rainbowColor(now,i+31,primaryColor())
+                    highlight.FillTransparency=math.clamp(0.90-glowBrightness()*0.018,0.68,0.90)
                 end
             end
 
@@ -16177,8 +16878,11 @@ if getgenv().__DEVKAGE_AUTO_STARTED == true then
 getgenv().__DEVKAGE_AUTO_STARTED = false
 end
 local UI = {}
+-- Do not allocate another top-level local here: this chunk sits exactly at
+-- Luau's 200-local register ceiling. Read the bridge directly instead.
+UI.HighQualityESPRuntime = ((type(getgenv)=="function" and getgenv()) or _G).__DevKageHighQualityESPRuntime
 
-(function()
+assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
 local spooferPage = window:CreatePage({ Icon = "rbxassetid://8547236654", Glyph = "R", Size = UDim2.new(0, 36, 0, 36) })
 local spooferRightLayout=spooferPage.Right:FindFirstChildOfClass("UIListLayout")
@@ -16719,6 +17423,7 @@ end
 spooferSection:CreateButton({
 Name = "Apply Spoofer",
 Callback = function()
+((type(getgenv)=="function" and getgenv()) or _G).__DevKagePassiveBoot = false
 getgenv().__DevKageConfig.victim  = victimInput:Get()
 getgenv().__DevKageConfig.helper  = helperInput:Get()
 getgenv().__DevKageConfig.level   = tonumber(levelInput:Get())  or 999
@@ -16751,6 +17456,7 @@ end
 })
 
 local function refreshSpooferPresentation()
+if not SpooferState.IsActive() then return end
 local config=getgenv().__DevKageConfig
 SpooferState.UpdatePlatformAsset(config,false)
 SpooferState.ApplyBadgeAttributes(LocalPlayer,config)
@@ -17291,9 +17997,9 @@ streamerHeightSlider=streamerHeightSlider,streamerTextSizeSlider=streamerTextSiz
 streamerOffsetXSlider=streamerOffsetXSlider,streamerOffsetYSlider=streamerOffsetYSlider,streamerCornerSlider=streamerCornerSlider,
 streamerLineSlider=streamerLineSlider,streamerStrokeSlider=streamerStrokeSlider
 }
-end)();
+end)()
 
-(function()
+assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
 local visualsPage = window:CreatePage({ Icon = "rbxassetid://8547254518", Glyph = "V", Size = UDim2.new(0, 36, 0, 36) })
 
@@ -18371,7 +19077,7 @@ section.SetCollapsed=setCollapsed
 end
 
 local playeresp = visualsPage:CreateSection({Name="Enemy ESP",Side="Left",Size=390})
-visualToggle(playeresp,"esp_enabled","Enabled",function() refresh_esp_highlights(); rebuildESPObjects(); refreshChams() end)
+visualToggle(playeresp,"esp_enabled","Enabled",function() HighQualityESPRuntime:SetEnabled(VisualsState.esp_enabled and VisualsState.high_quality_esp); refresh_esp_highlights(); rebuildESPObjects(); refreshChams() end)
 visualToggle(playeresp,"bounding_box","Bounding Box")
 visualToggle(playeresp,"health_bar","Health Bar")
 visualToggle(playeresp,"name","Name")
@@ -18384,7 +19090,8 @@ visualToggle(playeresp,"glow","Glow",refresh_esp_highlights)
 visualToggle(playeresp,"offscreen_arrow","Off-screen Arrow")
 visualToggle(playeresp,"visualize_aimbot","Visualize Aimbot")
 
-local espOptions = visualsPage:CreateSection({Name="Enemy ESP Options",Side="Left",Size=650})
+local espOptions = visualsPage:CreateSection({Name="Enemy ESP Options",Side="Left",Size=680})
+visualToggle(espOptions,"high_quality_esp","High Quality ESP",function() HighQualityESPRuntime:SetEnabled(VisualsState.esp_enabled and VisualsState.high_quality_esp); rebuildESPObjects() end)
 visualToggle(espOptions,"teamcheck","Team Check",function() refresh_esp_highlights(); rebuildESPObjects(); refreshChams(); ReferenceESPRuntime:RefreshRagdolls() end)
 visualToggle(espOptions,"highlights","Show Highlights",refresh_esp_highlights)
 visualToggle(espOptions,"show_only_highlights","Only Show Highlights",refreshDetailedESP)
@@ -21383,7 +22090,7 @@ Client={clientEffects,viewmodelSection,creatorSection,animationSection}
 }
 VisualCategoryController:Set("Enemy");
 
-(function()
+assert(function()
 local SharedSpoofConfig = (type(getgenv) == "function" and getgenv().__DevKageConfig) or {}
 local ProfileStatsRuntime = {
     Observed = setmetatable({}, {__mode = "k"}),
@@ -21539,14 +22246,14 @@ pcall(function() connection:Disconnect() end)
 end
 table.clear(ProfileStatsRuntime.Connections)
 end)
-end)();
+end)()
 
 UI.VisualControls = VisualControls
 UI.LightingControls = LightingControls
 UI.rebuildESPObjects = rebuildESPObjects
-end)();
+end)()
 
-(function()
+assert(function()
 library.AntiAimIconBase64 = library.AntiAimIconBase64 or [=[iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAUXklEQVR42uVdaXMbV5LMPnATvCRLsj2e4///l/24ERszjvWOx5ZlkSJI4mqgj/2gTHbiCSRxNERK6ggEeADdr+uurHrVUVVV2PNoARgC6PEdAHIABYA23zMACwBjADMAJZ72GPA95RpbABIAMdeeAIj4XnHduod5kwuJ9mBA31493sQxF34L4Jo3M+Urw/M9nBFd/t4hAxIKUc7XjK8pmbP3hXeR+CMSvQ/g1BYKMiAnwTMu9jkT3zW2pBZEpgl9fqaiYMHudfK5GdAiwcWAYy54wv8t+bqkhMz5+5dwVBSU2P4m6ZeAte1/HTOv1ediwAkZ8B1VVfaxoHS4ucnw5R0V7TxMG24oaIkxRSZrsq8Z2oYBLwGcAfgbndiIhD8i8ScA3uHLP2TrW/y94OuY7xGlX35iztd0F23fhAExpf4UwAsAP5L7mUU0GTXhazqWlP6M5jYnwRXtRfx5DOBPMmy8bZS0CQOGJP5LAD8B+J5Ev+DiRmTEBF/fUQUEVWh6S7rITPX42ZImrGyKAV3a/XNK/w9kwALAv7mgBZnwNR9zYwCMwCmjpA7Nr5zypCkGDAG8puS/BvCKFyxpEy/XSMnXzITCcgL5i5RacWwM2DjZTB8hfs9CLiUoc0p91zLGb+VY0vwsSewe3zuGCExJm+k+DHCCtyw8u+RrToejZOwnAL9+I0woSVxFREOa5w5p0eXPOzMgZpjZ48lA4r/lzyNLyrq8eMaF/fYNaUPGKEnO+ozR4dDC0mwXBvRMslvk9A2xnQmJ3GM+cE7f0CbXxaDJN8SEkQF8LdLifFMIZh0D2qZSsm/XND1/kLPXZqYScr1NSZCjmn8jTFgCeE9atCmcMcP2xWPCGK/BejqokcETAB8Y818Fdu1XMmRmzHgROO9vyUFPSPCKgn2EGp7fWAP6lukVZsfGZEDojN4D+D+qnMzVkCYrtajpWzhuaA1aNEdtmufCMuoHNaDLLwoHL2lqpg949A8AfgHwO1VxwVebcXHLMJWv/cgpbBlp0aUWvCJdo4c0ILUQKuEJhGhOHwmpfufJW3yv+HPPNKWy5OVrPoQKdGkJFMovKKz3akCf3BLoppPNaH4eg1yveIGM5zo3G6iqWfoNMMDNtTLhAnW18F4NOCHOI9u/oN3aFGKd0iH/RAZGVLuJmbEIdYGmDHIJLwVGZv4yc2ywpDDB86033NAEX1kkubBsebmOAR1KbEKiqeY52+LCM2pBx2LiwsKylOf0RO6Y1x3wdWxEf0kmdJn+O+q44P9u8TwrbvKFkSW2GRnzCQO6ZvszEu0Dti8n5mTe2BK6yMJaYemJgVjnJPoryyTbJKyIXPEVo+5aKOl72tS858iAjPco7T0mbVaK+alJf5cEn5vp2Pa4JdEzywde8F1dEqd8V0Hje372JQkqZDHm+bwUOLAM8wjAz1zr7YEIGZrGgr9HjzB+jo/w9AB144LnWJkzYIC6J0ZefJ/q1jiQ+owSfkzCj3gjlQFYZ3zFWO1E6KMuhivjXpLoOQl/eSAGaG0dw3hm/DnldZeP0CFCXcjvWMK6wgC1YFwbjrNP8lSa5HaCi1e8qRvLlOUbLi0f6WC12CHTdGqm8j2AN1z3eEeNXXdElpBKOLSm3Ezhi0e0oOJ9qZyp6DDztSpbnZGbUzRT21XNoLBXbIRUsqb/XZL5fS5QofAbyyeGRpglwUAVRwoA/426TlEE0dZDJiaUYpnODok/QN0B0rb72iSvyfn5hOdsG9JwKwYsLWR61yB0MEXdYXDDGxgawFeati24oJIS+II3LjDrR57nyMzT37n+Id8laTOLQnIzd6GWhhFcz0xxbMyZmKUY87yx+aZNmFCatov4dwwoDa+YNmhDY95YYX5BPZYdS92nlr6PjXkvUXendbjwiZmn0mCTN6iL5VlwznWmQThX15JRZfFLi7wis+cx6sazuWnLY/7nFnWbS8fuPwZQqsHomietGrSjHTNvQ15DUqPwUvXTGQVAktGlWXodQCWS0iOT1hPUvanKES6MAR2LopwJqmwN+d254ftaVx7AKEqqliZkrQ3C9TE/k5hPOwFw5ZnnoiHip5TeE97cAJ82Ock0ZGYqEvv/NDAdPZ5P0t02nyIfcc73EYC/8l3q3w3AsI5p/hnqDr8Rzyn4RRoM+7x6SMt7IP37ApM56pqJhPMuDL1oUPo7lFzFvn2LgBYmXUtzloVpTmnmSf/r0y9ccr0FzyH4t7Ro7pTX6QeOsjD7LtusSKcIbHaGugfID7Ul5naeTbofdJ8tM6d3PqC1IRe3KUwUhq4qlLuxxQpCSO1viUUgKn9GJnlLnssBxFuDOhJL8FIj8BVW+1gjI4R6WlVgX5hpcqlHoEGRmbJ8Qw2QH0gNCbiDIppkgGL5U6sxvDbVHfF6c6xWzpSAKdzLDXiD+YzC/p7a52XCUouCpjznBa8tjMu7uxVpLQwqmFm4CcN0ojUMqDbUAG3uEE2ucSCI+Bwfu6df0Wycoq4Z/9sin8QSNg8BZcb+RsIkBvUKHhdu1DXnpiLSwHzaB0surywikfM+4+9v+beROW9pk4TDrxUHIWu5AQMqY/y1/GJqtrFJ/ESvM8OCFmbDzyy0K+1GooARwGqF7gZ1G8zUQkpPKruWhOVG/HeoK3c9w6k+WGRTWAFJ5/RtSpVpQLQFA3LTyqGHuKnZ06uGGCAbKkkfWIjYoxRcUlOm9upaUiUVHxiKqjj8wmL2xGy6E2pmn31L0O5X3mNmjB0GPqBvkY2y9lZQ7SvMPG6DFN+aRothnfQAxY3YTEZiOMqA4WlGBLRnYJoY5OhjZTG6CCO45ILfT434fYuEphb6SQNGwX2u20RybfcwMI0oAjMXYbuOj9KSuKlr1yF8QDtQUSdOhbpPxneaXHNxAzMlCVa3BsWo+41Kq5SdYXWXozZTCFaZBdnrpgQbGwMURXUN3ZwafLKJE5Y5bBld0tQu0lQSFpkWCHqoTK0HFiq2LVS9DqpnvlXUNwE6VNA1U9C3zxdBnJ4YDLDpUZkmqa6bm1ZusxcgNxS0beF0km6B7G2zcI+h80CVPW5XPD41oK4wh1wFMEIREDW3F4xRyoBTK6J0dzS1c0Nv29SoF6i3Jm1KE9FC7Ts9AO2Ui2qSAR1L1R1zWQTFFXdwR6i7MDKTKnd2lTEysZrrnNcUnL0wxz4yuGOfftUyIPj1DlajDHAoiAFo0AQVQYIS4icyQ6VVljpWP72wcG9hmWYRwAGutWKizN2cjv3KwL2ZaUZTkd6u35tRG+cAhmmQ8TWBgiIA3gpDWt2ex+YHXljcDpNuSa6KN+010HEUrH9GB3xp5crnsFO/CqwCAERpILlNQBBO/FZQFPECu/sBfa5rkZDC45gE7Ng6E4vd1bs0M5DuhgmWIO4rPP3hNLlDetPAcTalnkuDlaeEI4o12pIYLC1tODL4uoPVdpk4WGsUmCnZf3WnXWO73qbPwYCJRVEHwYJC2+9hriKT2MLMyMLLjhF4aTlBgdVZFOuYvjD7f0sHfIXn00GXW3Byh7KmgSTte8zuOV8V5AcImFKZhHf42aXh9Wryysw8hVogGCK3yG6J57NbJzeBVLadpw3a//vMkTLhJIho2oEDTSxBSwLoVzbzNiC+TzcRluNStgjS/6c8HPYXhJ6lWG1+bSIHELGE3/QITXtTVphwwUyTfj7j94Tl/2YRlKR+btdRtpubFkzxfPYnOGAoOH7ZtA9QhWlJByhA69qImzwA4EX2e2W2v88aw3syVGYrDfIOD23V2TZF3Un3VEcUwC/qf5qnB7BzC4OjhX+oMtU3PxE64XgNBCCTlRo83Q+iisrwf8+aVVfuGfL6VIcjAJ4HRWnDIag6CdQqeIy6cFIGoFqYg/iMNneup8bAgTFLWa9MmVBGOXJFVXo9NQMU0Q0d2zpEGOq9oSJeETjV2IhdBFhPFSxcffVnlvlWlm9U5rg1w2JudYFbS/iWT2iCYuY4UQgfH+L4YBmsark9I3Bk2H1lkU60xjdIenwnjRM0Nzg6hLAvUTdCLZ9YA1ZMj99g64BM+GAQQfGA2crNkVYBpB0ZcNcyeFm9O4qurlE3l7UN6lbX3PAJGRAbTOMdFVlszuFQpigzKGEdEyZB9lwFgJX7h1YQ8vpWoJklYIK+T1D35HefOAzNgmS0ArBI0XxP0DrYNqwcxcaQtiVUoVOOA6yqsPh/ROZNqWkq+WnHzzHqQn//GTCgb+ZUCHQcG+B1KACqNEK3AzsvfLx6wDxVAcCXGswg7Cfn+39Qj1TweW/KCc6fiPip5QCpIbhFav88BGillpQTQwCTwKwMTNrDWD7E0JemATPUBfoLrI5Nm5r9L83+S/JuGg6/N3XCfaxuXFkqDziEBihqSQ121g4TNy3eoviQKZMmzc2mai+x8g7h7eqanqHet6wMtDA4IP/MDKgMWIQYkByIAUMjRorVJrBlkJjFa3xAEkRJhTlYaYOGJunvGT5WwzrUur6de2hEEBj22BiGpjAgp3Pb/WMaAGFlgxf1XfCFgWVzrO75PQpCM2zgD+aWP0QBsCdmLSn92nOmzx9bTqDvHrJmoLqGD8C6S0BTi5t7aAY713zpPuq9v/maG43NNldB9BMCcXOL8R0x7Rkjx4YVySzJ9BRY3YfcChK9GXacfLshQgwzs4v7GNDH6vabfZIOjSGQIxysMXOl4US+SSM2M5MEYFZuEqXm2rFJ8ti+n+PjRNuuAYVD00DtulkwcoqxW7vJJvF/idU6uDR0xQR1DS4o97xgYuZHY1ukZdPAqVb4tGwpM9MlgVpBziBnlmN1k4nmR8zsJpeoez3nFg6/QN0WqURxhsMMmNJ45w5Wx7rdOcdThnFLA7H2jf+9RVwFcx9oWgSQchkkXMsgimgZXpRY6Pod6l2VV6jn2rkQicja5qrrabRY29DTQzBAJlL3eNcYnBpnTgx93JcBKorP7L23Bu30yCdeo31loKWtIHKSo++bY9YotWRNfaEwfGmK1eZhRWzxAcxQEQj2nU9LTdJ6+LTgvY8jllRJ8oHV3fEtfNqulxmOMwyinyqI1pJAQ5Z2Pe0hnqyJSCY8xzv+fB74maaCEaeF233v8EbKi32PeqBQuyHHo4nq2pwwRj05q4fVp1WErYdVACt7BNRBvWNSPuBPatqNQRDZIz4qzNYjCxqqhvKD2ODzkiZyZgJ5h6uUJj2akXC7R6ao7rQe8RmY7dMYgvaa84ft7WkQ/8f2Xe1w+UBm/A8+DhCcmnTfdyxM26+4JmXvsSWPN3siAR2zLNpfNvf7To1Yp6irWLlhJrt6/QusPo0oNs34gc4PWG1B8ZTdTYuc95GZp4VJ++8A/ouasMmQjtxC4CioObxG3dTrD+7ZFvnsW6grzRsh6NRLaRpOUTdCuRna91kwf1ASJ1jd6nlk2XDXbLs7Se2eHJv0a0yBz2K7IiPeb7lWRSbAarPw0ADCKbbfXQOzIn18+iy1PGSA9sd2DMPRTsYmHkGlfWCnxtwT1HM1u+YARwH0MFsDR6gIc03z8wd2H7GjLVMKx88sU32BenRatQUdHAzsWnCRY804CO1U107BUzvJMerm1n2jAs1h8InrmhiibocQFveHqPUsY1azlfp91H7e3zGGV0bepqBofIOYIIkdbciEtvkXIQsKEJbrGAALzZQRdoOb3JcBKpx468k/LOc4M+J7BDQMpEZaoaf1fTBYWmMyd9FYYUdtY+LAIJpyC9DOq4yRadH8vg+7qdCIyDlWR8R0G8gQLwLgTRu3f6T9foX1e36rALLwPlGFt759dNdDWjAM/JXj99kGTrltdJUPvXcCZbpGUpW9nqJ+iM9NQyn6hSUi7xkNXePjwCU9renIEq1T0xJVw7zDboSP4w8uUHfiYQ9/cIV6hM0p6sd2xdS25QMMGPA7ZxbE3BoDsAkDFsYtPSOgbYlTE0y44iti2PgDienNvCrCdA3d9FFhOc9xgXo3TFNQ8o3BHueoZ71F+NggfN+ULM3I0My6Eeom4eWmDFhidabDuSGIvYaBKkncCPWGuqsgF+hbYqQZQIllrY4JNbnfeWpI6cCEoLWGAV0Af6EWD4x+i03WlN4Dm04tCdK8hr5JMBpmxKVltL+gbtQSvq8i+p+oh4JfBmFrkwCaRhxcoK7kKUfyKYp6zNcp4RyhAGOub/yYWUzv4T4sjBqa9PtzBZo8NFrmZ9R7ivXolMSYrtpCF8C/UHdDHKKue2vRjx5imqKuNQtF/d7ymoW9xptEj+kDKuh7sxQNvDYQ7aphLVA94hJ1mfF/UffR9GwtbdrjQz86a4LVWc8DC09PyYATo5UGyr7fVEjTRwA14TmvrJL0d8teR2iuteMWmz2r4BB4/WPC8TYwP29ME3S8JQj4B7YYKP4QA5bGxTkd8jkX8Mqc5buGb3aTzPVzHxX90BtK/g+GyM5J8J9Jiws0+DDPiSUkykqPAox+iXsez/GVHf7QiXMD2X4jA94D+Oe2J003NA1yippcqM3Uqh5VeB670Q95+AQX1RPmpM9/diH+pgxQSq0d3j5Ir4OPxXCV2m6+UuILihCEMjIY/BesPjPmIAyIDabQJMLvyAhNnlWP6T6VtOd4qLn42DJlBR+/kB477z/blAGeoP1Jf6Cied/Mkar/m0QzX8IhQFI7brQVVl0fl2TI+NAMUCQU9vucoy5qDw0uUDUp/8LNTt9ANkEfE9QDaK/2BSq33aQnNNChYTUbCTMq7Qaey5iAXcyOSp+arL4wa6Dq3WhffGyXXZJeQVMnnbdfd7HaA6nm1/wLMDd6uoVQ4MiSUmH7iyaDjV23qaqWKtCsZyo6RF0k8TZw9e8/R9+gCmDHoh1FfPJr6udZNM31fY7MNOHIHHHfcgi3qS3UddLqCZnho5JFfDUGqKQoAZvbq/H29aiqGqOBJtyq6zixqKG0xed2Y0Ddipihmfb4+46+RTQdS6raWJ2hLbPq4NrB4I//BxC+RNr7qPJLAAAAAElFTkSuQmCC]=]
 
 function utility:DecodeBase64(data)
@@ -22049,9 +22756,9 @@ UI.AntiAimControls=AntiAimControls
 UI.AntiAimYawModes=yawModes
 UI.AntiAimPitchModes=pitchModes
 UI.clearAntiAimPreview=vp3_clear
-end)();
+end)()
 
-(function()
+assert(function()
 local Workspace = game:GetService("Workspace")
 
 local Runtime = {
@@ -23289,7 +23996,7 @@ end
 local rapidFireSection = ragePage:CreateSection({
     Name = "Rapid Fire",
     Side = "Right",
-    Size = 675
+    Size = 805
 })
 
 local rapidFireStatus = rapidFireSection:CreateLabel({
@@ -23558,14 +24265,58 @@ local KnifeCombatRuntime = {
     UniversalGuard = false,
     UniversalOldNamecall = nil,
     UniversalOldIndex = nil,
+    BloxRaycastModule = nil,
+    BloxRaycastInstalled = false,
+    BloxRaycastNextSearch = 0,
+    BloxCastOriginal = nil,
+    BloxCastThroughOriginal = nil,
+    RivalsUtilityRaycastInstalled = false,
+    RivalsUtility = nil,
+    RivalsUtilityOriginal = nil,
+    RivalsUtilityWrapper = nil,
+    ItemLibrary = nil,
+    ItemLibraryOriginals = {},
+    LastItemStatApply = 0,
+    BloxWeaponModule = nil,
+    BloxRecoilOriginals = {},
+    BloxRecoilWrappers = {},
+    RivalsGunModule = nil,
+    RivalsRecoilOriginal = nil,
+    RivalsRecoilWrapper = nil,
+    PhantomCharacterModule = nil,
+    PhantomLoadGunOriginal = nil,
+    PhantomLoadGunWrapper = nil,
+    PhantomGunDataOriginals = setmetatable({}, {__mode = "k"}),
+    GenericRecoilPatched = setmetatable({}, {__mode = "k"}),
+    NoRecoilInstallStarted = false,
+    NoRecoilAdaptersInstalled = false,
+    GenericRecoilScanDone = false,
+    PhantomRecoilScanDone = false,
+    LastNoRecoilAttempt = 0,
+    BloxGameState = nil,
+    BloxGameStateSearched = false,
     LastChanceRoll = 0,
     LastChanceResult = true,
+    LastHeadRoll = 0,
+    LastHeadResult = true,
+    CachedPing = 0,
+    LastPingUpdate = 0,
     LastAimPosition = nil,
     LastAimUpdate = 0,
     StatusControl = nil,
     MaskStatusControl = nil,
     Controls = {},
+    StartupGate = true,
+    RivalsNativeCombatBridge = nil,
 }
+
+do
+    local previousRuntime = Environment.__DevKageCombatRuntime
+    if type(previousRuntime) == "table" and previousRuntime ~= KnifeCombatRuntime then
+        previousRuntime.Alive = false
+    end
+    Environment.__DevKageCombatRuntime = KnifeCombatRuntime
+end
 
 KnifeCombatRuntime.SetStatus = function(text)
     local value = tostring(text or "")
@@ -23593,17 +24344,51 @@ KnifeCombatRuntime.IsRivals = function()
     return tonumber(game.GameId) == KnifeCombatRuntime.GameId
 end
 
+KnifeCombatRuntime.IsBloxStrikes = function()
+    local shared = ReplicatedStorage:FindFirstChild("Shared")
+    local raycastModule = shared and shared:FindFirstChild("Raycast")
+    local components = ReplicatedStorage:FindFirstChild("Components")
+    local weaponModule = components and components:FindFirstChild("Weapon")
+    return raycastModule ~= nil or weaponModule ~= nil
+end
+
 KnifeCombatRuntime.IsTeammate = function(player)
     local config = Environment.__DevKageConfig
     if type(config) ~= "table" or config.aimTeamCheck ~= true then return false end
     if player == LocalPlayer then return true end
-    local localTeamId, targetTeamId
-    pcall(function() localTeamId = LocalPlayer:GetAttribute("TeamID") end)
-    pcall(function() targetTeamId = player:GetAttribute("TeamID") end)
+
+    local localTeamId = LocalPlayer:GetAttribute("TeamID")
+    local targetTeamId = player:GetAttribute("TeamID")
     if localTeamId ~= nil or targetTeamId ~= nil then
         return localTeamId ~= nil and localTeamId == targetTeamId
     end
+
+    -- Blox Strikes exposes team as a Player attribute rather than TeamID.
+    local localTeamAttr = LocalPlayer:GetAttribute("Team")
+    local targetTeamAttr = player:GetAttribute("Team")
+    if localTeamAttr ~= nil or targetTeamAttr ~= nil then
+        return localTeamAttr ~= nil and localTeamAttr == targetTeamAttr
+    end
+
     return LocalPlayer.Team ~= nil and LocalPlayer.Team == player.Team
+end
+
+KnifeCombatRuntime.GetAimCenter = function(camera)
+    camera = camera or Workspace.CurrentCamera
+    if not camera then return ZeroVector2 end
+
+    local config = Environment.__DevKageConfig
+    local originMode = tostring(type(config) == "table" and config.silentAimFOVOrigin or "Screen Center")
+
+    if originMode == "Mouse" and UserInputService.MouseBehavior ~= Enum.MouseBehavior.LockCenter then
+        local mousePosition = UserInputService:GetMouseLocation()
+        local inset = ZeroVector2
+        local insetOk, liveInset = pcall(GuiService.GetGuiInset, GuiService)
+        if insetOk and liveInset then inset = liveInset end
+        return mousePosition - inset
+    end
+
+    return camera.ViewportSize * 0.5
 end
 
 KnifeCombatRuntime.ResolvePart = function(character, wanted, camera)
@@ -23612,38 +24397,33 @@ KnifeCombatRuntime.ResolvePart = function(character, wanted, camera)
         local config = Environment.__DevKageConfig
         wanted = tostring(type(config) == "table" and config.aimTargetPart or "Head")
     end
-    if wanted == "Closest" then
+    local head = character:FindFirstChild("Head") or character:FindFirstChild("HitboxHead") or character:FindFirstChild("HitboxHeadSmall")
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if wanted == "Head" then return head or root end
+    if wanted == "Body" or wanted == "Torso" then
+        return character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso") or character:FindFirstChild("LowerTorso") or root
+    elseif wanted == "Closest" then
         camera = camera or Workspace.CurrentCamera
-        if not camera then return character:FindFirstChild("HumanoidRootPart") end
-        local cameraCFrame = camera.CFrame
-        local cameraPosition = cameraCFrame.Position
-        local lookVector = cameraCFrame.LookVector
-        local best, score
-        for _, object in ipairs(character:GetChildren()) do
+        if not camera then return root or head end
+        local mouse = KnifeCombatRuntime.GetAimCenter(camera)
+        local best,bestD
+        for _,object in ipairs(character:GetChildren()) do
             if object:IsA("BasePart") then
-                local offset = object.Position - cameraPosition
-                local magnitudeSquared = offset:Dot(offset)
-                if magnitudeSquared > 0.000001 then
-                    local candidate = 1 - (lookVector:Dot(offset) / math.sqrt(magnitudeSquared))
-                    if score == nil or candidate < score then best, score = object, candidate end
+                local p,on=camera:WorldToViewportPoint(object.Position)
+                if on and p.Z>0 then
+                    local dx,dy=p.X-mouse.X,p.Y-mouse.Y; local d=dx*dx+dy*dy
+                    if bestD==nil or d<bestD then best,bestD=object,d end
                 end
             end
         end
-        return best or character:FindFirstChild("HumanoidRootPart")
+        return best or head or root
     elseif wanted == "Random" then
-        -- Keep the original table + one-random-call behavior exactly.
-        local parts = {}
-        for _, object in ipairs(character:GetChildren()) do
-            if object:IsA("BasePart") then parts[#parts + 1] = object end
-        end
-        return #parts > 0 and parts[math.random(1, #parts)] or nil
-    elseif wanted == "Torso" then
-        return character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
-            or character:FindFirstChild("HumanoidRootPart")
+        local parts={}
+        for _,object in ipairs(character:GetChildren()) do if object:IsA("BasePart") then parts[#parts+1]=object end end
+        return #parts>0 and parts[math.random(1,#parts)] or head or root
     end
-    local part = character:FindFirstChild(wanted)
-    return part and part:IsA("BasePart") and part
-        or character:FindFirstChild("HumanoidRootPart")
+    local part=character:FindFirstChild(wanted)
+    return part and part:IsA("BasePart") and part or head or root
 end
 
 KnifeCombatRuntime.IsVisible = function(part, camera, visibleCheck)
@@ -23668,61 +24448,129 @@ end
 
 KnifeCombatRuntime.FindTarget = function()
     local camera = Workspace.CurrentCamera
-    if not camera then return nil, nil end
+    if not camera then return nil,nil end
 
     local config = Environment.__DevKageConfig
-    local radius = math.clamp(tonumber(type(config) == "table" and config.silentAimRadius) or 150, 25, 1000)
-    local radiusSquared = radius * radius
-    local wanted = tostring(type(config) == "table" and config.aimTargetPart or "Head")
-    local visibleCheck = type(config) == "table" and config.aimVisibleCheck == true
-    local teamCheck = type(config) == "table" and config.aimTeamCheck == true
-    local maxDistance = math.clamp(tonumber(type(config) == "table" and config.silentAimMaxDistance) or 2500, 50, 10000)
-    local maxDistanceSquared = maxDistance * maxDistance
-    local cameraPosition = camera.CFrame.Position
-    local localTeamId = teamCheck and LocalPlayer:GetAttribute("TeamID") or nil
-    local localTeam = teamCheck and LocalPlayer.Team or nil
+    local radius = math.clamp(
+        tonumber(type(config)=="table" and config.silentAimRadius) or 300,
+        25,
+        2000
+    )
+    local radiusSquared = radius*radius
+    local infiniteFOV = type(config)=="table" and config.silentAimInfiniteFOV==true
+    local wanted = tostring(type(config)=="table" and config.aimTargetPart or "Head")
+    local visibleCheck = type(config)=="table" and config.aimVisibleCheck==true
+    local teamCheck = type(config)=="table" and config.aimTeamCheck==true
+    local priority = tostring(type(config)=="table" and config.silentAimPriority or "FOV")
+    local targetLock = type(config)~="table" or config.silentAimTargetLock~=false
+    local stickiness = math.clamp(
+        tonumber(type(config)=="table" and config.silentAimTargetStickiness) or 1.25,
+        1,
+        2
+    )
+    local maxDistance = math.clamp(
+        tonumber(type(config)=="table" and config.silentAimMaxDistance) or 2500,
+        50,
+        10000
+    )
+    local maxDistanceSquared=maxDistance*maxDistance
+    local cameraPosition=camera.CFrame.Position
+    local center=KnifeCombatRuntime.GetAimCenter(camera)
 
-    local mousePosition = UserInputService:GetMouseLocation()
-    local inset = ZeroVector2
-    local insetOk, liveInset = pcall(GuiService.GetGuiInset, GuiService)
-    if insetOk and liveInset then inset = liveInset end
-    local center = mousePosition - inset
+    local localTeamId=teamCheck and LocalPlayer:GetAttribute("TeamID") or nil
+    local localTeamAttr=teamCheck and LocalPlayer:GetAttribute("Team") or nil
+    local localTeam=teamCheck and LocalPlayer.Team or nil
 
-    local bestPlayer, bestPart, bestDistanceSquared
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer then
-            local teammate = false
+    local currentTarget=targetLock and KnifeCombatRuntime.CurrentTarget or nil
+    local bestPlayer,bestPart,bestDistanceSquared,bestScore
+
+    for _,player in ipairs(Players:GetPlayers()) do
+        if player~=LocalPlayer then
+            local teammate=false
             if teamCheck then
-                local targetTeamId = player:GetAttribute("TeamID")
-                if localTeamId ~= nil or targetTeamId ~= nil then
-                    teammate = localTeamId ~= nil and localTeamId == targetTeamId
+                local targetTeamId=player:GetAttribute("TeamID")
+                if localTeamId~=nil or targetTeamId~=nil then
+                    teammate=localTeamId~=nil and localTeamId==targetTeamId
                 else
-                    teammate = localTeam ~= nil and localTeam == player.Team
+                    local targetTeamAttr=player:GetAttribute("Team")
+                    if localTeamAttr~=nil or targetTeamAttr~=nil then
+                        teammate=localTeamAttr~=nil and localTeamAttr==targetTeamAttr
+                    else
+                        teammate=localTeam~=nil and localTeam==player.Team
+                    end
                 end
             end
 
             if not teammate then
-                local character = player.Character
-                local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-                if humanoid and humanoid.Health > 0 and not character:FindFirstChildOfClass("ForceField") then
-                    local part = KnifeCombatRuntime.ResolvePart(character, wanted, camera)
+                local character=player.Character
+                local humanoid=character and character:FindFirstChildOfClass("Humanoid")
+                local deadAttribute=character and character:GetAttribute("Dead")==true
+                local blocked=false
+
+                if character and type(config)=="table" then
+                    if config.silentAimIgnoreDeflecting~=false
+                        and (character:GetAttribute("Deflecting")==true or character:FindFirstChild("Deflecting")) then
+                        blocked=true
+                    end
+                    if config.silentAimIgnoreShielded~=false
+                        and (character:GetAttribute("Shielded")==true
+                            or character:FindFirstChild("Shielded")
+                            or character:FindFirstChildOfClass("ForceField")) then
+                        blocked=true
+                    end
+                    if config.silentAimVulnerableOnly==true
+                        and character:GetAttribute("Vulnerable")==false then
+                        blocked=true
+                    end
+                end
+
+                if character and not deadAttribute and not blocked
+                    and (not humanoid or humanoid.Health>0) then
+
+                    local part=KnifeCombatRuntime.ResolvePart(character,wanted,camera)
                     if part and part:IsDescendantOf(Workspace) then
-                        local worldOffset = part.Position - cameraPosition
-                        local worldDistanceSquared = worldOffset:Dot(worldOffset)
-                        -- Projection/FOV rejection is much cheaper than a raycast.
-                        -- Only raycast if this candidate can actually become the winner.
-                        local point, onScreen = camera:WorldToViewportPoint(part.Position)
-                        if onScreen and point.Z > 0 then
-                            local dx = point.X - center.X
-                            local dy = point.Y - center.Y
-                            local distanceSquared = dx * dx + dy * dy
-                            if worldDistanceSquared <= maxDistanceSquared
-                                and distanceSquared <= radiusSquared
-                                and (bestDistanceSquared == nil or distanceSquared < bestDistanceSquared)
-                                and KnifeCombatRuntime.IsVisible(part, camera, visibleCheck) then
-                                bestPlayer = player
-                                bestPart = part
-                                bestDistanceSquared = distanceSquared
+                        local worldOffset=part.Position-cameraPosition
+                        local worldDistanceSquared=worldOffset:Dot(worldOffset)
+
+                        if worldDistanceSquared<=maxDistanceSquared then
+                            local point=camera:WorldToViewportPoint(part.Position)
+                            if point.Z>0 then
+                                local dx=point.X-center.X
+                                local dy=point.Y-center.Y
+                                local screenDistanceSquared=dx*dx+dy*dy
+
+                                local candidateRadiusSquared=radiusSquared
+                                if targetLock and player==currentTarget then
+                                    candidateRadiusSquared=candidateRadiusSquared*stickiness*stickiness
+                                end
+
+                                if (infiniteFOV or screenDistanceSquared<=candidateRadiusSquared)
+                                    and KnifeCombatRuntime.IsVisible(part,camera,visibleCheck) then
+
+                                    local score
+                                    if priority=="Distance" then
+                                        score=worldDistanceSquared
+                                    elseif priority=="Lowest Health" then
+                                        local health=humanoid and humanoid.Health or 100
+                                        local maxHealth=humanoid and math.max(humanoid.MaxHealth,1) or 100
+                                        score=(health/maxHealth)*1000000+screenDistanceSquared
+                                    else
+                                        score=screenDistanceSquared
+                                    end
+
+                                    -- Keep the current target unless another candidate is
+                                    -- meaningfully better. This removes rapid target flicker.
+                                    if targetLock and player==currentTarget then
+                                        score=score/stickiness
+                                    end
+
+                                    if bestScore==nil or score<bestScore then
+                                        bestPlayer=player
+                                        bestPart=part
+                                        bestDistanceSquared=screenDistanceSquared
+                                        bestScore=score
+                                    end
+                                end
                             end
                         end
                     end
@@ -23731,33 +24579,112 @@ KnifeCombatRuntime.FindTarget = function()
         end
     end
 
-    local bestDistance = bestDistanceSquared and math.sqrt(bestDistanceSquared) or nil
-    return bestPlayer, bestPart, bestDistance, center
+    local bestDistance=bestDistanceSquared and math.sqrt(bestDistanceSquared) or nil
+    return bestPlayer,bestPart,bestDistance,center
 end
 
 KnifeCombatRuntime.IsAimInputActive = function()
     local config = Environment.__DevKageConfig
     if type(config) ~= "table" or config.silentAimEnabled ~= true then return false end
-    if window.Enabled then return false end
     if config.silentAimAutoShoot == true then return true end
     local ok, pressed = pcall(UserInputService.IsMouseButtonPressed, UserInputService, Enum.UserInputType.MouseButton1)
     return ok and pressed == true
 end
 
+KnifeCombatRuntime.ResolveShotPart = function(part)
+    if not part or not part.Parent then return part end
+    local config=Environment.__DevKageConfig
+    local chance=math.clamp(
+        tonumber(type(config)=="table" and config.silentAimHeadChance) or 100,
+        0,
+        100
+    )
+    if chance<=0 then return part end
+
+    local useHead=true
+    if chance<100 then
+        local interval=math.clamp(
+            tonumber(type(config)=="table" and config.silentAimFireInterval) or 0.05,
+            0.02,
+            0.5
+        )
+        local window=math.clamp(interval*0.9,0.02,0.08)
+        local now=os.clock()
+        if now-KnifeCombatRuntime.LastHeadRoll>window then
+            KnifeCombatRuntime.LastHeadRoll=now
+            KnifeCombatRuntime.LastHeadResult=math.random(1,100)<=chance
+        end
+        useHead=KnifeCombatRuntime.LastHeadResult
+    end
+
+    if not useHead then return part end
+    local character=part:FindFirstAncestorOfClass("Model")
+    local head=character and (
+        character:FindFirstChild("Head")
+        or character:FindFirstChild("HitboxHead")
+        or character:FindFirstChild("HitboxHeadSmall")
+    )
+    return head or part
+end
+
 KnifeCombatRuntime.GetPredictedPosition = function(part)
     if not part or not part.Parent then return nil end
-    local position = part.Position
-    local config = Environment.__DevKageConfig
-    local prediction = math.clamp(tonumber(type(config) == "table" and config.silentAimPrediction) or 0, 0, 0.5)
-    if prediction > 0 then
-        local velocity = part.AssemblyLinearVelocity
-        position = position + velocity * prediction
+
+    local position=part.Position
+    local config=Environment.__DevKageConfig
+    local prediction=math.clamp(
+        tonumber(type(config)=="table" and config.silentAimPrediction) or 0,
+        0,
+        0.5
+    )
+
+    if type(config)=="table" and config.silentAimAutoPrediction==true then
+        local now=os.clock()
+        if now-KnifeCombatRuntime.LastPingUpdate>0.5 then
+            KnifeCombatRuntime.LastPingUpdate=now
+            local ping=KnifeCombatRuntime.CachedPing or 0
+            pcall(function()
+                local stats=game:GetService("Stats")
+                local item=stats.Network.ServerStatsItem["Data Ping"]
+                local value=item and item:GetValue()
+                if tonumber(value) then ping=math.clamp(value/1000,0,0.5) end
+            end)
+            KnifeCombatRuntime.CachedPing=ping
+        end
+
+        local camera=Workspace.CurrentCamera
+        local origin=camera and camera.CFrame.Position
+        local root=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not origin and root then origin=root.Position end
+        origin=origin or position
+
+        local speed=math.clamp(
+            tonumber(config.silentAimProjectileSpeed) or 3000,
+            250,
+            20000
+        )
+        local multiplier=math.clamp(
+            tonumber(config.silentAimPredictionMultiplier) or 1,
+            0,
+            3
+        )
+        local travel=(position-origin).Magnitude/speed
+        prediction=math.clamp(
+            ((KnifeCombatRuntime.CachedPing or 0)+travel)*multiplier,
+            0,
+            0.5
+        )
+    end
+
+    if prediction>0 then
+        local velocity=part.AssemblyLinearVelocity
+        position=position+velocity*prediction
     end
     return position
 end
 
-KnifeCombatRuntime.RefreshUniversalTarget = function(force)
-    if not KnifeCombatRuntime.Alive or not KnifeCombatRuntime.IsAimInputActive() then
+KnifeCombatRuntime.RefreshUniversalTarget = function(force, bypassInput)
+    if not KnifeCombatRuntime.Alive or (not bypassInput and not KnifeCombatRuntime.IsAimInputActive()) then
         KnifeCombatRuntime.CurrentTarget = nil
         KnifeCombatRuntime.CurrentPart = nil
         KnifeCombatRuntime.LastAimPosition = nil
@@ -23766,7 +24693,7 @@ KnifeCombatRuntime.RefreshUniversalTarget = function(force)
 
     local now = os.clock()
     if not force and KnifeCombatRuntime.CurrentPart and KnifeCombatRuntime.CurrentPart.Parent
-        and now - KnifeCombatRuntime.LastTargetScan < 0.025 then
+        and now - KnifeCombatRuntime.LastTargetScan < 0.016 then
         KnifeCombatRuntime.LastAimPosition = KnifeCombatRuntime.GetPredictedPosition(KnifeCombatRuntime.CurrentPart)
         return KnifeCombatRuntime.CurrentPart
     end
@@ -23796,30 +24723,43 @@ end
 
 KnifeCombatRuntime.ShouldRedirectShot = function()
     local config = Environment.__DevKageConfig
-    local chance = math.clamp(math.floor((tonumber(type(config) == "table" and config.silentAimHitChance) or 85) + 0.5), 0, 100)
-    if chance <= 0 then return false end
-    if chance >= 100 then return true end
+    local chance = math.clamp(
+        math.floor((tonumber(type(config)=="table" and config.silentAimHitChance) or 100)+0.5),
+        0,
+        100
+    )
+    if chance<=0 then return false end
+    if chance>=100 then return true end
 
-    -- One decision is reused briefly because a single weapon shot can make
-    -- several Raycast/Mouse queries. This keeps the whole shot consistent.
-    local now = os.clock()
-    if now - KnifeCombatRuntime.LastChanceRoll > 0.015 then
-        KnifeCombatRuntime.LastChanceRoll = now
-        KnifeCombatRuntime.LastChanceResult = math.random(1,100) <= chance
+    -- Reuse one roll for the duration of the shot. Shotguns and weapons that
+    -- perform several internal raycasts no longer get mixed hit/miss pellets.
+    local interval=math.clamp(
+        tonumber(type(config)=="table" and config.silentAimFireInterval) or 0.05,
+        0.02,
+        0.5
+    )
+    local chanceWindow=math.clamp(interval*0.9,0.02,0.08)
+    local now=os.clock()
+    if now-KnifeCombatRuntime.LastChanceRoll>chanceWindow then
+        KnifeCombatRuntime.LastChanceRoll=now
+        KnifeCombatRuntime.LastChanceResult=math.random(1,100)<=chance
     end
     return KnifeCombatRuntime.LastChanceResult
 end
 
-KnifeCombatRuntime.GetUniversalAimPart = function()
-    if not KnifeCombatRuntime.IsAimInputActive() then return nil end
+KnifeCombatRuntime.GetUniversalAimPart = function(bypassInput)
+    if not bypassInput and not KnifeCombatRuntime.IsAimInputActive() then return nil end
     local part = KnifeCombatRuntime.CurrentPart
-    if not part or not part.Parent or os.clock() - KnifeCombatRuntime.LastTargetScan > 0.05 then
-        part = KnifeCombatRuntime.RefreshUniversalTarget(true)
+    if not part or not part.Parent or os.clock() - KnifeCombatRuntime.LastTargetScan > 0.035 then
+        part = KnifeCombatRuntime.RefreshUniversalTarget(true, bypassInput)
     else
         KnifeCombatRuntime.LastAimPosition = KnifeCombatRuntime.GetPredictedPosition(part)
     end
     if not part or not KnifeCombatRuntime.ShouldRedirectShot() then return nil end
-    return part
+    local resolved = KnifeCombatRuntime.ResolveShotPart(part)
+    if not resolved or not resolved.Parent then return nil end
+    KnifeCombatRuntime.LastAimPosition = KnifeCombatRuntime.GetPredictedPosition(resolved)
+    return resolved
 end
 
 KnifeCombatRuntime.IsPlausibleShotOrigin = function(origin, direction)
@@ -23872,7 +24812,7 @@ KnifeCombatRuntime.InstallUniversalSilentAim = function()
         end
 
         local config = Environment.__DevKageConfig
-        if type(config) ~= "table" or config.silentAimEnabled ~= true or window.Enabled then
+        if type(config) ~= "table" or config.silentAimEnabled ~= true then
             return oldNamecall(self, ...)
         end
 
@@ -23931,7 +24871,7 @@ KnifeCombatRuntime.InstallUniversalSilentAim = function()
             end
 
             local config = Environment.__DevKageConfig
-            if type(config) ~= "table" or config.silentAimEnabled ~= true or window.Enabled
+            if type(config) ~= "table" or config.silentAimEnabled ~= true
                 or (key ~= "Hit" and key ~= "Target" and key ~= "UnitRay") then
                 return oldIndex(self,key)
             end
@@ -23961,6 +24901,562 @@ KnifeCombatRuntime.InstallUniversalSilentAim = function()
     return true
 end
 
+KnifeCombatRuntime.IsCurrentRuntime = function()
+    return KnifeCombatRuntime.Alive
+        and Environment.__DevKageCombatRuntime == KnifeCombatRuntime
+end
+
+KnifeCombatRuntime.InstallRivalsUtilitySilentAim = function()
+    if KnifeCombatRuntime.RivalsUtilityRaycastInstalled then return true end
+    local modules=ReplicatedStorage:FindFirstChild("Modules")
+    local utilityModule=modules and modules:FindFirstChild("Utility")
+    if not utilityModule or not utilityModule:IsA("ModuleScript") then return false end
+    local ok,utility=pcall(require,utilityModule)
+    if not ok or type(utility)~="table" or type(utility.Raycast)~="function" then return false end
+
+    local existing=Environment.__DevKageRivalsUtilityAimBridge
+    if type(existing)=="table" and existing.Utility==utility and type(existing.Wrapper)=="function" and utility.Raycast==existing.Wrapper then
+        existing.Runtime=KnifeCombatRuntime
+        KnifeCombatRuntime.RivalsUtility=utility
+        KnifeCombatRuntime.RivalsUtilityOriginal=existing.Original
+        KnifeCombatRuntime.RivalsUtilityWrapper=existing.Wrapper
+        KnifeCombatRuntime.RivalsUtilityRaycastInstalled=true
+        return true
+    end
+
+    local bridge={Runtime=KnifeCombatRuntime,Utility=utility,Original=utility.Raycast}
+    bridge.Wrapper=function(...)
+        local n=select("#",...); local args={...}; local runtime=bridge.Runtime
+        if runtime and runtime.Alive and Environment.__DevKageCombatRuntime==runtime then
+            local config=Environment.__DevKageConfig
+            if type(config)=="table" and config.silentAimEnabled==true then
+                local offset=(typeof(args[1])=="table" or typeof(args[1])=="Instance") and 1 or 0
+                local origin=args[offset+1]; local targetPos=args[offset+2]; local maxDist=args[offset+3]
+                if typeof(origin)=="Vector3" and typeof(targetPos)=="Vector3" and runtime.IsPlausibleShotOrigin(origin,targetPos-origin) then
+                    pcall(function()
+                        local part=runtime.GetUniversalAimPart(true)
+                        if part then
+                            local aimPos=runtime.LastAimPosition or runtime.GetPredictedPosition(part)
+                            if aimPos then
+                                local delta=aimPos-origin
+                                if delta.Magnitude>0.05 then
+                                    local distance=tonumber(maxDist) or (targetPos-origin).Magnitude
+                                    if distance<=0 then distance=1000 end
+                                    args[offset+2]=origin+delta.Unit*distance
+                                end
+                            end
+                        end
+                    end)
+                end
+            end
+        end
+        return bridge.Original(table.unpack(args,1,n))
+    end
+    utility.Raycast=bridge.Wrapper
+    Environment.__DevKageRivalsUtilityAimBridge=bridge
+    KnifeCombatRuntime.RivalsUtility=utility
+    KnifeCombatRuntime.RivalsUtilityOriginal=bridge.Original
+    KnifeCombatRuntime.RivalsUtilityWrapper=bridge.Wrapper
+    KnifeCombatRuntime.RivalsUtilityRaycastInstalled=true
+    return true
+end
+
+KnifeCombatRuntime.FindBloxRaycastModule = function()
+    if type(KnifeCombatRuntime.BloxRaycastModule) == "table" then
+        return KnifeCombatRuntime.BloxRaycastModule
+    end
+
+    local now = os.clock()
+    if now < KnifeCombatRuntime.BloxRaycastNextSearch then return nil end
+    KnifeCombatRuntime.BloxRaycastNextSearch = now + 1.5
+
+    -- Preferred path from the supplied Blox Strikes source.
+    local sharedFolder = ReplicatedStorage:FindFirstChild("Shared")
+    local moduleScript = sharedFolder and sharedFolder:FindFirstChild("Raycast")
+    if moduleScript and moduleScript:IsA("ModuleScript") then
+        local ok, module = pcall(require, moduleScript)
+        if ok and type(module) == "table"
+            and type(module.cast) == "function"
+            and type(module.castThrough) == "function" then
+            KnifeCombatRuntime.BloxRaycastModule = module
+            return module
+        end
+    end
+
+    -- Only GC-scan when the Blox-style Shared hierarchy exists. This avoids an
+    -- expensive scan on unrelated games while preserving the supplied fallback.
+    if sharedFolder and type(getgc) == "function" then
+        local ok, objects = pcall(getgc, true)
+        if ok and type(objects) == "table" then
+            for _, object in next, objects do
+                if type(object) == "table"
+                    and type(rawget(object,"cast")) == "function"
+                    and type(rawget(object,"castThrough")) == "function" then
+                    KnifeCombatRuntime.BloxRaycastModule = object
+                    return object
+                end
+            end
+        end
+    end
+    return nil
+end
+
+KnifeCombatRuntime.IsBloxShotOrigin = function(origin)
+    if typeof(origin) ~= "Vector3" then return false end
+    local character = LocalPlayer.Character
+    local head = character and character:FindFirstChild("Head")
+    if not head then return false end
+    local delta = origin - head.Position
+    return delta:Dot(delta) < 144 -- supplied source uses 12 studs
+end
+
+KnifeCombatRuntime.RedirectBloxDirection = function(origin, direction, part)
+    if typeof(origin) ~= "Vector3" or typeof(direction) ~= "Vector3" then return direction end
+    local aimPosition = KnifeCombatRuntime.LastAimPosition
+        or KnifeCombatRuntime.GetPredictedPosition(part)
+    if not aimPosition then return direction end
+    local delta = aimPosition - origin
+    if delta:Dot(delta) <= 0.000001 then return direction end
+    -- Blox Strikes' Shared.Raycast expects the point-to-target displacement,
+    -- matching the supplied cast/castThrough implementation.
+    return delta
+end
+
+KnifeCombatRuntime.InstallBloxStrikesSilentAim = function()
+    if KnifeCombatRuntime.BloxRaycastInstalled then return true end
+    local module=KnifeCombatRuntime.FindBloxRaycastModule()
+    if type(module)~="table" or type(module.cast)~="function" or type(module.castThrough)~="function" then return false end
+
+    local existing=Environment.__DevKageBloxRaycastBridge
+    if type(existing)=="table" and existing.Module==module then
+        existing.Runtime=KnifeCombatRuntime
+        KnifeCombatRuntime.BloxRaycastInstalled=true
+        KnifeCombatRuntime.BloxRaycastModule=module
+        return true
+    end
+
+    local bridge={Runtime=KnifeCombatRuntime,Module=module,OldCast=module.cast,OldCastThrough=module.castThrough}
+    local function redirect(origin,direction)
+        local runtime=bridge.Runtime
+        if not runtime or not runtime.Alive or Environment.__DevKageCombatRuntime~=runtime then return direction end
+        local config=Environment.__DevKageConfig
+        if type(config)~="table" or config.silentAimEnabled~=true or typeof(direction)~="Vector3" or not runtime.IsBloxShotOrigin(origin) then return direction end
+        local redirected=direction
+        pcall(function()
+            local part=runtime.GetUniversalAimPart(true)
+            if part then redirected=runtime.RedirectBloxDirection(origin,direction,part) end
+        end)
+        return redirected
+    end
+    bridge.CastWrapper=function(origin,direction,...)
+        return bridge.OldCast(origin,redirect(origin,direction),...)
+    end
+    bridge.CastThroughWrapper=function(origin,direction,...)
+        return bridge.OldCastThrough(origin,redirect(origin,direction),...)
+    end
+
+    local castHooked,throughHooked=false,false
+    if type(hookfunction)=="function" then
+        local ok1,old1=pcall(hookfunction,module.cast,bridge.CastWrapper)
+        if ok1 and type(old1)=="function" then bridge.OldCast=old1; castHooked=true end
+        local ok2,old2=pcall(hookfunction,module.castThrough,bridge.CastThroughWrapper)
+        if ok2 and type(old2)=="function" then bridge.OldCastThrough=old2; throughHooked=true end
+    end
+    if not castHooked then module.cast=bridge.CastWrapper end
+    if not throughHooked then module.castThrough=bridge.CastThroughWrapper end
+    bridge.Mode=(castHooked or throughHooked) and "hybrid" or "table"
+
+    Environment.__DevKageBloxRaycastBridge=bridge
+    KnifeCombatRuntime.BloxCastOriginal=bridge.OldCast
+    KnifeCombatRuntime.BloxCastThroughOriginal=bridge.OldCastThrough
+    KnifeCombatRuntime.BloxRaycastInstalled=true
+    return true
+end
+
+KnifeCombatRuntime.NoRecoilActive = function()
+    local config = Environment.__DevKageConfig
+    return KnifeCombatRuntime.IsCurrentRuntime()
+        and type(config) == "table"
+        and config.noRecoilEnabled == true
+end
+
+KnifeCombatRuntime.InstallRivalsNoRecoil = function()
+    local playerScripts=LocalPlayer:FindFirstChild("PlayerScripts")
+    local modules=playerScripts and playerScripts:FindFirstChild("Modules")
+    local itemTypes=modules and modules:FindFirstChild("ItemTypes")
+    local gunScript=itemTypes and itemTypes:FindFirstChild("Gun")
+    if not gunScript or not gunScript:IsA("ModuleScript") then return false end
+
+    local ok,gunModule=pcall(require,gunScript)
+    if not ok or type(gunModule)~="table" or type(gunModule._Recoil)~="function" then
+        return false
+    end
+
+    local existing=Environment.__DevKageRivalsNativeCombat
+    if type(existing)=="table"
+        and existing.Gun==gunModule
+        and type(existing.RecoilWrapper)=="function"
+        and gunModule._Recoil==existing.RecoilWrapper then
+        existing.Runtime=KnifeCombatRuntime
+        KnifeCombatRuntime.RivalsNativeCombatBridge=existing
+        KnifeCombatRuntime.RivalsGunModule=gunModule
+        KnifeCombatRuntime.RivalsRecoilWrapper=existing.RecoilWrapper
+        return true
+    end
+
+    local bridge=type(existing)=="table" and existing or {}
+    bridge.Runtime=KnifeCombatRuntime
+    bridge.Gun=gunModule
+    bridge.RecoilOriginal=gunModule._Recoil
+
+    bridge.RecoilWrapper=function(self,multiplier,...)
+        local runtime=bridge.Runtime
+        local config=Environment.__DevKageConfig
+        if runtime and runtime.Alive
+            and Environment.__DevKageCombatRuntime==runtime
+            and type(config)=="table"
+            and config.noRecoilEnabled==true then
+            return
+        end
+        return bridge.RecoilOriginal(self,multiplier,...)
+    end
+
+    gunModule._Recoil=bridge.RecoilWrapper
+    Environment.__DevKageRivalsNativeCombat=bridge
+    KnifeCombatRuntime.RivalsNativeCombatBridge=bridge
+    KnifeCombatRuntime.RivalsGunModule=gunModule
+    KnifeCombatRuntime.RivalsRecoilOriginal=bridge.RecoilOriginal
+    KnifeCombatRuntime.RivalsRecoilWrapper=bridge.RecoilWrapper
+    return true
+end
+
+KnifeCombatRuntime.InstallBloxNoRecoil = function()
+    if KnifeCombatRuntime.BloxWeaponModule then return true end
+    local components = ReplicatedStorage:FindFirstChild("Components")
+    local weaponScript = components and components:FindFirstChild("Weapon")
+    if not weaponScript or not weaponScript:IsA("ModuleScript") then return false end
+
+    local ok, weaponModule = pcall(require,weaponScript)
+    if not ok or type(weaponModule) ~= "table" then return false end
+
+    local patched = 0
+    for key, value in pairs(weaponModule) do
+        if type(value) == "function" then
+            local lower = tostring(key):lower()
+            local recoilLike = lower == "recoil" or lower == "_recoil"
+                or lower == "applyrecoil" or lower == "addrecoil"
+                or lower == "camerarecoil" or lower == "camera_recoil"
+                or lower == "recoilcamera"
+            local getterLike = lower:find("get",1,true) == 1
+                or lower:find("calc",1,true) == 1
+                or lower:find("compute",1,true) == 1
+            if recoilLike and not getterLike then
+                local original = value
+                local wrapper = function(...)
+                    if KnifeCombatRuntime.NoRecoilActive() then return end
+                    return original(...)
+                end
+                KnifeCombatRuntime.BloxRecoilOriginals[key] = original
+                KnifeCombatRuntime.BloxRecoilWrappers[key] = wrapper
+                weaponModule[key] = wrapper
+                patched = patched + 1
+            end
+        end
+    end
+
+    KnifeCombatRuntime.BloxWeaponModule = weaponModule
+    return patched > 0
+end
+
+local PhantomRecoilFields = {
+    "camkickmin","camkickmax","aimcamkickmin","aimcamkickmax",
+    "aimtranskickmin","aimtranskickmax","transkickmin","transkickmax",
+    "rotkickmin","rotkickmax","aimrotkickmin","aimrotkickmax",
+}
+
+KnifeCombatRuntime.CountPhantomRecoilFields = function(data)
+    if type(data) ~= "table" then return 0 end
+    local count = 0
+    for _, key in ipairs(PhantomRecoilFields) do
+        if rawget(data,key) ~= nil then count = count + 1 end
+    end
+    return count
+end
+
+KnifeCombatRuntime.ApplyPhantomGunData = function(data)
+    if type(data) ~= "table" or KnifeCombatRuntime.CountPhantomRecoilFields(data) < 3 then
+        return false
+    end
+    local originals = KnifeCombatRuntime.PhantomGunDataOriginals[data]
+    if not originals then
+        originals = {}
+        for _, key in ipairs(PhantomRecoilFields) do
+            if rawget(data,key) ~= nil then originals[key] = data[key] end
+        end
+        KnifeCombatRuntime.PhantomGunDataOriginals[data] = originals
+    end
+    for key in pairs(originals) do data[key] = Vector3.zero end
+    return true
+end
+
+KnifeCombatRuntime.RestorePhantomGunData = function()
+    for data, originals in pairs(KnifeCombatRuntime.PhantomGunDataOriginals) do
+        if type(data) == "table" and type(originals) == "table" then
+            for key, value in pairs(originals) do data[key] = value end
+        end
+        KnifeCombatRuntime.PhantomGunDataOriginals[data] = nil
+    end
+end
+
+KnifeCombatRuntime.InstallPhantomNoRecoil = function()
+    if KnifeCombatRuntime.PhantomLoadGunWrapper then return true end
+    if KnifeCombatRuntime.PhantomRecoilScanDone then return false end
+    KnifeCombatRuntime.PhantomRecoilScanDone = true
+    if type(getgc) ~= "function" then return false end
+
+    local ok, objects = pcall(getgc,true)
+    if not ok or type(objects) ~= "table" then return false end
+    local characterModule
+    for _, object in next, objects do
+        if type(object) == "table"
+            and type(rawget(object,"loadgun")) == "function"
+            and type(rawget(object,"loadgrenade")) == "function" then
+            characterModule = object
+            break
+        end
+    end
+    if not characterModule then return false end
+
+    local original = characterModule.loadgun
+    local wrapper
+    wrapper = function(...)
+        local args = table.pack(...)
+        if KnifeCombatRuntime.NoRecoilActive() then
+            for i = 1,args.n do
+                if type(args[i]) == "table" then
+                    KnifeCombatRuntime.ApplyPhantomGunData(args[i])
+                end
+            end
+        end
+        return original(table.unpack(args,1,args.n))
+    end
+
+    KnifeCombatRuntime.PhantomCharacterModule = characterModule
+    KnifeCombatRuntime.PhantomLoadGunOriginal = original
+    KnifeCombatRuntime.PhantomLoadGunWrapper = wrapper
+    characterModule.loadgun = wrapper
+
+    -- Apply immediately to already-loaded weapon data tables.
+    if KnifeCombatRuntime.NoRecoilActive() then
+        for _, object in next, objects do
+            if type(object) == "table" then
+                KnifeCombatRuntime.ApplyPhantomGunData(object)
+            end
+        end
+    end
+    return true
+end
+
+KnifeCombatRuntime.InstallGenericNoRecoil = function()
+    if KnifeCombatRuntime.GenericRecoilScanDone then return false end
+    KnifeCombatRuntime.GenericRecoilScanDone = true
+    if type(getgc) ~= "function" then return false end
+    local ok, objects = pcall(getgc,true)
+    if not ok or type(objects) ~= "table" then return false end
+    local patched = 0
+    for _, object in next, objects do
+        if type(object) == "table" and not KnifeCombatRuntime.GenericRecoilPatched[object] then
+            local shootLike = type(rawget(object,"StartShooting")) == "function"
+                or type(rawget(object,"Shoot")) == "function"
+                or type(rawget(object,"Fire")) == "function"
+            local recoilKey
+            for _, key in ipairs({"_Recoil","ApplyRecoil","applyRecoil","AddRecoil","addRecoil"}) do
+                if type(rawget(object,key)) == "function" then recoilKey = key break end
+            end
+            if shootLike and recoilKey then
+                local original = object[recoilKey]
+                local wrapper = function(...)
+                    if KnifeCombatRuntime.NoRecoilActive() then return end
+                    return original(...)
+                end
+                object[recoilKey] = wrapper
+                KnifeCombatRuntime.GenericRecoilPatched[object] = {
+                    Key=recoilKey,Original=original,Wrapper=wrapper
+                }
+                patched = patched + 1
+            end
+        end
+    end
+    return patched > 0
+end
+
+KnifeCombatRuntime.ApplyItemLibraryWeaponMods = function()
+    local config=Environment.__DevKageConfig
+    if type(config)~="table" then return false end
+    local modules=ReplicatedStorage:FindFirstChild("Modules")
+    local itemModule=modules and modules:FindFirstChild("ItemLibrary")
+    if not itemModule or not itemModule:IsA("ModuleScript") then return false end
+    local ok,itemLib=pcall(require,itemModule)
+    if not ok or type(itemLib)~="table" or type(itemLib.Items)~="table" then return false end
+    KnifeCombatRuntime.ItemLibrary=itemLib
+    for name,item in pairs(itemLib.Items) do
+        if type(item)=="table" then
+            local saved=KnifeCombatRuntime.ItemLibraryOriginals[name]
+            if not saved then
+                saved={}
+                for _,key in ipairs({"ShootRecoil","ShootSpread","AimSpreadMultiplier","ShootSpreadPerVelocityUnit","ShootSpreadPerVelocityLimit"}) do
+                    if item[key]~=nil then saved[key]=item[key] end
+                end
+                KnifeCombatRuntime.ItemLibraryOriginals[name]=saved
+            end
+            if config.noRecoilEnabled==true and saved.ShootRecoil~=nil then item.ShootRecoil=0 elseif saved.ShootRecoil~=nil then item.ShootRecoil=saved.ShootRecoil end
+            if config.noSpreadEnabled==true then
+                for _,key in ipairs({"ShootSpread","AimSpreadMultiplier","ShootSpreadPerVelocityUnit","ShootSpreadPerVelocityLimit"}) do
+                    if saved[key]~=nil then item[key]=0 end
+                end
+            else
+                for _,key in ipairs({"ShootSpread","AimSpreadMultiplier","ShootSpreadPerVelocityUnit","ShootSpreadPerVelocityLimit"}) do
+                    if saved[key]~=nil then item[key]=saved[key] end
+                end
+            end
+        end
+    end
+    return true
+end
+
+KnifeCombatRuntime.RestoreItemLibraryWeaponMods = function()
+    local itemLib=KnifeCombatRuntime.ItemLibrary
+    if type(itemLib)=="table" and type(itemLib.Items)=="table" then
+        for name,saved in pairs(KnifeCombatRuntime.ItemLibraryOriginals) do
+            local item=itemLib.Items[name]
+            if type(item)=="table" then for key,value in pairs(saved) do item[key]=value end end
+        end
+    end
+end
+
+KnifeCombatRuntime.InstallNoRecoilAdapters = function(force)
+    if KnifeCombatRuntime.NoRecoilInstallStarted then return end
+    if KnifeCombatRuntime.NoRecoilAdaptersInstalled and not force then return end
+    KnifeCombatRuntime.NoRecoilInstallStarted = true
+
+    task.spawn(function()
+        local installed = false
+
+        -- RIVALS: exact ItemTypes.Gun._Recoil adapter from the supplied source.
+        local rivalsOk, rivalsInstalled = pcall(KnifeCombatRuntime.InstallRivalsNoRecoil)
+        if rivalsOk and rivalsInstalled then installed = true end
+
+        -- Blox Strikes: only patch explicitly named recoil methods if the
+        -- current Weapon module actually exposes one. Never scan/hook unknown
+        -- functions because that can catch a firing method.
+        if KnifeCombatRuntime.IsBloxStrikes() then
+            local bloxOk, bloxInstalled = pcall(KnifeCombatRuntime.InstallBloxNoRecoil)
+            if bloxOk and bloxInstalled then installed = true end
+        end
+
+        -- Phantom-style gun-data tables use known camera/rotation kick fields.
+        if not KnifeCombatRuntime.IsRivals() and not KnifeCombatRuntime.IsBloxStrikes() then
+            local camera = Workspace.CurrentCamera
+            local looksPhantom = Workspace:FindFirstChild("Players") ~= nil
+                and camera ~= nil and camera:FindFirstChild("Main") ~= nil
+            if looksPhantom then
+                local pfOk, pfInstalled = pcall(KnifeCombatRuntime.InstallPhantomNoRecoil)
+                if pfOk and pfInstalled then installed = true end
+            end
+        end
+
+        KnifeCombatRuntime.NoRecoilAdaptersInstalled = installed
+        KnifeCombatRuntime.NoRecoilInstallStarted = false
+    end)
+end
+
+KnifeCombatRuntime.FindBloxGameState = function()
+    if KnifeCombatRuntime.BloxGameStateSearched then return KnifeCombatRuntime.BloxGameState end
+    KnifeCombatRuntime.BloxGameStateSearched = true
+    local database = ReplicatedStorage:FindFirstChild("Database")
+    local components = database and database:FindFirstChild("Components")
+    local moduleScript = components and components:FindFirstChild("GameState")
+    if moduleScript and moduleScript:IsA("ModuleScript") then
+        local ok, value = pcall(require,moduleScript)
+        if ok and type(value) == "table" then KnifeCombatRuntime.BloxGameState = value end
+    end
+    return KnifeCombatRuntime.BloxGameState
+end
+
+KnifeCombatRuntime.StepBunnyHop = function(dt)
+    local config = Environment.__DevKageConfig
+    if type(config) ~= "table" or config.bunnyHopEnabled ~= true then return end
+
+    local focused
+    pcall(function() focused = UserInputService:GetFocusedTextBox() end)
+    if focused then return end
+    if not UserInputService:IsKeyDown(Enum.KeyCode.Space) then return end
+
+    local character = LocalPlayer.Character
+    if not character then return end
+
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not humanoid or humanoid.Health <= 0 or not root or not root:IsA("BasePart") then return end
+
+    local state = humanoid:GetState()
+    local onGround = humanoid.FloorMaterial ~= Enum.Material.Air
+        or state == Enum.HumanoidStateType.Running
+        or state == Enum.HumanoidStateType.RunningNoPhysics
+        or state == Enum.HumanoidStateType.Landed
+
+    if onGround then
+        humanoid.Jump = true
+        pcall(humanoid.ChangeState, humanoid, Enum.HumanoidStateType.Jumping)
+        return
+    end
+
+    local velocity = root.AssemblyLinearVelocity
+    local horizontal = Vector3.new(velocity.X,0,velocity.Z)
+    local speed = horizontal.Magnitude
+
+    local moveDirection = humanoid.MoveDirection
+    local direction
+    if moveDirection.Magnitude > 0.05 then
+        direction = Vector3.new(moveDirection.X,0,moveDirection.Z).Unit
+    elseif speed > 0.05 then
+        direction = horizontal.Unit
+    else
+        return
+    end
+
+    local maxSpeed = math.clamp(tonumber(config.bunnyHopMaxSpeed) or 28,16,120)
+    local boost = math.clamp(tonumber(config.bunnyHopBoost) or 0.4,0,3)
+    local frameScale = math.clamp((tonumber(dt) or (1/60)) * 60,0.25,4)
+
+    -- Start from the character's actual horizontal speed. When a custom
+    -- controller zeroes horizontal velocity during the jump, use WalkSpeed as
+    -- a conservative baseline instead of doing nothing.
+    local baseSpeed = speed
+    if baseSpeed < 0.1 then
+        baseSpeed = math.min(math.max(tonumber(humanoid.WalkSpeed) or 16,16),maxSpeed)
+    end
+
+    local newSpeed = math.min(baseSpeed + boost * frameScale,maxSpeed)
+    local newVelocity = Vector3.new(
+        direction.X * newSpeed,
+        velocity.Y,
+        direction.Z * newSpeed
+    )
+
+    pcall(function() root.AssemblyLinearVelocity = newVelocity end)
+    -- Compatibility fallback for controllers that still observe BasePart.Velocity.
+    pcall(function() root.Velocity = newVelocity end)
+end
+
+KnifeCombatRuntime.GetAimBackendName = function()
+    if KnifeCombatRuntime.BloxRaycastInstalled then return "Blox Shared.Raycast" end
+    if KnifeCombatRuntime.RivalsUtilityRaycastInstalled then return "Utility.Raycast silent aim" end
+    if KnifeCombatRuntime.IsRivals() and KnifeCombatRuntime.Loaded then return "RIVALS native" end
+    if KnifeCombatRuntime.UniversalInstalled then return "Roblox ray/mouse APIs" end
+    return "Mouse fallback"
+end
+
 KnifeCombatRuntime.UninstallNoSpread = function()
     if KnifeCombatRuntime.SpreadInstalled
         and type(KnifeCombatRuntime.GameplayUtility) == "table"
@@ -23974,32 +25470,86 @@ KnifeCombatRuntime.UninstallNoSpread = function()
 end
 
 KnifeCombatRuntime.InstallNoSpread = function()
-    local config = Environment.__DevKageConfig
-    if not KnifeCombatRuntime.Alive or type(config) ~= "table"
-        or config.noSpreadEnabled ~= true then
-        KnifeCombatRuntime.UninstallNoSpread()
+    local config=Environment.__DevKageConfig
+    if not KnifeCombatRuntime.Alive or type(config)~="table"
+        or config.noSpreadEnabled~=true then
         return false
     end
-    local gameplay = KnifeCombatRuntime.GameplayUtility
-    if type(gameplay) ~= "table" or type(gameplay.GetSpread) ~= "function" then return false end
-    if KnifeCombatRuntime.SpreadInstalled and gameplay.GetSpread == KnifeCombatRuntime.SpreadWrapper then
+
+    if KnifeCombatRuntime.IsRivals() then
+        local modules=ReplicatedStorage:FindFirstChild("Modules")
+        local gameplayScript=modules and modules:FindFirstChild("GameplayUtility")
+        if not gameplayScript or not gameplayScript:IsA("ModuleScript") then return false end
+
+        local ok,gameplay=pcall(require,gameplayScript)
+        if not ok or type(gameplay)~="table" or type(gameplay.GetSpread)~="function" then
+            return false
+        end
+
+        local bridge=Environment.__DevKageRivalsNativeCombat
+        if type(bridge)~="table" then
+            bridge={Runtime=KnifeCombatRuntime}
+            Environment.__DevKageRivalsNativeCombat=bridge
+        end
+
+        bridge.Runtime=KnifeCombatRuntime
+
+        if bridge.Gameplay==gameplay
+            and type(bridge.SpreadWrapper)=="function"
+            and gameplay.GetSpread==bridge.SpreadWrapper then
+            KnifeCombatRuntime.RivalsNativeCombatBridge=bridge
+            KnifeCombatRuntime.GameplayUtility=gameplay
+            KnifeCombatRuntime.SpreadWrapper=bridge.SpreadWrapper
+            KnifeCombatRuntime.SpreadInstalled=true
+            return true
+        end
+
+        bridge.Gameplay=gameplay
+        bridge.SpreadOriginal=gameplay.GetSpread
+        bridge.SpreadWrapper=function(spread,aimMultiplier,isAiming,isCrouching,pelletIndex,totalPellets,consistent,...)
+            local runtime=bridge.Runtime
+            local liveConfig=Environment.__DevKageConfig
+            if runtime and runtime.Alive
+                and Environment.__DevKageCombatRuntime==runtime
+                and type(liveConfig)=="table"
+                and liveConfig.noSpreadEnabled==true then
+                return ZeroCFrame
+            end
+            return bridge.SpreadOriginal(
+                spread,aimMultiplier,isAiming,isCrouching,pelletIndex,totalPellets,consistent,...
+            )
+        end
+
+        gameplay.GetSpread=bridge.SpreadWrapper
+        KnifeCombatRuntime.RivalsNativeCombatBridge=bridge
+        KnifeCombatRuntime.GameplayUtility=gameplay
+        KnifeCombatRuntime.OriginalGetSpread=bridge.SpreadOriginal
+        KnifeCombatRuntime.SpreadWrapper=bridge.SpreadWrapper
+        KnifeCombatRuntime.SpreadInstalled=true
         return true
     end
-    KnifeCombatRuntime.UninstallNoSpread()
-    local original = gameplay.GetSpread
+
+    local gameplay=KnifeCombatRuntime.GameplayUtility
+    if type(gameplay)~="table" or type(gameplay.GetSpread)~="function" then return false end
+    if KnifeCombatRuntime.SpreadInstalled and gameplay.GetSpread==KnifeCombatRuntime.SpreadWrapper then
+        return true
+    end
+
+    local original=gameplay.GetSpread
     local wrapper
-    wrapper = function(...)
-        local liveConfig = Environment.__DevKageConfig
-        if KnifeCombatRuntime.Alive and type(liveConfig) == "table"
-            and liveConfig.noSpreadEnabled == true then
+    wrapper=function(...)
+        local liveConfig=Environment.__DevKageConfig
+        if KnifeCombatRuntime.Alive and type(liveConfig)=="table"
+            and liveConfig.noSpreadEnabled==true then
             return ZeroCFrame
         end
         return original(...)
     end
-    KnifeCombatRuntime.OriginalGetSpread = original
-    KnifeCombatRuntime.SpreadWrapper = wrapper
-    gameplay.GetSpread = wrapper
-    KnifeCombatRuntime.SpreadInstalled = true
+
+    KnifeCombatRuntime.OriginalGetSpread=original
+    KnifeCombatRuntime.SpreadWrapper=wrapper
+    gameplay.GetSpread=wrapper
+    KnifeCombatRuntime.SpreadInstalled=true
     return true
 end
 
@@ -24088,7 +25638,13 @@ KnifeCombatRuntime.FireAt = function(part)
     if type(utility.EncodeCFrame) ~= "function"
         or type(enumLibrary.ToEnum) ~= "function"
         or not remote or not remote.Parent then return false end
-    local aim = CFrame.lookAt(root.Position, part.Position)
+    local aimPosition = KnifeCombatRuntime.LastAimPosition
+        or KnifeCombatRuntime.GetPredictedPosition(part)
+        or part.Position
+    if typeof(aimPosition) ~= "Vector3" then return false end
+    local delta = aimPosition - root.Position
+    if delta:Dot(delta) <= 0.0001 then return false end
+    local aim = CFrame.lookAt(root.Position, aimPosition)
     local okFire = pcall(function()
         local data = {
             [PayloadKey1] = {
@@ -24120,11 +25676,28 @@ KnifeCombatRuntime.MoveMouseTo = function(part, center)
     return true
 end
 
-KnifeCombatRuntime.Step = function()
+KnifeCombatRuntime.Step = function(dt)
     if not KnifeCombatRuntime.Alive then return end
     local config = Environment.__DevKageConfig
     if type(config) ~= "table" then return end
     local now = os.clock()
+
+    if KnifeCombatRuntime.StartupGate then return end
+    KnifeCombatRuntime.StepBunnyHop(dt)
+
+    if not KnifeCombatRuntime.IsRivals()
+        and (config.noRecoilEnabled==true or config.noSpreadEnabled==true)
+        and now-KnifeCombatRuntime.LastItemStatApply>0.5 then
+        KnifeCombatRuntime.LastItemStatApply=now
+        pcall(KnifeCombatRuntime.ApplyItemLibraryWeaponMods)
+    end
+
+    if config.noRecoilEnabled == true
+        and not KnifeCombatRuntime.NoRecoilAdaptersInstalled
+        and now - KnifeCombatRuntime.LastNoRecoilAttempt > 2 then
+        KnifeCombatRuntime.LastNoRecoilAttempt = now
+        KnifeCombatRuntime.InstallNoRecoilAdapters()
+    end
 
     if config.noSpreadEnabled == true
         and (not KnifeCombatRuntime.SpreadInstalled
@@ -24140,9 +25713,15 @@ KnifeCombatRuntime.Step = function()
         KnifeCombatRuntime.LastAimPosition = nil
         return
     end
-    if window.Enabled then return end
-
-    if not KnifeCombatRuntime.UniversalInstalled then
+    if KnifeCombatRuntime.IsBloxStrikes() then
+        if not KnifeCombatRuntime.BloxRaycastInstalled then
+            KnifeCombatRuntime.InstallBloxStrikesSilentAim()
+        end
+    elseif KnifeCombatRuntime.IsRivals() then
+        if not KnifeCombatRuntime.Loaded then
+            KnifeCombatRuntime.QueueModuleLoad(false)
+        end
+    elseif not KnifeCombatRuntime.UniversalInstalled then
         KnifeCombatRuntime.InstallUniversalSilentAim()
     end
 
@@ -24156,8 +25735,8 @@ KnifeCombatRuntime.Step = function()
 
     -- Target acquisition is independent of the weapon's firing interval. The
     -- actual Raycast/Mouse hooks then consume this cached result very cheaply.
-    if now - KnifeCombatRuntime.LastTargetScan >= 0.025 then
-        KnifeCombatRuntime.RefreshUniversalTarget(true)
+    if now - KnifeCombatRuntime.LastTargetScan >= 0.016 then
+        KnifeCombatRuntime.RefreshUniversalTarget(true, false)
     elseif KnifeCombatRuntime.CurrentPart then
         KnifeCombatRuntime.LastAimPosition = KnifeCombatRuntime.GetPredictedPosition(KnifeCombatRuntime.CurrentPart)
     end
@@ -24172,33 +25751,59 @@ KnifeCombatRuntime.Step = function()
         return
     end
 
-    -- Manual firing is handled by the universal hooks. Auto Shoot remains
-    -- separate: use the native RIVALS payload when available, otherwise a
-    -- normal executor mouse click if supported.
-    if config.silentAimAutoShoot == true then
-        local interval = math.clamp(tonumber(config.silentAimFireInterval) or 0.05,0.02,1)
-        if now - KnifeCombatRuntime.LastAttempt >= interval then
-            KnifeCombatRuntime.LastAttempt = now
-            local fired = false
-            if KnifeCombatRuntime.IsRivals() then
-                if not KnifeCombatRuntime.Loaded then KnifeCombatRuntime.QueueModuleLoad(false) end
-                fired = KnifeCombatRuntime.FireAt(part)
-            end
-            if not fired and type(mouse1click) == "function" then
-                fired = pcall(mouse1click)
+    -- RIVALS follows the supplied native implementation: while Silent Aim is
+    -- enabled, either Auto Shoot OR a held left mouse button sends the encoded
+    -- StartShooting payload directly at the resolved part. No ray-hook success
+    -- is required and no fallback shot is fired into empty space.
+    if KnifeCombatRuntime.IsRivals() then
+        local wantsShot = config.silentAimAutoShoot == true
+            or UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+
+        if wantsShot then
+            local interval=math.clamp(tonumber(config.silentAimFireInterval) or 0.05,0.02,1)
+            if now-KnifeCombatRuntime.LastAttempt>=interval then
+                local shotPart=KnifeCombatRuntime.GetUniversalAimPart(true)
+                if shotPart then
+                    if not KnifeCombatRuntime.Loaded then
+                        KnifeCombatRuntime.QueueModuleLoad(false)
+                    end
+                    if KnifeCombatRuntime.Loaded and KnifeCombatRuntime.FireAt(shotPart) then
+                        KnifeCombatRuntime.LastAttempt=now
+                    end
+                end
             end
         end
-    elseif not KnifeCombatRuntime.UniversalInstalled then
-        -- Only use visible mouse movement when the executor lacks metamethod hooks.
-        KnifeCombatRuntime.MoveMouseTo(part)
+    elseif config.silentAimAutoShoot == true then
+        local interval=math.clamp(tonumber(config.silentAimFireInterval) or 0.05,0.02,1)
+        if now-KnifeCombatRuntime.LastAttempt>=interval then
+            local shotPart=KnifeCombatRuntime.GetUniversalAimPart(true)
+            if shotPart then
+                local fired=false
+                if KnifeCombatRuntime.IsBloxStrikes() then
+                    if KnifeCombatRuntime.BloxRaycastInstalled and type(mouse1click)=="function" then
+                        fired=pcall(mouse1click)
+                    end
+                elseif KnifeCombatRuntime.UniversalInstalled and type(mouse1click)=="function" then
+                    fired=pcall(mouse1click)
+                end
+                if fired then KnifeCombatRuntime.LastAttempt=now end
+            end
+        end
+    elseif not KnifeCombatRuntime.UniversalInstalled
+        and not KnifeCombatRuntime.BloxRaycastInstalled then
+        if now-KnifeCombatRuntime.LastStatusUpdate>0.5 then
+            KnifeCombatRuntime.LastStatusUpdate=now
+            KnifeCombatRuntime.SetStatus("No silent backend detected for this weapon")
+        end
     end
 
     if now - KnifeCombatRuntime.LastStatusUpdate > 0.25 then
         KnifeCombatRuntime.LastStatusUpdate = now
         KnifeCombatRuntime.SetStatus(
-            (KnifeCombatRuntime.UniversalInstalled and "Universal silent aim" or "Mouse fallback")
+            KnifeCombatRuntime.GetAimBackendName()
             .. " • " .. tostring(target and target.Name or part.Parent.Name)
             .. " • " .. tostring(part.Name)
+            .. " • " .. tostring(math.floor(tonumber(config.silentAimHitChance) or 100)) .. "%"
         )
     end
 end
@@ -24213,9 +25818,17 @@ KnifeCombatRuntime.Controls.SilentAim = rapidFireSection:CreateToggle({
     State = Environment.__DevKageConfig.silentAimEnabled == true,
     Flag = "knife.silentAimEnabled",
     Callback = function(value)
+        KnifeCombatRuntime.StartupGate = false
+        Environment.__DevKagePassiveBoot = false
         Environment.__DevKageConfig.silentAimEnabled = value == true
         if value then
-            KnifeCombatRuntime.InstallUniversalSilentAim()
+            if KnifeCombatRuntime.IsBloxStrikes() then
+                KnifeCombatRuntime.InstallBloxStrikesSilentAim()
+            elseif KnifeCombatRuntime.IsRivals() then
+                KnifeCombatRuntime.QueueModuleLoad(true)
+            else
+                KnifeCombatRuntime.InstallUniversalSilentAim()
+            end
             KnifeCombatRuntime.RefreshUniversalTarget(true)
         else
             KnifeCombatRuntime.CurrentTarget, KnifeCombatRuntime.CurrentPart = nil, nil
@@ -24225,7 +25838,7 @@ KnifeCombatRuntime.Controls.SilentAim = rapidFireSection:CreateToggle({
 })
 KnifeCombatRuntime.Controls.HitChance = rapidFireSection:CreateSlider({
     Name = "Hit Chance",
-    State = tonumber(Environment.__DevKageConfig.silentAimHitChance) or 85,
+    State = tonumber(Environment.__DevKageConfig.silentAimHitChance) or 100,
     Min = 0,
     Max = 100,
     Decimals = 0,
@@ -24233,24 +25846,79 @@ KnifeCombatRuntime.Controls.HitChance = rapidFireSection:CreateSlider({
     Flag = "knife.silentAimHitChance",
     Callback = function(value)
         Environment.__DevKageConfig.silentAimHitChance =
-            math.clamp(math.floor((tonumber(value) or 85) + 0.5), 0, 100)
+            math.clamp(math.floor((tonumber(value) or 100) + 0.5), 0, 100)
     end
 })
 KnifeCombatRuntime.Controls.Radius = rapidFireSection:CreateSlider({
     Name = "FOV Radius",
-    State = tonumber(Environment.__DevKageConfig.silentAimRadius) or 150,
+    State = tonumber(Environment.__DevKageConfig.silentAimRadius) or 300,
     Min = 25,
-    Max = 1000,
+    Max = 2000,
     Decimals = 0,
     Suffix = " px",
     Flag = "knife.silentAimRadius",
     Callback = function(value)
         Environment.__DevKageConfig.silentAimRadius =
-            math.clamp(math.floor((tonumber(value) or 150) + 0.5), 25, 1000)
+            math.clamp(math.floor((tonumber(value) or 300) + 0.5), 25, 2000)
+    end
+})
+KnifeCombatRuntime.Controls.InfiniteFOV = rapidFireSection:CreateToggle({
+    Name = "Unlimited FOV",
+    State = Environment.__DevKageConfig.silentAimInfiniteFOV == true,
+    Flag = "knife.silentAimInfiniteFOV",
+    Callback = function(value)
+        Environment.__DevKageConfig.silentAimInfiniteFOV = value == true
+    end
+})
+KnifeCombatRuntime.Controls.FOVOrigin = rapidFireSection:CreateDropdown({
+    Name = "FOV Origin",
+    Options = {"Screen Center","Mouse"},
+    State = table.find(
+        {"Screen Center","Mouse"},
+        tostring(Environment.__DevKageConfig.silentAimFOVOrigin or "Screen Center")
+    ) or 1,
+    Flag = "knife.silentAimFOVOrigin",
+    Callback = function(index)
+        Environment.__DevKageConfig.silentAimFOVOrigin =
+            ({"Screen Center","Mouse"})[index] or "Screen Center"
+    end
+})
+KnifeCombatRuntime.Controls.Priority = rapidFireSection:CreateDropdown({
+    Name = "Target Priority",
+    Options = {"FOV","Distance","Lowest Health"},
+    State = table.find(
+        {"FOV","Distance","Lowest Health"},
+        tostring(Environment.__DevKageConfig.silentAimPriority or "FOV")
+    ) or 1,
+    Flag = "knife.silentAimPriority",
+    Callback = function(index)
+        Environment.__DevKageConfig.silentAimPriority =
+            ({"FOV","Distance","Lowest Health"})[index] or "FOV"
+    end
+})
+KnifeCombatRuntime.Controls.TargetLock = rapidFireSection:CreateToggle({
+    Name = "Sticky Target",
+    State = Environment.__DevKageConfig.silentAimTargetLock ~= false,
+    Flag = "knife.silentAimTargetLock",
+    Callback = function(value)
+        Environment.__DevKageConfig.silentAimTargetLock = value == true
+    end
+})
+KnifeCombatRuntime.Controls.Stickiness = rapidFireSection:CreateSlider({
+    Name = "Target Stickiness",
+    State = tonumber(Environment.__DevKageConfig.silentAimTargetStickiness) or 1.25,
+    Min = 1,
+    Max = 2,
+    Decimals = 2,
+    Suffix = "x",
+    Flag = "knife.silentAimTargetStickiness",
+    Callback = function(value)
+        Environment.__DevKageConfig.silentAimTargetStickiness =
+            math.clamp(tonumber(value) or 1.25,1,2)
     end
 })
 KnifeCombatRuntime.Controls.Prediction = rapidFireSection:CreateSlider({
-    Name = "Velocity Prediction",
+    Name = "Manual Prediction",
     State = tonumber(Environment.__DevKageConfig.silentAimPrediction) or 0,
     Min = 0,
     Max = 0.5,
@@ -24260,6 +25928,40 @@ KnifeCombatRuntime.Controls.Prediction = rapidFireSection:CreateSlider({
     Callback = function(value)
         Environment.__DevKageConfig.silentAimPrediction =
             math.clamp(tonumber(value) or 0,0,0.5)
+    end
+})
+KnifeCombatRuntime.Controls.AutoPrediction = rapidFireSection:CreateToggle({
+    Name = "Auto Prediction",
+    State = Environment.__DevKageConfig.silentAimAutoPrediction == true,
+    Flag = "knife.silentAimAutoPrediction",
+    Callback = function(value)
+        Environment.__DevKageConfig.silentAimAutoPrediction = value == true
+    end
+})
+KnifeCombatRuntime.Controls.PredictionMultiplier = rapidFireSection:CreateSlider({
+    Name = "Prediction Multiplier",
+    State = tonumber(Environment.__DevKageConfig.silentAimPredictionMultiplier) or 1,
+    Min = 0,
+    Max = 3,
+    Decimals = 2,
+    Suffix = "x",
+    Flag = "knife.silentAimPredictionMultiplier",
+    Callback = function(value)
+        Environment.__DevKageConfig.silentAimPredictionMultiplier =
+            math.clamp(tonumber(value) or 1,0,3)
+    end
+})
+KnifeCombatRuntime.Controls.ProjectileSpeed = rapidFireSection:CreateSlider({
+    Name = "Projectile Speed",
+    State = tonumber(Environment.__DevKageConfig.silentAimProjectileSpeed) or 3000,
+    Min = 250,
+    Max = 20000,
+    Decimals = 0,
+    Suffix = " studs/s",
+    Flag = "knife.silentAimProjectileSpeed",
+    Callback = function(value)
+        Environment.__DevKageConfig.silentAimProjectileSpeed =
+            math.clamp(math.floor((tonumber(value) or 3000)+0.5),250,20000)
     end
 })
 KnifeCombatRuntime.Controls.MaxDistance = rapidFireSection:CreateSlider({
@@ -24288,6 +25990,20 @@ KnifeCombatRuntime.Controls.TargetPart = rapidFireSection:CreateDropdown({
         Environment.__DevKageConfig.aimTargetPart = options[index] or "Head"
     end
 })
+KnifeCombatRuntime.Controls.HeadChance = rapidFireSection:CreateSlider({
+    Name = "Head Chance",
+    State = tonumber(Environment.__DevKageConfig.silentAimHeadChance) or 100,
+    Min = 0, Max = 100, Decimals = 0, Suffix = "%", Flag = "knife.silentAimHeadChance",
+    Callback = function(value) Environment.__DevKageConfig.silentAimHeadChance=math.clamp(math.floor((tonumber(value) or 100)+0.5),0,100) end
+})
+KnifeCombatRuntime.Controls.IgnoreDeflecting = rapidFireSection:CreateToggle({
+    Name="Ignore Deflecting",State=Environment.__DevKageConfig.silentAimIgnoreDeflecting~=false,Flag="knife.silentAimIgnoreDeflecting",
+    Callback=function(value) Environment.__DevKageConfig.silentAimIgnoreDeflecting=value==true end
+})
+KnifeCombatRuntime.Controls.IgnoreShielded = rapidFireSection:CreateToggle({
+    Name="Ignore Shielded",State=Environment.__DevKageConfig.silentAimIgnoreShielded~=false,Flag="knife.silentAimIgnoreShielded",
+    Callback=function(value) Environment.__DevKageConfig.silentAimIgnoreShielded=value==true end
+})
 KnifeCombatRuntime.Controls.TeamCheck = rapidFireSection:CreateToggle({
     Name = "Team Check",
     State = Environment.__DevKageConfig.aimTeamCheck ~= false,
@@ -24295,8 +26011,8 @@ KnifeCombatRuntime.Controls.TeamCheck = rapidFireSection:CreateToggle({
     Callback = function(value) Environment.__DevKageConfig.aimTeamCheck = value == true end
 })
 KnifeCombatRuntime.Controls.WallCheck = rapidFireSection:CreateToggle({
-    Name = "Wall Check",
-    State = Environment.__DevKageConfig.aimVisibleCheck ~= false,
+    Name = "Wall Check (Require LOS)",
+    State = Environment.__DevKageConfig.aimVisibleCheck == true,
     Flag = "knife.aimVisibleCheck",
     Callback = function(value) Environment.__DevKageConfig.aimVisibleCheck = value == true end
 })
@@ -24337,15 +26053,83 @@ KnifeCombatRuntime.Controls.NoSpread = rapidFireSection:CreateToggle({
     State = Environment.__DevKageConfig.noSpreadEnabled == true,
     Flag = "knife.noSpreadEnabled",
     Callback = function(value)
+        KnifeCombatRuntime.StartupGate = false
+        Environment.__DevKagePassiveBoot = false
         Environment.__DevKageConfig.noSpreadEnabled = value == true
-        if value then KnifeCombatRuntime.QueueModuleLoad(true)
-        else KnifeCombatRuntime.UninstallNoSpread() end
+        if value then
+            if KnifeCombatRuntime.IsRivals() then
+                KnifeCombatRuntime.InstallNoSpread()
+            else
+                KnifeCombatRuntime.QueueModuleLoad(true)
+            end
+        else
+            KnifeCombatRuntime.UninstallNoSpread()
+        end
+        if not KnifeCombatRuntime.IsRivals() then
+            pcall(KnifeCombatRuntime.ApplyItemLibraryWeaponMods)
+        end
+    end
+})
+KnifeCombatRuntime.Controls.NoRecoil = rapidFireSection:CreateToggle({
+    Name = "No Recoil",
+    State = Environment.__DevKageConfig.noRecoilEnabled == true,
+    Flag = "knife.noRecoilEnabled",
+    Callback = function(value)
+        KnifeCombatRuntime.StartupGate = false
+        Environment.__DevKagePassiveBoot = false
+        Environment.__DevKageConfig.noRecoilEnabled = value == true
+        if value then
+            KnifeCombatRuntime.GenericRecoilScanDone = false
+            KnifeCombatRuntime.PhantomRecoilScanDone = false
+            KnifeCombatRuntime.NoRecoilAdaptersInstalled = false
+            if KnifeCombatRuntime.IsRivals() then
+                KnifeCombatRuntime.InstallRivalsNoRecoil()
+            end
+            KnifeCombatRuntime.InstallNoRecoilAdapters(true)
+        else
+            KnifeCombatRuntime.RestorePhantomGunData()
+            pcall(KnifeCombatRuntime.ApplyItemLibraryWeaponMods)
+        end
+    end
+})
+KnifeCombatRuntime.Controls.BunnyHop = rapidFireSection:CreateToggle({
+    Name = "Bunny Hop",
+    State = Environment.__DevKageConfig.bunnyHopEnabled == true,
+    Flag = "knife.bunnyHopEnabled",
+    Callback = function(value)
+        KnifeCombatRuntime.StartupGate = false
+        Environment.__DevKagePassiveBoot = false
+        Environment.__DevKageConfig.bunnyHopEnabled = value == true
+    end
+})
+KnifeCombatRuntime.Controls.BunnyHopBoost = rapidFireSection:CreateSlider({
+    Name = "BHop Air Boost",
+    State = tonumber(Environment.__DevKageConfig.bunnyHopBoost) or 0.4,
+    Min = 0,
+    Max = 3,
+    Decimals = 2,
+    Flag = "knife.bunnyHopBoost",
+    Callback = function(value)
+        Environment.__DevKageConfig.bunnyHopBoost = math.clamp(tonumber(value) or 0.4,0,3)
+    end
+})
+KnifeCombatRuntime.Controls.BunnyHopMaxSpeed = rapidFireSection:CreateSlider({
+    Name = "BHop Max Speed",
+    State = tonumber(Environment.__DevKageConfig.bunnyHopMaxSpeed) or 28,
+    Min = 16,
+    Max = 120,
+    Decimals = 0,
+    Suffix = " studs/s",
+    Flag = "knife.bunnyHopMaxSpeed",
+    Callback = function(value)
+        Environment.__DevKageConfig.bunnyHopMaxSpeed =
+            math.clamp(math.floor((tonumber(value) or 28) + 0.5),16,120)
     end
 })
 KnifeCombatRuntime.StatusControl = rapidFireSection:CreateLabel({
     Text = type(hookmetamethod) == "function"
-        and "Universal silent aim • Raycast + Mouse APIs"
-        or "Executor hooks unavailable • mouse fallback"
+        and "Silent aim • Roblox APIs + game adapters"
+        or "Metamethod hooks unavailable • module/mouse fallback"
 })
 
 KnifeCombatRuntime.Track(RunService.Heartbeat:Connect(KnifeCombatRuntime.Step))
@@ -24363,7 +26147,18 @@ table.insert(library.CleanupCallbacks, function()
     end
     table.clear(KnifeCombatRuntime.Connections)
     KnifeCombatRuntime.UninstallNoSpread()
+    KnifeCombatRuntime.RestorePhantomGunData()
+    KnifeCombatRuntime.RestoreItemLibraryWeaponMods()
+    if type(Environment.__DevKageRivalsUtilityAimBridge)=="table" and Environment.__DevKageRivalsUtilityAimBridge.Runtime==KnifeCombatRuntime then Environment.__DevKageRivalsUtilityAimBridge.Runtime=nil end
+    if type(Environment.__DevKageRivalsNativeCombat)=="table"
+        and Environment.__DevKageRivalsNativeCombat.Runtime==KnifeCombatRuntime then
+        Environment.__DevKageRivalsNativeCombat.Runtime=nil
+    end
+    if type(Environment.__DevKageBloxRaycastBridge)=="table" and Environment.__DevKageBloxRaycastBridge.Runtime==KnifeCombatRuntime then Environment.__DevKageBloxRaycastBridge.Runtime=nil end
     KnifeCombatRuntime.CurrentTarget, KnifeCombatRuntime.CurrentPart = nil, nil
+    if Environment.__DevKageCombatRuntime == KnifeCombatRuntime then
+        Environment.__DevKageCombatRuntime = nil
+    end
     if type(MaskShard) == "table" and type(MaskShard.Runtime) == "table"
         and MaskShard.Runtime.KnifeCombat == KnifeCombatRuntime then
         MaskShard.Runtime.KnifeCombat = nil
@@ -24371,16 +26166,10 @@ table.insert(library.CleanupCallbacks, function()
 end)
 
 do
-    local config = Environment.__DevKageConfig
-    if type(config) == "table" then
-        if config.silentAimEnabled == true then
-            KnifeCombatRuntime.InstallUniversalSilentAim()
-        end
-        if config.noSpreadEnabled == true
-            or (config.silentAimAutoShoot == true and KnifeCombatRuntime.IsRivals()) then
-            KnifeCombatRuntime.QueueModuleLoad(true)
-        end
-    end
+    -- Opiumware safe-start: never install combat hooks from stale/default config
+    -- during injection. The first explicit combat toggle arms the runtime.
+    KnifeCombatRuntime.StartupGate = true
+    KnifeCombatRuntime.SetStatus("Combat safe-loaded • toggle feature to activate")
 end
 
 return KnifeCombatRuntime
@@ -24962,7 +26751,7 @@ end)
 
 UI.UniversalTools = UniversalToolsRuntime
 
-local modDetectorSection = ragePage:CreateSection({Name="Mod Detector",Side="Left",Size=120})
+local modDetectorSection = ragePage:CreateSection({Name="Mod Detector",Side="Left",Size=290})
 local worldTextureSection = ragePage:CreateSection({Name="World Texture",Side="Left",Size=330})
 local accessoriesSection = ragePage:CreateSection({Name="Accessories",Side="Left",Size=300})
 local creatorPresetSection = ragePage:CreateSection({Name="Creator Presets",Side="Left",Size=330})
@@ -25009,6 +26798,80 @@ local function avatarColor(section, key, name)
         Callback=function(v) VisualsState[key]=v; scheduleAvatarApply() end
     }))
 end
+
+local HackerDetectorRuntime = {
+    Enabled = false,
+    Token = 0,
+    AboveSince = setmetatable({}, {__mode="k"}),
+    LastAlert = setmetatable({}, {__mode="k"}),
+    Detected = setmetatable({}, {__mode="k"}),
+    Connection = nil,
+    Accumulator = 0,
+}
+
+local function hackerDetectorSetAlert(active,duration)
+    local manager=library and library.KeybindManager
+    if not manager or not manager.SetHackerAlert then return end
+    manager:SetHackerAlert(active==true,window,duration or 12)
+end
+
+local function hackerDetectorStep(dt)
+    if not HackerDetectorRuntime.Enabled then return end
+    HackerDetectorRuntime.Accumulator=HackerDetectorRuntime.Accumulator+(tonumber(dt) or 0)
+    if HackerDetectorRuntime.Accumulator<0.10 then return end
+    HackerDetectorRuntime.Accumulator=0
+    local now=os.clock(); local threshold=math.clamp(tonumber(VisualsState.hacker_speed_threshold) or 180,50,500)
+    local required=math.clamp(tonumber(VisualsState.hacker_speed_duration) or 0.75,0.1,5)
+    for _,plr in ipairs(Players:GetPlayers()) do
+        if plr~=LocalPlayer then
+            local char=plr.Character; local root=char and char:FindFirstChild("HumanoidRootPart")
+            local hum=char and char:FindFirstChildOfClass("Humanoid")
+            if root and hum and hum.Health>0 then
+                local velocity=root.AssemblyLinearVelocity.Magnitude
+                local gameFlag=plr:GetAttribute("Hacker")==true or char:GetAttribute("Hacker")==true
+                if gameFlag or velocity>threshold then
+                    local since=HackerDetectorRuntime.AboveSince[plr]
+                    if not since then HackerDetectorRuntime.AboveSince[plr]=now; since=now end
+                    if gameFlag or now-since>=required then
+                        HackerDetectorRuntime.Detected[plr]=true
+                        local last=HackerDetectorRuntime.LastAlert[plr] or 0
+                        if now-last>=12 then
+                            HackerDetectorRuntime.LastAlert[plr]=now
+                            hackerDetectorSetAlert(true,12)
+                            library:Notify({Message="!hacker!  "..plr.DisplayName.."  •  "..math.floor(velocity+0.5).." studs/s",Duration=4})
+                        end
+                    end
+                else
+                    HackerDetectorRuntime.AboveSince[plr]=nil
+                    HackerDetectorRuntime.Detected[plr]=nil
+                end
+            else
+                HackerDetectorRuntime.AboveSince[plr]=nil
+                HackerDetectorRuntime.Detected[plr]=nil
+            end
+        end
+    end
+end
+
+local function setHackerDetectorEnabled(enabled)
+    enabled=enabled==true
+    VisualsState.hacker_detector_enabled=enabled
+    HackerDetectorRuntime.Enabled=enabled
+    HackerDetectorRuntime.Token=HackerDetectorRuntime.Token+1
+    table.clear(HackerDetectorRuntime.AboveSince); table.clear(HackerDetectorRuntime.Detected)
+    if enabled then
+        if library and library.KeybindManager and library.KeybindManager.EnsureUI then library.KeybindManager:EnsureUI(window) end
+    else
+        hackerDetectorSetAlert(false)
+    end
+end
+
+HackerDetectorRuntime.Connection=utility:CreateConnection(RunService.Heartbeat,hackerDetectorStep)
+if type(MaskShard)=="table" and type(MaskShard.Connections)=="table" then MaskShard.Connections[#MaskShard.Connections+1]=HackerDetectorRuntime.Connection end
+utility:CreateConnection(Players.PlayerRemoving,function(plr)
+    HackerDetectorRuntime.AboveSince[plr]=nil; HackerDetectorRuntime.LastAlert[plr]=nil; HackerDetectorRuntime.Detected[plr]=nil
+end)
+UI.HackerDetectorRuntime=HackerDetectorRuntime
 
 local ModDetectorRuntime = {
     Enabled = false,
@@ -25243,6 +27106,11 @@ modDetectorTrack(utility:CreateConnection(Players.PlayerRemoving, function()
     modDetectorQueueScan(0.25)
 end))
 
+table.insert(library.CleanupCallbacks,function()
+    HackerDetectorRuntime.Enabled=false
+    hackerDetectorSetAlert(false)
+end)
+
 trackVisualControl("mod_detector_enabled", modDetectorSection:CreateToggle({
     Name="Mod Detector",
     State=VisualsState.mod_detector_enabled,
@@ -25264,6 +27132,29 @@ modDetectorSection:CreateButton({
         end
     end
 })
+
+trackVisualControl("hacker_detector_enabled", modDetectorSection:CreateToggle({
+    Name="Hacker Detector",State=VisualsState.hacker_detector_enabled,Flag="visuals.hacker_detector_enabled",
+    Callback=function(v) setHackerDetectorEnabled(v) end
+}))
+trackVisualControl("hacker_speed_threshold", modDetectorSection:CreateSlider({
+    Name="Hacker Speed Threshold",State=VisualsState.hacker_speed_threshold,Min=50,Max=500,Decimals=0,Suffix=" studs/s",Flag="visuals.hacker_speed_threshold",
+    Callback=function(v) VisualsState.hacker_speed_threshold=math.clamp(tonumber(v) or 180,50,500) end
+}))
+trackVisualControl("hacker_speed_duration", modDetectorSection:CreateSlider({
+    Name="Required Speed Duration",State=VisualsState.hacker_speed_duration,Min=0.1,Max=3,Decimals=2,Suffix=" s",Flag="visuals.hacker_speed_duration",
+    Callback=function(v) VisualsState.hacker_speed_duration=math.clamp(tonumber(v) or 0.75,0.1,3) end
+}))
+modDetectorSection:CreateButton({
+    Name="Test Hacker Alert",
+    Callback=function()
+        if library and library.KeybindManager and library.KeybindManager.EnsureUI then library.KeybindManager:EnsureUI(window) end
+        hackerDetectorSetAlert(true,12)
+        library:Notify({Message="Hacker detector test: !hacker! yellow alert active",Duration=3})
+    end
+})
+
+if VisualsState.hacker_detector_enabled then setHackerDetectorEnabled(true) end
 
 avatarToggle(avatarSection,"avatar_zombie_animations","Zombie Animations")
 avatarToggle(avatarSection,"avatar_headless","Headless")
@@ -25401,9 +27292,9 @@ end)
 
 if VisualsState.world_minecraft_texture then rebuildWorldTextures() end
 scheduleAvatarApply()
-end)();
+end)()
 
-(function()
+assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
 local mouseLockPage = window:CreatePage({Icon="rbxassetid://8547249956",Glyph="A",Size=UDim2.new(0,36,0,36)})
 local crosshairSection = mouseLockPage:CreateSection({Name="Crosshair",Side="Left",Size=650})
@@ -27784,9 +29675,9 @@ VisualsState.devkage_cursor_profile="Custom"; cursorProfileDrop:Set(1,true); pub
 end})
 UI.CursorProfileDrop=cursorProfileDrop
 UI.ApplyCursorProfile=applyCursorProfile
-end)();
+end)()
 
-(function()
+assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
 local settingPage = window:CreatePage({ Icon = "rbxassetid://8547256547", Glyph = "L", Size = UDim2.new(0, 36, 0, 36) })
 UI.LuaPage = settingPage
@@ -28087,9 +29978,9 @@ if getgenv().__DevKageConfig.luaAutoExecute==true
 and tostring(getgenv().__DevKageConfig.luaCode or ""):match("%S") then
 task.defer(executeLuaEditor)
 end
-end)();
+end)()
 
-(function()
+assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
 local configPage = window:CreatePage({ Icon = "rbxassetid://8547269749", Glyph = "C", Size = UDim2.new(0, 36, 0, 36) })
 
@@ -28556,6 +30447,26 @@ AntiAimState.SyncControls()
 
 
 getgenv().__DevKageApplySavedControlValues(data.controlValues)
+
+if (((type(getgenv)=="function" and getgenv()) or _G).__DevKagePassiveBoot == true) then
+local config=getgenv().__DevKageConfig
+config.autoLoadSpoofer=false
+config.eloLiveSyncAutoLoad=false
+config.eloLiveSync=false
+config.silentAimEnabled=false
+config.noRecoilEnabled=false
+config.noSpreadEnabled=false
+config.bunnyHopEnabled=false
+config.unlockEmotes=false
+config.unlockWeapons=false
+config.luaAutoExecute=false
+config.avatarModsEnabled=false
+config.rainbowAuraEnabled=false
+config.chinaHatEnabled=false
+VisualsState.esp_enabled=false
+VisualsState.hacker_detector_enabled=false
+AntiAimState.enabled=false
+end
 
 aa_apply(AntiAimState.enabled)
 AntiAimMovement:SetNoClip(AntiAimState.noclip_enabled)
@@ -29463,7 +31374,7 @@ rebuildConfigList()
 task.spawn(function()
     task.wait()
 
-    if VisualsState.esp_enabled then
+    if VisualsState.esp_enabled and HighQualityESPRuntime.StartupReady then
         pcall(refreshDetailedESP)
         task.wait()
         pcall(refresh_esp_highlights)
@@ -29504,7 +31415,7 @@ task.spawn(function()
     if getgenv().__DevKageConfig.rainbowAuraEnabled then pcall(startRainbowAura) end
 end)
 
-end)();
+end)()
 
 library:ObserveThemeRoot(library.ThemeRoot)
 task.spawn(function()
@@ -29529,33 +31440,182 @@ task.spawn(function()
 end)
 
 
--- DUAL MASK SHARDS ALWAYS-ON WATCHDOG (COMPATIBILITY MODE)
+-- DUAL MASK SHARDS ALWAYS-ON WATCHDOG (HARDENED COMPATIBILITY MODE)
+-- Isolated function frame: avoids consuming registers in the saturated main
+-- embedded chunk. This guardian keeps the SAFE compatibility lifecycle intact;
+-- it intentionally does not enable the destructive v9.7 memory/remote hooks.
+assert(function(alwaysOnMaskShards, environment, safeActivate, safeDeactivate)
+    local maskShardWatchElapsed = 0
+    local maskShardWatchConnection
+    local guardEnabled = true
+    local lastHealthCheck = os.clock()
+    local repairs = 0
 
-local alwaysOnMaskShards = {MaskShard, MaskShardV96}
-local maskShardWatchElapsed = 0
-local maskShardWatchConnection = RunService.Heartbeat:Connect(function(dt)
-    maskShardWatchElapsed = maskShardWatchElapsed + (tonumber(dt) or 0)
-    if maskShardWatchElapsed < 0.25 then return end
-    maskShardWatchElapsed = 0
-    for _, shard in ipairs(alwaysOnMaskShards) do
-        if shard.Active ~= true then shard:Activate() end
+    local function restoreShard(shard)
+        if type(shard) ~= "table" then return false end
+        local changed = false
+
+        if shard.Activate ~= safeActivate then
+            shard.Activate = safeActivate
+            changed = true
+        end
+        if shard.Deactivate ~= safeDeactivate then
+            shard.Deactivate = safeDeactivate
+            changed = true
+        end
+        if shard.AlwaysOn ~= true then
+            shard.AlwaysOn = true
+            changed = true
+        end
+
+        shard.Runtime = type(shard.Runtime) == "table" and shard.Runtime or {}
+        if shard.Runtime.CompatibilityOnly ~= true then
+            shard.Runtime.CompatibilityOnly = true
+            changed = true
+        end
+
+        if shard.Active ~= true then
+            safeActivate(shard)
+            changed = true
+        end
+
+        if changed then repairs = repairs + 1 end
+        return true
     end
-end)
-table.insert(library.CleanupCallbacks, function()
-    pcall(function() maskShardWatchConnection:Disconnect() end)
-    MaskShard:Deactivate(maskShardShutdownKey)
-    MaskShardV96:Deactivate(maskShardShutdownKey)
-end)
-local maskShardEnvironment = (type(getgenv) == "function" and getgenv()) or _G
-maskShardEnvironment.__DevKageMaskShard = MaskShard
-maskShardEnvironment.__DevKageMaskShardV96 = MaskShardV96
-maskShardEnvironment.__DevKageMaskShards = {
-    Integrated = MaskShard,
-    V96 = MaskShardV96,
-}
-print("[DevKage] Both Mask Shards always on; Knife combat controls integrated.")
+
+    local function restoreGlobals()
+        local changed = false
+
+        if environment.__DevKageMaskShard ~= MaskShard then
+            environment.__DevKageMaskShard = MaskShard
+            changed = true
+        end
+        if environment.__DevKageMaskShardV96 ~= MaskShardV96 then
+            environment.__DevKageMaskShardV96 = MaskShardV96
+            changed = true
+        end
+
+        local shardMap = environment.__DevKageMaskShards
+        if type(shardMap) ~= "table"
+            or shardMap.Integrated ~= MaskShard
+            or shardMap.V96 ~= MaskShardV96 then
+            environment.__DevKageMaskShards = {
+                Integrated = MaskShard,
+                V96 = MaskShardV96,
+            }
+            changed = true
+        end
+
+        if changed then repairs = repairs + 1 end
+    end
+
+    local function health()
+        local integratedOk = type(MaskShard) == "table"
+            and MaskShard.Active == true
+            and MaskShard.AlwaysOn == true
+            and type(MaskShard.Runtime) == "table"
+            and MaskShard.Runtime.CompatibilityOnly == true
+            and MaskShard.Activate == safeActivate
+            and MaskShard.Deactivate == safeDeactivate
+
+        local aliasOk = type(MaskShardV96) == "table"
+            and MaskShardV96.Active == true
+            and MaskShardV96.AlwaysOn == true
+            and type(MaskShardV96.Runtime) == "table"
+            and MaskShardV96.Runtime.CompatibilityOnly == true
+            and MaskShardV96.Activate == safeActivate
+            and MaskShardV96.Deactivate == safeDeactivate
+
+        local globalsOk = environment.__DevKageMaskShard == MaskShard
+            and environment.__DevKageMaskShardV96 == MaskShardV96
+            and type(environment.__DevKageMaskShards) == "table"
+            and environment.__DevKageMaskShards.Integrated == MaskShard
+            and environment.__DevKageMaskShards.V96 == MaskShardV96
+
+        return {
+            Active = integratedOk and aliasOk and globalsOk and guardEnabled,
+            IntegratedActive = MaskShard.Active == true,
+            V96Active = MaskShardV96.Active == true,
+            AlwaysOn = MaskShard.AlwaysOn == true and MaskShardV96.AlwaysOn == true,
+            CompatibilityOnly = MaskShard.Runtime.CompatibilityOnly == true
+                and MaskShardV96.Runtime.CompatibilityOnly == true,
+            LifecycleIntact = MaskShard.Activate == safeActivate
+                and MaskShard.Deactivate == safeDeactivate
+                and MaskShardV96.Activate == safeActivate
+                and MaskShardV96.Deactivate == safeDeactivate,
+            GlobalsIntact = globalsOk,
+            GuardianActive = guardEnabled and maskShardWatchConnection ~= nil,
+            Repairs = repairs,
+            LastCheck = lastHealthCheck,
+            Version = tostring(MaskShard.Version or "unknown"),
+            Mode = "CompatibilityOnly",
+        }
+    end
+
+    local function publishHealthBridge()
+        environment.__DevKageMaskShardHealth = health
+        environment.__DevKageMaskShardStatus = health()
+    end
+
+    -- Repair once immediately before any later script gets a chance to alter it.
+    for _, shard in ipairs(alwaysOnMaskShards) do
+        restoreShard(shard)
+    end
+    restoreGlobals()
+    publishHealthBridge()
+
+    maskShardWatchConnection = RunService.Heartbeat:Connect(function(dt)
+        if not guardEnabled then return end
+
+        maskShardWatchElapsed = maskShardWatchElapsed + (tonumber(dt) or 0)
+        if maskShardWatchElapsed < 1.0 then return end
+        maskShardWatchElapsed = 0
+        lastHealthCheck = os.clock()
+
+        for _, shard in ipairs(alwaysOnMaskShards) do
+            restoreShard(shard)
+        end
+        restoreGlobals()
+
+        -- Re-publish these too in case another script replaces the status bridge.
+        publishHealthBridge()
+    end)
+
+    table.insert(library.CleanupCallbacks, function()
+        guardEnabled = false
+
+        pcall(function()
+            if maskShardWatchConnection then
+                maskShardWatchConnection:Disconnect()
+                maskShardWatchConnection = nil
+            end
+        end)
+
+        -- Only DevKage's private shutdown key can actually deactivate the shard.
+        safeDeactivate(MaskShard, maskShardShutdownKey)
+        if MaskShardV96 ~= MaskShard then
+            safeDeactivate(MaskShardV96, maskShardShutdownKey)
+        end
+
+        if environment.__DevKageMaskShardHealth == health then
+            environment.__DevKageMaskShardHealth = nil
+        end
+        environment.__DevKageMaskShardStatus = {
+            Active = false,
+            GuardianActive = false,
+            Mode = "Shutdown",
+        }
+    end)
+end)(
+    {MaskShard, MaskShardV96},
+    (type(getgenv) == "function" and getgenv()) or _G,
+    MaskShard.Activate,
+    MaskShard.Deactivate
+)
+
+print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
 
 
 -- END OF FILE
 
-]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,50,48,45,105,110,118,101,110,116,111,114,121,45,97,118,97,116,97,114,45,115,107,121,98,111,120,45,50,48,50,54,48,57,48,54)_b._a=_a pcall(function()if type(writefile)~=string.char(102,117,110,99,116,105,111,110)or type(readfile)~=string.char(102,117,110,99,116,105,111,110)then return end local _c=string.char(68,101,118,75,97,103,101,95,67,111,110,102,105,103,115)local _d=_c..string.char(47,95,115,99,114,105,112,116,95,115,101,116,116,105,110,103,115,46,106,115,111,110)local _e=_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,101,110,97,98,108,101,100,46,102,108,97,103)local _f=false local _g,_h=pcall(readfile,_d)if _g and type(_h)==string.char(115,116,114,105,110,103)and _h~=""then local _i,_j=pcall(game.GetService,game,string.char(72,116,116,112,83,101,114,118,105,99,101))if _i and _j then local _k,_l=pcall(_j.JSONDecode,_j,_h)if _k and type(_l)==string.char(116,97,98,108,101)and _l.AutoLoad==true then _f=true end end end if not _f then if type(isfile)==string.char(102,117,110,99,116,105,111,110)then local _m,_n=pcall(isfile,_e)_f=_m and _n==true else local _m=pcall(readfile,_e)_f=_m end end if not _f then return end if type(makefolder)==string.char(102,117,110,99,116,105,111,110)then pcall(makefolder,_c)end local _o=_a local _p=_b.__DEVKAGE_PACKAGE_BUILD local _q=string.char(45,45,32,68,69,86,75,65,71,69,95,65,85,84,79,76,79,65,68,95,66,85,73,76,68,58).._p..string.char(10).._o pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,50,48,46,108,117,97),_q)for _r,_s in ipairs({string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,57,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,56,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,55,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,54,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,50,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,49,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,48,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,57,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,56,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,55,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,54,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,51,46,108,117,97),})do pcall(writefile,_c..string.char(47).._s,_q)end pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,46,108,117,97),_q)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,99,117,114,114,101,110,116,46,116,120,116),_p)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,98,117,105,108,100,46,116,120,116),_p)pcall(writefile,_e,_p)_b.__DEVKAGE_AUTOLOAD_BUILD=_p _b.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT=os.clock()end)task.spawn(function()local _t,_u=pcall(function()local _v=game:GetService(string.char(80,108,97,121,101,114,115))local _w=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while tostring(game.JobId)==""do task.wait(0.1)end while not _v.LocalPlayer do task.wait(0.1)end local _x=_v.LocalPlayer while _x and not _x:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_x=_v.LocalPlayer end while not _w.CurrentCamera do task.wait(0.1)end local _y=_x:FindFirstChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115))if not _y then _y=_x:WaitForChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115),10)end if _y then _y:WaitForChild(string.char(67,111,110,116,114,111,108,108,101,114,115),8)_y:WaitForChild(string.char(77,111,100,117,108,101,115),8)end _w:WaitForChild(string.char(86,105,101,119,77,111,100,101,108,115),8)_b.__DEVKAGE_LATE_BOOT_WAITING=true local _z=tonumber(rawget(_b,string.char(95,95,68,69,86,75,65,71,69,95,76,65,84,69,95,66,79,79,84,95,68,69,76,65,89)))or 6 if _z<5 then _z=5 end task.wait(_z)_b.__DEVKAGE_LATE_BOOT_WAITING=nil local _A=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)if _b.__DEVKAGE_AUTO_STARTING_JOB==_A then local _B=_b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD local _C=tonumber(_b.__DEVKAGE_AUTO_STARTING_AT)or 0 local _D=_C>0 and(os.clock()-_C)or math.huge if _B==_b.__DEVKAGE_PACKAGE_BUILD and _D>=0 and _D<45 then return end _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end if _b.__DEVKAGE_AUTO_STARTED_JOB==_A and _b.__DEVKAGE_AUTOLOADED_BUILD==_b.__DEVKAGE_PACKAGE_BUILD then return end _b.__DEVKAGE_AUTO_STARTING_JOB=_A _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_AT=os.clock()task.wait()local _E=loadstring or load if type(_E)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _F,_H=_E(_a)if not _F then error(_H)end local _I,_J=pcall(_F)if not _I then error(_J)end _b.__DEVKAGE_AUTO_STARTED_JOB=_A _b.__DEVKAGE_AUTOLOADED_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end)if not _t then _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil _b.__DEVKAGE_LATE_BOOT_WAITING=nil warn(string.char(91,68,101,118,75,97,103,101,32,80,97,99,107,97,103,101,32,66,111,111,116,93,32)..tostring(_u))end end)return nil
+]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,53,48,45,99,117,114,114,101,110,116,45,111,110,108,121,45,50,48,50,54,48,57,48,54)_b.__DEVKAGE_PACKAGE_VERSION=50250 if(tonumber(_b.__DEVKAGE_ACTIVE_VERSION)or 0)<=50250 then _b.__DEVKAGE_ACTIVE_VERSION=50250 end _b._a=_a pcall(function()if type(writefile)~=string.char(102,117,110,99,116,105,111,110)or type(readfile)~=string.char(102,117,110,99,116,105,111,110)then return end local _c=string.char(68,101,118,75,97,103,101,95,67,111,110,102,105,103,115)local _d=_c..string.char(47,95,115,99,114,105,112,116,95,115,101,116,116,105,110,103,115,46,106,115,111,110)local _e=_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,101,110,97,98,108,101,100,46,102,108,97,103)local _f=false local _g,_h=pcall(readfile,_d)if _g and type(_h)==string.char(115,116,114,105,110,103)and _h~=""then local _i,_j=pcall(game.GetService,game,string.char(72,116,116,112,83,101,114,118,105,99,101))if _i and _j then local _k,_l=pcall(_j.JSONDecode,_j,_h)if _k and type(_l)==string.char(116,97,98,108,101)and _l.AutoLoad==true then _f=true end end end if not _f then if type(isfile)==string.char(102,117,110,99,116,105,111,110)then local _m,_n=pcall(isfile,_e)_f=_m and _n==true else local _m=pcall(readfile,_e)_f=_m end end if not _f then return end if type(makefolder)==string.char(102,117,110,99,116,105,111,110)then pcall(makefolder,_c)end local _o=_a local _p=_b.__DEVKAGE_PACKAGE_BUILD local _q=string.char(45,45,32,68,69,86,75,65,71,69,95,65,85,84,79,76,79,65,68,95,66,85,73,76,68,58).._p..string.char(10).._o pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,53,48,46,108,117,97),_q)for _r=3,49 do pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95)..tostring(_r)..string.char(46,108,117,97),_q)end pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,46,108,117,97),_q)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,99,117,114,114,101,110,116,46,116,120,116),_p)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,98,117,105,108,100,46,116,120,116),_p)pcall(writefile,_e,_p)_b.__DEVKAGE_AUTOLOAD_BUILD=_p _b.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT=os.clock()end)task.spawn(function()local _s,_t=pcall(function()local _u=game:GetService(string.char(80,108,97,121,101,114,115))local _v=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while tostring(game.JobId)==""do task.wait(0.1)end while not _u.LocalPlayer do task.wait(0.1)end local _w=_u.LocalPlayer while _w and not _w:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_w=_u.LocalPlayer end while not _v.CurrentCamera do task.wait(0.1)end local _x=_w:FindFirstChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115))if not _x then _x=_w:WaitForChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115),10)end if _x then _x:WaitForChild(string.char(67,111,110,116,114,111,108,108,101,114,115),8)_x:WaitForChild(string.char(77,111,100,117,108,101,115),8)end _v:WaitForChild(string.char(86,105,101,119,77,111,100,101,108,115),8)_b.__DEVKAGE_LATE_BOOT_WAITING=true local _y=tonumber(rawget(_b,string.char(95,95,68,69,86,75,65,71,69,95,76,65,84,69,95,66,79,79,84,95,68,69,76,65,89)))or 6 if _y<5 then _y=5 end task.wait(_y)_b.__DEVKAGE_LATE_BOOT_WAITING=nil local _z=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)if _b.__DEVKAGE_AUTO_STARTING_JOB==_z then local _A=_b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD local _B=tonumber(_b.__DEVKAGE_AUTO_STARTING_AT)or 0 local _C=_B>0 and(os.clock()-_B)or math.huge if _A==_b.__DEVKAGE_PACKAGE_BUILD and _C>=0 and _C<45 then return end _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end if _b.__DEVKAGE_AUTO_STARTED_JOB==_z and _b.__DEVKAGE_AUTOLOADED_BUILD==_b.__DEVKAGE_PACKAGE_BUILD then return end _b.__DEVKAGE_AUTO_STARTING_JOB=_z _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_AT=os.clock()task.wait()local _D=loadstring or load if type(_D)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _E,_F=_D(_a)if not _E then error(_F)end local _H,_I=pcall(_E)if not _H then error(_I)end _b.__DEVKAGE_AUTO_STARTED_JOB=_z _b.__DEVKAGE_AUTOLOADED_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_ACTIVE_VERSION=50250 _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end)if not _s then _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil _b.__DEVKAGE_LATE_BOOT_WAITING=nil warn(string.char(91,68,101,118,75,97,103,101,32,80,97,99,107,97,103,101,32,66,111,111,116,93,32)..tostring(_t))end end)return nil
