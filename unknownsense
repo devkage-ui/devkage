@@ -5464,14 +5464,15 @@ rainbowAuraPulse = 0.22,
 rainbowAuraGround = true,
 rainbowAuraTrails = true,
 avatarModsEnabled = false,
-avatarModsType = "Guardian Angel",
+avatarModsType = "Wings + Halos",
 avatarModsColor = {255, 235, 170},
 avatarModsSecondaryColor = {130, 195, 255},
 avatarModsRainbow = false,
-avatarModsAlpha = 0.18,
+avatarModsAlpha = 0.12,
 avatarModsSpeed = 1,
 avatarModsSize = 1,
 avatarModsBrightness = 3,
+avatarModsGlowSize = 18,
 avatarModsMaterial = "Neon",
 avatarModsQuality = "High",
 avatarModsMotion = "Elegant",
@@ -5531,6 +5532,8 @@ silentAimHitChance = 85,
 silentAimRadius = 150,
 silentAimAutoShoot = false,
 silentAimFireInterval = 0.05,
+silentAimPrediction = 0,
+silentAimMaxDistance = 2500,
 noSpreadEnabled = false,
 luaCode = "",
 luaAutoExecute = false
@@ -5543,8 +5546,31 @@ existingConfig[key] = type(value) == "table" and table.clone(value) or value
 end
 end
 getgenv().__DevKageConfig = existingConfig
-if getgenv().__DevKageConfig.avatarModsType == "Premium Aura" then
-getgenv().__DevKageConfig.avatarModsType = "Guardian Angel"
+do
+local legacyAvatarModType = tostring(getgenv().__DevKageConfig.avatarModsType or "")
+local legacyAvatarModMap = {
+["Premium Aura"]="Wings + Halos",
+["Guardian Angel"]="Wings + Halos",
+["Divine Halo + Wings"]="Wings + Halos",
+["Seraph Halo + Wings"]="Wings + Halos",
+["Ascended Angel"]="Wings + Halos",
+["Celestial Phoenix"]="Wings + Halos",
+["Prismatic Seraph"]="Wings + Halos",
+["Void Monarch"]="Wings + Halos",
+["Solar Dominion"]="Wings + Halos",
+["Crystal Valkyrie"]="Wings + Halos",
+["Ethereal Bloom"]="Wings + Halos",
+["Nebula Empress"]="Wings + Halos",
+["Cyber Seraph"]="Wings + Halos",
+["Angel Halo"]="Head Halo",
+["Double Angel Halo"]="Head + Feet Halos",
+["Angel Crown"]="Head Halo",
+["Seraph Wings"]="Angel Wings",
+["Archangel Wings"]="Angel Wings",
+}
+if legacyAvatarModMap[legacyAvatarModType] then
+getgenv().__DevKageConfig.avatarModsType = legacyAvatarModMap[legacyAvatarModType]
+end
 end
 
 __DevKageSpooferConfigKeys={
@@ -13461,6 +13487,7 @@ chinaHatAlpha = cfg.chinaHatAlpha,
     avatarModsSpeed = cfg.avatarModsSpeed,
     avatarModsSize = cfg.avatarModsSize,
     avatarModsBrightness = cfg.avatarModsBrightness,
+    avatarModsGlowSize = cfg.avatarModsGlowSize,
     avatarModsMaterial = cfg.avatarModsMaterial,
     avatarModsQuality = cfg.avatarModsQuality,
     avatarModsMotion = cfg.avatarModsMotion,
@@ -15411,525 +15438,726 @@ local runtimeEnv = (type(getgenv) == "function" and getgenv()) or _G
 if runtimeEnv.__DevKageAvatarMods and runtimeEnv.__DevKageAvatarMods.Destroy then
     pcall(function() runtimeEnv.__DevKageAvatarMods:Destroy() end)
 end
+
 runtimeEnv.__DevKageAvatarMods = (function()
+    -- Wing geometry independently adapted from the MIT-licensed
+    -- Angel Cloud Roblox WingService:
+    -- https://github.com/thebardchat/angel-cloud-roblox
+    --
+    -- This renderer is client-only and hook-free: no remotes, metatable hooks,
+    -- DataController changes, or executor environment mutation.
+
     local API = {}
-    local state = {objects={}, entries={}, connection=nil, characterConnection=nil, character=nil, light=nil, highlight=nil, emitter=nil}
+    local PlayersService = game:GetService("Players")
+    local RunServiceService = game:GetService("RunService")
+    local player = PlayersService.LocalPlayer
 
-    local function configColor()
-        return auraColorFromConfig(getgenv().__DevKageConfig.avatarModsColor, Color3.fromRGB(255,235,170))
+    local state = {
+        character = nil,
+        model = nil,
+        objects = {},
+        feathers = {},
+        haloSegments = {},
+        haloRigs = {},
+        wingRigs = {},
+        lights = {},
+        emitters = {},
+        trails = {},
+        renderConnection = nil,
+        characterConnection = nil,
+        buildToken = 0,
+        refreshToken = 0,
+    }
+
+    local VALID_TYPES = {
+        ["Angel Wings"] = true,
+        ["Head Halo"] = true,
+        ["Feet Halo"] = true,
+        ["Head + Feet Halos"] = true,
+        ["Wings + Halos"] = true,
+    }
+
+    local LEGACY_TYPES = {
+        ["Premium Aura"]="Wings + Halos", ["Guardian Angel"]="Wings + Halos",
+        ["Divine Halo + Wings"]="Wings + Halos", ["Seraph Halo + Wings"]="Wings + Halos",
+        ["Ascended Angel"]="Wings + Halos", ["Celestial Phoenix"]="Wings + Halos",
+        ["Prismatic Seraph"]="Wings + Halos", ["Void Monarch"]="Wings + Halos",
+        ["Solar Dominion"]="Wings + Halos", ["Crystal Valkyrie"]="Wings + Halos",
+        ["Ethereal Bloom"]="Wings + Halos", ["Nebula Empress"]="Wings + Halos",
+        ["Cyber Seraph"]="Wings + Halos", ["Angel Halo"]="Head Halo",
+        ["Double Angel Halo"]="Head + Feet Halos", ["Angel Crown"]="Head Halo",
+        ["Seraph Wings"]="Angel Wings", ["Archangel Wings"]="Angel Wings",
+    }
+
+    local MATERIALS = {
+        Neon = Enum.Material.Neon,
+        Glass = Enum.Material.Glass,
+        ForceField = Enum.Material.ForceField,
+        SmoothPlastic = Enum.Material.SmoothPlastic,
+        Metal = Enum.Material.Metal,
+    }
+
+    local function cfg()
+        return getgenv().__DevKageConfig
     end
 
-    local function configSecondaryColor()
-        return auraColorFromConfig(getgenv().__DevKageConfig.avatarModsSecondaryColor, Color3.fromRGB(130,195,255))
+    local function primaryColor()
+        return auraColorFromConfig(cfg().avatarModsColor, Color3.fromRGB(248,248,255))
     end
 
-    local function qualityMultiplier()
-        local quality=tostring(getgenv().__DevKageConfig.avatarModsQuality or "High")
-        if quality=="Performance" then return 0.68 end
-        if quality=="Ultra" then return 1.30 end
-        return 1
+    local function secondaryColor()
+        return auraColorFromConfig(cfg().avatarModsSecondaryColor, Color3.fromRGB(205,225,255))
+    end
+
+    local function normalizedType()
+        local value = tostring(cfg().avatarModsType or "Wings + Halos")
+        value = LEGACY_TYPES[value] or value
+        if not VALID_TYPES[value] then value = "Wings + Halos" end
+        return value
     end
 
     local function configuredMaterial()
-        local materials={
-            Neon=Enum.Material.Neon,
-            Glass=Enum.Material.Glass,
-            ForceField=Enum.Material.ForceField,
-            SmoothPlastic=Enum.Material.SmoothPlastic,
-            Metal=Enum.Material.Metal,
-        }
-        return materials[tostring(getgenv().__DevKageConfig.avatarModsMaterial or "Neon")] or Enum.Material.Neon
+        return MATERIALS[tostring(cfg().avatarModsMaterial or "Neon")] or Enum.Material.Neon
     end
 
-    local function motionSettings()
-        local motion=tostring(getgenv().__DevKageConfig.avatarModsMotion or "Elegant")
-        if motion=="Cinematic" then return 0.52,1.25 end
-        if motion=="Dynamic" then return 1.15,1.15 end
-        if motion=="Intense" then return 1.48,1.35 end
-        return 0.78,1
+    local function featherMaterial()
+        local chosen = configuredMaterial()
+        -- Full-neon feathers flatten all detail; preserve the user's material
+        -- choice for non-Neon modes while using readable feather surfaces.
+        if chosen == Enum.Material.Neon then return Enum.Material.SmoothPlastic end
+        return chosen
     end
 
-    local function animatedColor(now,offset)
-        local base = configColor()
-        local secondary=configSecondaryColor()
-        offset=tonumber(offset) or 0
-        if getgenv().__DevKageConfig.avatarModsRainbow == true then
-            local baseHue=select(1,Color3.toHSV(base))
-            local h = (baseHue+now*0.10*math.max(tonumber(getgenv().__DevKageConfig.avatarModsSpeed) or 1,0.05)+offset*0.22) % 1
-            return Color3.fromHSV(h,0.72,1)
+    local function modSize()
+        return math.clamp(tonumber(cfg().avatarModsSize) or 1,0.55,2)
+    end
+
+    local function transparency()
+        return math.clamp(tonumber(cfg().avatarModsAlpha) or 0.12,0,0.9)
+    end
+
+    local function glowBrightness()
+        return math.max(tonumber(cfg().avatarModsBrightness) or 3,0)
+    end
+
+    local function glowSize()
+        return math.clamp(tonumber(cfg().avatarModsGlowSize) or 18,0,50)
+    end
+
+    local function animationSpeed()
+        return math.max(tonumber(cfg().avatarModsSpeed) or 1,0.05)
+    end
+
+    local function motionProfile()
+        local name = tostring(cfg().avatarModsMotion or "Elegant")
+        if name == "Cinematic" then return 0.72,0.72 end
+        if name == "Dynamic" then return 1.14,1.18 end
+        if name == "Intense" then return 1.36,1.46 end
+        return 1,1
+    end
+
+    local function qualityProfile()
+        local quality = tostring(cfg().avatarModsQuality or "High")
+        if quality == "Performance" then
+            return {primary=6,secondary=4,covert=3,haloSegments=24,shafts=false}
+        elseif quality == "Ultra" then
+            return {primary=9,secondary=7,covert=5,haloSegments=48,shafts=true}
         end
-        local blend=(math.sin(now*math.max(tonumber(getgenv().__DevKageConfig.avatarModsSpeed) or 1,0.05)*0.72+offset*math.pi*2)+1)*0.5
-        return base:Lerp(secondary,0.12+blend*0.62)
+        return {primary=8,secondary=6,covert=4,haloSegments=36,shafts=true}
+    end
+
+    local function rainbowColor(now,index,fallback)
+        if cfg().avatarModsRainbow ~= true then return fallback end
+        local hue = (now * 0.10 * animationSpeed() + (index or 0) * 0.037) % 1
+        return Color3.fromHSV(hue,0.70,1)
     end
 
     local function remember(object)
-        state.objects[#state.objects+1] = object
+        if object then state.objects[#state.objects + 1] = object end
         return object
     end
 
-    local function basePart(className,size)
-        local part = Instance.new(className or "Part")
-        part.Name = "DevKage_AvatarMod"
-        part.Anchored = true
-        part.CanCollide = false
-        part.CanTouch = false
-        part.CanQuery = false
-        part.CastShadow = false
-        part.Material = configuredMaterial()
-        part.Reflectance = part.Material==Enum.Material.Metal and 0.10 or 0
-        part.TopSurface = Enum.SurfaceType.Smooth
-        part.BottomSurface = Enum.SurfaceType.Smooth
-        part.Size = size
-        part.Transparency = math.clamp(tonumber(getgenv().__DevKageConfig.avatarModsAlpha) or 0.18,0,0.92)
-        part.Color = configColor()
-        part:SetAttribute("DevKageAvatarTint",true)
-        part:SetAttribute("DevKageAvatarTintIndex",#state.entries+1)
-        part.Parent = workspace
-        return remember(part)
+    local function safeDestroy(object)
+        if object then pcall(function() object:Destroy() end) end
     end
 
-    local function newPart(size,shape)
-        local part = basePart("Part",size)
-        if shape then part.Shape = shape end
-        return part
-    end
-
-    local function addPremiumTrail(part,width,lifetime,index)
-        if getgenv().__DevKageConfig.avatarModsTrails == false or not part then return nil end
-        local a0=Instance.new("Attachment")
-        local a1=Instance.new("Attachment")
-        a0.Name="DevKage_AvatarTrailA"; a1.Name="DevKage_AvatarTrailB"
-        a0.Position=Vector3.new(-part.Size.X*0.30,part.Size.Y*0.20,0)
-        a1.Position=Vector3.new(part.Size.X*0.30,-part.Size.Y*0.20,0)
-        a0.Parent=part; a1.Parent=part
-        remember(a0); remember(a1)
-        local trail=Instance.new("Trail")
-        trail.Name="DevKage_AvatarPremiumTrail"
-        trail.Attachment0=a0; trail.Attachment1=a1
-        trail.FaceCamera=true
-        trail.Lifetime=lifetime or 0.24
-        trail.MinLength=0.035
-        trail.LightEmission=1
-        trail.LightInfluence=0
-        trail.WidthScale=NumberSequence.new({NumberSequenceKeypoint.new(0,width or 0.22),NumberSequenceKeypoint.new(0.56,(width or 0.22)*0.46),NumberSequenceKeypoint.new(1,0)})
-        trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0.30),NumberSequenceKeypoint.new(0.72,0.64),NumberSequenceKeypoint.new(1,1)})
-        trail.Color=ColorSequence.new(configColor(),configSecondaryColor())
-        trail:SetAttribute("DevKageAvatarTintIndex",index or 1)
-        trail.Parent=part
-        return remember(trail)
-    end
-
-    local function addHalo(ringIndex,height,radius,tiltX,tiltZ,segments,thickness)
-        segments = math.clamp(math.floor((tonumber(segments) or 48)*qualityMultiplier()+0.5),28,78)
-        local t = thickness or 0.045
-        for i=1,segments do
-            local arc = (math.pi*2*radius/segments)*1.08
-            local part = newPart(Vector3.new(arc,t,t))
-            state.entries[#state.entries+1] = {
-                Kind="Halo",Part=part,Index=i,Count=segments,Ring=ringIndex,
-                Height=height,Radius=radius,TiltX=tiltX or 0,TiltZ=tiltZ or 0
-            }
+    local function disconnectRender()
+        if state.renderConnection then
+            pcall(function() state.renderConnection:Disconnect() end)
+            state.renderConnection = nil
         end
     end
 
-    local function addWing(side,count,spread,lengthScale,layer)
-        count = math.clamp(math.floor((count or 12)*qualityMultiplier()+0.5),7,24)
-        layer = layer or 1
-        for i=1,count do
-            local f = (i-1)/math.max(count-1,1)
-            local length = (1.10 + f*1.45) * (lengthScale or 1)
-            local width = (0.34 - f*0.10) * (lengthScale or 1)
-            local feather = basePart("WedgePart",Vector3.new(width,length,0.18 + (1-f)*0.06))
-            state.entries[#state.entries+1] = {Kind="Wing",Part=feather,Index=i,Count=count,Side=side,Spread=spread or 1,Layer=layer}
-            if i>=count-1 or (qualityMultiplier()>1 and i==math.floor(count*0.72)) then
-                addPremiumTrail(feather,0.16*(lengthScale or 1),0.20+layer*0.035,i)
-            end
-        end
+    local function clearVisuals()
+        state.buildToken = state.buildToken + 1
+        disconnectRender()
+        for index = #state.objects,1,-1 do safeDestroy(state.objects[index]) end
+        state.objects = {}
+        state.feathers = {}
+        state.haloSegments = {}
+        state.haloRigs = {}
+        state.wingRigs = {}
+        state.lights = {}
+        state.emitters = {}
+        state.trails = {}
+        state.model = nil
+        state.character = nil
     end
 
-    local function addCrown(count,radius,height)
-        count=math.clamp(math.floor((count or 9)*qualityMultiplier()+0.5),7,18)
-        for i=1,count do
-            local spike = basePart("WedgePart",Vector3.new(0.16,0.62,0.22))
-            state.entries[#state.entries+1] = {Kind="Crown",Part=spike,Index=i,Count=count,Radius=radius or 0.72,Height=height or 1.0}
-        end
+    local function makeInvisibleBone(name,parent)
+        local bone = Instance.new("Part")
+        bone.Name = name
+        bone.Size = Vector3.new(0.18,0.18,0.18)
+        bone.Transparency = 1
+        bone.CanCollide = false
+        bone.CanTouch = false
+        bone.CanQuery = false
+        bone.CastShadow = false
+        bone.Massless = true
+        bone.Anchored = false
+        bone.Parent = parent
+        remember(bone)
+        return bone
     end
 
-    local function addAngelOrbs(count,radius,vertical)
-        count=math.clamp(math.floor(count*qualityMultiplier()+0.5),4,18)
-        for i=1,count do
-            local orb = newPart(Vector3.new(0.16,0.16,0.16),Enum.PartType.Ball)
-            state.entries[#state.entries+1] = {Kind="Orb",Part=orb,Index=i,Count=count,Radius=radius or 2.2,Vertical=vertical or 0.65}
-            if i%math.max(2,math.floor(count/4))==0 then addPremiumTrail(orb,0.14,0.30,i) end
-        end
+    local function makeMotor(name,part0,part1,c0)
+        local motor = Instance.new("Motor6D")
+        motor.Name = name
+        motor.Part0 = part0
+        motor.Part1 = part1
+        motor.C0 = c0 or CFrame.new()
+        motor.C1 = CFrame.new()
+        motor.Parent = part0
+        remember(motor)
+        return motor
     end
 
-    local function addCrystalOrbit(count,radius,height,size,tilt)
-        count=math.clamp(math.floor((count or 10)*qualityMultiplier()+0.5),6,20)
-        for i=1,count do
-            local crystal=basePart("WedgePart",Vector3.new(0.18,0.52,0.22)*(size or 1))
-            state.entries[#state.entries+1]={Kind="Crystal",Part=crystal,Index=i,Count=count,Radius=radius or 2.25,Height=height or 0,Tilt=tilt or 0}
-            if i%3==0 then addPremiumTrail(crystal,0.12,0.26,i) end
-        end
+    local function makeWeld(part0,part1)
+        local weld = Instance.new("WeldConstraint")
+        weld.Part0 = part0
+        weld.Part1 = part1
+        weld.Parent = part1
+        remember(weld)
+        return weld
     end
 
-    local function addEnergyCore(size)
-        local core=newPart(Vector3.new(0.42,0.42,0.42)*(size or 1),Enum.PartType.Ball)
-        state.entries[#state.entries+1]={Kind="Core",Part=core,Index=1,Count=1,Size=size or 1}
-        for i=1,3 do
-            local satellite=newPart(Vector3.new(0.11,0.11,0.11)*(size or 1),Enum.PartType.Ball)
-            state.entries[#state.entries+1]={Kind="CoreOrbit",Part=satellite,Index=i,Count=3,Radius=(0.62+0.10*i)*(size or 1)}
-        end
-    end
-
-    local function addMantle(size)
-        for side=-1,1,2 do
-            for i=1,5 do
-                local plate=basePart("WedgePart",Vector3.new(0.20+0.05*i,0.28,0.58+0.14*i)*(size or 1))
-                state.entries[#state.entries+1]={Kind="Mantle",Part=plate,Index=i,Count=5,Side=side}
-            end
-        end
-    end
-
-    local function addAscensionRings(size)
-        for ring=1,4 do
-            addHalo(ring,(-1.65+(ring-1)*1.12)*size,(1.40+ring*0.16)*size,math.rad((ring%2==0) and 8 or -8),math.rad((ring-2.5)*5),44,0.038*size)
-        end
-    end
-
-    local function addFinishingGlow(root,character,size)
+    local function addLight(parent,color,index,scale)
         local light = Instance.new("PointLight")
-        light.Name = "DevKage_AvatarModsLight"
-        light.Color = configColor()
-        light.Brightness = math.max(tonumber(getgenv().__DevKageConfig.avatarModsBrightness) or 3,0)
-        light.Range = 13 + 7*size
+        light.Name = "DevKage_AngelGlow"
+        light.Color = color
+        light.Brightness = glowBrightness() * (scale or 1)
+        light.Range = glowSize()
         light.Shadows = false
-        light.Parent = root
-        state.light = remember(light)
+        light.Parent = parent
+        remember(light)
+        state.lights[#state.lights + 1] = {
+            Light=light,Index=index or 0,Scale=scale or 1
+        }
+        return light
+    end
 
-        local highlight = Instance.new("Highlight")
-        highlight.Name = "DevKage_AvatarModsGlow"
-        highlight.FillColor = configColor()
-        highlight.OutlineColor = configSecondaryColor():Lerp(Color3.new(1,1,1),0.28)
-        highlight.FillTransparency = 0.94
-        highlight.OutlineTransparency = 0.22
-        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        highlight.Parent = character
-        state.highlight = remember(highlight)
-
-        if getgenv().__DevKageConfig.avatarModsParticles == false then return end
-
-        local attachment = Instance.new("Attachment")
-        attachment.Name = "DevKage_AngelShimmer"
-        attachment.Parent = root
-        remember(attachment)
-
+    local function addEmitter(parent,index,rateScale)
+        if cfg().avatarModsParticles == false then return end
         local emitter = Instance.new("ParticleEmitter")
-        emitter.Name = "DevKage_AngelShimmerEmitter"
+        emitter.Name = "DevKage_AngelMotes"
         emitter.Texture = "rbxasset://textures/particles/sparkles_main.dds"
-        emitter.Rate = 22*qualityMultiplier()
-        emitter.Speed = NumberRange.new(0.12,0.55)
-        emitter.Lifetime = NumberRange.new(1.0,1.8)
+        emitter.LightEmission = 0.92
+        emitter.LightInfluence = 0
+        emitter.Rate = 6 * (rateScale or 1)
+        emitter.Lifetime = NumberRange.new(0.35,0.70)
+        emitter.Speed = NumberRange.new(0.12,0.45)
+        emitter.Drag = 1.5
+        emitter.SpreadAngle = Vector2.new(26,26)
+        emitter.Rotation = NumberRange.new(0,360)
+        emitter.RotSpeed = NumberRange.new(-35,35)
         emitter.Size = NumberSequence.new({
-            NumberSequenceKeypoint.new(0,0.05*size),
-            NumberSequenceKeypoint.new(0.35,0.14*size),
-            NumberSequenceKeypoint.new(1,0)
+            NumberSequenceKeypoint.new(0,0.10),
+            NumberSequenceKeypoint.new(0.35,0.16),
+            NumberSequenceKeypoint.new(1,0),
         })
         emitter.Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0,0.44),
-            NumberSequenceKeypoint.new(0.7,0.68),
-            NumberSequenceKeypoint.new(1,1)
+            NumberSequenceKeypoint.new(0,0.22),
+            NumberSequenceKeypoint.new(0.72,0.62),
+            NumberSequenceKeypoint.new(1,1),
         })
-        emitter.SpreadAngle = Vector2.new(180,180)
-        emitter.Rotation = NumberRange.new(0,360)
-        emitter.RotSpeed = NumberRange.new(-45,45)
-        emitter.LightEmission = 1
-        emitter.LightInfluence = 0
-        emitter.ZOffset = 0.12
-        emitter.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0,configColor():Lerp(Color3.new(1,1,1),0.46)),
-            ColorSequenceKeypoint.new(0.52,configColor()),
-            ColorSequenceKeypoint.new(1,configSecondaryColor())
-        })
-        emitter.Parent = attachment
-        state.emitter = remember(emitter)
-    end
-
-    function API:Destroy()
-        if state.connection then pcall(function() state.connection:Disconnect() end); state.connection=nil end
-        if state.characterConnection then pcall(function() state.characterConnection:Disconnect() end); state.characterConnection=nil end
-        for _,object in ipairs(state.objects) do pcall(function() object:Destroy() end) end
-        state.objects={}; state.entries={}; state.light=nil; state.highlight=nil; state.emitter=nil; state.character=nil
-    end
-
-    local function clearVisualsOnly()
-        if state.connection then pcall(function() state.connection:Disconnect() end); state.connection=nil end
-        for _,object in ipairs(state.objects) do pcall(function() object:Destroy() end) end
-        state.objects={}; state.entries={}; state.light=nil; state.highlight=nil; state.emitter=nil
-    end
-
-    local function normalizedPreset(value)
-        local preset = tostring(value or "Guardian Angel")
-        local aliases = {
-            ["Premium Aura"]="Guardian Angel",
-            ["Halo Crown"]="Angel Crown",
-            ["Orbiting Feathers"]="Guardian Angel",
-            ["Heavenly Orbs"]="Guardian Angel",
-            ["Ascension Rings"]="Ascended Angel",
-            ["Celestial Guardian"]="Guardian Angel",
-            ["Premium Wings"]="Prismatic Seraph",
-            ["Royal Aura"]="Void Monarch",
+        emitter.Color = ColorSequence.new(primaryColor(),secondaryColor())
+        emitter.Parent = parent
+        remember(emitter)
+        state.emitters[#state.emitters + 1] = {
+            Emitter=emitter,Index=index or 0,Rate=6 * (rateScale or 1)
         }
-        return aliases[preset] or preset
+    end
+
+    local function makeFeather(parentBone,localCFrame,width,length,thickness,layer,index,tip)
+        local feather = Instance.new("Part")
+        feather.Name = string.format("Feather_%s_%02d",layer,index)
+        feather.Size = Vector3.new(width,thickness,length)
+        feather.Material = featherMaterial()
+        feather.Color = tip and secondaryColor() or primaryColor()
+        feather.Transparency = transparency()
+        feather.CanCollide = false
+        feather.CanTouch = false
+        feather.CanQuery = false
+        feather.CastShadow = false
+        feather.Massless = true
+        feather.Anchored = false
+        feather.CFrame = parentBone.CFrame * localCFrame
+        feather.Parent = state.model
+        remember(feather)
+
+        -- Rounded feather profile; asset-free and much less blocky than raw Parts.
+        local mesh = Instance.new("SpecialMesh")
+        mesh.Name = "FeatherProfile"
+        mesh.MeshType = Enum.MeshType.Sphere
+        mesh.Scale = Vector3.new(1,1,1)
+        mesh.Parent = feather
+        remember(mesh)
+
+        makeWeld(parentBone,feather)
+
+        local entry = {Part=feather,Layer=layer,Index=index,Tip=tip == true}
+        state.feathers[#state.feathers + 1] = entry
+
+        if qualityProfile().shafts and length >= 2.2 then
+            local shaft = Instance.new("Part")
+            shaft.Name = "FeatherShaft"
+            shaft.Size = Vector3.new(
+                math.max(0.025,width * 0.055),
+                math.max(0.018,thickness * 0.35),
+                length * 0.88
+            )
+            shaft.Material = Enum.Material.SmoothPlastic
+            shaft.Color = Color3.new(
+                math.min(1,feather.Color.R * 0.84 + 0.12),
+                math.min(1,feather.Color.G * 0.84 + 0.12),
+                math.min(1,feather.Color.B * 0.84 + 0.12)
+            )
+            shaft.Transparency = math.clamp(transparency() + 0.08,0,0.95)
+            shaft.CanCollide = false
+            shaft.CanTouch = false
+            shaft.CanQuery = false
+            shaft.CastShadow = false
+            shaft.Massless = true
+            shaft.Anchored = false
+            shaft.CFrame = feather.CFrame * CFrame.new(0,-thickness * 0.32,0)
+            shaft.Parent = state.model
+            remember(shaft)
+            makeWeld(feather,shaft)
+            entry.Shaft = shaft
+        end
+
+        return feather
+    end
+
+    local function addWingTrail(feather,index)
+        if cfg().avatarModsTrails == false or not feather then return end
+        local a0 = Instance.new("Attachment")
+        local a1 = Instance.new("Attachment")
+        a0.Position = Vector3.new(0,0,-feather.Size.Z * 0.15)
+        a1.Position = Vector3.new(0,0, feather.Size.Z * 0.42)
+        a0.Parent = feather
+        a1.Parent = feather
+        remember(a0); remember(a1)
+
+        local trail = Instance.new("Trail")
+        trail.Name = "DevKage_WingTipTrail"
+        trail.Attachment0 = a0
+        trail.Attachment1 = a1
+        trail.FaceCamera = true
+        trail.Lifetime = 0.20
+        trail.MinLength = 0.05
+        trail.LightEmission = 0.9
+        trail.LightInfluence = 0
+        trail.Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0,0.45),
+            NumberSequenceKeypoint.new(1,1),
+        })
+        trail.WidthScale = NumberSequence.new({
+            NumberSequenceKeypoint.new(0,0.12),
+            NumberSequenceKeypoint.new(1,0),
+        })
+        trail.Color = ColorSequence.new(primaryColor(),secondaryColor())
+        trail.Parent = feather
+        remember(trail)
+        state.trails[#state.trails + 1] = {Trail=trail,Index=index}
+    end
+
+    local function buildWingSide(torso,side,profile,scale)
+        local sideName = side < 0 and "L" or "R"
+        local rootBone = makeInvisibleBone("WingRoot_" .. sideName,state.model)
+        local outerBone = makeInvisibleBone("WingOuter_" .. sideName,state.model)
+
+        local rootC0 = CFrame.new(side * 0.58 * scale,0.34 * scale,0.48 * scale)
+            * CFrame.Angles(math.rad(8),math.rad(side * 11),math.rad(side * -23))
+
+        local rootMotor = makeMotor("WingRootMotor_" .. sideName,torso,rootBone,rootC0)
+        local outerMotor = makeMotor(
+            "WingOuterMotor_" .. sideName,
+            rootBone,
+            outerBone,
+            CFrame.new(side * 1.55 * scale,0.18 * scale,0.18 * scale)
+                * CFrame.Angles(math.rad(-4),math.rad(side * -10),math.rad(side * -18))
+        )
+
+        state.wingRigs[#state.wingRigs + 1] = {
+            Side=side,Root=rootBone,Outer=outerBone,
+            RootMotor=rootMotor,OuterMotor=outerMotor
+        }
+
+        local tipFeathers = {}
+
+        -- PRIMARY FLIGHT FEATHERS (long outer fan)
+        for i = 1,profile.primary do
+            local t = (i - 1) / math.max(profile.primary - 1,1)
+            local length = (3.15 + t * 2.15) * scale
+            local width = (0.82 - t * 0.20) * scale
+            local thickness = 0.115 * scale
+            local feather = makeFeather(
+                outerBone,
+                CFrame.new(
+                    side * (0.10 + t * 0.26) * scale,
+                    (0.28 - t * 0.74) * scale,
+                    (-0.18 - t * 1.82) * scale
+                ) * CFrame.Angles(
+                    math.rad(-7 + t * 11),
+                    math.rad(side * (9 + t * 58)),
+                    math.rad(side * (-15 - t * 9))
+                ),
+                width,length,thickness,"Primary",i,i >= profile.primary - 1
+            )
+            if i >= profile.primary - 1 then tipFeathers[#tipFeathers + 1] = feather end
+        end
+
+        -- SECONDARY FEATHERS (overlapping inner wing)
+        for i = 1,profile.secondary do
+            local t = (i - 1) / math.max(profile.secondary - 1,1)
+            makeFeather(
+                rootBone,
+                CFrame.new(
+                    side * (0.04 + t * 0.42) * scale,
+                    (0.26 - t * 0.38) * scale,
+                    (0.18 - t * 1.08) * scale
+                ) * CFrame.Angles(
+                    math.rad(-3 + t * 7),
+                    math.rad(side * (4 + t * 27)),
+                    math.rad(side * (-10 - t * 11))
+                ),
+                (0.90 - t * 0.11) * scale,
+                (2.25 + t * 1.10) * scale,
+                0.125 * scale,
+                "Secondary",i,false
+            )
+        end
+
+        -- COVERT FEATHERS (short broad root layer)
+        for i = 1,profile.covert do
+            local t = (i - 1) / math.max(profile.covert - 1,1)
+            makeFeather(
+                rootBone,
+                CFrame.new(
+                    side * (0.04 + t * 0.38) * scale,
+                    (0.40 - t * 0.21) * scale,
+                    (0.38 - t * 0.34) * scale
+                ) * CFrame.Angles(
+                    math.rad(5 - t * 3),
+                    math.rad(side * (2 + t * 17)),
+                    math.rad(side * (-5 - t * 7))
+                ),
+                (0.98 - t * 0.10) * scale,
+                (1.25 + t * 0.68) * scale,
+                0.14 * scale,
+                "Covert",i,false
+            )
+        end
+
+        addLight(rootBone,primaryColor(),side < 0 and 1 or 2,0.72)
+        addEmitter(rootBone,side < 0 and 1 or 2,0.75)
+        if #tipFeathers > 0 then
+            addWingTrail(tipFeathers[#tipFeathers],side < 0 and 1 or 2)
+        end
+    end
+
+    local function createWings(character,torso)
+        local profile = qualityProfile()
+        local scale = modSize()
+        buildWingSide(torso,-1,profile,scale)
+        buildWingSide(torso,1,profile,scale)
+    end
+
+    local function createRingSegment(anchor,radius,thickness,theta,count,ringIndex,segmentIndex)
+        local arc = (2 * math.pi * radius) / count
+        local x = math.cos(theta) * radius
+        local z = math.sin(theta) * radius
+
+        local segment = Instance.new("Part")
+        segment.Name = string.format("HaloSegment_%02d",segmentIndex)
+        segment.Size = Vector3.new(arc * 1.10,thickness,thickness)
+        segment.Material = Enum.Material.Neon
+        segment.Color = ringIndex == 2 and secondaryColor() or primaryColor()
+        segment.Transparency = transparency()
+        segment.CanCollide = false
+        segment.CanTouch = false
+        segment.CanQuery = false
+        segment.CastShadow = false
+        segment.Massless = true
+        segment.Anchored = false
+        segment.CFrame = anchor.CFrame
+            * CFrame.new(x,0,z)
+            * CFrame.Angles(0,-theta,0)
+        segment.Parent = state.model
+        remember(segment)
+
+        local mesh = Instance.new("SpecialMesh")
+        mesh.MeshType = Enum.MeshType.Sphere
+        mesh.Scale = Vector3.new(1,1,1)
+        mesh.Parent = segment
+        remember(mesh)
+
+        makeWeld(anchor,segment)
+        state.haloSegments[#state.haloSegments + 1] = {
+            Part=segment,Ring=ringIndex,Index=segmentIndex
+        }
+    end
+
+    local function footOffset(root,humanoid)
+        local hip = humanoid and tonumber(humanoid.HipHeight) or nil
+        if hip and hip > 0 then return -(hip + root.Size.Y * 0.5 + 0.16) end
+        return -2.75
+    end
+
+    local function createHaloRig(attachmentPart,kind,baseRadius,yOffset,ringIndex)
+        local profile = qualityProfile()
+        local scale = modSize()
+        local radius = baseRadius * scale
+        local thickness = math.clamp(0.12 * scale,0.07,0.24)
+        local anchor = makeInvisibleBone(kind .. "_HaloRoot",state.model)
+        local motor = makeMotor(kind .. "_HaloMotor",attachmentPart,anchor,CFrame.new(0,yOffset,0))
+
+        for i = 1,profile.haloSegments do
+            local theta = ((i - 1) / profile.haloSegments) * math.pi * 2
+            createRingSegment(anchor,radius,thickness,theta,profile.haloSegments,ringIndex,i)
+        end
+
+        addLight(anchor,ringIndex == 2 and secondaryColor() or primaryColor(),ringIndex + 10,0.82)
+        addEmitter(anchor,ringIndex + 10,0.55)
+
+        state.haloRigs[#state.haloRigs + 1] = {
+            Kind=kind,Anchor=anchor,Motor=motor,Ring=ringIndex
+        }
+    end
+
+    local function createHeadHalo(head)
+        createHaloRig(head,"Head",1.48,head.Size.Y * 0.5 + 0.72 * modSize(),1)
+    end
+
+    local function createFeetHalo(root,humanoid)
+        createHaloRig(root,"Feet",1.82,footOffset(root,humanoid),2)
     end
 
     local function build(character)
-        clearVisualsOnly()
-        if getgenv().__DevKageConfig.avatarModsEnabled ~= true or not character or not character.Parent then return end
+        clearVisuals()
+        if cfg().avatarModsEnabled ~= true or not character or not character.Parent then return end
+
+        local token = state.buildToken + 1
+        state.buildToken = token
+
         local root = character:FindFirstChild("HumanoidRootPart")
-        local head = character:FindFirstChild("Head")
-        if not root or not head then return end
+            or character:WaitForChild("HumanoidRootPart",8)
+        local torso = character:FindFirstChild("UpperTorso")
+            or character:FindFirstChild("Torso")
+            or character:WaitForChild("UpperTorso",2)
+            or character:FindFirstChild("Torso")
+        local head = character:FindFirstChild("Head") or character:WaitForChild("Head",5)
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+
+        if token ~= state.buildToken or not root or not torso or not character.Parent then return end
         state.character = character
 
-        local preset = normalizedPreset(getgenv().__DevKageConfig.avatarModsType)
-        local size = math.clamp(tonumber(getgenv().__DevKageConfig.avatarModsSize) or 1,0.55,2.0)
+        local old = character:FindFirstChild("AngelWings")
+        if old and old:GetAttribute("DevKageAvatarMods") == true then safeDestroy(old) end
 
-        if preset == "Angel Halo" then
-            addHalo(1,0.74*size,1.18*size,math.rad(4),0,52,0.05*size)
-        elseif preset == "Double Angel Halo" then
-            addHalo(1,0.66*size,1.10*size,math.rad(6),0,50,0.05*size)
-            addHalo(2,0.92*size,1.40*size,math.rad(-7),math.rad(3),56,0.038*size)
-        elseif preset == "Angel Wings" then
-            addWing(-1,13,1.0,1.08*size,1); addWing(1,13,1.0,1.08*size,1)
-        elseif preset == "Seraph Wings" then
-            addWing(-1,15,1.08,1.18*size,1); addWing(1,15,1.08,1.18*size,1)
-            addWing(-1,11,0.78,0.92*size,2); addWing(1,11,0.78,0.92*size,2)
-            addWing(-1,8,0.58,0.72*size,3); addWing(1,8,0.58,0.72*size,3)
-        elseif preset == "Archangel Wings" then
-            addWing(-1,17,1.16,1.30*size,1); addWing(1,17,1.16,1.30*size,1)
-            addWing(-1,12,0.82,0.98*size,2); addWing(1,12,0.82,0.98*size,2)
-            addHalo(1,0.72*size,1.28*size,math.rad(4),0,54,0.045*size)
-        elseif preset == "Divine Halo + Wings" then
-            addHalo(1,0.68*size,1.14*size,math.rad(5),0,52,0.05*size)
-            addHalo(2,0.96*size,1.50*size,math.rad(-8),math.rad(5),58,0.036*size)
-            addWing(-1,15,1.10,1.22*size,1); addWing(1,15,1.10,1.22*size,1)
-        elseif preset == "Seraph Halo + Wings" then
-            addHalo(1,0.66*size,1.10*size,math.rad(5),0,50,0.045*size)
-            addHalo(2,0.92*size,1.42*size,math.rad(-8),math.rad(4),56,0.036*size)
-            addHalo(3,1.16*size,1.70*size,math.rad(11),math.rad(-5),60,0.03*size)
-            addWing(-1,15,1.08,1.20*size,1); addWing(1,15,1.08,1.20*size,1)
-            addWing(-1,10,0.72,0.86*size,2); addWing(1,10,0.72,0.86*size,2)
-        elseif preset == "Angel Crown" then
-            addHalo(1,0.72*size,1.08*size,math.rad(9),0,48,0.042*size)
-            addCrown(11,0.74*size,1.02*size)
-        elseif preset == "Ascended Angel" then
-            addWing(-1,13,1.02,1.12*size,1); addWing(1,13,1.02,1.12*size,1)
-            addHalo(1,0.72*size,1.20*size,math.rad(5),0,52,0.045*size)
-            addAscensionRings(size)
-            addAngelOrbs(8,2.25*size,0.58*size)
-        elseif preset == "Celestial Phoenix" then
-            addWing(-1,18,1.20,1.36*size,1); addWing(1,18,1.20,1.36*size,1)
-            addWing(-1,12,0.84,1.02*size,2); addWing(1,12,0.84,1.02*size,2)
-            addCrown(13,0.82*size,1.08*size)
-            addHalo(1,0.76*size,1.36*size,math.rad(6),0,60,0.042*size)
-            addEnergyCore(1.10*size)
-        elseif preset == "Prismatic Seraph" then
-            addWing(-1,16,1.12,1.25*size,1); addWing(1,16,1.12,1.25*size,1)
-            addWing(-1,12,0.80,0.96*size,2); addWing(1,12,0.80,0.96*size,2)
-            addWing(-1,8,0.54,0.72*size,3); addWing(1,8,0.54,0.72*size,3)
-            addHalo(1,0.68*size,1.12*size,math.rad(7),math.rad(-3),56,0.042*size)
-            addHalo(2,0.98*size,1.52*size,math.rad(-9),math.rad(5),64,0.030*size)
-            addCrystalOrbit(12,2.30*size,0.16*size,size,math.rad(24))
-        elseif preset == "Void Monarch" then
-            addCrown(15,0.88*size,1.14*size)
-            addMantle(size)
-            addHalo(1,0.48*size,1.48*size,math.rad(78),math.rad(8),62,0.040*size)
-            addHalo(2,-0.10*size,2.05*size,math.rad(-26),math.rad(32),68,0.030*size)
-            addCrystalOrbit(14,2.55*size,-0.25*size,1.10*size,math.rad(38))
-            addEnergyCore(1.18*size)
-        elseif preset == "Solar Dominion" then
-            addWing(-1,15,1.10,1.24*size,1); addWing(1,15,1.10,1.24*size,1)
-            addHalo(1,0.68*size,1.18*size,math.rad(4),0,58,0.052*size)
-            addHalo(2,0.93*size,1.54*size,math.rad(-8),math.rad(4),64,0.038*size)
-            addHalo(3,1.18*size,1.88*size,math.rad(12),math.rad(-7),70,0.026*size)
-            addCrown(12,0.76*size,1.04*size)
-            addEnergyCore(1.22*size)
-            addAngelOrbs(10,2.45*size,0.74*size)
-        elseif preset == "Crystal Valkyrie" then
-            addWing(-1,14,1.18,1.18*size,1); addWing(1,14,1.18,1.18*size,1)
-            addMantle(0.92*size)
-            addCrystalOrbit(16,2.38*size,0.30*size,1.16*size,math.rad(18))
-            addCrown(10,0.76*size,1.06*size)
-            addHalo(1,0.76*size,1.26*size,math.rad(7),0,58,0.038*size)
-        elseif preset == "Ethereal Bloom" then
-            addWing(-1,12,0.92,1.04*size,1); addWing(1,12,0.92,1.04*size,1)
-            addHalo(1,0.70*size,1.15*size,math.rad(5),0,56,0.038*size)
-            addHalo(2,-0.55*size,1.82*size,math.rad(78),math.rad(12),64,0.028*size)
-            addAngelOrbs(14,2.18*size,1.0*size)
-            addCrystalOrbit(10,1.72*size,-0.65*size,0.82*size,math.rad(62))
-        elseif preset == "Nebula Empress" then
-            addWing(-1,17,1.16,1.28*size,1); addWing(1,17,1.16,1.28*size,1)
-            addWing(-1,10,0.72,0.88*size,2); addWing(1,10,0.72,0.88*size,2)
-            addCrown(14,0.86*size,1.12*size)
-            addCrystalOrbit(15,2.65*size,0.25*size,1.06*size,math.rad(42))
-            addAngelOrbs(12,2.05*size,1.15*size)
-            addEnergyCore(1.15*size)
-        elseif preset == "Cyber Seraph" then
-            addWing(-1,15,1.22,1.18*size,1); addWing(1,15,1.22,1.18*size,1)
-            addMantle(size)
-            addHalo(1,0.72*size,1.24*size,math.rad(82),math.rad(5),60,0.036*size)
-            addHalo(2,0.86*size,1.68*size,math.rad(-82),math.rad(-7),68,0.026*size)
-            addCrystalOrbit(12,2.35*size,0.05*size,0.90*size,math.rad(70))
-            addEnergyCore(1.05*size)
+        local model = Instance.new("Model")
+        model.Name = "AngelWings"
+        model:SetAttribute("DevKageAvatarMods",true)
+        model:SetAttribute("DevKageAvatarRenderer","RealisticV2")
+        model.Parent = character
+        state.model = model
+        remember(model)
+
+        local preset = normalizedType()
+        if preset == "Angel Wings" then
+            createWings(character,torso)
+        elseif preset == "Head Halo" then
+            if head then createHeadHalo(head) end
+        elseif preset == "Feet Halo" then
+            createFeetHalo(root,humanoid)
+        elseif preset == "Head + Feet Halos" then
+            if head then createHeadHalo(head) end
+            createFeetHalo(root,humanoid)
         else
-            addWing(-1,14,1.05,1.16*size,1); addWing(1,14,1.05,1.16*size,1)
-            addWing(-1,9,0.68,0.82*size,2); addWing(1,9,0.68,0.82*size,2)
-            addHalo(1,0.70*size,1.18*size,math.rad(5),0,52,0.048*size)
-            addHalo(2,0.98*size,1.50*size,math.rad(-8),math.rad(4),58,0.035*size)
-            addAngelOrbs(6,2.10*size,0.45*size)
+            createWings(character,torso)
+            if head then createHeadHalo(head) end
+            createFeetHalo(root,humanoid)
         end
 
-        addFinishingGlow(root,character,size)
-
-        local frameElapsed=0
-        local renderInterval=tostring(getgenv().__DevKageConfig.avatarModsQuality or "High")=="Performance" and (1/30) or (1/60)
-        state.connection = RunService.RenderStepped:Connect(function(dt)
-            frameElapsed=frameElapsed+(tonumber(dt) or 0)
-            if frameElapsed<renderInterval then return end
-            frameElapsed=math.max(0,frameElapsed-renderInterval)
-            if getgenv().__DevKageConfig.avatarModsEnabled ~= true or state.character ~= character or not character.Parent then return end
-            local liveRoot = character:FindFirstChild("HumanoidRootPart")
-            local liveHead = character:FindFirstChild("Head")
-            local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso") or liveRoot
-            if not liveRoot or not liveHead or not torso then return end
-
-            local now = os.clock()
-            local speed = math.max(tonumber(getgenv().__DevKageConfig.avatarModsSpeed) or 1,0.05)
-            local alpha = math.clamp(tonumber(getgenv().__DevKageConfig.avatarModsAlpha) or 0.18,0,0.92)
-            local motionAmount,motionRate=motionSettings()
-            speed=speed*motionRate
-            local color = animatedColor(now,0)
-            local secondary=configSecondaryColor()
-            local scale = math.clamp(tonumber(getgenv().__DevKageConfig.avatarModsSize) or 1,0.55,2.0)
-            local bright = color:Lerp(Color3.new(1,1,1),0.32)
-            local pulseAmount=math.clamp(tonumber(getgenv().__DevKageConfig.avatarModsPulse) or 0.18,0,0.75)
-            local pulseWave=(math.sin(now*speed*1.45)+1)*0.5
-            local pulseBrightness=1+(pulseWave-0.5)*pulseAmount
-            local pulseAlpha=math.clamp(alpha-(pulseWave-0.5)*pulseAmount*0.38,0,0.94)
-
-            if state.light then state.light.Color=color:Lerp(secondary,0.20); state.light.Brightness=math.max(tonumber(getgenv().__DevKageConfig.avatarModsBrightness) or 3,0)*pulseBrightness end
-            if state.highlight then state.highlight.FillColor=color; state.highlight.OutlineColor=bright end
-            if state.emitter then
-                state.emitter.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,bright),ColorSequenceKeypoint.new(0.52,color),ColorSequenceKeypoint.new(1,secondary)})
-                state.emitter.Rate=22*qualityMultiplier()*(0.90+pulseWave*0.10)
+        local elapsed = 0
+        state.renderConnection = RunServiceService.RenderStepped:Connect(function(dt)
+            if token ~= state.buildToken
+                or state.character ~= character
+                or cfg().avatarModsEnabled ~= true
+                or not character.Parent then
+                return
             end
 
-            for _,object in ipairs(state.objects) do
-                if object and object.Parent and object:IsA("Trail") then
-                    local tintIndex=tonumber(object:GetAttribute("DevKageAvatarTintIndex")) or 1
-                    local trailColor=animatedColor(now,tintIndex*0.09)
-                    object.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,trailColor:Lerp(Color3.new(1,1,1),0.32)),ColorSequenceKeypoint.new(0.55,trailColor),ColorSequenceKeypoint.new(1,secondary)})
+            local interval = tostring(cfg().avatarModsQuality or "High") == "Performance"
+                and (1/30) or (1/60)
+            elapsed = elapsed + (tonumber(dt) or 0)
+            if elapsed < interval then return end
+            elapsed = math.max(0,elapsed - interval)
+
+            local now = os.clock()
+            local speed = animationSpeed()
+            local amplitude,motionRate = motionProfile()
+            local pulse = math.clamp(tonumber(cfg().avatarModsPulse) or 0.18,0,0.75)
+            local wave = (math.sin(now * 1.7 * speed) + 1) * 0.5
+            local brightnessScale = 1 + (wave - 0.5) * pulse
+            local alpha = transparency()
+
+            -- Four animated joints total; all feathers follow their bones.
+            for _,rig in ipairs(state.wingRigs) do
+                local side = rig.Side
+                if rig.RootMotor and rig.RootMotor.Parent then
+                    local flap = math.sin(now * 2.55 * speed * motionRate + (side < 0 and 0 or 0.06))
+                    local breathe = math.sin(now * 1.15 * speed + 0.7) * 0.18
+                    rig.RootMotor.Transform = CFrame.Angles(
+                        math.rad((-1.8 + 2.2 * wave) * amplitude),
+                        0,
+                        math.rad((6.5 * flap + 2.0 * breathe) * amplitude) * -side
+                    )
+                end
+                if rig.OuterMotor and rig.OuterMotor.Parent then
+                    local fold = math.sin(now * 2.55 * speed * motionRate + 0.48)
+                    rig.OuterMotor.Transform = CFrame.Angles(
+                        0,
+                        math.rad((2.0 + 1.8 * wave) * amplitude * side),
+                        math.rad((4.2 * fold - 1.5) * amplitude) * -side
+                    )
                 end
             end
 
-            for _,entry in ipairs(state.entries) do
-                local part = entry.Part
-                if part and part.Parent then
-                    local count=math.max(tonumber(entry.Count) or 1,1)
-                    local phase=((tonumber(entry.Index) or 1)-1)/count+(tonumber(entry.Layer) or 0)*0.11
-                    local entryColor=animatedColor(now,phase)
-                    part.Color = entryColor:Lerp(Color3.new(1,1,1),entry.Kind=="Core" and 0.44 or 0.18)
-                    part.Transparency = math.clamp(pulseAlpha + ((entry.Kind=="Wing") and 0.06 or 0),0.035,0.92)
-                    if entry.Kind == "Halo" then
-                        local angle = ((entry.Index-1)/entry.Count)*math.pi*2 + now*speed*((entry.Ring%2==0) and -0.20 or 0.20)
-                        local bob = math.sin(now*speed*1.4 + entry.Ring)*0.045*scale*motionAmount
-                        local base
-                        if math.abs(entry.Height) > 1.5*scale then
-                            base = liveRoot.CFrame * CFrame.new(0,entry.Height+bob,0)
-                        else
-                            base = liveHead.CFrame * CFrame.new(0,entry.Height+bob,0)
-                        end
-                        base = base * CFrame.Angles(entry.TiltX,0,entry.TiltZ)
-                        local r = entry.Radius
-                        local pos = (base * CFrame.new(math.cos(angle)*r,0,math.sin(angle)*r)).Position
-                        local tangent = base:VectorToWorldSpace(Vector3.new(-math.sin(angle),0,math.cos(angle)))
-                        part.CFrame = CFrame.new(pos,pos+tangent)
-                    elseif entry.Kind == "Wing" then
-                        local f = (entry.Index-1)/math.max(entry.Count-1,1)
-                        local flap = math.sin(now*speed*1.65 + entry.Index*0.08 + entry.Layer*0.45)*0.085*motionAmount
-                        local layer = tonumber(entry.Layer) or 1
-                        local side = entry.Side
-                        local spread = entry.Spread
-                        local x = side*(0.66 + f*(2.75*spread) + (layer-1)*0.16)*scale
-                        local y = (0.72 - f*1.62 + (layer-1)*0.32)*scale
-                        local z = (0.36 + f*1.15 + (layer-1)*0.16)*scale
-                        local sweep = side*(0.36 + f*0.66 + flap)
-                        local roll = side*math.rad(19 + f*30 - (layer-1)*4)
-                        local pitch = math.rad(-18 + f*22)
-                        part.CFrame = torso.CFrame * CFrame.new(x,y,z) * CFrame.Angles(pitch,sweep,roll)
-                    elseif entry.Kind == "Orb" then
-                        local angle = ((entry.Index-1)/entry.Count)*math.pi*2 + now*speed*(0.42 + (entry.Index%2)*0.05)
-                        local y = math.sin(angle*1.5 + entry.Index)*entry.Vertical*motionAmount + 0.35*scale
-                        part.CFrame = CFrame.new(liveRoot.Position + Vector3.new(math.cos(angle)*entry.Radius,y,math.sin(angle)*entry.Radius))
-                    elseif entry.Kind == "Crown" then
-                        local angle = ((entry.Index-1)/entry.Count)*math.pi*2 + now*speed*0.08
-                        local radius = entry.Radius or 0.72*scale
-                        local y = entry.Height or 1.0*scale
-                        part.CFrame = liveHead.CFrame * CFrame.new(math.cos(angle)*radius,y,math.sin(angle)*radius) * CFrame.Angles(0,-angle,math.rad(16))
-                    elseif entry.Kind == "Crystal" then
-                        local angle=((entry.Index-1)/entry.Count)*math.pi*2+now*speed*((entry.Index%2==0) and -0.38 or 0.38)
-                        local vertical=entry.Height+math.sin(angle*1.55+entry.Index)*0.34*scale*motionAmount
-                        local base=liveRoot.CFrame*CFrame.Angles(entry.Tilt or 0,0,math.sin(now*0.35)*0.08)
-                        local pos=(base*CFrame.new(math.cos(angle)*entry.Radius,vertical,math.sin(angle)*entry.Radius)).Position
-                        part.CFrame=CFrame.new(pos)*CFrame.Angles(now*speed*0.7+entry.Index,angle,math.rad(45))
-                    elseif entry.Kind == "Core" then
-                        local bob=math.sin(now*speed*1.35)*0.10*scale*motionAmount
-                        local coreScale=1+(pulseWave-0.5)*pulseAmount*0.34
-                        part.CFrame=torso.CFrame*CFrame.new(0,0.28+bob,-0.72)
-                        part.Size=Vector3.new(0.42,0.42,0.42)*(entry.Size or 1)*coreScale
-                    elseif entry.Kind == "CoreOrbit" then
-                        local angle=((entry.Index-1)/entry.Count)*math.pi*2+now*speed*(0.92+entry.Index*0.08)
-                        local center=(torso.CFrame*CFrame.new(0,0.28,-0.72)).Position
-                        local radius=entry.Radius or 0.7*scale
-                        part.CFrame=CFrame.new(center+Vector3.new(math.cos(angle)*radius,math.sin(angle*1.8)*0.22*scale,math.sin(angle)*radius))
-                    elseif entry.Kind == "Mantle" then
-                        local f=(entry.Index-1)/math.max(entry.Count-1,1)
-                        local sway=math.sin(now*speed*1.2+entry.Index*0.3)*0.04*motionAmount
-                        local x=entry.Side*(0.42+f*0.66)*scale
-                        local y=(0.64-f*0.34)*scale
-                        local z=(-0.20+f*0.24)*scale
-                        part.CFrame=torso.CFrame*CFrame.new(x,y,z)*CFrame.Angles(math.rad(-18+f*12),entry.Side*(0.42+sway),entry.Side*math.rad(24+f*12))
+            for _,rig in ipairs(state.haloRigs) do
+                if rig.Motor and rig.Motor.Parent then
+                    local bob = math.sin(now * 1.45 * speed + rig.Ring * 0.9) * 0.035 * amplitude
+                    local spin = math.rad((now * 16 * speed * motionRate) % 360)
+                    rig.Motor.Transform = CFrame.new(0,bob,0) * CFrame.Angles(0,spin,0)
+                end
+            end
+
+            for i,entry in ipairs(state.feathers) do
+                local feather = entry.Part
+                if feather and feather.Parent then
+                    local base = entry.Tip and secondaryColor() or primaryColor()
+                    feather.Color = rainbowColor(now,i,base)
+                    feather.Transparency = alpha
+                    feather.Material = featherMaterial()
+                    if entry.Shaft and entry.Shaft.Parent then
+                        local c = feather.Color
+                        entry.Shaft.Color = Color3.new(
+                            math.min(1,c.R * 0.84 + 0.12),
+                            math.min(1,c.G * 0.84 + 0.12),
+                            math.min(1,c.B * 0.84 + 0.12)
+                        )
+                        entry.Shaft.Transparency = math.clamp(alpha + 0.08,0,0.95)
                     end
+                end
+            end
+
+            for i,entry in ipairs(state.haloSegments) do
+                local segment = entry.Part
+                if segment and segment.Parent then
+                    local base = entry.Ring == 2 and secondaryColor() or primaryColor()
+                    segment.Color = rainbowColor(now,i + entry.Ring * 17,base)
+                    segment.Transparency = alpha
+                end
+            end
+
+            for _,entry in ipairs(state.lights) do
+                local light = entry.Light
+                if light and light.Parent then
+                    local base = entry.Index % 2 == 0 and secondaryColor() or primaryColor()
+                    light.Color = rainbowColor(now,entry.Index,base)
+                    light.Brightness = glowBrightness() * entry.Scale * brightnessScale
+                    light.Range = glowSize()
+                end
+            end
+
+            for _,entry in ipairs(state.trails) do
+                local trail = entry.Trail
+                if trail and trail.Parent then
+                    trail.Color = ColorSequence.new(
+                        rainbowColor(now,entry.Index,primaryColor()),
+                        rainbowColor(now,entry.Index + 7,secondaryColor())
+                    )
+                    trail.Enabled = cfg().avatarModsTrails ~= false
+                end
+            end
+
+            for _,entry in ipairs(state.emitters) do
+                local emitter = entry.Emitter
+                if emitter and emitter.Parent then
+                    emitter.Color = ColorSequence.new(
+                        rainbowColor(now,entry.Index,primaryColor()),
+                        rainbowColor(now,entry.Index + 5,secondaryColor())
+                    )
+                    emitter.Enabled = cfg().avatarModsParticles ~= false
+                    emitter.Rate = entry.Rate * (0.88 + wave * 0.24)
                 end
             end
         end)
     end
 
     function API:Refresh()
-        if getgenv().__DevKageConfig.avatarModsEnabled ~= true then
-            clearVisualsOnly()
-            return
-        end
-        local character = LocalPlayer.Character
-        if character then task.defer(function() build(character) end) end
+        state.refreshToken = state.refreshToken + 1
+        local refreshToken = state.refreshToken
+        task.delay(0.08,function()
+            if refreshToken ~= state.refreshToken then return end
+            if cfg().avatarModsEnabled ~= true then
+                clearVisuals()
+                return
+            end
+            local character = player.Character
+            if character and character.Parent then build(character) end
+        end)
     end
 
     function API:SetEnabled(value)
-        getgenv().__DevKageConfig.avatarModsEnabled = value == true
-        if value then self:Refresh() else clearVisualsOnly() end
+        cfg().avatarModsEnabled = value == true
+        if value then self:Refresh() else clearVisuals() end
     end
 
-    state.characterConnection = LocalPlayer.CharacterAdded:Connect(function(character)
-        if getgenv().__DevKageConfig.avatarModsEnabled == true then
-            task.delay(0.15,function()
-                if character.Parent then build(character) end
+    function API:Destroy()
+        state.refreshToken = state.refreshToken + 1
+        clearVisuals()
+        if state.characterConnection then
+            pcall(function() state.characterConnection:Disconnect() end)
+            state.characterConnection = nil
+        end
+    end
+
+    state.characterConnection = player.CharacterAdded:Connect(function(character)
+        if cfg().avatarModsEnabled == true then
+            task.delay(0.18,function()
+                if character.Parent and cfg().avatarModsEnabled == true then build(character) end
             end)
         end
     end)
 
-    if getgenv().__DevKageConfig.avatarModsEnabled == true then task.defer(function() API:Refresh() end) end
+    if cfg().avatarModsEnabled == true then
+        task.defer(function() API:Refresh() end)
+    end
+
     return API
-end)();
+end)()
 end
 
 local function optionIndex(options, selected)
@@ -16052,7 +16280,7 @@ chinaHatToggle:Set(false)
 end
 })
 
-local avatarModsSection = spooferPage:CreateSection({ Name = "Avatar Mods", Side = "Left", Size = 680 })
+local avatarModsSection = spooferPage:CreateSection({ Name = "Avatar Mods", Side = "Left", Size = 715 })
 local avatarModsRuntime = ((type(getgenv)=="function" and getgenv()) or _G).__DevKageAvatarMods
 
 local avatarModsToggle = avatarModsSection:CreateToggle({
@@ -16065,15 +16293,14 @@ end
 })
 
 local avatarModsTypes = {
-"Angel Halo","Double Angel Halo","Angel Wings","Seraph Wings","Archangel Wings","Divine Halo + Wings","Seraph Halo + Wings","Angel Crown","Guardian Angel","Ascended Angel",
-"Celestial Phoenix","Prismatic Seraph","Void Monarch","Solar Dominion","Crystal Valkyrie","Ethereal Bloom","Nebula Empress","Cyber Seraph"
+"Angel Wings","Head Halo","Feet Halo","Head + Feet Halos","Wings + Halos"
 }
 local avatarModsTypeDrop = avatarModsSection:CreateDropdown({
 Name = "Avatar Mod",
 Options = avatarModsTypes,
 State = optionIndex(avatarModsTypes,getgenv().__DevKageConfig.avatarModsType),
 Callback = function(idx)
-getgenv().__DevKageConfig.avatarModsType = avatarModsTypes[idx] or "Guardian Angel"
+getgenv().__DevKageConfig.avatarModsType = avatarModsTypes[idx] or "Wings + Halos"
 if avatarModsRuntime then avatarModsRuntime:Refresh() end
 end
 })
@@ -16104,7 +16331,7 @@ Callback = function(v) getgenv().__DevKageConfig.avatarModsRainbow = v end
 
 local avatarModsMaterialOptions={"Neon","Glass","ForceField","SmoothPlastic","Metal"}
 local avatarModsMaterialDrop = avatarModsSection:CreateDropdown({
-Name = "Premium Material",
+Name = "Material",
 Options = avatarModsMaterialOptions,
 State = optionIndex(avatarModsMaterialOptions,getgenv().__DevKageConfig.avatarModsMaterial),
 Callback = function(idx)
@@ -16153,6 +16380,12 @@ local avatarModsBrightnessSlider = avatarModsSection:CreateSlider({
 Name = "Glow Brightness", State = tonumber(getgenv().__DevKageConfig.avatarModsBrightness) or 3,
 Min = 0, Max = 10, Decimals = 1,
 Callback = function(v) getgenv().__DevKageConfig.avatarModsBrightness = v end
+})
+
+local avatarModsGlowSizeSlider = avatarModsSection:CreateSlider({
+Name = "Glow Size", State = tonumber(getgenv().__DevKageConfig.avatarModsGlowSize) or 18,
+Min = 0, Max = 50, Decimals = 1, Suffix = " studs",
+Callback = function(v) getgenv().__DevKageConfig.avatarModsGlowSize = v end
 })
 
 local avatarModsTransparencySlider = avatarModsSection:CreateSlider({
@@ -17035,6 +17268,7 @@ avatarModsSecondaryPicker=avatarModsSecondaryPicker, avatarModsRainbowToggle=ava
 avatarModsMaterialDrop=avatarModsMaterialDrop, avatarModsQualityDrop=avatarModsQualityDrop,
 avatarModsMotionDrop=avatarModsMotionDrop, avatarModsSpeedSlider=avatarModsSpeedSlider,
 avatarModsSizeSlider=avatarModsSizeSlider, avatarModsBrightnessSlider=avatarModsBrightnessSlider,
+avatarModsGlowSizeSlider=avatarModsGlowSizeSlider,
 avatarModsTransparencySlider=avatarModsTransparencySlider, avatarModsPulseSlider=avatarModsPulseSlider,
 avatarModsParticlesToggle=avatarModsParticlesToggle, avatarModsTrailsToggle=avatarModsTrailsToggle,
 avatarModsRebuildButton=avatarModsRebuildButton, rainbowAuraToggle=rainbowAuraToggle,
@@ -23281,6 +23515,18 @@ local VisibilityParams = RaycastParams.new()
 VisibilityParams.IgnoreWater = true
 VisibilityParams.FilterType = Enum.RaycastFilterType.Exclude
 local VisibilityCharacter = nil
+local UniversalMouse = nil
+pcall(function() UniversalMouse = LocalPlayer:GetMouse() end)
+local UniversalRayMethods = {
+    Raycast = true,
+    FindPartOnRay = true,
+    FindPartOnRayWithIgnoreList = true,
+    FindPartOnRayWithWhitelist = true,
+}
+local CameraRayMethods = {
+    ViewportPointToRay = true,
+    ScreenPointToRay = true,
+}
 
 -- MASK SHARD + KNIFE COMBAT (integrated; no standalone ScreenGui)
 
@@ -23308,6 +23554,14 @@ local KnifeCombatRuntime = {
     OriginalGetSpread = nil,
     SpreadWrapper = nil,
     SpreadInstalled = false,
+    UniversalInstalled = false,
+    UniversalGuard = false,
+    UniversalOldNamecall = nil,
+    UniversalOldIndex = nil,
+    LastChanceRoll = 0,
+    LastChanceResult = true,
+    LastAimPosition = nil,
+    LastAimUpdate = 0,
     StatusControl = nil,
     MaskStatusControl = nil,
     Controls = {},
@@ -23422,6 +23676,9 @@ KnifeCombatRuntime.FindTarget = function()
     local wanted = tostring(type(config) == "table" and config.aimTargetPart or "Head")
     local visibleCheck = type(config) == "table" and config.aimVisibleCheck == true
     local teamCheck = type(config) == "table" and config.aimTeamCheck == true
+    local maxDistance = math.clamp(tonumber(type(config) == "table" and config.silentAimMaxDistance) or 2500, 50, 10000)
+    local maxDistanceSquared = maxDistance * maxDistance
+    local cameraPosition = camera.CFrame.Position
     local localTeamId = teamCheck and LocalPlayer:GetAttribute("TeamID") or nil
     local localTeam = teamCheck and LocalPlayer.Team or nil
 
@@ -23450,6 +23707,8 @@ KnifeCombatRuntime.FindTarget = function()
                 if humanoid and humanoid.Health > 0 and not character:FindFirstChildOfClass("ForceField") then
                     local part = KnifeCombatRuntime.ResolvePart(character, wanted, camera)
                     if part and part:IsDescendantOf(Workspace) then
+                        local worldOffset = part.Position - cameraPosition
+                        local worldDistanceSquared = worldOffset:Dot(worldOffset)
                         -- Projection/FOV rejection is much cheaper than a raycast.
                         -- Only raycast if this candidate can actually become the winner.
                         local point, onScreen = camera:WorldToViewportPoint(part.Position)
@@ -23457,7 +23716,8 @@ KnifeCombatRuntime.FindTarget = function()
                             local dx = point.X - center.X
                             local dy = point.Y - center.Y
                             local distanceSquared = dx * dx + dy * dy
-                            if distanceSquared <= radiusSquared
+                            if worldDistanceSquared <= maxDistanceSquared
+                                and distanceSquared <= radiusSquared
                                 and (bestDistanceSquared == nil or distanceSquared < bestDistanceSquared)
                                 and KnifeCombatRuntime.IsVisible(part, camera, visibleCheck) then
                                 bestPlayer = player
@@ -23473,6 +23733,232 @@ KnifeCombatRuntime.FindTarget = function()
 
     local bestDistance = bestDistanceSquared and math.sqrt(bestDistanceSquared) or nil
     return bestPlayer, bestPart, bestDistance, center
+end
+
+KnifeCombatRuntime.IsAimInputActive = function()
+    local config = Environment.__DevKageConfig
+    if type(config) ~= "table" or config.silentAimEnabled ~= true then return false end
+    if window.Enabled then return false end
+    if config.silentAimAutoShoot == true then return true end
+    local ok, pressed = pcall(UserInputService.IsMouseButtonPressed, UserInputService, Enum.UserInputType.MouseButton1)
+    return ok and pressed == true
+end
+
+KnifeCombatRuntime.GetPredictedPosition = function(part)
+    if not part or not part.Parent then return nil end
+    local position = part.Position
+    local config = Environment.__DevKageConfig
+    local prediction = math.clamp(tonumber(type(config) == "table" and config.silentAimPrediction) or 0, 0, 0.5)
+    if prediction > 0 then
+        local velocity = part.AssemblyLinearVelocity
+        position = position + velocity * prediction
+    end
+    return position
+end
+
+KnifeCombatRuntime.RefreshUniversalTarget = function(force)
+    if not KnifeCombatRuntime.Alive or not KnifeCombatRuntime.IsAimInputActive() then
+        KnifeCombatRuntime.CurrentTarget = nil
+        KnifeCombatRuntime.CurrentPart = nil
+        KnifeCombatRuntime.LastAimPosition = nil
+        return nil
+    end
+
+    local now = os.clock()
+    if not force and KnifeCombatRuntime.CurrentPart and KnifeCombatRuntime.CurrentPart.Parent
+        and now - KnifeCombatRuntime.LastTargetScan < 0.025 then
+        KnifeCombatRuntime.LastAimPosition = KnifeCombatRuntime.GetPredictedPosition(KnifeCombatRuntime.CurrentPart)
+        return KnifeCombatRuntime.CurrentPart
+    end
+
+    KnifeCombatRuntime.LastTargetScan = now
+    local previousGuard = KnifeCombatRuntime.UniversalGuard
+    KnifeCombatRuntime.UniversalGuard = true
+    local ok, target, part = pcall(function()
+        local targetPlayer, targetPart = KnifeCombatRuntime.FindTarget()
+        return targetPlayer, targetPart
+    end)
+    KnifeCombatRuntime.UniversalGuard = previousGuard
+
+    if ok then
+        KnifeCombatRuntime.CurrentTarget = target
+        KnifeCombatRuntime.CurrentPart = part
+        KnifeCombatRuntime.LastAimPosition = KnifeCombatRuntime.GetPredictedPosition(part)
+        KnifeCombatRuntime.LastAimUpdate = now
+        return part
+    end
+
+    KnifeCombatRuntime.CurrentTarget = nil
+    KnifeCombatRuntime.CurrentPart = nil
+    KnifeCombatRuntime.LastAimPosition = nil
+    return nil
+end
+
+KnifeCombatRuntime.ShouldRedirectShot = function()
+    local config = Environment.__DevKageConfig
+    local chance = math.clamp(math.floor((tonumber(type(config) == "table" and config.silentAimHitChance) or 85) + 0.5), 0, 100)
+    if chance <= 0 then return false end
+    if chance >= 100 then return true end
+
+    -- One decision is reused briefly because a single weapon shot can make
+    -- several Raycast/Mouse queries. This keeps the whole shot consistent.
+    local now = os.clock()
+    if now - KnifeCombatRuntime.LastChanceRoll > 0.015 then
+        KnifeCombatRuntime.LastChanceRoll = now
+        KnifeCombatRuntime.LastChanceResult = math.random(1,100) <= chance
+    end
+    return KnifeCombatRuntime.LastChanceResult
+end
+
+KnifeCombatRuntime.GetUniversalAimPart = function()
+    if not KnifeCombatRuntime.IsAimInputActive() then return nil end
+    local part = KnifeCombatRuntime.CurrentPart
+    if not part or not part.Parent or os.clock() - KnifeCombatRuntime.LastTargetScan > 0.05 then
+        part = KnifeCombatRuntime.RefreshUniversalTarget(true)
+    else
+        KnifeCombatRuntime.LastAimPosition = KnifeCombatRuntime.GetPredictedPosition(part)
+    end
+    if not part or not KnifeCombatRuntime.ShouldRedirectShot() then return nil end
+    return part
+end
+
+KnifeCombatRuntime.IsPlausibleShotOrigin = function(origin, direction)
+    if typeof(origin) ~= "Vector3" or typeof(direction) ~= "Vector3" then return false end
+    local directionLengthSquared = direction:Dot(direction)
+    if directionLengthSquared < 4 then return false end
+
+    local camera = Workspace.CurrentCamera
+    if camera then
+        local delta = origin - camera.CFrame.Position
+        if delta:Dot(delta) <= 625 then return true end -- within 25 studs of camera
+    end
+
+    local character = LocalPlayer.Character
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+    if root then
+        local delta = origin - root.Position
+        if delta:Dot(delta) <= 625 then return true end
+    end
+    return false
+end
+
+KnifeCombatRuntime.RedirectDirection = function(origin, direction, part)
+    local aimPosition = KnifeCombatRuntime.LastAimPosition or KnifeCombatRuntime.GetPredictedPosition(part)
+    if not aimPosition then return direction end
+    local delta = aimPosition - origin
+    local targetLengthSquared = delta:Dot(delta)
+    local originalLengthSquared = direction:Dot(direction)
+    if targetLengthSquared <= 0.000001 or originalLengthSquared <= 0.000001 then return direction end
+    return delta.Unit * math.sqrt(originalLengthSquared)
+end
+
+KnifeCombatRuntime.RedirectRay = function(ray, part)
+    if typeof(ray) ~= "Ray" then return ray end
+    if not KnifeCombatRuntime.IsPlausibleShotOrigin(ray.Origin, ray.Direction) then return ray end
+    return Ray.new(ray.Origin, KnifeCombatRuntime.RedirectDirection(ray.Origin, ray.Direction, part))
+end
+
+KnifeCombatRuntime.InstallUniversalSilentAim = function()
+    if KnifeCombatRuntime.UniversalInstalled then return true end
+    if type(hookmetamethod) ~= "function" or type(getnamecallmethod) ~= "function" then
+        return false
+    end
+
+    local oldNamecall
+    local namecallHook
+    namecallHook = function(self, ...)
+        if KnifeCombatRuntime.UniversalGuard or not KnifeCombatRuntime.Alive then
+            return oldNamecall(self, ...)
+        end
+
+        local config = Environment.__DevKageConfig
+        if type(config) ~= "table" or config.silentAimEnabled ~= true or window.Enabled then
+            return oldNamecall(self, ...)
+        end
+
+        local method = getnamecallmethod()
+        local args = table.pack(...)
+
+        if self == Workspace and UniversalRayMethods[method] then
+            if method == "Raycast" then
+                local origin, direction = args[1], args[2]
+                if KnifeCombatRuntime.IsPlausibleShotOrigin(origin, direction) then
+                    local part = KnifeCombatRuntime.GetUniversalAimPart()
+                    if part then
+                        args[2] = KnifeCombatRuntime.RedirectDirection(origin, direction, part)
+                        return oldNamecall(self, table.unpack(args,1,args.n))
+                    end
+                end
+            else
+                local ray = args[1]
+                if typeof(ray) == "Ray" and KnifeCombatRuntime.IsPlausibleShotOrigin(ray.Origin, ray.Direction) then
+                    local part = KnifeCombatRuntime.GetUniversalAimPart()
+                    if part then
+                        args[1] = KnifeCombatRuntime.RedirectRay(ray, part)
+                        return oldNamecall(self, table.unpack(args,1,args.n))
+                    end
+                end
+            end
+        end
+
+        local camera = Workspace.CurrentCamera
+        if camera and self == camera and CameraRayMethods[method] and KnifeCombatRuntime.IsAimInputActive() then
+            KnifeCombatRuntime.UniversalGuard = true
+            local ok, ray = pcall(function()
+                return oldNamecall(self, table.unpack(args,1,args.n))
+            end)
+            KnifeCombatRuntime.UniversalGuard = false
+            if ok and typeof(ray) == "Ray" then
+                local part = KnifeCombatRuntime.GetUniversalAimPart()
+                if part then return KnifeCombatRuntime.RedirectRay(ray, part) end
+                return ray
+            end
+            return oldNamecall(self, table.unpack(args,1,args.n))
+        end
+
+        return oldNamecall(self, ...)
+    end
+
+    oldNamecall = hookmetamethod(game, "__namecall", namecallHook)
+    KnifeCombatRuntime.UniversalOldNamecall = oldNamecall
+
+    if UniversalMouse then
+        local oldIndex
+        local indexHook
+        indexHook = function(self, key)
+            if KnifeCombatRuntime.UniversalGuard or not KnifeCombatRuntime.Alive or self ~= UniversalMouse then
+                return oldIndex(self,key)
+            end
+
+            local config = Environment.__DevKageConfig
+            if type(config) ~= "table" or config.silentAimEnabled ~= true or window.Enabled
+                or (key ~= "Hit" and key ~= "Target" and key ~= "UnitRay") then
+                return oldIndex(self,key)
+            end
+
+            local part = KnifeCombatRuntime.GetUniversalAimPart()
+            if not part then return oldIndex(self,key) end
+            local aimPosition = KnifeCombatRuntime.LastAimPosition or KnifeCombatRuntime.GetPredictedPosition(part)
+            if not aimPosition then return oldIndex(self,key) end
+
+            if key == "Target" then return part end
+            if key == "Hit" then return CFrame.new(aimPosition) end
+            if key == "UnitRay" then
+                local camera = Workspace.CurrentCamera
+                if camera then
+                    local origin = camera.CFrame.Position
+                    local delta = aimPosition - origin
+                    if delta.Magnitude > 0.0001 then return Ray.new(origin, delta.Unit) end
+                end
+            end
+            return oldIndex(self,key)
+        end
+        oldIndex = hookmetamethod(game, "__index", indexHook)
+        KnifeCombatRuntime.UniversalOldIndex = oldIndex
+    end
+
+    KnifeCombatRuntime.UniversalInstalled = true
+    return true
 end
 
 KnifeCombatRuntime.UninstallNoSpread = function()
@@ -23639,6 +24125,7 @@ KnifeCombatRuntime.Step = function()
     local config = Environment.__DevKageConfig
     if type(config) ~= "table" then return end
     local now = os.clock()
+
     if config.noSpreadEnabled == true
         and (not KnifeCombatRuntime.SpreadInstalled
             or type(KnifeCombatRuntime.GameplayUtility) ~= "table"
@@ -23646,36 +24133,70 @@ KnifeCombatRuntime.Step = function()
         KnifeCombatRuntime.QueueModuleLoad(false)
         KnifeCombatRuntime.InstallNoSpread()
     end
+
     if config.silentAimEnabled ~= true then
-        KnifeCombatRuntime.CurrentTarget, KnifeCombatRuntime.CurrentPart = nil, nil
+        KnifeCombatRuntime.CurrentTarget = nil
+        KnifeCombatRuntime.CurrentPart = nil
+        KnifeCombatRuntime.LastAimPosition = nil
         return
     end
     if window.Enabled then return end
-    local autoShoot = config.silentAimAutoShoot == true
-    if not autoShoot and not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then return end
-    local interval = math.clamp(tonumber(config.silentAimFireInterval) or 0.05, 0.02, 1)
-    if now - KnifeCombatRuntime.LastAttempt < interval then return end
-    KnifeCombatRuntime.LastAttempt = now
-    local chance = math.clamp(math.floor((tonumber(config.silentAimHitChance) or 85) + 0.5), 0, 100)
-    if chance <= 0 or (chance < 100 and math.random(1, 100) > chance) then return end
-    local target, part, _, center = KnifeCombatRuntime.FindTarget()
-    KnifeCombatRuntime.CurrentTarget, KnifeCombatRuntime.CurrentPart = target, part
+
+    if not KnifeCombatRuntime.UniversalInstalled then
+        KnifeCombatRuntime.InstallUniversalSilentAim()
+    end
+
+    local active = KnifeCombatRuntime.IsAimInputActive()
+    if not active then
+        KnifeCombatRuntime.CurrentTarget = nil
+        KnifeCombatRuntime.CurrentPart = nil
+        KnifeCombatRuntime.LastAimPosition = nil
+        return
+    end
+
+    -- Target acquisition is independent of the weapon's firing interval. The
+    -- actual Raycast/Mouse hooks then consume this cached result very cheaply.
+    if now - KnifeCombatRuntime.LastTargetScan >= 0.025 then
+        KnifeCombatRuntime.RefreshUniversalTarget(true)
+    elseif KnifeCombatRuntime.CurrentPart then
+        KnifeCombatRuntime.LastAimPosition = KnifeCombatRuntime.GetPredictedPosition(KnifeCombatRuntime.CurrentPart)
+    end
+
+    local target = KnifeCombatRuntime.CurrentTarget
+    local part = KnifeCombatRuntime.CurrentPart
     if not part then
         if now - KnifeCombatRuntime.LastStatusUpdate > 0.5 then
             KnifeCombatRuntime.LastStatusUpdate = now
-            KnifeCombatRuntime.SetStatus("Silent aim: no target in FOV")
+            KnifeCombatRuntime.SetStatus("Universal silent aim: no target in FOV")
         end
         return
     end
-    local fired = KnifeCombatRuntime.FireAt(part)
-    if not fired then
-        KnifeCombatRuntime.QueueModuleLoad(false)
-        KnifeCombatRuntime.MoveMouseTo(part, center)
+
+    -- Manual firing is handled by the universal hooks. Auto Shoot remains
+    -- separate: use the native RIVALS payload when available, otherwise a
+    -- normal executor mouse click if supported.
+    if config.silentAimAutoShoot == true then
+        local interval = math.clamp(tonumber(config.silentAimFireInterval) or 0.05,0.02,1)
+        if now - KnifeCombatRuntime.LastAttempt >= interval then
+            KnifeCombatRuntime.LastAttempt = now
+            local fired = false
+            if KnifeCombatRuntime.IsRivals() then
+                if not KnifeCombatRuntime.Loaded then KnifeCombatRuntime.QueueModuleLoad(false) end
+                fired = KnifeCombatRuntime.FireAt(part)
+            end
+            if not fired and type(mouse1click) == "function" then
+                fired = pcall(mouse1click)
+            end
+        end
+    elseif not KnifeCombatRuntime.UniversalInstalled then
+        -- Only use visible mouse movement when the executor lacks metamethod hooks.
+        KnifeCombatRuntime.MoveMouseTo(part)
     end
+
     if now - KnifeCombatRuntime.LastStatusUpdate > 0.25 then
         KnifeCombatRuntime.LastStatusUpdate = now
         KnifeCombatRuntime.SetStatus(
-            (fired and "Silent aim" or "Mouse aim fallback")
+            (KnifeCombatRuntime.UniversalInstalled and "Universal silent aim" or "Mouse fallback")
             .. " • " .. tostring(target and target.Name or part.Parent.Name)
             .. " • " .. tostring(part.Name)
         )
@@ -23693,8 +24214,13 @@ KnifeCombatRuntime.Controls.SilentAim = rapidFireSection:CreateToggle({
     Flag = "knife.silentAimEnabled",
     Callback = function(value)
         Environment.__DevKageConfig.silentAimEnabled = value == true
-        if value then KnifeCombatRuntime.QueueModuleLoad(true)
-        else KnifeCombatRuntime.CurrentTarget, KnifeCombatRuntime.CurrentPart = nil, nil end
+        if value then
+            KnifeCombatRuntime.InstallUniversalSilentAim()
+            KnifeCombatRuntime.RefreshUniversalTarget(true)
+        else
+            KnifeCombatRuntime.CurrentTarget, KnifeCombatRuntime.CurrentPart = nil, nil
+            KnifeCombatRuntime.LastAimPosition = nil
+        end
     end
 })
 KnifeCombatRuntime.Controls.HitChance = rapidFireSection:CreateSlider({
@@ -23721,6 +24247,32 @@ KnifeCombatRuntime.Controls.Radius = rapidFireSection:CreateSlider({
     Callback = function(value)
         Environment.__DevKageConfig.silentAimRadius =
             math.clamp(math.floor((tonumber(value) or 150) + 0.5), 25, 1000)
+    end
+})
+KnifeCombatRuntime.Controls.Prediction = rapidFireSection:CreateSlider({
+    Name = "Velocity Prediction",
+    State = tonumber(Environment.__DevKageConfig.silentAimPrediction) or 0,
+    Min = 0,
+    Max = 0.5,
+    Decimals = 3,
+    Suffix = " s",
+    Flag = "knife.silentAimPrediction",
+    Callback = function(value)
+        Environment.__DevKageConfig.silentAimPrediction =
+            math.clamp(tonumber(value) or 0,0,0.5)
+    end
+})
+KnifeCombatRuntime.Controls.MaxDistance = rapidFireSection:CreateSlider({
+    Name = "Max Target Distance",
+    State = tonumber(Environment.__DevKageConfig.silentAimMaxDistance) or 2500,
+    Min = 50,
+    Max = 10000,
+    Decimals = 0,
+    Suffix = " studs",
+    Flag = "knife.silentAimMaxDistance",
+    Callback = function(value)
+        Environment.__DevKageConfig.silentAimMaxDistance =
+            math.clamp(math.floor((tonumber(value) or 2500) + 0.5),50,10000)
     end
 })
 KnifeCombatRuntime.Controls.TargetPart = rapidFireSection:CreateDropdown({
@@ -23755,7 +24307,7 @@ KnifeCombatRuntime.Controls.AutoShoot = rapidFireSection:CreateToggle({
     Callback = function(value) Environment.__DevKageConfig.silentAimAutoShoot = value == true end
 })
 KnifeCombatRuntime.Controls.Smoothing = rapidFireSection:CreateSlider({
-    Name = "Fallback Smoothing",
+    Name = "Mouse Fallback Smoothing",
     State = tonumber(Environment.__DevKageConfig.aimSmoothing) or 0,
     Min = 0,
     Max = 100,
@@ -23791,9 +24343,9 @@ KnifeCombatRuntime.Controls.NoSpread = rapidFireSection:CreateToggle({
     end
 })
 KnifeCombatRuntime.StatusControl = rapidFireSection:CreateLabel({
-    Text = KnifeCombatRuntime.IsRivals()
-        and "Combat modules load when needed"
-        or "Universal mouse-aim fallback"
+    Text = type(hookmetamethod) == "function"
+        and "Universal silent aim • Raycast + Mouse APIs"
+        or "Executor hooks unavailable • mouse fallback"
 })
 
 KnifeCombatRuntime.Track(RunService.Heartbeat:Connect(KnifeCombatRuntime.Step))
@@ -23820,9 +24372,14 @@ end)
 
 do
     local config = Environment.__DevKageConfig
-    if type(config) == "table"
-        and (config.silentAimEnabled == true or config.noSpreadEnabled == true) then
-        KnifeCombatRuntime.QueueModuleLoad(true)
+    if type(config) == "table" then
+        if config.silentAimEnabled == true then
+            KnifeCombatRuntime.InstallUniversalSilentAim()
+        end
+        if config.noSpreadEnabled == true
+            or (config.silentAimAutoShoot == true and KnifeCombatRuntime.IsRivals()) then
+            KnifeCombatRuntime.QueueModuleLoad(true)
+        end
     end
 end
 
