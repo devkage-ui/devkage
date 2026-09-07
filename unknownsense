@@ -13702,11 +13702,11 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_50.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_20.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOLOAD_ENABLED_FILE = CONFIG_FOLDER .. "/_devkage_autoload_enabled.flag"
-local SCRIPT_AUTOEXEC_NAME = "0000_DevKage_AutoLoad_CURRENT.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.50-current-only-20260906"
+local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_AutoLoad_LAST.lua"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.20-inventory-avatar-skybox-20260906"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -14290,7 +14290,6 @@ local function build_script_autoload_stub()
 return string.format([=[
 local env = (type(getgenv) == "function" and getgenv()) or _G
 local BUILD_LABEL = %q
-local BUILD_RANK = 50250
 local SETTINGS_FILE = %q
 local PAYLOAD_FILE = %q
 local ENABLED_FILE = %q
@@ -14306,11 +14305,8 @@ task.spawn(function()
             return
         end
 
-        local activeRank = tonumber(rawget(env, "__DEVKAGE_ACTIVE_VERSION")) or 0
-        if activeRank > BUILD_RANK then
-            warn("[DevKage AutoLoad] Refused older loader " .. BUILD_LABEL)
-            return
-        end
+
+
 
         local autoLoadEnabled = nil
         local settingsOk, rawSettings = pcall(readfile, SETTINGS_FILE)
@@ -14465,15 +14461,6 @@ task.spawn(function()
             return
         end
 
-        local newestRank = tonumber(rawget(env, "__DEVKAGE_ACTIVE_VERSION")) or 0
-        if newestRank > BUILD_RANK then
-            env.__DEVKAGE_AUTO_STARTING_JOB = nil
-            env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
-            env.__DEVKAGE_AUTO_STARTING_AT = nil
-            warn("[DevKage AutoLoad] Newer DevKage already active; skipped " .. BUILD_LABEL)
-            return
-        end
-
         env.__DEVKAGE_AUTO_STARTED = true
         env.__DEVKAGE_EMBEDDED_SOURCE = embeddedSource
         env.__DEVKAGE_MULTI_INJECT_BOOT = true
@@ -14505,7 +14492,6 @@ task.spawn(function()
 
         env.__DEVKAGE_AUTO_STARTED_JOB = jobKey
         env.__DEVKAGE_AUTOLOADED_BUILD = BUILD_LABEL
-        env.__DEVKAGE_ACTIVE_VERSION = BUILD_RANK
         env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
         env.__DEVKAGE_AUTO_STARTING_AT = nil
     end)
@@ -14567,52 +14553,10 @@ local seen = {}
 
 
 local function cleanLegacyDevKageAutoexec(folder)
-    if type(delfile) ~= "function" then return true end
 
-    local currentPath = folder .. "/" .. SCRIPT_AUTOEXEC_NAME
 
-    -- Remove exact DevKage loader names from older releases.
-    for _, oldName in ipairs({
-        "DevKage_AutoLoad.lua",
-        "zzzz_DevKage_AutoLoad_LAST.lua",
-        "DevKage_AutoLoad_CURRENT.lua",
-    }) do
-        local path = folder .. "/" .. oldName
-        if path ~= currentPath then
-            local shouldDelete = true
-            if type(isfile) == "function" then
-                local ok, exists = pcall(isfile, path)
-                shouldDelete = ok and exists == true
-            end
-            if shouldDelete then pcall(delfile, path) end
-        end
-    end
 
-    -- If the executor can enumerate files, remove ONLY old DevKage-marked Lua
-    -- files. Other autoexec scripts are never touched.
-    if type(listfiles) == "function" and type(readfile) == "function" then
-        local okList, entries = pcall(listfiles, folder)
-        if okList and type(entries) == "table" then
-            for _, path in ipairs(entries) do
-                if type(path) == "string" and path ~= currentPath then
-                    local lower = string.lower(path)
-                    if lower:find("devkage", 1, true) and lower:sub(-4) == ".lua" then
-                        local okRead, body = pcall(readfile, path)
-                        if okRead and type(body) == "string" then
-                            local ours = body:find("DEVKAGE_AUTOLOAD_BUILD:", 1, true)
-                                or body:find("__DEVKAGE_PACKAGE_BUILD", 1, true)
-                                or body:find("__DEVKAGE_EMBEDDED_SOURCE", 1, true)
-                                or body:find("-- DEVKAGE v5.2.", 1, true)
-                            local isCurrent = body:find("DevKage-v5.2.50-current-only-20260906", 1, true)
-                            if ours and not isCurrent then
-                                pcall(delfile, path)
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
+
 
     return true
 end
@@ -14667,12 +14611,7 @@ end
 local function remove_autoexec_stubs()
 if type(delfile) ~= "function" then return end
 for _, folder in ipairs(AUTOEXEC_FOLDERS) do
-    for _, loaderName in ipairs({
-        SCRIPT_AUTOEXEC_NAME,
-        "DevKage_AutoLoad.lua",
-        "zzzz_DevKage_AutoLoad_LAST.lua",
-        "DevKage_AutoLoad_CURRENT.lua",
-    }) do
+    for _, loaderName in ipairs({SCRIPT_AUTOEXEC_NAME, "DevKage_AutoLoad.lua"}) do
         local path = folder .. "/" .. loaderName
         local shouldDelete = true
         if type(isfile) == "function" then
@@ -14721,6 +14660,18 @@ if not enabled then
     if type(delfile) == "function" then
         for _, path in ipairs({
             SCRIPT_PAYLOAD_FILE,
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_19.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_18.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_17.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_16.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_12.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_11.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_10.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_9.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_8.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_7.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_6.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_3.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload.lua",
             SCRIPT_BUILD_FILE,
             SCRIPT_AUTOLOAD_ENABLED_FILE
@@ -14730,10 +14681,9 @@ if not enabled then
                 local ok, exists = pcall(isfile, path)
                 shouldDelete = not ok or exists == true
             end
-            if shouldDelete then pcall(delfile, path) end
-        end
-        for minor = 3, 49 do
-            pcall(delfile, CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_" .. tostring(minor) .. ".lua")
+            if shouldDelete then
+                pcall(delfile, path)
+            end
         end
     end
 
@@ -14798,12 +14748,21 @@ end
 
 
 
-for minor = 3, 49 do
-    pcall(
-        writefile,
-        CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_" .. tostring(minor) .. ".lua",
-        payloadSource
-    )
+for _, legacyName in ipairs({
+    "_devkage_autoload_payload_v5_2_19.lua",
+    "_devkage_autoload_payload_v5_2_18.lua",
+    "_devkage_autoload_payload_v5_2_17.lua",
+    "_devkage_autoload_payload_v5_2_16.lua",
+    "_devkage_autoload_payload_v5_2_12.lua",
+    "_devkage_autoload_payload_v5_2_11.lua",
+    "_devkage_autoload_payload_v5_2_10.lua",
+    "_devkage_autoload_payload_v5_2_9.lua",
+    "_devkage_autoload_payload_v5_2_8.lua",
+    "_devkage_autoload_payload_v5_2_7.lua",
+    "_devkage_autoload_payload_v5_2_6.lua",
+    "_devkage_autoload_payload_v5_2_3.lua",
+}) do
+    pcall(writefile, CONFIG_FOLDER .. "/" .. legacyName, payloadSource)
 end
 
 
@@ -31618,4 +31577,4 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
 
 -- END OF FILE
 
-]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,53,48,45,99,117,114,114,101,110,116,45,111,110,108,121,45,50,48,50,54,48,57,48,54)_b.__DEVKAGE_PACKAGE_VERSION=50250 if(tonumber(_b.__DEVKAGE_ACTIVE_VERSION)or 0)<=50250 then _b.__DEVKAGE_ACTIVE_VERSION=50250 end _b._a=_a pcall(function()if type(writefile)~=string.char(102,117,110,99,116,105,111,110)or type(readfile)~=string.char(102,117,110,99,116,105,111,110)then return end local _c=string.char(68,101,118,75,97,103,101,95,67,111,110,102,105,103,115)local _d=_c..string.char(47,95,115,99,114,105,112,116,95,115,101,116,116,105,110,103,115,46,106,115,111,110)local _e=_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,101,110,97,98,108,101,100,46,102,108,97,103)local _f=false local _g,_h=pcall(readfile,_d)if _g and type(_h)==string.char(115,116,114,105,110,103)and _h~=""then local _i,_j=pcall(game.GetService,game,string.char(72,116,116,112,83,101,114,118,105,99,101))if _i and _j then local _k,_l=pcall(_j.JSONDecode,_j,_h)if _k and type(_l)==string.char(116,97,98,108,101)and _l.AutoLoad==true then _f=true end end end if not _f then if type(isfile)==string.char(102,117,110,99,116,105,111,110)then local _m,_n=pcall(isfile,_e)_f=_m and _n==true else local _m=pcall(readfile,_e)_f=_m end end if not _f then return end if type(makefolder)==string.char(102,117,110,99,116,105,111,110)then pcall(makefolder,_c)end local _o=_a local _p=_b.__DEVKAGE_PACKAGE_BUILD local _q=string.char(45,45,32,68,69,86,75,65,71,69,95,65,85,84,79,76,79,65,68,95,66,85,73,76,68,58).._p..string.char(10).._o pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,53,48,46,108,117,97),_q)for _r=3,49 do pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95)..tostring(_r)..string.char(46,108,117,97),_q)end pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,46,108,117,97),_q)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,99,117,114,114,101,110,116,46,116,120,116),_p)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,98,117,105,108,100,46,116,120,116),_p)pcall(writefile,_e,_p)_b.__DEVKAGE_AUTOLOAD_BUILD=_p _b.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT=os.clock()end)task.spawn(function()local _s,_t=pcall(function()local _u=game:GetService(string.char(80,108,97,121,101,114,115))local _v=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while tostring(game.JobId)==""do task.wait(0.1)end while not _u.LocalPlayer do task.wait(0.1)end local _w=_u.LocalPlayer while _w and not _w:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_w=_u.LocalPlayer end while not _v.CurrentCamera do task.wait(0.1)end local _x=_w:FindFirstChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115))if not _x then _x=_w:WaitForChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115),10)end if _x then _x:WaitForChild(string.char(67,111,110,116,114,111,108,108,101,114,115),8)_x:WaitForChild(string.char(77,111,100,117,108,101,115),8)end _v:WaitForChild(string.char(86,105,101,119,77,111,100,101,108,115),8)_b.__DEVKAGE_LATE_BOOT_WAITING=true local _y=tonumber(rawget(_b,string.char(95,95,68,69,86,75,65,71,69,95,76,65,84,69,95,66,79,79,84,95,68,69,76,65,89)))or 6 if _y<5 then _y=5 end task.wait(_y)_b.__DEVKAGE_LATE_BOOT_WAITING=nil local _z=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)if _b.__DEVKAGE_AUTO_STARTING_JOB==_z then local _A=_b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD local _B=tonumber(_b.__DEVKAGE_AUTO_STARTING_AT)or 0 local _C=_B>0 and(os.clock()-_B)or math.huge if _A==_b.__DEVKAGE_PACKAGE_BUILD and _C>=0 and _C<45 then return end _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end if _b.__DEVKAGE_AUTO_STARTED_JOB==_z and _b.__DEVKAGE_AUTOLOADED_BUILD==_b.__DEVKAGE_PACKAGE_BUILD then return end _b.__DEVKAGE_AUTO_STARTING_JOB=_z _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_AT=os.clock()task.wait()local _D=loadstring or load if type(_D)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _E,_F=_D(_a)if not _E then error(_F)end local _H,_I=pcall(_E)if not _H then error(_I)end _b.__DEVKAGE_AUTO_STARTED_JOB=_z _b.__DEVKAGE_AUTOLOADED_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_ACTIVE_VERSION=50250 _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end)if not _s then _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil _b.__DEVKAGE_LATE_BOOT_WAITING=nil warn(string.char(91,68,101,118,75,97,103,101,32,80,97,99,107,97,103,101,32,66,111,111,116,93,32)..tostring(_t))end end)return nil
+]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,50,48,45,105,110,118,101,110,116,111,114,121,45,97,118,97,116,97,114,45,115,107,121,98,111,120,45,50,48,50,54,48,57,48,54)_b._a=_a pcall(function()if type(writefile)~=string.char(102,117,110,99,116,105,111,110)or type(readfile)~=string.char(102,117,110,99,116,105,111,110)then return end local _c=string.char(68,101,118,75,97,103,101,95,67,111,110,102,105,103,115)local _d=_c..string.char(47,95,115,99,114,105,112,116,95,115,101,116,116,105,110,103,115,46,106,115,111,110)local _e=_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,101,110,97,98,108,101,100,46,102,108,97,103)local _f=false local _g,_h=pcall(readfile,_d)if _g and type(_h)==string.char(115,116,114,105,110,103)and _h~=""then local _i,_j=pcall(game.GetService,game,string.char(72,116,116,112,83,101,114,118,105,99,101))if _i and _j then local _k,_l=pcall(_j.JSONDecode,_j,_h)if _k and type(_l)==string.char(116,97,98,108,101)and _l.AutoLoad==true then _f=true end end end if not _f then if type(isfile)==string.char(102,117,110,99,116,105,111,110)then local _m,_n=pcall(isfile,_e)_f=_m and _n==true else local _m=pcall(readfile,_e)_f=_m end end if not _f then return end if type(makefolder)==string.char(102,117,110,99,116,105,111,110)then pcall(makefolder,_c)end local _o=_a local _p=_b.__DEVKAGE_PACKAGE_BUILD local _q=string.char(45,45,32,68,69,86,75,65,71,69,95,65,85,84,79,76,79,65,68,95,66,85,73,76,68,58).._p..string.char(10).._o pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,50,48,46,108,117,97),_q)for _r,_s in ipairs({string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,57,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,56,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,55,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,54,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,50,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,49,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,48,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,57,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,56,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,55,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,54,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,51,46,108,117,97),})do pcall(writefile,_c..string.char(47).._s,_q)end pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,46,108,117,97),_q)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,99,117,114,114,101,110,116,46,116,120,116),_p)pcall(writefile,_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,98,117,105,108,100,46,116,120,116),_p)pcall(writefile,_e,_p)_b.__DEVKAGE_AUTOLOAD_BUILD=_p _b.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT=os.clock()end)task.spawn(function()local _t,_u=pcall(function()local _v=game:GetService(string.char(80,108,97,121,101,114,115))local _w=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while tostring(game.JobId)==""do task.wait(0.1)end while not _v.LocalPlayer do task.wait(0.1)end local _x=_v.LocalPlayer while _x and not _x:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_x=_v.LocalPlayer end while not _w.CurrentCamera do task.wait(0.1)end local _y=_x:FindFirstChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115))if not _y then _y=_x:WaitForChild(string.char(80,108,97,121,101,114,83,99,114,105,112,116,115),10)end if _y then _y:WaitForChild(string.char(67,111,110,116,114,111,108,108,101,114,115),8)_y:WaitForChild(string.char(77,111,100,117,108,101,115),8)end _w:WaitForChild(string.char(86,105,101,119,77,111,100,101,108,115),8)_b.__DEVKAGE_LATE_BOOT_WAITING=true local _z=tonumber(rawget(_b,string.char(95,95,68,69,86,75,65,71,69,95,76,65,84,69,95,66,79,79,84,95,68,69,76,65,89)))or 6 if _z<5 then _z=5 end task.wait(_z)_b.__DEVKAGE_LATE_BOOT_WAITING=nil local _A=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)if _b.__DEVKAGE_AUTO_STARTING_JOB==_A then local _B=_b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD local _C=tonumber(_b.__DEVKAGE_AUTO_STARTING_AT)or 0 local _D=_C>0 and(os.clock()-_C)or math.huge if _B==_b.__DEVKAGE_PACKAGE_BUILD and _D>=0 and _D<45 then return end _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end if _b.__DEVKAGE_AUTO_STARTED_JOB==_A and _b.__DEVKAGE_AUTOLOADED_BUILD==_b.__DEVKAGE_PACKAGE_BUILD then return end _b.__DEVKAGE_AUTO_STARTING_JOB=_A _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_AT=os.clock()task.wait()local _E=loadstring or load if type(_E)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _F,_H=_E(_a)if not _F then error(_H)end local _I,_J=pcall(_F)if not _I then error(_J)end _b.__DEVKAGE_AUTO_STARTED_JOB=_A _b.__DEVKAGE_AUTOLOADED_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end)if not _t then _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil _b.__DEVKAGE_LATE_BOOT_WAITING=nil warn(string.char(91,68,101,118,75,97,103,101,32,80,97,99,107,97,103,101,32,66,111,111,116,93,32)..tostring(_u))end end)return nil
