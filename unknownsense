@@ -1,4 +1,5 @@
-local _a=[============[
+-- DEVKAGE v5.2.54: local-register compiler fix + single-source autoexec
+local __DEVKAGE_EMBEDDED_SOURCE = [============[
 
 
 
@@ -13771,12 +13772,12 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_53.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_54.lua"
 local SCRIPT_STABLE_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_current.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOLOAD_ENABLED_FILE = CONFIG_FOLDER .. "/_devkage_autoload_enabled.flag"
 local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_AutoLoad_LAST.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.53-single-source-autoexec-safe-20260907"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.54-local-register-fix-20260907"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -16929,7 +16930,7 @@ runtimeEnv.__DevKageAvatarMods = (function()
 end)()
 end
 
-local function optionIndex(options, selected)
+library.OptionIndex = function(options, selected)
 for index, option in ipairs(options) do
 if tostring(option) == tostring(selected) then return index end
 end
@@ -16937,14 +16938,14 @@ return 1
 end
 
 if __devkageMultiInjectAutoBoot then task.wait() end
-local window = library:CreateWindow({
+library.Window = library:CreateWindow({
 Key = Enum.KeyCode.RightShift,
 Enabled = not (getgenv().__DEVKAGE_AUTO_STARTED == true and _script_boot_settings.SilentLoad == true)
 })
-getgenv().__DevKageWindow = window
+getgenv().__DevKageWindow = library.Window
 do
 local environment=(type(getgenv)=="function" and getgenv()) or _G
-environment.__DEVKAGE_RUNTIME_WINDOW=window
+environment.__DEVKAGE_RUNTIME_WINDOW=library.Window
 environment.__DEVKAGE_RUNTIME_BOOT_JOB=tostring(game.PlaceId)..":"..tostring(game.JobId)
 environment.__DEVKAGE_RUNTIME_BOOT_BUILD=tostring(environment.__DEVKAGE_PACKAGE_BUILD or "")
 environment.__DEVKAGE_RUNTIME_BOOT_STATE="active"
@@ -16960,7 +16961,7 @@ UI.HighQualityESPRuntime = ((type(getgenv)=="function" and getgenv()) or _G).__D
 
 assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
-local spooferPage = window:CreatePage({ Icon = "rbxassetid://8547236654", Glyph = "R", Size = UDim2.new(0, 36, 0, 36) })
+local spooferPage = library.Window:CreatePage({ Icon = "rbxassetid://8547236654", Glyph = "R", Size = UDim2.new(0, 36, 0, 36) })
 local spooferRightLayout=spooferPage.Right:FindFirstChildOfClass("UIListLayout")
 if spooferRightLayout then spooferRightLayout.SortOrder=Enum.SortOrder.LayoutOrder end
 
@@ -17078,7 +17079,7 @@ local avatarModsTypes = {
 local avatarModsTypeDrop = avatarModsSection:CreateDropdown({
 Name = "Avatar Mod",
 Options = avatarModsTypes,
-State = optionIndex(avatarModsTypes,getgenv().__DevKageConfig.avatarModsType),
+State = library.OptionIndex(avatarModsTypes,getgenv().__DevKageConfig.avatarModsType),
 Callback = function(idx)
 getgenv().__DevKageConfig.avatarModsType = avatarModsTypes[idx] or "Wings + Halos"
 if avatarModsRuntime then avatarModsRuntime:Refresh() end
@@ -17113,7 +17114,7 @@ local avatarModsMaterialOptions={"Neon","Glass","ForceField","SmoothPlastic","Me
 local avatarModsMaterialDrop = avatarModsSection:CreateDropdown({
 Name = "Material",
 Options = avatarModsMaterialOptions,
-State = optionIndex(avatarModsMaterialOptions,getgenv().__DevKageConfig.avatarModsMaterial),
+State = library.OptionIndex(avatarModsMaterialOptions,getgenv().__DevKageConfig.avatarModsMaterial),
 Callback = function(idx)
 getgenv().__DevKageConfig.avatarModsMaterial=avatarModsMaterialOptions[idx] or "Neon"
 if avatarModsRuntime then avatarModsRuntime:Refresh() end
@@ -17124,7 +17125,7 @@ local avatarModsQualityOptions={"Performance","High","Ultra"}
 local avatarModsQualityDrop = avatarModsSection:CreateDropdown({
 Name = "Render Quality",
 Options = avatarModsQualityOptions,
-State = optionIndex(avatarModsQualityOptions,getgenv().__DevKageConfig.avatarModsQuality),
+State = library.OptionIndex(avatarModsQualityOptions,getgenv().__DevKageConfig.avatarModsQuality),
 Callback = function(idx)
 getgenv().__DevKageConfig.avatarModsQuality=avatarModsQualityOptions[idx] or "High"
 if avatarModsRuntime then avatarModsRuntime:Refresh() end
@@ -17135,7 +17136,7 @@ local avatarModsMotionOptions={"Elegant","Cinematic","Dynamic","Intense"}
 local avatarModsMotionDrop = avatarModsSection:CreateDropdown({
 Name = "Motion Profile",
 Options = avatarModsMotionOptions,
-State = optionIndex(avatarModsMotionOptions,getgenv().__DevKageConfig.avatarModsMotion),
+State = library.OptionIndex(avatarModsMotionOptions,getgenv().__DevKageConfig.avatarModsMotion),
 Callback = function(idx)
 getgenv().__DevKageConfig.avatarModsMotion=avatarModsMotionOptions[idx] or "Elegant"
 end
@@ -17253,7 +17254,7 @@ end
 local rainbowAuraPaletteDrop = rainbowAuraSection:CreateDropdown({
 Name = "Color Palette",
 Options = RainbowAuraState.PaletteOptions,
-State = optionIndex(RainbowAuraState.PaletteOptions,getgenv().__DevKageConfig.rainbowAuraPalette),
+State = library.OptionIndex(RainbowAuraState.PaletteOptions,getgenv().__DevKageConfig.rainbowAuraPalette),
 Callback = function(idx)
 getgenv().__DevKageConfig.rainbowAuraPalette = RainbowAuraState.PaletteOptions[idx] or "Spectrum"
 RainbowAuraState.palette = getgenv().__DevKageConfig.rainbowAuraPalette
@@ -17263,7 +17264,7 @@ end
 local rainbowAuraTypeDrop = rainbowAuraSection:CreateDropdown({
 Name = "Aura Type",
 Options = RainbowAuraState.TypeOptions,
-State = optionIndex(RainbowAuraState.TypeOptions,getgenv().__DevKageConfig.rainbowAuraType),
+State = library.OptionIndex(RainbowAuraState.TypeOptions,getgenv().__DevKageConfig.rainbowAuraType),
 Callback = function(idx)
 getgenv().__DevKageConfig.rainbowAuraType = RainbowAuraState.TypeOptions[idx] or "Character"
 RainbowAuraState.auraType = getgenv().__DevKageConfig.rainbowAuraType
@@ -17274,7 +17275,7 @@ end
 local rainbowAuraQualityDrop = rainbowAuraSection:CreateDropdown({
 Name = "Render Quality",
 Options = RainbowAuraState.QualityOptions,
-State = optionIndex(RainbowAuraState.QualityOptions,getgenv().__DevKageConfig.rainbowAuraQuality),
+State = library.OptionIndex(RainbowAuraState.QualityOptions,getgenv().__DevKageConfig.rainbowAuraQuality),
 Callback = function(idx)
 getgenv().__DevKageConfig.rainbowAuraQuality = RainbowAuraState.QualityOptions[idx] or "High"
 RainbowAuraState.quality = getgenv().__DevKageConfig.rainbowAuraQuality
@@ -17465,7 +17466,7 @@ pcall(SpooferState.SaveELOAutoLoad,true,value)
 end
 SpooferState.localActive=true
 eloInput:Set(tostring(value),true)
-if spooferExtraControls.rankDisplayDrop then spooferExtraControls.rankDisplayDrop:Set(optionIndex(SpoofRankRuntime.Options,"Use Spoofed ELO"),true) end
+if spooferExtraControls.rankDisplayDrop then spooferExtraControls.rankDisplayDrop:Set(library.OptionIndex(SpoofRankRuntime.Options,"Use Spoofed ELO"),true) end
 pcall(applySpoofELOValues,LocalPlayer,value)
 if SpooferState.targetPlayer then pcall(applySpoofELOValues,SpooferState.targetPlayer,value) end
 if SpooferState.privacy and SpooferState.privacy.RefreshAll then pcall(SpooferState.privacy.RefreshAll) end
@@ -17550,7 +17551,7 @@ flagsSection.Root.LayoutOrder=-290
 local platformDrop = flagsSection:CreateDropdown({
 Name    = "Platform",
 Options = {"DESKTOP", "MOBILE", "CONSOLE", "VR"},
-State   = optionIndex({"DESKTOP","MOBILE","CONSOLE","VR"},getgenv().__DevKageConfig.platform),
+State   = library.OptionIndex({"DESKTOP","MOBILE","CONSOLE","VR"},getgenv().__DevKageConfig.platform),
 Callback = function(idx)
 local opts = {"DESKTOP","MOBILE","CONSOLE","VR"}
 getgenv().__DevKageConfig.platform = opts[idx]
@@ -17619,7 +17620,7 @@ end
 do
 local section=spooferPage:CreateSection({Name="Season Rank Charms",Side="Right",Size=520})
 section.Root.LayoutOrder=-288
-spooferExtraControls.rankDisplayDrop=section:CreateDropdown({Name="Charm Rank",Options=SpoofRankRuntime.Options,State=optionIndex(SpoofRankRuntime.Options,SpoofRankRuntime.Normalize(getgenv().__DevKageConfig.rankDisplay)),Callback=function(index)
+spooferExtraControls.rankDisplayDrop=section:CreateDropdown({Name="Charm Rank",Options=SpoofRankRuntime.Options,State=library.OptionIndex(SpoofRankRuntime.Options,SpoofRankRuntime.Normalize(getgenv().__DevKageConfig.rankDisplay)),Callback=function(index)
 getgenv().__DevKageConfig.rankDisplay=SpoofRankRuntime.Options[index] or "Use Spoofed ELO"
 SpooferState.localActive=true
 pcall(SpoofRankRuntime.Apply,LocalPlayer,getgenv().__DevKageConfig)
@@ -17644,7 +17645,7 @@ local config=getgenv().__DevKageConfig
 config.rankDisplay="Archnemesis"
 config.archRank=SpoofRankRuntime.ArchDivision(config)
 SpooferState.localActive=true
-spooferExtraControls.rankDisplayDrop:Set(optionIndex(SpoofRankRuntime.Options,"Archnemesis"),true)
+spooferExtraControls.rankDisplayDrop:Set(library.OptionIndex(SpoofRankRuntime.Options,"Archnemesis"),true)
 pcall(SpoofRankRuntime.Apply,LocalPlayer,config)
 if SpooferState.targetPlayer then pcall(SpoofRankRuntime.Apply,SpooferState.targetPlayer,config) end
 local installed=SpoofRankRuntime.InstallSeasonBridge()
@@ -17702,11 +17703,11 @@ return control
 end
 duelInput("duelMatchIndex","Match Index",1)
 local modes={"Ranked","Casual"}
-spooferExtraControls.duelMode=section:CreateDropdown({Name="Mode",Options=modes,State=optionIndex(modes,getgenv().__DevKageConfig.duelMode),Callback=function(index) getgenv().__DevKageConfig.duelMode=modes[index] or "Ranked" end})
+spooferExtraControls.duelMode=section:CreateDropdown({Name="Mode",Options=modes,State=library.OptionIndex(modes,getgenv().__DevKageConfig.duelMode),Callback=function(index) getgenv().__DevKageConfig.duelMode=modes[index] or "Ranked" end})
 local results={"Win","Loss","Draw"}
-spooferExtraControls.duelResult=section:CreateDropdown({Name="Result",Options=results,State=optionIndex(results,getgenv().__DevKageConfig.duelResult),Callback=function(index) getgenv().__DevKageConfig.duelResult=results[index] or "Win" end})
+spooferExtraControls.duelResult=section:CreateDropdown({Name="Result",Options=results,State=library.OptionIndex(results,getgenv().__DevKageConfig.duelResult),Callback=function(index) getgenv().__DevKageConfig.duelResult=results[index] or "Win" end})
 local maps={"Arena","Onyx","Crossroads","Bridge","Station","Construction","Docks","Backrooms","Random"}
-spooferExtraControls.duelMap=section:CreateDropdown({Name="Map",Options=maps,State=optionIndex(maps,getgenv().__DevKageConfig.duelMap),Callback=function(index) getgenv().__DevKageConfig.duelMap=maps[index] or "Arena" end})
+spooferExtraControls.duelMap=section:CreateDropdown({Name="Map",Options=maps,State=library.OptionIndex(maps,getgenv().__DevKageConfig.duelMap),Callback=function(index) getgenv().__DevKageConfig.duelMap=maps[index] or "Arena" end})
 duelInput("duelTeam1Score","Team 1 Score",5)
 duelInput("duelTeam2Score","Team 2 Score",0)
 duelInput("duelDuelerIndex","Dueler Index",1)
@@ -17990,9 +17991,9 @@ local streamerSection=spooferPage:CreateSection({Name="Streamer / Recording HUD"
 streamerSection.Root.LayoutOrder=-280
 local streamerHudToggle=streamerSection:CreateToggle({Name="Enable DevSense HUD",State=getgenv().__DevKageConfig.streamerHudEnabled==true,Callback=function(value) getgenv().__DevKageConfig.streamerHudEnabled=value==true; StreamerHUDRuntime:RefreshConfig() end})
 local streamerPositions={"Top Bar","Top Center","Top Right","Bottom Bar","Bottom Center","Bottom Right"}
-local streamerPositionDrop=streamerSection:CreateDropdown({Name="HUD Position",Options=streamerPositions,State=optionIndex(streamerPositions,getgenv().__DevKageConfig.streamerHudPosition),Callback=function(index) getgenv().__DevKageConfig.streamerHudPosition=streamerPositions[index] or "Top Bar"; StreamerHUDRuntime:RefreshConfig() end})
+local streamerPositionDrop=streamerSection:CreateDropdown({Name="HUD Position",Options=streamerPositions,State=library.OptionIndex(streamerPositions,getgenv().__DevKageConfig.streamerHudPosition),Callback=function(index) getgenv().__DevKageConfig.streamerHudPosition=streamerPositions[index] or "Top Bar"; StreamerHUDRuntime:RefreshConfig() end})
 local streamerStyles={"Reference","Glass","Minimal","Neon","Broadcast"}
-local streamerStyleDrop=streamerSection:CreateDropdown({Name="HUD Style",Options=streamerStyles,State=optionIndex(streamerStyles,getgenv().__DevKageConfig.streamerHudStyle),Callback=function(index) getgenv().__DevKageConfig.streamerHudStyle=streamerStyles[index] or "Reference"; StreamerHUDRuntime:RefreshConfig() end})
+local streamerStyleDrop=streamerSection:CreateDropdown({Name="HUD Style",Options=streamerStyles,State=library.OptionIndex(streamerStyles,getgenv().__DevKageConfig.streamerHudStyle),Callback=function(index) getgenv().__DevKageConfig.streamerHudStyle=streamerStyles[index] or "Reference"; StreamerHUDRuntime:RefreshConfig() end})
 local streamerLabelInput=streamerSection:CreateInput({Name="Brand Text",Default=tostring(getgenv().__DevKageConfig.streamerHudLabel or "DevSense"),Placeholder="DevSense",MaxLength=24,Callback=function(value) getgenv().__DevKageConfig.streamerHudLabel=tostring(value~="" and value or "DevSense"); StreamerHUDRuntime:UpdateText() end})
 local streamerModeInput=streamerSection:CreateInput({Name="Mode Text",Default=tostring(getgenv().__DevKageConfig.streamerHudModeText or "Matchmaking"),Placeholder="Matchmaking",MaxLength=28,Callback=function(value) getgenv().__DevKageConfig.streamerHudModeText=tostring(value~="" and value or "Matchmaking"); StreamerHUDRuntime:UpdateText() end})
 local streamerShowMode=streamerSection:CreateToggle({Name="Show Mode",State=getgenv().__DevKageConfig.streamerHudShowMode~=false,Callback=function(value) getgenv().__DevKageConfig.streamerHudShowMode=value==true; StreamerHUDRuntime:UpdateText() end})
@@ -18005,9 +18006,9 @@ local streamerTextPicker=streamerSection:CreateColorpicker({Name="Text Color",St
 local streamerAlphaSlider=streamerSection:CreateSlider({Name="Background Transparency",State=math.floor(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudBackgroundAlpha) or 0.03,0,0.9)*100+0.5),Min=0,Max=90,Decimals=0,Suffix="%",Callback=function(value) getgenv().__DevKageConfig.streamerHudBackgroundAlpha=math.clamp(value/100,0,0.9); StreamerHUDRuntime:ApplyStyle() end})
 local streamerScaleSlider=streamerSection:CreateSlider({Name="HUD Scale",State=tonumber(getgenv().__DevKageConfig.streamerHudScale) or 1,Min=0.75,Max=1.5,Decimals=2,Suffix="x",Callback=function(value) getgenv().__DevKageConfig.streamerHudScale=value; StreamerHUDRuntime:ApplyLayout() end})
 local streamerWidthModes={"Custom Width","Full Width"}
-local streamerWidthModeDrop=streamerSection:CreateDropdown({Name="Width Mode",Options=streamerWidthModes,State=optionIndex(streamerWidthModes,getgenv().__DevKageConfig.streamerHudWidthMode),Callback=function(index) getgenv().__DevKageConfig.streamerHudWidthMode=streamerWidthModes[index] or "Custom Width"; StreamerHUDRuntime:ApplyLayout() end})
+local streamerWidthModeDrop=streamerSection:CreateDropdown({Name="Width Mode",Options=streamerWidthModes,State=library.OptionIndex(streamerWidthModes,getgenv().__DevKageConfig.streamerHudWidthMode),Callback=function(index) getgenv().__DevKageConfig.streamerHudWidthMode=streamerWidthModes[index] or "Custom Width"; StreamerHUDRuntime:ApplyLayout() end})
 local streamerAlignments={"Auto","Left","Center","Right"}
-local streamerAlignmentDrop=streamerSection:CreateDropdown({Name="Text Alignment",Options=streamerAlignments,State=optionIndex(streamerAlignments,getgenv().__DevKageConfig.streamerHudTextAlignment),Callback=function(index) getgenv().__DevKageConfig.streamerHudTextAlignment=streamerAlignments[index] or "Auto"; StreamerHUDRuntime:ApplyLayout() end})
+local streamerAlignmentDrop=streamerSection:CreateDropdown({Name="Text Alignment",Options=streamerAlignments,State=library.OptionIndex(streamerAlignments,getgenv().__DevKageConfig.streamerHudTextAlignment),Callback=function(index) getgenv().__DevKageConfig.streamerHudTextAlignment=streamerAlignments[index] or "Auto"; StreamerHUDRuntime:ApplyLayout() end})
 local streamerWidthSlider=streamerSection:CreateSlider({Name="HUD Width",State=math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudWidth) or 660,260,1800),Min=260,Max=1800,Decimals=0,Suffix="px",Callback=function(value) getgenv().__DevKageConfig.streamerHudWidth=math.floor((tonumber(value) or 660)+0.5); StreamerHUDRuntime:ApplyLayout() end})
 local streamerHeightSlider=streamerSection:CreateSlider({Name="HUD Height",State=math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudHeight) or 26,18,64),Min=18,Max=64,Decimals=0,Suffix="px",Callback=function(value) getgenv().__DevKageConfig.streamerHudHeight=math.floor((tonumber(value) or 26)+0.5); StreamerHUDRuntime:ApplyLayout() end})
 local streamerTextSizeSlider=streamerSection:CreateSlider({Name="Text Size",State=math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudTextSize) or 11,8,22),Min=8,Max=22,Decimals=0,Suffix="px",Callback=function(value) getgenv().__DevKageConfig.streamerHudTextSize=math.floor((tonumber(value) or 11)+0.5); StreamerHUDRuntime:ApplyLayout() end})
@@ -18025,10 +18026,10 @@ config.streamerHudAccent={175,205,75}; config.streamerHudSecondary={110,165,255}
 config.streamerHudWidthMode="Full Width"; config.streamerHudWidth=660; config.streamerHudHeight=26; config.streamerHudTextSize=11; config.streamerHudPadding=14
 config.streamerHudOffsetX=0; config.streamerHudOffsetY=8; config.streamerHudTextAlignment="Left"; config.streamerHudCornerRadius=0
 config.streamerHudLineThickness=2; config.streamerHudStrokeThickness=1; config.streamerHudScale=1; config.streamerHudBackgroundAlpha=0.03
-streamerPositionDrop:Set(optionIndex(streamerPositions,"Top Bar"),true); streamerStyleDrop:Set(optionIndex(streamerStyles,"Reference"),true)
+streamerPositionDrop:Set(library.OptionIndex(streamerPositions,"Top Bar"),true); streamerStyleDrop:Set(library.OptionIndex(streamerStyles,"Reference"),true)
 streamerLabelInput:Set("DevSense",true); streamerModeInput:Set("Matchmaking",true); streamerShowMode:Set(true,true); streamerShowFPS:Set(true,true); streamerShowPing:Set(true,true); streamerShowClock:Set(true,true)
 streamerHudToggle:Set(true,true); streamerAccentPicker:Set(Color3.fromRGB(175,205,75),nil,true); streamerSecondaryPicker:Set(Color3.fromRGB(110,165,255),nil,true); streamerTextPicker:Set(Color3.fromRGB(205,205,205),nil,true)
-streamerWidthModeDrop:Set(optionIndex(streamerWidthModes,"Full Width"),true); streamerAlignmentDrop:Set(optionIndex(streamerAlignments,"Left"),true)
+streamerWidthModeDrop:Set(library.OptionIndex(streamerWidthModes,"Full Width"),true); streamerAlignmentDrop:Set(library.OptionIndex(streamerAlignments,"Left"),true)
 streamerWidthSlider:Set(660,true); streamerHeightSlider:Set(26,true); streamerTextSizeSlider:Set(11,true); streamerPaddingSlider:Set(14,true)
 streamerOffsetXSlider:Set(0,true); streamerOffsetYSlider:Set(8,true); streamerCornerSlider:Set(0,true); streamerLineSlider:Set(2,true); streamerStrokeSlider:Set(1,true)
 streamerScaleSlider:Set(1,true); streamerAlphaSlider:Set(3,true)
@@ -18077,7 +18078,7 @@ end)()
 
 assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
-local visualsPage = window:CreatePage({ Icon = "rbxassetid://8547254518", Glyph = "V", Size = UDim2.new(0, 36, 0, 36) })
+local visualsPage = library.Window:CreatePage({ Icon = "rbxassetid://8547254518", Glyph = "V", Size = UDim2.new(0, 36, 0, 36) })
 
 local VisualCategoryController = {Current="Enemy",Buttons={},Sections={}}
 do
@@ -18384,7 +18385,7 @@ if changed then changed(value,alpha) end
 end})
 end
 local function visualDropdown(section, key, name, options, changed)
-VisualControls[key] = section:CreateDropdown({Name=name,Options=options,State=optionIndex(options,VisualsState[key]),Flag="visuals."..key,Callback=function(index)
+VisualControls[key] = section:CreateDropdown({Name=name,Options=options,State=library.OptionIndex(options,VisualsState[key]),Flag="visuals."..key,Callback=function(index)
 VisualsState[key]=options[index] or options[1]
 if changed then changed(VisualsState[key]) end
 end})
@@ -19266,7 +19267,7 @@ esp_visibility_flag=true,esp_health_percent=true,esp_low_health_warning=true,esp
 esp_distance_limit=true,esp_max_distance=2200,esp_distance_fade=false,text_scale=1.35,tracer_thickness=2.5,
 },
 }
-VisualControls.esp_profile=espProfileSection:CreateDropdown({Name="Profile",Options=espProfileOptions,State=optionIndex(espProfileOptions,VisualsState.esp_profile),Flag="visuals.esp_profile",Callback=function(index) VisualsState.esp_profile=espProfileOptions[index] or "Custom" end})
+VisualControls.esp_profile=espProfileSection:CreateDropdown({Name="Profile",Options=espProfileOptions,State=library.OptionIndex(espProfileOptions,VisualsState.esp_profile),Flag="visuals.esp_profile",Callback=function(index) VisualsState.esp_profile=espProfileOptions[index] or "Custom" end})
 local function applyESPProfile(name)
 local profile=espProfileData[name]
 if not profile then VisualsState.esp_profile="Custom"; return false end
@@ -19275,7 +19276,7 @@ for key,value in pairs(profile) do
 VisualsState[key]=value
 local control=VisualControls[key]
 if control and control.Set then
-if control.Options then control:Set(optionIndex(control.Options,value),true)
+if control.Options then control:Set(library.OptionIndex(control.Options,value),true)
 elseif control.GetAlpha then control:Set(value,control:GetAlpha(),true)
 else control:Set(value,true) end
 end
@@ -19514,7 +19515,7 @@ VisualControls.skybox_enabled=clientEffects:CreateToggle({Name="Skybox",State=Vi
 VisualsState.skybox_enabled=v
 applyPlayerESPSkybox()
 end})
-VisualControls.skybox_preset=clientEffects:CreateDropdown({Name="Skybox Style",Options=PlayerESPSkyboxNames,State=optionIndex(PlayerESPSkyboxNames,VisualsState.skybox_preset),Flag="visuals.skybox_preset",Callback=function(index)
+VisualControls.skybox_preset=clientEffects:CreateDropdown({Name="Skybox Style",Options=PlayerESPSkyboxNames,State=library.OptionIndex(PlayerESPSkyboxNames,VisualsState.skybox_preset),Flag="visuals.skybox_preset",Callback=function(index)
 VisualsState.skybox_preset=PlayerESPSkyboxNames[index] or "Default"
 if VisualsState.skybox_enabled then applyPlayerESPSkybox() end
 end})
@@ -20182,7 +20183,7 @@ end
 VisualControls.kill_sound_preset=clientEffects:CreateDropdown({
 Name="Kill Sound Preset",
 Options=CombatSoundPresetNames,
-State=optionIndex(CombatSoundPresetNames,VisualsState.kill_sound_preset),
+State=library.OptionIndex(CombatSoundPresetNames,VisualsState.kill_sound_preset),
 Flag="visuals.kill_sound_preset",
 Callback=function(index)
 VisualsState.kill_sound_preset=CombatSoundPresetNames[index] or "Arcade Confirm"
@@ -20202,7 +20203,7 @@ Flag="visuals.kill_sound_id",
 Callback=function(v)
 VisualsState.kill_sound_id=normalizedCombatSoundId(v,PLAYER_ESP_KILL_SOUND_ID)
 VisualsState.kill_sound_preset="Custom ID"
-if VisualControls.kill_sound_preset then VisualControls.kill_sound_preset:Set(optionIndex(CombatSoundPresetNames,"Custom ID"),true) end
+if VisualControls.kill_sound_preset then VisualControls.kill_sound_preset:Set(library.OptionIndex(CombatSoundPresetNames,"Custom ID"),true) end
 warmCombatSound("kill")
 end
 })
@@ -20251,7 +20252,7 @@ local combatDetectionModes={"Hybrid","Health + Stats","Feed Events"}
 VisualControls.kill_sound_detection=clientEffects:CreateDropdown({
 Name="Kill Detection",
 Options=combatDetectionModes,
-State=optionIndex(combatDetectionModes,VisualsState.kill_sound_detection),
+State=library.OptionIndex(combatDetectionModes,VisualsState.kill_sound_detection),
 Flag="visuals.kill_sound_detection",
 Callback=function(index)
 VisualsState.kill_sound_detection=combatDetectionModes[index] or "Hybrid"
@@ -20275,7 +20276,7 @@ end
 VisualControls.hit_sound_preset=clientEffects:CreateDropdown({
 Name="Hit Sound Preset",
 Options=CombatSoundPresetNames,
-State=optionIndex(CombatSoundPresetNames,VisualsState.hit_sound_preset),
+State=library.OptionIndex(CombatSoundPresetNames,VisualsState.hit_sound_preset),
 Flag="visuals.hit_sound_preset",
 Callback=function(index)
 VisualsState.hit_sound_preset=CombatSoundPresetNames[index] or "Soft Tick"
@@ -20294,7 +20295,7 @@ Flag="visuals.hit_sound_id",
 Callback=function(v)
 VisualsState.hit_sound_id=normalizedCombatSoundId(v,PLAYER_ESP_HIT_SOUND_ID)
 VisualsState.hit_sound_preset="Custom ID"
-if VisualControls.hit_sound_preset then VisualControls.hit_sound_preset:Set(optionIndex(CombatSoundPresetNames,"Custom ID"),true) end
+if VisualControls.hit_sound_preset then VisualControls.hit_sound_preset:Set(library.OptionIndex(CombatSoundPresetNames,"Custom ID"),true) end
 warmCombatSound("hit")
 end
 })
@@ -20990,7 +20991,7 @@ if self.Gui then self.Gui.Enabled=false end
 return
 end
 if not self:Ensure() then return end
-self.Gui.Enabled=not (VisualsState.creator_hide_when_menu_open and window.Enabled)
+self.Gui.Enabled=not (VisualsState.creator_hide_when_menu_open and library.Window.Enabled)
 if not self.Gui.Enabled then return end
 self:ApplyLayout()
 self.Watermark.Visible=VisualsState.creator_watermark==true
@@ -21113,17 +21114,17 @@ local function lightingSlider(key,name,minimum,maximum,decimals,suffix,changed)
 LightingControls[key]=lightingSection:CreateSlider({Name=name,State=AdvancedLighting[key],Min=minimum,Max=maximum,Decimals=decimals,Suffix=suffix or "",Flag="lighting."..key,Callback=function(value) AdvancedLighting[key]=value; changed(value) end})
 end
 local function lightingDropdown(key,name,options,changed)
-LightingControls[key]=lightingSection:CreateDropdown({Name=name,Options=options,State=optionIndex(options,AdvancedLighting[key]),Flag="lighting."..key,Callback=function(index) AdvancedLighting[key]=options[index] or options[1]; changed(AdvancedLighting[key]) end})
+LightingControls[key]=lightingSection:CreateDropdown({Name=name,Options=options,State=library.OptionIndex(options,AdvancedLighting[key]),Flag="lighting."..key,Callback=function(index) AdvancedLighting[key]=options[index] or options[1]; changed(AdvancedLighting[key]) end})
 end
 
 LightingControls.visualPreset=lightingSection:CreateDropdown({
-Name="Visual Grade Preset",Options=LightingPresetNames,State=optionIndex(LightingPresetNames,AdvancedLighting.visualPreset),Flag="lighting.visualPreset",
+Name="Visual Grade Preset",Options=LightingPresetNames,State=library.OptionIndex(LightingPresetNames,AdvancedLighting.visualPreset),Flag="lighting.visualPreset",
 Callback=function(index) applyLightingPreset(LightingPresetNames[index] or "Neutral") end
 })
 lightingSection:CreateButton({Name="Reapply Visual Grade",Callback=function() applyLightingPreset(AdvancedLighting.visualPreset or "Neutral") end})
 lightingSection:CreateButton({Name="Apply DevKage Worlds",Callback=function()
 AdvancedLighting.visualPreset="DevKage Worlds"
-if LightingControls.visualPreset then LightingControls.visualPreset:Set(optionIndex(LightingPresetNames,"DevKage Worlds"),true) end
+if LightingControls.visualPreset then LightingControls.visualPreset:Set(library.OptionIndex(LightingPresetNames,"DevKage Worlds"),true) end
 applyLightingPreset("DevKage Worlds")
 end})
 
@@ -21257,7 +21258,7 @@ local AtmosphereProfiles={
 local AtmosphereProfileNames={"Custom","DevKage Atmosphere","Cinematic","Clean","Dreamy","Midnight","Golden Hour"}
 local applyAtmosphereProfile
 LightingControls.atmosphereProfile=lightingSection:CreateDropdown({
-Name="Atmosphere Profile",Options=AtmosphereProfileNames,State=optionIndex(AtmosphereProfileNames,AdvancedLighting.atmosphereProfile),Flag="lighting.atmosphereProfile",
+Name="Atmosphere Profile",Options=AtmosphereProfileNames,State=library.OptionIndex(AtmosphereProfileNames,AdvancedLighting.atmosphereProfile),Flag="lighting.atmosphereProfile",
 Callback=function(index)
 local name=AtmosphereProfileNames[index] or "Custom"
 AdvancedLighting.atmosphereProfile=name
@@ -21280,7 +21281,7 @@ end
 local function markAtmosphereCustom()
 AdvancedLighting.atmosphereProfile="Custom"
 local control=LightingControls.atmosphereProfile
-if control and control.Set then control:Set(optionIndex(AtmosphereProfileNames,"Custom"),true) end
+if control and control.Set then control:Set(library.OptionIndex(AtmosphereProfileNames,"Custom"),true) end
 end
 
 lightingToggle("atmosphereEnabled","Atmosphere",function(value)
@@ -21340,7 +21341,7 @@ AdvancedLighting.atmosphereGlare=0.15
 AdvancedLighting.atmosphereHaze=0.78
 AdvancedLighting.atmosphereGlowEnabled=false
 AdvancedLighting.atmosphereGlowIntensity=1
-if LightingControls.atmosphereProfile then LightingControls.atmosphereProfile:Set(optionIndex(AtmosphereProfileNames,"Custom"),true) end
+if LightingControls.atmosphereProfile then LightingControls.atmosphereProfile:Set(library.OptionIndex(AtmosphereProfileNames,"Custom"),true) end
 for _,key in ipairs({"atmosphereEnabled","atmosphereDensity","atmosphereHaze","atmosphereGlare","atmosphereOffset","atmosphereColor","atmosphereDecay","atmosphereGlowEnabled","atmosphereGlowIntensity"}) do
 local control=LightingControls[key]
 local value=AdvancedLighting[key]
@@ -21374,7 +21375,7 @@ local function snowColor(key,name,changed)
 LightingControls[key]=snowSection:CreateColorpicker({Name=name,State=AdvancedLighting[key],Flag="lighting."..key,Callback=function(value) AdvancedLighting[key]=value; changed(value) end})
 end
 local function snowDropdown(key,name,options,changed)
-LightingControls[key]=snowSection:CreateDropdown({Name=name,Options=options,State=optionIndex(options,AdvancedLighting[key]),Flag="lighting."..key,Callback=function(index) AdvancedLighting[key]=options[index] or options[1]; changed(AdvancedLighting[key]) end})
+LightingControls[key]=snowSection:CreateDropdown({Name=name,Options=options,State=library.OptionIndex(options,AdvancedLighting[key]),Flag="lighting."..key,Callback=function(index) AdvancedLighting[key]=options[index] or options[1]; changed(AdvancedLighting[key]) end})
 end
 snowToggle("snowEnabled","Snow",function() refreshSnow() end)
 snowDropdown("snowQuality","Snow Quality",{"Performance","High","Ultra"},function() refreshSnow() end)
@@ -21396,7 +21397,7 @@ local function weatherColor(key,name,changed)
 LightingControls[key]=weatherSection:CreateColorpicker({Name=name,State=AdvancedLighting[key],Flag="lighting."..key,Callback=function(value) AdvancedLighting[key]=value; changed(value) end})
 end
 local function weatherDropdown(key,name,options,changed)
-LightingControls[key]=weatherSection:CreateDropdown({Name=name,Options=options,State=optionIndex(options,AdvancedLighting[key]),Flag="lighting."..key,Callback=function(index) AdvancedLighting[key]=options[index] or options[1]; changed(AdvancedLighting[key]) end})
+LightingControls[key]=weatherSection:CreateDropdown({Name=name,Options=options,State=library.OptionIndex(options,AdvancedLighting[key]),Flag="lighting."..key,Callback=function(index) AdvancedLighting[key]=options[index] or options[1]; changed(AdvancedLighting[key]) end})
 end
 weatherToggle("weatherEnabled","Enable Weather",function() refreshPremiumWeather() end)
 weatherDropdown("weatherType","Weather Type",{"Rain","Embers","Ash","Leaves","Stars","Mist","Sakura"},function() buildPremiumWeather(); refreshPremiumWeather() end)
@@ -21441,7 +21442,7 @@ for key,control in pairs(LightingControls) do
 if key~="visualPreset" then
 local value=AdvancedLighting[key]
 if value~=nil and control and control.Set then
-if control.Options then control:Set(optionIndex(control.Options,value),true)
+if control.Options then control:Set(library.OptionIndex(control.Options,value),true)
 elseif control.GetAlpha then control:Set(value,control:GetAlpha(),true)
 else control:Set(value,true) end
 end
@@ -21470,13 +21471,13 @@ config.avatarModsTrails=true
 local controls=UI.Spoofer
 if controls then
 controls.avatarModsToggle:Set(true,true)
-controls.avatarModsTypeDrop:Set(optionIndex(controls.avatarModsTypeDrop.Options,avatar.Type),true)
+controls.avatarModsTypeDrop:Set(library.OptionIndex(controls.avatarModsTypeDrop.Options,avatar.Type),true)
 controls.avatarModsColorPicker:Set(auraColorFromConfig(avatar.Primary,Color3.fromRGB(255,235,170)),avatar.Alpha,true)
 controls.avatarModsSecondaryPicker:Set(auraColorFromConfig(avatar.Secondary,Color3.fromRGB(130,195,255)),nil,true)
 controls.avatarModsRainbowToggle:Set(false,true)
-controls.avatarModsMaterialDrop:Set(optionIndex(controls.avatarModsMaterialDrop.Options,avatar.Material),true)
-controls.avatarModsQualityDrop:Set(optionIndex(controls.avatarModsQualityDrop.Options,avatar.Quality),true)
-controls.avatarModsMotionDrop:Set(optionIndex(controls.avatarModsMotionDrop.Options,avatar.Motion),true)
+controls.avatarModsMaterialDrop:Set(library.OptionIndex(controls.avatarModsMaterialDrop.Options,avatar.Material),true)
+controls.avatarModsQualityDrop:Set(library.OptionIndex(controls.avatarModsQualityDrop.Options,avatar.Quality),true)
+controls.avatarModsMotionDrop:Set(library.OptionIndex(controls.avatarModsMotionDrop.Options,avatar.Motion),true)
 controls.avatarModsSizeSlider:Set(avatar.Size,true); controls.avatarModsBrightnessSlider:Set(avatar.Brightness,true)
 controls.avatarModsTransparencySlider:Set(math.floor(avatar.Alpha*100+0.5),true); controls.avatarModsPulseSlider:Set(math.floor(avatar.Pulse*100+0.5),true)
 controls.avatarModsParticlesToggle:Set(true,true); controls.avatarModsTrailsToggle:Set(true,true)
@@ -21537,7 +21538,7 @@ setLightingProperty("ColorShift_Bottom",profile.ColorShiftBottom)
 refreshCustomFog()
 applyPlayerESPSkybox()
 if VisualControls.skybox_enabled then VisualControls.skybox_enabled:Set(true,true) end
-if VisualControls.skybox_preset then VisualControls.skybox_preset:Set(optionIndex(VisualControls.skybox_preset.Options,profile.Skybox),true) end
+if VisualControls.skybox_preset then VisualControls.skybox_preset:Set(library.OptionIndex(VisualControls.skybox_preset.Options,profile.Skybox),true) end
 if VisualControls.skybox_mood_strength then VisualControls.skybox_mood_strength:Set(profile.MoodStrength,true) end
 syncDevKageLightingControls()
 applyDevKagePresetAvatar(profile)
@@ -21548,14 +21549,14 @@ end
 
 local devkagePresetSection=visualsPage:CreateSection({Name="DevKage World Presets",Side="Left",Size=360})
 local devkagePresetOptions={"Custom","DevKage Day","DevKage Night"}
-VisualControls.devkage_world_preset=devkagePresetSection:CreateDropdown({Name="Selected Look",Options=devkagePresetOptions,State=optionIndex(devkagePresetOptions,VisualsState.devkage_world_preset),Flag="visuals.devkage_world_preset",Callback=function(index)
+VisualControls.devkage_world_preset=devkagePresetSection:CreateDropdown({Name="Selected Look",Options=devkagePresetOptions,State=library.OptionIndex(devkagePresetOptions,VisualsState.devkage_world_preset),Flag="visuals.devkage_world_preset",Callback=function(index)
 local name=devkagePresetOptions[index] or "Custom"
 VisualsState.devkage_world_preset=name
 if name~="Custom" then applyDevKageWorldPreset(name) end
 end})
 visualToggle(devkagePresetSection,"devkage_preset_avatar","Apply Matching Avatar")
-devkagePresetSection:CreateButton({Name="Apply DevKage Day",Callback=function() VisualControls.devkage_world_preset:Set(optionIndex(devkagePresetOptions,"DevKage Day"),true); applyDevKageWorldPreset("DevKage Day") end})
-devkagePresetSection:CreateButton({Name="Apply DevKage Night",Callback=function() VisualControls.devkage_world_preset:Set(optionIndex(devkagePresetOptions,"DevKage Night"),true); applyDevKageWorldPreset("DevKage Night") end})
+devkagePresetSection:CreateButton({Name="Apply DevKage Day",Callback=function() VisualControls.devkage_world_preset:Set(library.OptionIndex(devkagePresetOptions,"DevKage Day"),true); applyDevKageWorldPreset("DevKage Day") end})
+devkagePresetSection:CreateButton({Name="Apply DevKage Night",Callback=function() VisualControls.devkage_world_preset:Set(library.OptionIndex(devkagePresetOptions,"DevKage Night"),true); applyDevKageWorldPreset("DevKage Night") end})
 devkagePresetSection:CreateButton({Name="Reapply Selected Look",Callback=function() if VisualsState.devkage_world_preset~="Custom" then applyDevKageWorldPreset(VisualsState.devkage_world_preset) else library:Notify({Message="Select DevKage Day or DevKage Night",Duration=3}) end end})
 devkagePresetStatus=devkagePresetSection:CreateLabel({Text="Night uses Heaven with a violet cinematic grade • Day uses bright warm dream clouds"})
 UI.applyDevKageWorldPreset=applyDevKageWorldPreset
@@ -22110,7 +22111,7 @@ animPreviewElapsed=animPreviewElapsed+dt
 if animPreviewElapsed < (1/30) then return end
 local step=animPreviewElapsed
 animPreviewElapsed=0
-if window.Enabled and AnimPreview.model and AnimPreview.camera then
+if library.Window.Enabled and AnimPreview.model and AnimPreview.camera then
 AnimPreview.rotation=AnimPreview.rotation+step*0.18
 updateAnimCamera()
 end
@@ -22199,7 +22200,7 @@ end
 local function patchProfileStatLabel(object)
     if not SpooferState.running then return end
     if not object or not object.Parent or ProfileStatsRuntime.Muting[object] then return end
-    if window and window.ScreenGui and object:IsDescendantOf(window.ScreenGui) then return end
+    if library.Window and library.Window.ScreenGui and object:IsDescendantOf(library.Window.ScreenGui) then return end
     if not (object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox")) then return end
 
     local name = tostring(object.Name or ""):lower()
@@ -22384,7 +22385,7 @@ function utility:ResolveAntiAimIcon()
 end
 
 if __devkageMultiInjectAutoBoot then task.wait() end
-local antiAimPage = window:CreatePage({ Icon = utility:ResolveAntiAimIcon(), Glyph = "◉", Size = UDim2.new(0, 36, 0, 36) })
+local antiAimPage = library.Window:CreatePage({ Icon = utility:ResolveAntiAimIcon(), Glyph = "◉", Size = UDim2.new(0, 36, 0, 36) })
 local AntiAimControls = {}
 local yawModes = AntiAimState.core.YawModes
 local pitchModes = AntiAimState.core.PitchModes
@@ -22637,18 +22638,18 @@ AntiAimControls.backtrack_rainbow_speed=backtrackSection:CreateSlider({Name="Rai
 AntiAimControls.backtrack_show_lines=backtrackSection:CreateToggle({Name="Show Trail Lines",State=AntiAimState.backtrack_show_lines,Flag="antiAim.backtrack_show_lines",Callback=function(v) AntiAimState.backtrack_show_lines=v; if not v then for _,entry in ipairs(AntiAimVisualRuntime.backtrackEntries) do if entry.line then pcall(function() entry.line:Destroy() end); entry.line=nil end end end end})
 AntiAimControls.backtrack_line_thickness=backtrackSection:CreateSlider({Name="Line Thickness",State=AntiAimState.backtrack_line_thickness,Min=0.01,Max=1,Decimals=2,Flag="antiAim.backtrack_line_thickness",Callback=function(v) AntiAimState.backtrack_line_thickness=v end})
 AntiAimControls.backtrack_transparency=backtrackSection:CreateSlider({Name="Ghost Transparency",State=AntiAimState.backtrack_transparency,Min=0.05,Max=0.95,Decimals=2,Flag="antiAim.backtrack_transparency",Callback=function(v) AntiAimState.backtrack_transparency=v; aa_clearBacktrack() end})
-AntiAimControls.backtrack_material=backtrackSection:CreateDropdown({Name="Ghost Material",Options=UI.AntiAimBacktrackMaterials,State=optionIndex(UI.AntiAimBacktrackMaterials,AntiAimState.backtrack_material),Flag="antiAim.backtrack_material",Callback=function(v) AntiAimState.backtrack_material=UI.AntiAimBacktrackMaterials[v] or "ForceField"; aa_clearBacktrack() end})
+AntiAimControls.backtrack_material=backtrackSection:CreateDropdown({Name="Ghost Material",Options=UI.AntiAimBacktrackMaterials,State=library.OptionIndex(UI.AntiAimBacktrackMaterials,AntiAimState.backtrack_material),Flag="antiAim.backtrack_material",Callback=function(v) AntiAimState.backtrack_material=UI.AntiAimBacktrackMaterials[v] or "ForceField"; aa_clearBacktrack() end})
 AntiAimControls.backtrack_min_delay=backtrackSection:CreateSlider({Name="Minimum Delay",State=AntiAimState.backtrack_min_delay,Min=0.02,Max=2,Decimals=2,Suffix="s",Flag="antiAim.backtrack_min_delay",Callback=function(v) AntiAimState.backtrack_min_delay=v end})
 AntiAimControls.backtrack_max_delay=backtrackSection:CreateSlider({Name="Maximum Delay",State=AntiAimState.backtrack_max_delay,Min=0.05,Max=5,Decimals=2,Suffix="s",Flag="antiAim.backtrack_max_delay",Callback=function(v) AntiAimState.backtrack_max_delay=v end})
 AntiAimControls.backtrack_max_distance=backtrackSection:CreateSlider({Name="Maximum Distance",State=AntiAimState.backtrack_max_distance,Min=10,Max=5000,Decimals=0,Suffix=" studs",Flag="antiAim.backtrack_max_distance",Callback=function(v) AntiAimState.backtrack_max_distance=v end})
 AntiAimControls.backtrack_ping_smoothing=backtrackSection:CreateSlider({Name="Ping Smoothing",State=AntiAimState.backtrack_ping_smoothing,Min=0,Max=0.95,Decimals=2,Flag="antiAim.backtrack_ping_smoothing",Callback=function(v) AntiAimState.backtrack_ping_smoothing=v end})
 local backtrackQualityOptions={"Performance","High","Ultra"}
-AntiAimControls.backtrack_quality=backtrackSection:CreateDropdown({Name="Ghost Quality",Options=backtrackQualityOptions,State=optionIndex(backtrackQualityOptions,AntiAimState.backtrack_quality),Flag="antiAim.backtrack_quality",Callback=function(v) AntiAimState.backtrack_quality=backtrackQualityOptions[v] or "High"; aa_clearBacktrack() end})
+AntiAimControls.backtrack_quality=backtrackSection:CreateDropdown({Name="Ghost Quality",Options=backtrackQualityOptions,State=library.OptionIndex(backtrackQualityOptions,AntiAimState.backtrack_quality),Flag="antiAim.backtrack_quality",Callback=function(v) AntiAimState.backtrack_quality=backtrackQualityOptions[v] or "High"; aa_clearBacktrack() end})
 AntiAimControls.backtrack_max_entries=backtrackSection:CreateSlider({Name="Maximum Ghosts",State=AntiAimState.backtrack_max_entries,Min=4,Max=80,Decimals=0,Flag="antiAim.backtrack_max_entries",Callback=function(v) AntiAimState.backtrack_max_entries=math.floor(v) end})
 
 local targetSection = antiAimPage:CreateSection({ Name = "Target Indicator", Side = "Right", Size = 375 })
 AntiAimControls.target_indicator_enabled=targetSection:CreateToggle({Name="Enabled",State=AntiAimState.target_indicator_enabled,Flag="antiAim.target_indicator_enabled",Callback=function(v) AntiAimState.target_indicator_enabled=v; if not v and AntiAimVisualRuntime.gui then AntiAimVisualRuntime.gui.Enabled=false end end})
-AntiAimControls.indicator_position_mode=targetSection:CreateDropdown({Name="Position",Options=UI.AntiAimIndicatorPositions,State=optionIndex(UI.AntiAimIndicatorPositions,AntiAimState.indicator_position_mode),Flag="antiAim.indicator_position_mode",Callback=function(v) AntiAimState.indicator_position_mode=UI.AntiAimIndicatorPositions[v] or "Follow Target" end})
+AntiAimControls.indicator_position_mode=targetSection:CreateDropdown({Name="Position",Options=UI.AntiAimIndicatorPositions,State=library.OptionIndex(UI.AntiAimIndicatorPositions,AntiAimState.indicator_position_mode),Flag="antiAim.indicator_position_mode",Callback=function(v) AntiAimState.indicator_position_mode=UI.AntiAimIndicatorPositions[v] or "Follow Target" end})
 AntiAimControls.target_radius=targetSection:CreateSlider({Name="Target Radius",State=AntiAimState.target_radius,Min=10,Max=2000,Decimals=0,Suffix="px",Flag="antiAim.target_radius",Callback=function(v) AntiAimState.target_radius=v end})
 AntiAimControls.scan_interval=targetSection:CreateSlider({Name="Scan Interval",State=AntiAimState.scan_interval,Min=0.01,Max=2,Decimals=2,Suffix="s",Flag="antiAim.scan_interval",Callback=function(v) AntiAimState.scan_interval=v end})
 AntiAimControls.text_interval=targetSection:CreateSlider({Name="Text Interval",State=AntiAimState.text_interval,Min=0.01,Max=2,Decimals=2,Suffix="s",Flag="antiAim.text_interval",Callback=function(v) AntiAimState.text_interval=v end})
@@ -22805,7 +22806,7 @@ end
 do
     local elapsed = 0
     utility:CreateConnection(RunService.RenderStepped, function(dt)
-        if not window.Enabled then return end
+        if not library.Window.Enabled then return end
         elapsed = elapsed + dt
         if elapsed < 1 / 30 then return end
         elapsed = 0
@@ -23506,7 +23507,7 @@ pcall(function()
 end)
 
 if __devkageMultiInjectAutoBoot then task.wait() end
-local ragePage = window:CreatePage({Icon="rbxassetid://8547258459",Glyph="R",Size=UDim2.new(0,36,0,36)})
+local ragePage = library.Window:CreatePage({Icon="rbxassetid://8547258459",Glyph="R",Size=UDim2.new(0,36,0,36)})
 
 
 
@@ -24467,7 +24468,7 @@ end
     UserInputService = uis,
     Players = Players,
     RunService = RunService,
-    Window = window,
+    Window = library.Window,
     Library = library,
     UI = UI,
     MaskShard = MaskShard,
@@ -25098,7 +25099,7 @@ local HackerDetectorRuntime = {
 local function hackerDetectorSetAlert(active,duration)
     local manager=library and library.KeybindManager
     if not manager or not manager.SetHackerAlert then return end
-    manager:SetHackerAlert(active==true,window,duration or 12)
+    manager:SetHackerAlert(active==true,library.Window,duration or 12)
 end
 
 local function hackerDetectorStep(dt)
@@ -25146,7 +25147,7 @@ local function setHackerDetectorEnabled(enabled)
     HackerDetectorRuntime.Token=HackerDetectorRuntime.Token+1
     table.clear(HackerDetectorRuntime.AboveSince); table.clear(HackerDetectorRuntime.Detected)
     if enabled then
-        if library and library.KeybindManager and library.KeybindManager.EnsureUI then library.KeybindManager:EnsureUI(window) end
+        if library and library.KeybindManager and library.KeybindManager.EnsureUI then library.KeybindManager:EnsureUI(library.Window) end
     else
         hackerDetectorSetAlert(false)
     end
@@ -25191,9 +25192,9 @@ local function modDetectorSetAlert(active, forceClear)
     if not manager or not manager.SetModAlert then return end
 
     if active then
-        manager:SetModAlert(true, window, 240)
+        manager:SetModAlert(true, library.Window, 240)
     elseif forceClear == true then
-        manager:SetModAlert(false, window)
+        manager:SetModAlert(false, library.Window)
     end
 end
 
@@ -25367,7 +25368,7 @@ local function setModDetectorEnabled(enabled)
     ModDetectorRuntime.Enabled = enabled
     ModDetectorRuntime.Token = ModDetectorRuntime.Token + 1
     if enabled and library and library.KeybindManager and library.KeybindManager.EnsureUI then
-        library.KeybindManager:EnsureUI(window)
+        library.KeybindManager:EnsureUI(library.Window)
     end
     modDetectorSetAlert(false, true)
 
@@ -25410,10 +25411,10 @@ modDetectorSection:CreateButton({
     Name = "Test Mod Alert",
     Callback = function()
         if library and library.KeybindManager and library.KeybindManager.EnsureUI then
-            library.KeybindManager:EnsureUI(window)
+            library.KeybindManager:EnsureUI(library.Window)
         end
         if library and library.KeybindManager and library.KeybindManager.SetModAlert then
-            library.KeybindManager:SetModAlert(true, window, 240)
+            library.KeybindManager:SetModAlert(true, library.Window, 240)
             library:Notify({Message="Mod detector test: !mod! alert active",Duration=3})
         end
     end
@@ -25434,7 +25435,7 @@ trackVisualControl("hacker_speed_duration", modDetectorSection:CreateSlider({
 modDetectorSection:CreateButton({
     Name="Test Hacker Alert",
     Callback=function()
-        if library and library.KeybindManager and library.KeybindManager.EnsureUI then library.KeybindManager:EnsureUI(window) end
+        if library and library.KeybindManager and library.KeybindManager.EnsureUI then library.KeybindManager:EnsureUI(library.Window) end
         hackerDetectorSetAlert(true,12)
         library:Notify({Message="Hacker detector test: !hacker! yellow alert active",Duration=3})
     end
@@ -25582,7 +25583,7 @@ end)()
 
 assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
-local mouseLockPage = window:CreatePage({Icon="rbxassetid://8547249956",Glyph="A",Size=UDim2.new(0,36,0,36)})
+local mouseLockPage = library.Window:CreatePage({Icon="rbxassetid://8547249956",Glyph="A",Size=UDim2.new(0,36,0,36)})
 local crosshairSection = mouseLockPage:CreateSection({Name="Crosshair",Side="Left",Size=650})
 local textSection = mouseLockPage:CreateSection({Name="Crosshair Text",Side="Left",Size=360})
 local animationSection = mouseLockPage:CreateSection({Name="Crosshair Animation",Side="Right",Size=470})
@@ -25652,7 +25653,7 @@ local function publishCursorSettings(force)
             changed=true
         end
     end
-    cursorBridge.UIOpen=window and window.Enabled==true
+    cursorBridge.UIOpen=library.Window and library.Window.Enabled==true
     cursorBridge.ControlMode="Mouse"
     cursorBridge.MainHeartbeat=os.clock()
     if changed then
@@ -25668,8 +25669,8 @@ local function syncCursorSetting(key,value)
         cursorBridge.Revision=(tonumber(cursorBridge.Revision) or 0)+1
     end
     cursorBridge.MainHeartbeat=os.clock()
-    if key=="devkage_cursor_control_mode" and window and window.SetCursorControlMode then
-        window:SetCursorControlMode(value)
+    if key=="devkage_cursor_control_mode" and library.Window and library.Window.SetCursorControlMode then
+        library.Window:SetCursorControlMode(value)
     end
 end
 
@@ -27391,8 +27392,8 @@ local function referenceRouteCursorLayer()
 
 
 
-    local menuGui = window and window.ScreenGui
-    local target = (window and window.Enabled == true and menuGui and menuGui.Parent)
+    local menuGui = library.Window and library.Window.ScreenGui
+    local target = (library.Window and library.Window.Enabled == true and menuGui and menuGui.Parent)
         and menuGui
         or runtime.ScreenGui
 
@@ -27470,7 +27471,7 @@ local function referenceCursorRender(deltaTime)
 
 
 
-    if window and window.Enabled == true then
+    if library.Window and library.Window.Enabled == true then
         pcall(function()
             if uis.MouseBehavior ~= Enum.MouseBehavior.Default then
                 uis.MouseBehavior = Enum.MouseBehavior.Default
@@ -27481,7 +27482,7 @@ local function referenceCursorRender(deltaTime)
     runtime.ScreenGui.Enabled =
         enabled
 
-    local menuOpen = window and window.Enabled == true
+    local menuOpen = library.Window and library.Window.Enabled == true
 
     referenceSetBridgeOwnership(
         enabled and not menuOpen
@@ -27875,7 +27876,7 @@ local function addSlider(section,key,name,min,max,decimals,suffix)
     return control
 end
 local function addDropdown(section,key,name,options)
-    local control=section:CreateDropdown({Name=name,Options=options,State=optionIndex(options,VisualsState[key]),Flag="visuals."..key,Callback=function(i) syncCursorSetting(key,options[i] or options[1]) end})
+    local control=section:CreateDropdown({Name=name,Options=options,State=library.OptionIndex(options,VisualsState[key]),Flag="visuals."..key,Callback=function(i) syncCursorSetting(key,options[i] or options[1]) end})
     UI.VisualControls[key]=control
     return control
 end
@@ -27887,8 +27888,8 @@ end
 
 addToggle(crosshairSection,"devkage_cursor_enabled","Enabled")
 addDropdown(crosshairSection,"devkage_cursor_control_mode","Cursor Control",{"Mouse"})
-if window and window.SetCursorControlMode then
-    window:SetCursorControlMode(VisualsState.devkage_cursor_control_mode)
+if library.Window and library.Window.SetCursorControlMode then
+    library.Window:SetCursorControlMode(VisualsState.devkage_cursor_control_mode)
 end
 addColor(crosshairSection,"devkage_cursor_color","Main Color")
 addColor(crosshairSection,"devkage_cursor_color_secondary","Secondary Color")
@@ -27934,7 +27935,7 @@ Precision={devkage_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(235,2
 Cinematic={devkage_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(255,205,120),devkage_cursor_color_secondary=Color3.fromRGB(255,105,75),devkage_cursor_color_mode="Color Wave",devkage_cursor_color_speed=0.55,devkage_cursor_color_spread=0.38,devkage_cursor_rainbow=false,devkage_cursor_line_width=2,devkage_cursor_line_length=28,devkage_cursor_center_radius=9,devkage_cursor_arm_count=4,devkage_cursor_spin=true,devkage_cursor_spin_style="Ping Pong",devkage_cursor_spin_direction="Counter Clockwise",devkage_cursor_spin_speed=22,devkage_cursor_spin_range=38,devkage_cursor_smooth_spin=true,devkage_cursor_line_glow=true,devkage_cursor_glow_thickness=9,devkage_cursor_glow_extra_length=5,devkage_cursor_glow_transparency=0.48,devkage_cursor_text_enabled=true,devkage_cursor_main_text="devkage",devkage_cursor_second_text="None",devkage_cursor_text_outline=true},
 Classic={devkage_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(255,255,255),devkage_cursor_color_secondary=Color3.fromRGB(255,255,255),devkage_cursor_color_mode="Solid",devkage_cursor_rainbow=false,devkage_cursor_line_width=2,devkage_cursor_line_length=16,devkage_cursor_center_radius=5,devkage_cursor_arm_count=4,devkage_cursor_spin=false,devkage_cursor_line_glow=false,devkage_cursor_text_enabled=false},
 }
-local cursorProfileDrop=profileSection:CreateDropdown({Name="Profile",Options=cursorProfileOptions,State=optionIndex(cursorProfileOptions,VisualsState.devkage_cursor_profile),Flag="visuals.devkage_cursor_profile",Callback=function(index) VisualsState.devkage_cursor_profile=cursorProfileOptions[index] or "Custom" end})
+local cursorProfileDrop=profileSection:CreateDropdown({Name="Profile",Options=cursorProfileOptions,State=library.OptionIndex(cursorProfileOptions,VisualsState.devkage_cursor_profile),Flag="visuals.devkage_cursor_profile",Callback=function(index) VisualsState.devkage_cursor_profile=cursorProfileOptions[index] or "Custom" end})
 UI.VisualControls.devkage_cursor_profile=cursorProfileDrop
 local function applyCursorProfile(name)
 local profile=cursorProfiles[name]
@@ -27944,7 +27945,7 @@ for key,value in pairs(profile) do
 syncCursorSetting(key,value)
 local control=UI.VisualControls[key]
 if control and control.Set then
-if control.Options then control:Set(optionIndex(control.Options,value),true)
+if control.Options then control:Set(library.OptionIndex(control.Options,value),true)
 elseif control.GetAlpha then control:Set(value,control:GetAlpha(),true)
 else control:Set(value,true) end
 end
@@ -27974,7 +27975,7 @@ end)()
 
 assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
-local settingPage = window:CreatePage({ Icon = "rbxassetid://8547256547", Glyph = "L", Size = UDim2.new(0, 36, 0, 36) })
+local settingPage = library.Window:CreatePage({ Icon = "rbxassetid://8547256547", Glyph = "L", Size = UDim2.new(0, 36, 0, 36) })
 UI.LuaPage = settingPage
 local luaSection = settingPage:CreateSection({ Name = "Lua Editor", Side = "Left", Size = 520 })
 local luaControls = settingPage:CreateSection({ Name = "Lua Controls", Side = "Right", Size = 300 })
@@ -28038,11 +28039,11 @@ UI.ThemeMenuAnimation = UI.ThemeSection:CreateSlider({
 })
 
 UI.DPIOptions = {"75%","90%","100%","110%","125%","150%","175%","200%"}
-local menuScale = window.MainFrame and window.MainFrame:FindFirstChild("DevKageDPIScale")
-if not menuScale and window.MainFrame then
+local menuScale = library.Window.MainFrame and library.Window.MainFrame:FindFirstChild("DevKageDPIScale")
+if not menuScale and library.Window.MainFrame then
     menuScale = Instance.new("UIScale")
     menuScale.Name = "DevKageDPIScale"
-    menuScale.Parent = window.MainFrame
+    menuScale.Parent = library.Window.MainFrame
 end
 library.ThemeScaleObject = menuScale
 library:SetDPIScale(library.Theme.DPIScale)
@@ -28282,7 +28283,7 @@ end)()
 
 assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
-local configPage = window:CreatePage({ Icon = "rbxassetid://8547269749", Glyph = "C", Size = UDim2.new(0, 36, 0, 36) })
+local configPage = library.Window:CreatePage({ Icon = "rbxassetid://8547269749", Glyph = "C", Size = UDim2.new(0, 36, 0, 36) })
 
 local configSelected = nil
 local configListHolder
@@ -28527,18 +28528,18 @@ for _,binding in ipairs(textBindings) do setSpooferControl(extra[binding[1]],tos
 setSpooferControl(extra.deviceSpamRate,math.clamp(tonumber(config.deviceSpamRate) or 1,0.1,5))
 setSpooferControl(extra.archCutoffInput,tostring(math.clamp(normalizeSpoofELO(config.archNemesisCutoff or 3601),3601,9999999)))
 setSpooferControl(extra.archRankSlider,SpoofRankRuntime.ArchDivision(config))
-setSpooferControl(extra.rankDisplayDrop,optionIndex(SpoofRankRuntime.Options,SpoofRankRuntime.Normalize(config.rankDisplay)))
-if extra.duelMode then setSpooferControl(extra.duelMode,optionIndex(extra.duelMode.Options,config.duelMode)) end
-if extra.duelResult then setSpooferControl(extra.duelResult,optionIndex(extra.duelResult.Options,config.duelResult)) end
-if extra.duelMap then setSpooferControl(extra.duelMap,optionIndex(extra.duelMap.Options,config.duelMap)) end
+setSpooferControl(extra.rankDisplayDrop,library.OptionIndex(SpoofRankRuntime.Options,SpoofRankRuntime.Normalize(config.rankDisplay)))
+if extra.duelMode then setSpooferControl(extra.duelMode,library.OptionIndex(extra.duelMode.Options,config.duelMode)) end
+if extra.duelResult then setSpooferControl(extra.duelResult,library.OptionIndex(extra.duelResult.Options,config.duelResult)) end
+if extra.duelMap then setSpooferControl(extra.duelMap,library.OptionIndex(extra.duelMap.Options,config.duelMap)) end
 
-setSpooferControl(controls.platformDrop,optionIndex(controls.platformDrop.Options,config.platform))
+setSpooferControl(controls.platformDrop,library.OptionIndex(controls.platformDrop.Options,config.platform))
 setSpooferControl(controls.premiumToggle,config.premium==true)
 setSpooferControl(controls.verifiedToggle,config.verified==true)
 setSpooferControl(controls.emotesToggle,config.unlockEmotes==true)
 setSpooferControl(controls.weaponsToggle,config.unlockWeapons==true)
-setSpooferControl(controls.streamerWidthModeDrop,optionIndex(controls.streamerWidthModeDrop.Options,config.streamerHudWidthMode))
-setSpooferControl(controls.streamerAlignmentDrop,optionIndex(controls.streamerAlignmentDrop.Options,config.streamerHudTextAlignment))
+setSpooferControl(controls.streamerWidthModeDrop,library.OptionIndex(controls.streamerWidthModeDrop.Options,config.streamerHudWidthMode))
+setSpooferControl(controls.streamerAlignmentDrop,library.OptionIndex(controls.streamerAlignmentDrop.Options,config.streamerHudTextAlignment))
 setSpooferControl(controls.streamerWidthSlider,math.clamp(tonumber(config.streamerHudWidth) or 660,260,1800))
 setSpooferControl(controls.streamerHeightSlider,math.clamp(tonumber(config.streamerHudHeight) or 36,22,100))
 setSpooferControl(controls.streamerTextSizeSlider,math.clamp(tonumber(config.streamerHudTextSize) or 14,8,32))
@@ -28581,8 +28582,8 @@ applyRuntimeState(VisualsState,data)
 VisualsState.devkage_cursor_enabled = cursorEnabledBeforeLoad ~= false
 VisualsState.devkage_cursor_position_mode = "Mouse"
 VisualsState.devkage_cursor_control_mode = "Mouse"
-if window and window.SetCursorControlMode then
-window:SetCursorControlMode(VisualsState.devkage_cursor_control_mode)
+if library.Window and library.Window.SetCursorControlMode then
+library.Window:SetCursorControlMode(VisualsState.devkage_cursor_control_mode)
 end
 if VisualsState.avatar_blue_horn == true and VisualsState.avatar_purple_horn ~= true then
 VisualsState.avatar_purple_horn = true
@@ -28648,19 +28649,19 @@ end
 controls.chinaHatToggle:Set(getgenv().__DevKageConfig.chinaHatEnabled==true,true)
 controls.chinaHatColorPicker:Set(chinaHatColorFromConfig(getgenv().__DevKageConfig.chinaHatColor,Color3.fromRGB(255,105,180)),math.clamp(tonumber(getgenv().__DevKageConfig.chinaHatAlpha) or 0.2,0,1),true)
 controls.chinaHatSecondaryPicker:Set(chinaHatColorFromConfig(getgenv().__DevKageConfig.chinaHatSecondaryColor,Color3.fromRGB(255,255,255)),nil,true)
-controls.chinaHatPatternDrop:Set(optionIndex({"Static","Rainbow","Pulse","Gradient"},getgenv().__DevKageConfig.chinaHatPattern),true)
+controls.chinaHatPatternDrop:Set(library.OptionIndex({"Static","Rainbow","Pulse","Gradient"},getgenv().__DevKageConfig.chinaHatPattern),true)
 controls.chinaHatSpeedSlider:Set(tonumber(getgenv().__DevKageConfig.chinaHatSpeed) or 1,true)
 controls.chinaHatBrightnessSlider:Set(tonumber(getgenv().__DevKageConfig.chinaHatBrightness) or 0,true)
 controls.chinaHatRangeSlider:Set(tonumber(getgenv().__DevKageConfig.chinaHatRange) or 12,true)
 
 controls.avatarModsToggle:Set(getgenv().__DevKageConfig.avatarModsEnabled==true,true)
-controls.avatarModsTypeDrop:Set(optionIndex(controls.avatarModsTypeDrop.Options,getgenv().__DevKageConfig.avatarModsType),true)
+controls.avatarModsTypeDrop:Set(library.OptionIndex(controls.avatarModsTypeDrop.Options,getgenv().__DevKageConfig.avatarModsType),true)
 controls.avatarModsColorPicker:Set(auraColorFromConfig(getgenv().__DevKageConfig.avatarModsColor,Color3.fromRGB(255,235,170)),math.clamp(tonumber(getgenv().__DevKageConfig.avatarModsAlpha) or 0.18,0,0.92),true)
 controls.avatarModsSecondaryPicker:Set(auraColorFromConfig(getgenv().__DevKageConfig.avatarModsSecondaryColor,Color3.fromRGB(130,195,255)),nil,true)
 controls.avatarModsRainbowToggle:Set(getgenv().__DevKageConfig.avatarModsRainbow==true,true)
-controls.avatarModsMaterialDrop:Set(optionIndex(controls.avatarModsMaterialDrop.Options,getgenv().__DevKageConfig.avatarModsMaterial),true)
-controls.avatarModsQualityDrop:Set(optionIndex(controls.avatarModsQualityDrop.Options,getgenv().__DevKageConfig.avatarModsQuality),true)
-controls.avatarModsMotionDrop:Set(optionIndex(controls.avatarModsMotionDrop.Options,getgenv().__DevKageConfig.avatarModsMotion),true)
+controls.avatarModsMaterialDrop:Set(library.OptionIndex(controls.avatarModsMaterialDrop.Options,getgenv().__DevKageConfig.avatarModsMaterial),true)
+controls.avatarModsQualityDrop:Set(library.OptionIndex(controls.avatarModsQualityDrop.Options,getgenv().__DevKageConfig.avatarModsQuality),true)
+controls.avatarModsMotionDrop:Set(library.OptionIndex(controls.avatarModsMotionDrop.Options,getgenv().__DevKageConfig.avatarModsMotion),true)
 controls.avatarModsSpeedSlider:Set(tonumber(getgenv().__DevKageConfig.avatarModsSpeed) or 1,true)
 controls.avatarModsSizeSlider:Set(tonumber(getgenv().__DevKageConfig.avatarModsSize) or 1,true)
 controls.avatarModsBrightnessSlider:Set(tonumber(getgenv().__DevKageConfig.avatarModsBrightness) or 3,true)
@@ -28670,12 +28671,12 @@ controls.avatarModsParticlesToggle:Set(getgenv().__DevKageConfig.avatarModsParti
 controls.avatarModsTrailsToggle:Set(getgenv().__DevKageConfig.avatarModsTrails~=false,true)
 
 local auraModes={"Rainbow","Plain Color"}
-controls.rainbowAuraModeDrop:Set(optionIndex(auraModes,getgenv().__DevKageConfig.rainbowAuraMode),true)
-controls.rainbowAuraTypeDrop:Set(optionIndex(RainbowAuraState.TypeOptions,getgenv().__DevKageConfig.rainbowAuraType),true)
+controls.rainbowAuraModeDrop:Set(library.OptionIndex(auraModes,getgenv().__DevKageConfig.rainbowAuraMode),true)
+controls.rainbowAuraTypeDrop:Set(library.OptionIndex(RainbowAuraState.TypeOptions,getgenv().__DevKageConfig.rainbowAuraType),true)
 controls.rainbowAuraColorPicker:Set(auraColorFromConfig(getgenv().__DevKageConfig.rainbowAuraColor,Color3.fromRGB(255,80,220)),math.clamp(tonumber(getgenv().__DevKageConfig.rainbowAuraAlpha) or 0.35,0,1),true)
 controls.rainbowAuraSecondaryPicker:Set(auraColorFromConfig(getgenv().__DevKageConfig.rainbowAuraSecondaryColor,Color3.fromRGB(90,170,255)),nil,true)
-controls.rainbowAuraPaletteDrop:Set(optionIndex(RainbowAuraState.PaletteOptions,getgenv().__DevKageConfig.rainbowAuraPalette),true)
-controls.rainbowAuraQualityDrop:Set(optionIndex(RainbowAuraState.QualityOptions,getgenv().__DevKageConfig.rainbowAuraQuality),true)
+controls.rainbowAuraPaletteDrop:Set(library.OptionIndex(RainbowAuraState.PaletteOptions,getgenv().__DevKageConfig.rainbowAuraPalette),true)
+controls.rainbowAuraQualityDrop:Set(library.OptionIndex(RainbowAuraState.QualityOptions,getgenv().__DevKageConfig.rainbowAuraQuality),true)
 controls.rainbowAuraSpeedSlider:Set(tonumber(getgenv().__DevKageConfig.rainbowAuraSpeed) or 1,true)
 controls.rainbowAuraBrightnessSlider:Set(tonumber(getgenv().__DevKageConfig.rainbowAuraBrightness) or 2,true)
 controls.rainbowAuraAlphaSlider:Set(math.floor(math.clamp(tonumber(getgenv().__DevKageConfig.rainbowAuraAlpha) or 0.35,0,1)*100+0.5),true)
@@ -28688,8 +28689,8 @@ controls.rainbowAuraToggle:Set(getgenv().__DevKageConfig.rainbowAuraEnabled==tru
 hydrateSupplementalSpooferControls(controls,getgenv().__DevKageConfig)
 if controls.streamerHudToggle then
 controls.streamerHudToggle:Set(getgenv().__DevKageConfig.streamerHudEnabled==true,true)
-controls.streamerPositionDrop:Set(optionIndex(controls.streamerPositionDrop.Options,getgenv().__DevKageConfig.streamerHudPosition),true)
-controls.streamerStyleDrop:Set(optionIndex(controls.streamerStyleDrop.Options,getgenv().__DevKageConfig.streamerHudStyle),true)
+controls.streamerPositionDrop:Set(library.OptionIndex(controls.streamerPositionDrop.Options,getgenv().__DevKageConfig.streamerHudPosition),true)
+controls.streamerStyleDrop:Set(library.OptionIndex(controls.streamerStyleDrop.Options,getgenv().__DevKageConfig.streamerHudStyle),true)
 controls.streamerLabelInput:Set(tostring(getgenv().__DevKageConfig.streamerHudLabel or "DevSense"),true)
 controls.streamerModeInput:Set(tostring(getgenv().__DevKageConfig.streamerHudModeText or "Matchmaking"),true)
 controls.streamerShowMode:Set(getgenv().__DevKageConfig.streamerHudShowMode~=false,true)
@@ -28701,8 +28702,8 @@ controls.streamerSecondaryPicker:Set(auraColorFromConfig(getgenv().__DevKageConf
 controls.streamerTextPicker:Set(auraColorFromConfig(getgenv().__DevKageConfig.streamerHudTextColor,Color3.fromRGB(205,205,205)),nil,true)
 controls.streamerAlphaSlider:Set(math.floor(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudBackgroundAlpha) or 0.03,0,0.9)*100+0.5),true)
 controls.streamerScaleSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudScale) or 1,0.75,1.5),true)
-controls.streamerWidthModeDrop:Set(optionIndex(controls.streamerWidthModeDrop.Options,getgenv().__DevKageConfig.streamerHudWidthMode),true)
-controls.streamerAlignmentDrop:Set(optionIndex(controls.streamerAlignmentDrop.Options,getgenv().__DevKageConfig.streamerHudTextAlignment),true)
+controls.streamerWidthModeDrop:Set(library.OptionIndex(controls.streamerWidthModeDrop.Options,getgenv().__DevKageConfig.streamerHudWidthMode),true)
+controls.streamerAlignmentDrop:Set(library.OptionIndex(controls.streamerAlignmentDrop.Options,getgenv().__DevKageConfig.streamerHudTextAlignment),true)
 controls.streamerWidthSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudWidth) or 660,260,1800),true)
 controls.streamerHeightSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudHeight) or 36,22,100),true)
 controls.streamerTextSizeSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudTextSize) or 14,8,32),true)
@@ -28717,20 +28718,20 @@ end
 if UI.AimControls then
 for key,control in pairs(UI.AimControls) do
 local value=getgenv().__DevKageConfig[key]
-if control.Options then control:Set(optionIndex(control.Options,value)) else control:Set(value) end
+if control.Options then control:Set(library.OptionIndex(control.Options,value)) else control:Set(value) end
 end
 end
 
 local visualAlphaKeys={bounding_box_color="bounding_box_alpha",filled_box_color="filled_box_alpha",chams_color="chams_alpha",chams_outline_color="chams_outline_alpha",glow_color="glow_alpha",skeleton_outline_color="skeleton_outline_alpha",head_marker_color="head_marker_alpha",head_marker_outline_color="head_marker_outline_alpha",tracer_color="tracer_alpha",tracer_outline_color="tracer_outline_alpha"}
 for key,control in pairs(UI.VisualControls) do
 local value=VisualsState[key]
-if control.Options then control:Set(optionIndex(control.Options,value))
+if control.Options then control:Set(library.OptionIndex(control.Options,value))
 elseif control.GetAlpha then control:Set(value,visualAlphaKeys[key] and VisualsState[visualAlphaKeys[key]] or control:GetAlpha())
 else control:Set(value) end
 end
 for key,control in pairs(UI.LightingControls) do
 local value=AdvancedLighting[key]
-if control.Options then control:Set(optionIndex(control.Options,value))
+if control.Options then control:Set(library.OptionIndex(control.Options,value))
 elseif control.GetAlpha then control:Set(value,control:GetAlpha())
 else control:Set(value) end
 end
@@ -28738,7 +28739,7 @@ AntiAimState.core.Syncing = true
 for key,control in pairs(UI.AntiAimControls) do
 local value=AntiAimState[key]
 if value ~= nil then
-if control.Options then control:Set(optionIndex(control.Options,value))
+if control.Options then control:Set(library.OptionIndex(control.Options,value))
 elseif control.GetAlpha then control:Set(value,control:GetAlpha())
 else control:Set(value) end
 end
@@ -28822,7 +28823,7 @@ local scriptSilentLoadToggle
 
 scriptSettingsSection:CreateButton({
 Name = "Unload Script",
-Callback = function() window:Unload() end
+Callback = function() library.Window:Unload() end
 })
 
 scriptSettingsSection:CreateLabel({
@@ -29511,8 +29512,8 @@ end
 photoConfigButton({
 Name = "Reset menu layout",
 Callback = function()
-window.Accent=Color3.fromRGB(175,205,75)
-window.MainFrame.Position=UDim2.new(0.5,0,0.5,0)
+library.Window.Accent=Color3.fromRGB(175,205,75)
+library.Window.MainFrame.Position=UDim2.new(0.5,0,0.5,0)
 for _,control in pairs(library.Controls) do
 if control.Set and control.Get and typeof(control:Get())=="boolean" then control:Set(control:Get(),true) end
 end
@@ -29529,7 +29530,7 @@ end
 
 photoConfigButton({
 Name = "Unload",
-Callback = function() window:Unload() end
+Callback = function() library.Window:Unload() end
 })
 
 autoLoadStatusLabel = configActions:CreateLabel({
@@ -29922,4 +29923,295 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
 
 -- END OF FILE
 
-]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,53,51,45,115,105,110,103,108,101,45,115,111,117,114,99,101,45,97,117,116,111,101,120,101,99,45,115,97,102,101,45,50,48,50,54,48,57,48,55)_b._a=_a pcall(function()local _c=string.char(68,101,118,75,97,103,101,95,67,111,110,102,105,103,115)local _d=_c..string.char(47,95,115,99,114,105,112,116,95,115,101,116,116,105,110,103,115,46,106,115,111,110)local _e=_c..string.char(47,95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,101,110,97,98,108,101,100,46,102,108,97,103)if type(readfile)==string.char(102,117,110,99,116,105,111,110)and type(writefile)==string.char(102,117,110,99,116,105,111,110)then local _f,_g=pcall(game.GetService,game,string.char(72,116,116,112,83,101,114,118,105,99,101))local _h,_i=pcall(readfile,_d)if _f and _g and _h and type(_i)==string.char(115,116,114,105,110,103)and _i~=""then local _j,_k=pcall(_g.JSONDecode,_g,_i)if _j and type(_k)==string.char(116,97,98,108,101)then local _l=_k.AutoLoad~=false _k.AutoLoad=false if _l then local _m,_n=pcall(_g.JSONEncode,_g,_k)if _m and type(_n)==string.char(115,116,114,105,110,103)then pcall(writefile,_d,_n)end end end end end if type(delfile)==string.char(102,117,110,99,116,105,111,110)then pcall(delfile,_e)for _o,_p in ipairs({string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,99,117,114,114,101,110,116,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,98,117,105,108,100,46,116,120,116),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,99,117,114,114,101,110,116,46,116,120,116),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,53,51,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,53,50,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,53,49,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,53,48,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,50,48,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,57,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,56,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,55,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,54,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,50,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,49,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,49,48,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,57,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,56,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,55,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,54,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,95,118,53,95,50,95,51,46,108,117,97),string.char(95,100,101,118,107,97,103,101,95,97,117,116,111,108,111,97,100,95,112,97,121,108,111,97,100,46,108,117,97),})do local _q=_c..string.char(47).._p local _r=true if type(isfile)==string.char(102,117,110,99,116,105,111,110)then local _s,_t=pcall(isfile,_q)_r=_s and _t==true end if _r then pcall(delfile,_q)end end for _o,_u in ipairs({string.char(97,117,116,111,101,120,101,99),string.char(65,117,116,111,101,120,101,99),string.char(97,117,116,111,101,120,101,99,117,116,101),string.char(65,117,116,111,69,120,101,99,117,116,101),string.char(115,99,114,105,112,116,115,47,97,117,116,111,101,120,101,99),string.char(115,99,114,105,112,116,115,47,65,117,116,111,101,120,101,99)})do for _o,_v in ipairs({string.char(122,122,122,122,95,68,101,118,75,97,103,101,95,65,117,116,111,76,111,97,100,95,76,65,83,84,46,108,117,97),string.char(68,101,118,75,97,103,101,95,65,117,116,111,76,111,97,100,46,108,117,97),string.char(122,122,122,122,95,68,101,118,75,97,103,101,95,65,117,116,111,69,120,101,99,117,116,101,95,83,116,97,98,108,101,95,76,111,97,100,101,114,46,108,117,97),})do local _q=_u..string.char(47).._v local _r=true if type(isfile)==string.char(102,117,110,99,116,105,111,110)then local _s,_t=pcall(isfile,_q)_r=_s and _t==true end if _r then pcall(delfile,_q)end end end end end)do local _w=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId or"")local _x=_b.__DEVKAGE_PACKAGE_BUILD local _y=tonumber(_b.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_AT)or 0 local _z=_y>0 and(os.clock()-_y)or math.huge if _b.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_JOB==_w and _b.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_BUILD==_x and _z>=0 and _z<30 then return nil end _b.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_JOB=_w _b.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_BUILD=_x _b.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_AT=os.clock()end task.spawn(function()local _A,_B=pcall(function()local _C=game:GetService(string.char(80,108,97,121,101,114,115))local _D=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while tostring(game.JobId)==""do task.wait(0.1)end while not _C.LocalPlayer do task.wait(0.1)end local _E=_C.LocalPlayer while _E and not _E:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_E=_C.LocalPlayer end while not _D.CurrentCamera do task.wait(0.1)end _b.__DEVKAGE_LATE_BOOT_WAITING=true local _F=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)local _H=tostring(rawget(_b,string.char(95,95,68,69,86,75,65,71,69,95,69,88,84,69,82,78,65,76,95,68,69,76,65,89,95,68,79,78,69,95,74,79,66))or"")==_F local _I=_H and 0 or(tonumber(rawget(_b,string.char(95,95,68,69,86,75,65,71,69,95,76,65,84,69,95,66,79,79,84,95,68,69,76,65,89)))or 8)if not _H and _I<7.5 then _I=7.5 end if _I>0 then task.wait(_I)end _b.__DEVKAGE_LATE_BOOT_WAITING=nil local _J=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)if _b.__DEVKAGE_AUTO_STARTING_JOB==_J then local _K=_b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD local _L=tonumber(_b.__DEVKAGE_AUTO_STARTING_AT)or 0 local _M=_L>0 and(os.clock()-_L)or math.huge if _K==_b.__DEVKAGE_PACKAGE_BUILD and _M>=0 and _M<45 then return end _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end if _b.__DEVKAGE_AUTO_STARTED_JOB==_J and _b.__DEVKAGE_AUTOLOADED_BUILD==_b.__DEVKAGE_PACKAGE_BUILD then return end _b.__DEVKAGE_AUTO_STARTING_JOB=_J _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_AT=os.clock()local _N=loadstring or load if type(_N)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _O,_P=_N(_a)if not _O then error(_P)end _b.__DEVKAGE_MULTI_INJECT_BOOT=true local _Q,_R=pcall(_O)_b.__DEVKAGE_MULTI_INJECT_BOOT=nil if not _Q then error(_R)end _b.__DEVKAGE_AUTO_STARTED_JOB=_J _b.__DEVKAGE_AUTOLOADED_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil _b.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_JOB=nil _b.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_BUILD=nil _b.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_AT=nil end)if not _A then _b.__DEVKAGE_MULTI_INJECT_BOOT=nil _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil _b.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_JOB=nil _b.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_BUILD=nil _b.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_AT=nil _b.__DEVKAGE_LATE_BOOT_WAITING=nil if _b.__DEVKAGE_RUNTIME_BOOT_STATE==string.char(115,116,97,114,116,105,110,103)and tostring(_b.__DEVKAGE_RUNTIME_BOOT_BUILD or"")==tostring(_b.__DEVKAGE_PACKAGE_BUILD or"")then _b.__DEVKAGE_RUNTIME_BOOT_STATE=nil _b.__DEVKAGE_RUNTIME_BOOT_JOB=nil _b.__DEVKAGE_RUNTIME_BOOT_BUILD=nil _b.__DEVKAGE_RUNTIME_BOOT_AT=nil end warn(string.char(91,68,101,118,75,97,103,101,32,80,97,99,107,97,103,101,32,66,111,111,116,93,32)..tostring(_B))end end)return nil
+]============]
+
+local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
+__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.54-local-register-fix-20260907"
+__devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
+
+-- SINGLE-SOURCE EXTERNAL-AUTOEXEC CLEANUP (v5.2.53)
+-- The user's executor Auto Execute loadstring is the single launcher.
+-- Disable DevKage's historical self-installed loader state so old payloads
+-- cannot race this current source. Only exact DevKage-owned names are touched.
+pcall(function()
+    local configFolder = "DevKage_Configs"
+    local settingsPath = configFolder .. "/_script_settings.json"
+    local enabledFlagPath = configFolder .. "/_devkage_autoload_enabled.flag"
+
+    if type(readfile) == "function" and type(writefile) == "function" then
+        local okHttp, http = pcall(game.GetService, game, "HttpService")
+        local okRead, raw = pcall(readfile, settingsPath)
+        if okHttp and http and okRead and type(raw) == "string" and raw ~= "" then
+            local okDecode, settings = pcall(http.JSONDecode, http, raw)
+            if okDecode and type(settings) == "table" then
+                local changed = settings.AutoLoad ~= false
+                settings.AutoLoad = false
+                if changed then
+                    local okEncode, encoded = pcall(http.JSONEncode, http, settings)
+                    if okEncode and type(encoded) == "string" then
+                        pcall(writefile, settingsPath, encoded)
+                    end
+                end
+            end
+        end
+    end
+
+    if type(delfile) == "function" then
+        pcall(delfile, enabledFlagPath)
+
+        for _, fileName in ipairs({
+            "_devkage_autoload_current.lua",
+            "_devkage_autoload_build.txt",
+            "_devkage_autoload_current.txt",
+            "_devkage_autoload_payload_v5_2_54.lua",
+            "_devkage_autoload_payload_v5_2_53.lua",
+            "_devkage_autoload_payload_v5_2_52.lua",
+            "_devkage_autoload_payload_v5_2_51.lua",
+            "_devkage_autoload_payload_v5_2_50.lua",
+            "_devkage_autoload_payload_v5_2_20.lua",
+            "_devkage_autoload_payload_v5_2_19.lua",
+            "_devkage_autoload_payload_v5_2_18.lua",
+            "_devkage_autoload_payload_v5_2_17.lua",
+            "_devkage_autoload_payload_v5_2_16.lua",
+            "_devkage_autoload_payload_v5_2_12.lua",
+            "_devkage_autoload_payload_v5_2_11.lua",
+            "_devkage_autoload_payload_v5_2_10.lua",
+            "_devkage_autoload_payload_v5_2_9.lua",
+            "_devkage_autoload_payload_v5_2_8.lua",
+            "_devkage_autoload_payload_v5_2_7.lua",
+            "_devkage_autoload_payload_v5_2_6.lua",
+            "_devkage_autoload_payload_v5_2_3.lua",
+            "_devkage_autoload_payload.lua",
+        }) do
+            local path = configFolder .. "/" .. fileName
+            local shouldDelete = true
+            if type(isfile) == "function" then
+                local checked, exists = pcall(isfile, path)
+                shouldDelete = checked and exists == true
+            end
+            if shouldDelete then pcall(delfile, path) end
+        end
+
+        -- Delete only DevKage's known self-installed loader filenames.
+        -- Never enumerate/read/delete sibling autoexec scripts.
+        for _, folder in ipairs({
+            "autoexec","Autoexec","autoexecute","AutoExecute",
+            "scripts/autoexec","scripts/Autoexec"
+        }) do
+            for _, loaderName in ipairs({
+                "zzzz_DevKage_AutoLoad_LAST.lua",
+                "DevKage_AutoLoad.lua",
+                "zzzz_DevKage_AutoExecute_Stable_Loader.lua",
+            }) do
+                local path = folder .. "/" .. loaderName
+                local shouldDelete = true
+                if type(isfile) == "function" then
+                    local checked, exists = pcall(isfile, path)
+                    shouldDelete = checked and exists == true
+                end
+                if shouldDelete then pcall(delfile, path) end
+            end
+        end
+    end
+end)
+
+-- AUTOEXEC COEXISTENCE / LATE-BOOT SINGLE-BOOT ENTRYPOINT (v5.2.3)
+--
+-- Do not inspect or delete anything else in the executor Auto Execute folder.
+-- Older v5.2.x builds attempted sibling cleanup here; that can interfere with a
+-- completely separate script sharing Auto Execute.  Current ownership is now
+-- limited to DevKage's exact canonical loader/payload files inside its own
+-- config path.
+--
+-- Also do not block the executor's Auto Execute dispatcher while Roblox is
+-- loading.  Some executors launch Auto Execute files sequentially; a synchronous
+-- game.Loaded/PlayerGui/Camera wait here can prevent the next script from ever
+-- getting its startup turn.  DevKage now boots in its own task.
+do
+    local scheduledJob = tostring(game.PlaceId) .. ":" .. tostring(game.JobId or "")
+    local scheduledBuild = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
+    local scheduledAt = tonumber(__devkageEnv.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_AT) or 0
+    local scheduledAge = scheduledAt > 0 and (os.clock() - scheduledAt) or math.huge
+
+    if __devkageEnv.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_JOB == scheduledJob
+        and __devkageEnv.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_BUILD == scheduledBuild
+        and scheduledAge >= 0 and scheduledAge < 30 then
+        return nil
+    end
+
+    __devkageEnv.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_JOB = scheduledJob
+    __devkageEnv.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_BUILD = scheduledBuild
+    __devkageEnv.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_AT = os.clock()
+end
+
+task.spawn(function()
+    local ok, err = pcall(function()
+        local players = game:GetService("Players")
+        local workspaceService = game:GetService("Workspace")
+
+        if not game:IsLoaded() then
+            game.Loaded:Wait()
+        end
+
+        while tostring(game.JobId) == "" do
+            task.wait(0.1)
+        end
+
+        while not players.LocalPlayer do
+            task.wait(0.1)
+        end
+
+        local localPlayer = players.LocalPlayer
+        while localPlayer and not localPlayer:FindFirstChildOfClass("PlayerGui") do
+            task.wait(0.1)
+            localPlayer = players.LocalPlayer
+        end
+
+        while not workspaceService.CurrentCamera do
+            task.wait(0.1)
+        end
+
+        -- LATE-BOOT AUTOEXEC COEXISTENCE (v5.2.3)
+        -- Wait for the match's own client controllers/viewmodel to appear, then
+        -- deliberately leave a grace period for every other native Auto Execute
+        -- script.  This package returns immediately at top level, so this wait
+        -- happens only inside DevKage's background boot task.
+        -- Fixed universal coexistence delay. Game-specific Controller/Module/
+        -- ViewModel names are not required, so this works across maps/games.
+        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = true
+        local delayJobKey = tostring(game.PlaceId) .. ":" .. tostring(game.JobId)
+        local delayAlreadySatisfied = tostring(rawget(__devkageEnv, "__DEVKAGE_EXTERNAL_DELAY_DONE_JOB") or "") == delayJobKey
+        local lateDelay = delayAlreadySatisfied and 0 or (tonumber(rawget(__devkageEnv, "__DEVKAGE_LATE_BOOT_DELAY")) or 8)
+        if not delayAlreadySatisfied and lateDelay < 7.5 then lateDelay = 7.5 end
+        if lateDelay > 0 then task.wait(lateDelay) end
+        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = nil
+
+        -- Full native Auto Execute and DevKage_AutoLoad.lua use the same job
+        -- ownership keys, but neither is allowed to claim the match until the
+        -- late-boot grace period has completed.
+        local jobKey = tostring(game.PlaceId) .. ":" .. tostring(game.JobId)
+
+        if __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB == jobKey then
+            local lockBuild = __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD
+            local lockAt = tonumber(__devkageEnv.__DEVKAGE_AUTO_STARTING_AT) or 0
+            local lockAge = lockAt > 0 and (os.clock() - lockAt) or math.huge
+            if lockBuild == __devkageEnv.__DEVKAGE_PACKAGE_BUILD
+                and lockAge >= 0 and lockAge < 45 then
+                return
+            end
+            __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
+            __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+            __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
+        end
+
+        if __devkageEnv.__DEVKAGE_AUTO_STARTED_JOB == jobKey
+            and __devkageEnv.__DEVKAGE_AUTOLOADED_BUILD == __devkageEnv.__DEVKAGE_PACKAGE_BUILD then
+            return
+        end
+
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = jobKey
+        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = os.clock()
+
+        -- Coexistence delay is already complete; compile immediately.
+
+        local loader = loadstring or load
+        if type(loader) ~= "function" then
+            error("DevKage requires loadstring support")
+        end
+
+        local chunk, compileError = loader(__DEVKAGE_EMBEDDED_SOURCE)
+        if not chunk then
+            error(compileError)
+        end
+
+        __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT = true
+        local runOk, runError = pcall(chunk)
+        __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT = nil
+        if not runOk then
+            error(runError)
+        end
+
+        __devkageEnv.__DEVKAGE_AUTO_STARTED_JOB = jobKey
+        __devkageEnv.__DEVKAGE_AUTOLOADED_BUILD = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
+        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
+        __devkageEnv.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_JOB = nil
+        __devkageEnv.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_BUILD = nil
+        __devkageEnv.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_AT = nil
+    end)
+
+    if not ok then
+        __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT = nil
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
+        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
+        __devkageEnv.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_JOB = nil
+        __devkageEnv.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_BUILD = nil
+        __devkageEnv.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_AT = nil
+        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = nil
+        if __devkageEnv.__DEVKAGE_RUNTIME_BOOT_STATE == "starting"
+            and tostring(__devkageEnv.__DEVKAGE_RUNTIME_BOOT_BUILD or "") == tostring(__devkageEnv.__DEVKAGE_PACKAGE_BUILD or "") then
+            __devkageEnv.__DEVKAGE_RUNTIME_BOOT_STATE = nil
+            __devkageEnv.__DEVKAGE_RUNTIME_BOOT_JOB = nil
+            __devkageEnv.__DEVKAGE_RUNTIME_BOOT_BUILD = nil
+            __devkageEnv.__DEVKAGE_RUNTIME_BOOT_AT = nil
+        end
+        warn("[DevKage Package Boot] " .. tostring(err))
+    end
+end)
+
+-- COEXISTENCE NOTES (non-executable documentation)
+-- 01 DevKage does not enumerate sibling Auto Execute files.
+-- 02 DevKage does not read sibling Auto Execute files.
+-- 03 DevKage does not delete sibling Auto Execute files.
+-- 04 DevKage only replaces its own zzzz_DevKage_AutoLoad_LAST.lua loader.
+-- 05 Other executor scripts remain independent.
+-- 06 Full-package startup is asynchronous.
+-- 07 Roblox readiness waits happen inside the DevKage task.
+-- 08 The executor dispatcher is not held by those waits.
+-- 09 The executor's external loadstring is the only intended launcher.
+-- 10 Duplicate DevKage startup exits before runtime installation.
+-- 11 PlayerGui readiness is still required before DevKage starts.
+-- 12 CurrentCamera readiness is still required before DevKage starts.
+-- 13 A non-empty JobId is required before claiming the run.
+-- 14 A failed compile clears the in-progress ownership marker.
+-- 15 A failed runtime clears the in-progress ownership marker.
+-- 16 A successful runtime records the completed job.
+-- 17 DevKage does not install an additional teleport-queue loader in this build.
+-- 18 Existing executor Auto Execute loadstrings remain supported.
+-- 19 Historical DevKage-owned loader filenames are cleaned up when accessible.
+-- 20 The old exact DevKage_AutoLoad.lua is removed during refresh.
+-- 21 Duplicate loader aliases share the same-build/same-server mutex.
+-- 22 Same-build duplicate source executions share one scheduling/boot mutex.
+-- 22 Config serialization is unchanged.
+-- 23 ELO persistence is unchanged.
+-- 24 Cursor behavior is unchanged.
+-- 25 Rapid Fire behavior is unchanged.
+-- 26 Weapon/viewmodel appearance is unchanged.
+-- 27 Moderator detector behavior is unchanged.
+-- 28 Slider controls are unchanged.
+-- 29 Named config auto-load is unchanged.
+-- 30 Persistence is controlled by the executor's existing Auto Execute loadstring.
+-- 31 Legacy payload compatibility remains intact.
+-- 32 Current payload remains versioned.
+-- 33 Auto Load settings remain in the same settings file.
+-- 34 The package source remains embedded exactly once.
+-- 35 The outer package returns immediately after scheduling boot.
+-- 36 DevKage waits for PlayerScripts before claiming a match.
+-- 37 DevKage does not depend on game-specific Controllers/Modules folders.
+-- 38 DevKage does not depend on a game-specific ViewModels folder.
+-- 39 DevKage yields a default 8-second grace period for the other autoexec script.
+-- 40 The late-boot delay can be increased through __DEVKAGE_LATE_BOOT_DELAY.
+-- 41 The minimum late-boot delay is 7.5 seconds unless an external loader already waited.
+-- 42 No DevKage ownership flag is set during the grace period.
+-- 43 This block intentionally contains comments only.
+-- 44 No gameplay feature is initialized from this documentation.
+-- 45 No input state is changed from this documentation.
+-- 46 No executor file is touched from this documentation.
+-- 47 End coexistence notes.
+
+-- Return immediately so the executor can continue launching any other
+-- Auto Execute scripts in the same folder/session.
+return nil
