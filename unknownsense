@@ -1,4 +1,4 @@
--- DEVKAGE v5.2.49 STABILITY BUILD r5
+-- DEVKAGE v5.2.49 STABILITY BUILD r6 MAIN
 -- Silent Aim removed. Slim runtime: no self-embedded package wrapper.
 -- Duplicate live executions are ignored; startup work is cooperatively staggered.
 local maskShardShutdownKey = {}
@@ -538,7 +538,7 @@ end
 
 
 
-__devkageEnv.__DEVKAGE_RUNTIME_VERSION = "DevKage-v5.2.49-stability-nosilentaim-20260907-r5"
+__devkageEnv.__DEVKAGE_RUNTIME_VERSION = "DevKage-v5.2.49-stability-nosilentaim-20260907-r6-main"
 
 -- Re-execution guard. Auto Execute can occasionally launch both the package and its
 -- generated loader close together. A second copy used to synchronously unload the
@@ -572,6 +572,9 @@ do
 end
 
 local __devkageMultiInjectAutoBoot = __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT == true
+if not __devkageMultiInjectAutoBoot then
+    task.wait()
+end
 if __devkageMultiInjectAutoBoot then
     -- Actual pre-construction grace period. This happens before thousands of UI
     -- objects/connections are created, not merely before saved features are enabled.
@@ -606,7 +609,7 @@ local sections = {}
 -- Cooperative startup budget: constructing the full UI in one scheduler slice can
 -- stall the client, especially when DevKage is started beside another autoexec.
 -- Yield every N rendered objects only while the initial UI is being assembled.
-local __devkageStartupRenderBudget = 24
+local __devkageStartupRenderBudget = 8
 local __devkageStartupRenderCount = 0
 
 do
@@ -11454,8 +11457,7 @@ end
 
 
 
-local WorldLightingRuntime=assert(loadstring([======[
-return function(context)
+local WorldLightingRuntime=(function(context)
 local LightingService=context.LightingService
 local AdvancedLighting=context.AdvancedLighting
 local getOrCreateEffect=context.GetOrCreateEffect
@@ -11555,7 +11557,7 @@ end
 
 return WorldLightingRuntime
 end
-]======], "@DevKage/WorldAtmosphereRuntime"))()({
+)({
 LightingService=LightingService,
 AdvancedLighting=AdvancedLighting,
 GetOrCreateEffect=getOrCreateEffect,
@@ -11635,8 +11637,7 @@ end
 end
 
 
-assert(loadstring([======[
-return function(context)
+(function(context)
 local WorldLightingRuntime=context.Runtime
 local AdvancedLighting=context.AdvancedLighting
 local VisualsState=context.VisualsState
@@ -11769,7 +11770,7 @@ end
 
 return WorldLightingRuntime
 end
-]======], "@DevKage/WorldLightingExtensions"))()({
+)({
 Runtime=WorldLightingRuntime,
 AdvancedLighting=AdvancedLighting,
 VisualsState=VisualsState,
@@ -13772,12 +13773,6 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_22.lua"
-local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
-local SCRIPT_AUTOLOAD_ENABLED_FILE = CONFIG_FOLDER .. "/_devkage_autoload_enabled.flag"
-local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_r5_ONLY.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.49-stability-nosilentaim-20260907-r5"
-local SCRIPT_SESSION_LOCK_FILE = CONFIG_FOLDER .. "/_devkage_runtime_job.lock"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -14278,618 +14273,19 @@ local ok, err = pcall(writefile, SCRIPT_SETTINGS_FILE, encoded)
 return ok, ok and nil or tostring(err)
 end
 
-local AUTOEXEC_FOLDERS = {"autoexec","Autoexec","autoexecute","AutoExecute","scripts/autoexec","scripts/Autoexec"}
-
-local function existing_autoexec_folders()
-local folders = {}
-if type(isfolder) ~= "function" then return folders end
-for _, folder in ipairs(AUTOEXEC_FOLDERS) do
-local ok, exists = pcall(isfolder, folder)
-if ok and exists == true then folders[#folders+1] = folder end
-end
-return folders
-end
-
-local function ensure_autoexec_folder(folder)
-if type(isfolder) == "function" then
-local ok, exists = pcall(isfolder, folder)
-if ok and exists == true then return true end
-end
-
-if type(makefolder) == "function" then
-if folder:sub(1,8) == "scripts/" then
-pcall(makefolder, "scripts")
-end
-pcall(makefolder, folder)
-
-if type(isfolder) == "function" then
-local ok, exists = pcall(isfolder, folder)
-if ok and exists == true then return true end
-else
-return true
-end
-end
-
-
-return type(writefile) == "function"
-end
-
-
-
-
-
-
-
-
-
-
-
-local SCRIPT_AUTOLOAD_MARKER_PREFIX = "-- DEVKAGE_AUTOLOAD_BUILD:"
-
-local function script_autoload_payload_build(source)
-    if type(source) ~= "string"
-        or source:sub(1, #SCRIPT_AUTOLOAD_MARKER_PREFIX) ~= SCRIPT_AUTOLOAD_MARKER_PREFIX then
-        return nil
+-- r6 MAIN: autoload installation/runtime loading is intentionally NOT embedded here.
+-- Keeping generated loaders, legacy scans, teleport queues, and megabyte payload
+-- migration inside the main runtime made executor compile/runtime failures collapse
+-- into generic "line 1" errors and added unnecessary startup I/O.
+local function configure_script_autoload(enabled)
+    local settings = read_script_settings()
+    settings.AutoLoad = enabled == true
+    local ok, err = write_script_settings(settings)
+    if not ok then return false, err end
+    if settings.AutoLoad then
+        return true, "Auto Load preference saved (use the separate r6 loader installer)"
     end
-
-    local newline = source:find("\n", 1, true)
-    if not newline then return nil end
-    return source:sub(#SCRIPT_AUTOLOAD_MARKER_PREFIX + 1, newline - 1)
-end
-
-local function normalize_script_autoload_source(source)
-    if type(source) ~= "string" or source == "" then
-        return nil
-    end
-
-
-
-
-    if source:sub(1, #SCRIPT_AUTOLOAD_MARKER_PREFIX) == SCRIPT_AUTOLOAD_MARKER_PREFIX then
-        local newline = source:find("\n", 1, true)
-        if not newline then return nil end
-        source = source:sub(newline + 1)
-    end
-
-    if source == "" then
-        return nil
-    end
-
-    return source
-end
-
-local function build_script_autoload_stub()
-return string.format([=[
--- DEVKAGE r5 canonical autoexec loader
-local env = (type(getgenv) == "function" and getgenv()) or _G
-local BUILD_LABEL = %q
-local SETTINGS_FILE = %q
-local PAYLOAD_FILE = %q
-local ENABLED_FILE = %q
-local SESSION_LOCK_FILE = %q
-
-local function clearStartLock()
-    env.__DEVKAGE_AUTO_STARTING_JOB = nil
-    env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
-    env.__DEVKAGE_AUTO_STARTING_AT = nil
-end
-
-local function enabled()
-    if type(readfile) ~= "function" then return false end
-    local ok, raw = pcall(readfile, SETTINGS_FILE)
-    if ok and type(raw) == "string" and raw ~= "" then
-        local hs = game:GetService("HttpService")
-        local decodedOk, data = pcall(hs.JSONDecode, hs, raw)
-        if decodedOk and type(data) == "table" and data.AutoLoad ~= nil then
-            return data.AutoLoad == true
-        end
-    end
-    if type(isfile) == "function" then
-        local checked, exists = pcall(isfile, ENABLED_FILE)
-        return checked and exists == true
-    end
-    local markerOk, marker = pcall(readfile, ENABLED_FILE)
-    return markerOk and type(marker) == "string" and marker ~= ""
-end
-
-task.spawn(function()
-    if not enabled() then return end
-
-    local ok, err = pcall(function()
-        local Players = game:GetService("Players")
-        local Workspace = game:GetService("Workspace")
-        if not game:IsLoaded() then game.Loaded:Wait() end
-        while not Players.LocalPlayer do task.wait(0.1) end
-        while not Workspace.CurrentCamera do task.wait(0.1) end
-        task.wait(5)
-
-        local jobKey = tostring(game.PlaceId) .. ":" .. tostring(game.JobId)
-        if env.__DEVKAGE_AUTO_STARTED_JOB == jobKey then return end
-        if env.__DEVKAGE_AUTO_STARTING_JOB == jobKey then return end
-
-        if type(readfile) == "function" then
-            local lockOk, lockRaw = pcall(readfile, SESSION_LOCK_FILE)
-            if lockOk and type(lockRaw) == "string" then
-                local lockJob, state = lockRaw:match("^([^|]+)|([^|]+)|")
-                if lockJob == jobKey and (state == "starting" or state == "active") then
-                    return
-                end
-            end
-        end
-
-        local readOk, source = pcall(readfile, PAYLOAD_FILE)
-        if not readOk or type(source) ~= "string" or source == "" then
-            return
-        end
-
-        local firstLine = source:match("^([^\r\n]+)") or ""
-        if firstLine ~= "-- DEVKAGE_AUTOLOAD_BUILD:" .. BUILD_LABEL then
-            warn("[DevKage r5] Refused old/stale payload")
-            return
-        end
-
-        env.__DEVKAGE_AUTO_STARTING_JOB = jobKey
-        env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = BUILD_LABEL
-        env.__DEVKAGE_AUTO_STARTING_AT = os.clock()
-        if type(writefile) == "function" then
-            pcall(writefile, SESSION_LOCK_FILE, jobKey .. "|starting|" .. BUILD_LABEL)
-        end
-
-        local fn, compileError = nil, nil
-        if type(loadfile) == "function" then
-            local loadOk, a, b = pcall(loadfile, PAYLOAD_FILE)
-            if loadOk and type(a) == "function" then
-                fn, compileError = a, b
-            end
-        end
-
-        if type(fn) ~= "function" then
-            if type(loadstring) ~= "function" then
-                clearStartLock()
-                if type(delfile) == "function" then pcall(delfile, SESSION_LOCK_FILE) end
-                warn("[DevKage r5] loadstring unavailable")
-                return
-            end
-            local compileOk, a, b = pcall(loadstring, source, "@DevKage_r5_payload")
-            if compileOk then
-                fn, compileError = a, b
-            else
-                compileError = a
-            end
-        end
-
-        source = nil
-        if type(fn) ~= "function" then
-            clearStartLock()
-            if type(delfile) == "function" then pcall(delfile, SESSION_LOCK_FILE) end
-            warn("[DevKage r5 compile] " .. tostring(compileError))
-            return
-        end
-
-        env.__DEVKAGE_MULTI_INJECT_BOOT = true
-        local runOk, runError = pcall(fn)
-        env.__DEVKAGE_MULTI_INJECT_BOOT = nil
-        clearStartLock()
-
-        if not runOk then
-            if type(delfile) == "function" then pcall(delfile, SESSION_LOCK_FILE) end
-            warn("[DevKage r5 runtime] " .. tostring(runError))
-            return
-        end
-
-        env.__DEVKAGE_AUTO_STARTED_JOB = jobKey
-        env.__DEVKAGE_AUTOLOADED_BUILD = BUILD_LABEL
-        if type(writefile) == "function" then
-            pcall(writefile, SESSION_LOCK_FILE, jobKey .. "|active|" .. BUILD_LABEL)
-        end
-    end)
-
-    if not ok then
-        clearStartLock()
-        env.__DEVKAGE_MULTI_INJECT_BOOT = nil
-        if type(delfile) == "function" then pcall(delfile, SESSION_LOCK_FILE) end
-        warn("[DevKage r5 loader] " .. tostring(err))
-    end
-end)
-]=],
-SCRIPT_AUTOLOAD_BUILD,
-SCRIPT_SETTINGS_FILE,
-SCRIPT_PAYLOAD_FILE,
-SCRIPT_AUTOLOAD_ENABLED_FILE,
-SCRIPT_SESSION_LOCK_FILE)
-end
-
-local function find_teleport_queue()
-local env = (type(getgenv) == "function" and getgenv()) or _G
-local candidates = {
-    rawget(env, "queue_on_teleport"),
-    rawget(env, "queueonteleport"),
-    rawget(env, "queue_on_tp"),
-    type(queue_on_teleport) == "function" and queue_on_teleport or nil,
-    type(queueonteleport) == "function" and queueonteleport or nil,
-    type(queue_on_tp) == "function" and queue_on_tp or nil,
-}
-if type(syn) == "table" then candidates[#candidates+1] = syn.queue_on_teleport end
-if type(fluxus) == "table" then candidates[#candidates+1] = fluxus.queue_on_teleport end
-for _, candidate in ipairs(candidates) do
-    if type(candidate) == "function" then return candidate end
-end
-return nil
-end
-
-local function queue_script_autoload(stub)
-local queue = find_teleport_queue()
-if not queue then return false, "teleport queue API unavailable" end
-local ok, err = pcall(queue, stub)
-return ok, ok and nil or tostring(err)
-end
-
-local function write_autoexec_stubs(stub)
-if type(writefile) ~= "function" then return false, {} end
-
-local installed = {}
-local seen = {}
-
-
-
-
-
-
-
-
-
-local function cleanLegacyDevKageAutoexec(folder)
-    if type(listfiles) ~= "function" or type(delfile) ~= "function" then return true end
-    local ok, entries = pcall(listfiles, folder)
-    if not ok or type(entries) ~= "table" then return false end
-
-    for _, entry in ipairs(entries) do
-        local rawPath = tostring(entry)
-        local path = rawPath:gsub("\\", "/")
-        local name = path:match("([^/]+)$") or path
-        if name ~= SCRIPT_AUTOEXEC_NAME and name:lower():sub(-4) == ".lua" then
-            local ownedLegacy = false
-            if type(readfile) == "function" then
-                local readOk, raw = pcall(readfile, rawPath)
-                if readOk and type(raw) == "string" then
-                    -- Only remove files that identify themselves as DevKage. This
-                    -- catches old full builds as well as old loader stubs while
-                    -- leaving unrelated executor scripts alone.
-                    ownedLegacy = raw:find("DEVKAGE_AUTOLOAD", 1, true) ~= nil
-                        or raw:find("DevKage AutoLoad", 1, true) ~= nil
-                        or raw:find("_devkage_autoload_payload", 1, true) ~= nil
-                        or raw:find("__DEVKAGE_RUNTIME_VERSION", 1, true) ~= nil
-                        or raw:find("-- DEVKAGE v5.2", 1, true) ~= nil
-                end
-            end
-            if ownedLegacy then pcall(delfile, rawPath) end
-        end
-    end
-    return true
-end
-
-local function tryWrite(folder)
-if seen[folder] then return end
-seen[folder] = true
-
-if not ensure_autoexec_folder(folder) then return end
-cleanLegacyDevKageAutoexec(folder)
-
-
-
-if type(delfile) == "function" then
-    local legacyPath = folder .. "/DevKage_AutoLoad.lua"
-    local deleteLegacy = true
-    if type(isfile) == "function" then
-        local okLegacy, existsLegacy = pcall(isfile, legacyPath)
-        deleteLegacy = okLegacy and existsLegacy == true
-    end
-    if deleteLegacy then pcall(delfile, legacyPath) end
-end
-
-local path = folder .. "/" .. SCRIPT_AUTOEXEC_NAME
-local ok = pcall(writefile, path, stub)
-if ok then
-installed[#installed+1] = path
-end
-end
-
-
-
--- Purge owned legacy DevKage autoload stubs from every known existing autoexec
--- folder before installing the one canonical r5 entry.
-for _, folder in ipairs(existing_autoexec_folders()) do
-    cleanLegacyDevKageAutoexec(folder)
-end
-
-for _, folder in ipairs(existing_autoexec_folders()) do
-    tryWrite(folder)
-    if #installed > 0 then break end
-end
-
-
-
-
-
-if #installed == 0 then
-    for _, folder in ipairs(AUTOEXEC_FOLDERS) do
-        tryWrite(folder)
-        if #installed > 0 then break end
-    end
-end
-
-return #installed > 0, installed
-end
-local function remove_autoexec_stubs()
-if type(delfile) ~= "function" then return end
-for _, folder in ipairs(AUTOEXEC_FOLDERS) do
-    for _, loaderName in ipairs({SCRIPT_AUTOEXEC_NAME, "DevKage_AutoLoad.lua"}) do
-        local path = folder .. "/" .. loaderName
-        local shouldDelete = true
-        if type(isfile) == "function" then
-            local ok, exists = pcall(isfile, path)
-            shouldDelete = ok and exists == true
-        end
-        if shouldDelete then pcall(delfile, path) end
-    end
-end
-end
-
-local function configure_script_autoload(enabled, bootRefresh)
-local settings = read_script_settings()
-enabled = enabled == true
-
-
-
-
-
-settings.AutoLoad = enabled
-local saved, saveError = write_script_settings(settings)
-if not saved then
-    return false, saveError
-end
-
-
-
-if enabled and type(writefile) == "function" then
-    pcall(writefile, SCRIPT_AUTOLOAD_ENABLED_FILE, SCRIPT_AUTOLOAD_BUILD)
-elseif not enabled and type(delfile) == "function" then
-    pcall(delfile, SCRIPT_AUTOLOAD_ENABLED_FILE)
-end
-
-local function rollback_manual_enable()
-    if bootRefresh then return end
-    settings.AutoLoad = false
-    write_script_settings(settings)
-    if type(delfile) == "function" then
-        pcall(delfile, SCRIPT_AUTOLOAD_ENABLED_FILE)
-    end
-end
-
-if not enabled then
-    remove_autoexec_stubs()
-
-    if type(delfile) == "function" then
-        for _, path in ipairs({
-            SCRIPT_PAYLOAD_FILE,
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_21.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_20.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_19.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_18.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_17.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_16.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_12.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_11.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_10.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_9.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_8.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_7.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_6.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_3.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload.lua",
-            SCRIPT_BUILD_FILE,
-            SCRIPT_AUTOLOAD_ENABLED_FILE,
-            SCRIPT_SESSION_LOCK_FILE
-        }) do
-            local shouldDelete = true
-            if type(isfile) == "function" then
-                local ok, exists = pcall(isfile, path)
-                shouldDelete = not ok or exists == true
-            end
-            if shouldDelete then
-                pcall(delfile, path)
-            end
-        end
-    end
-
-    local env = (type(getgenv) == "function" and getgenv()) or _G
-    env.__DEVKAGE_AUTOLOAD_BUILD = nil
-    env.__DEVKAGE_AUTOEXEC_PATHS = nil
-    env.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT = nil
-    return true, "Script auto-load disabled"
-end
-
-local env = (type(getgenv) == "function" and getgenv()) or _G
-local source = normalize_script_autoload_source(env.__DEVKAGE_EMBEDDED_SOURCE)
-
--- Manual/file execution reads its source only when Auto Load actually needs to be
--- installed/refreshed. This avoids retaining a megabyte-scale source string during
--- ordinary runtime.
-if not source and __devkageSelfSourcePath and type(readfile) == "function" then
-    local ok, raw = pcall(readfile, __devkageSelfSourcePath)
-    if ok then source = normalize_script_autoload_source(raw) end
-end
-
-if not source and type(readfile) == "function" then
-    if type(isfile) ~= "function" then
-        local ok, existing = pcall(readfile, SCRIPT_PAYLOAD_FILE)
-        if ok and script_autoload_payload_build(existing) == SCRIPT_AUTOLOAD_BUILD then
-            source = normalize_script_autoload_source(existing)
-        end
-    else
-        local checked, exists = pcall(isfile, SCRIPT_PAYLOAD_FILE)
-        if not checked or exists == true then
-            local ok, existing = pcall(readfile, SCRIPT_PAYLOAD_FILE)
-            if ok and script_autoload_payload_build(existing) == SCRIPT_AUTOLOAD_BUILD then
-                source = normalize_script_autoload_source(existing)
-            end
-        end
-    end
-end
-
-if not source then
-    rollback_manual_enable()
-    return false, "Packaged source is unavailable"
-end
-
-if type(writefile) ~= "function" then
-    rollback_manual_enable()
-    return false, "This executor cannot write the auto-load payload"
-end
-
-local folderOk, folderError = ensure_folder()
-if not folderOk then
-    rollback_manual_enable()
-    return false, folderError
-end
-
-
-
-
-local payloadSource = SCRIPT_AUTOLOAD_MARKER_PREFIX .. SCRIPT_AUTOLOAD_BUILD .. "\n" .. source
-local payloadOk, payloadErr = pcall(writefile, SCRIPT_PAYLOAD_FILE, payloadSource)
-if not payloadOk then
-    rollback_manual_enable()
-    return false, tostring(payloadErr)
-end
-
-
-
-
-
-local legacyTombstone = "-- DEVKAGE_LEGACY_PAYLOAD_DISABLED:r5\nreturn function() return true end\n"
-for _, legacyName in ipairs({
-    "_devkage_autoload_payload_v5_2_21.lua",
-    "_devkage_autoload_payload_v5_2_20.lua",
-    "_devkage_autoload_payload_v5_2_19.lua",
-    "_devkage_autoload_payload_v5_2_18.lua",
-    "_devkage_autoload_payload_v5_2_17.lua",
-    "_devkage_autoload_payload_v5_2_16.lua",
-    "_devkage_autoload_payload_v5_2_12.lua",
-    "_devkage_autoload_payload_v5_2_11.lua",
-    "_devkage_autoload_payload_v5_2_10.lua",
-    "_devkage_autoload_payload_v5_2_9.lua",
-    "_devkage_autoload_payload_v5_2_8.lua",
-    "_devkage_autoload_payload_v5_2_7.lua",
-    "_devkage_autoload_payload_v5_2_6.lua",
-    "_devkage_autoload_payload_v5_2_3.lua",
-}) do
-    pcall(writefile, CONFIG_FOLDER .. "/" .. legacyName, legacyTombstone)
-end
-
-
-
-if type(readfile) == "function" then
-    local verified = false
-    for _ = 1, 4 do
-        local readOk, savedSource = pcall(readfile, SCRIPT_PAYLOAD_FILE)
-        if readOk and savedSource == payloadSource then
-            verified = true
-            break
-        end
-        task.wait(0.1)
-    end
-    if not verified then
-        rollback_manual_enable()
-        return false, "Auto-load payload verification failed"
-    end
-end
-
-
-
-
-
-pcall(writefile, CONFIG_FOLDER .. "/_devkage_autoload_payload.lua", legacyTombstone)
-pcall(writefile, SCRIPT_BUILD_FILE, SCRIPT_AUTOLOAD_BUILD)
-
-
-
-pcall(writefile, CONFIG_FOLDER .. "/_devkage_autoload_current.txt", SCRIPT_AUTOLOAD_BUILD)
-
-local stub = build_script_autoload_stub()
-
--- Prefer one persistent autoexec stub. Queue-on-teleport is only used as a fallback;
--- installing both on every refresh can accumulate duplicate queued loaders.
-local autoexecWritten, autoexecPaths = write_autoexec_stubs(stub)
-local queued, queueError = false, nil
-if not autoexecWritten then
-    queued, queueError = queue_script_autoload(stub)
-end
-env.__DEVKAGE_AUTOLOAD_QUEUE_AVAILABLE = queued == true
-
-if not queued and not autoexecWritten then
-    rollback_manual_enable()
-    return false, "Executor exposes neither a working teleport queue nor a writable autoexec folder"
-end
-
-env.__DEVKAGE_AUTOEXEC_PATHS = autoexecPaths
-env.__DEVKAGE_AUTOLOAD_BUILD = SCRIPT_AUTOLOAD_BUILD
-env.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT = os.clock()
-
-local pathText = autoexecWritten and table.concat(autoexecPaths, ", ") or ""
-
-if queued then
-    return true, "Auto Load enabled through teleport queue fallback"
-else
-    return true, "Auto Load installed as one canonical executor autoexec | " .. pathText
-end
-end
-
--- r5 migration runs on every manual launch before any boot refresh. It makes old
--- DevKage payload entry points cheap no-ops so stale loader files cannot compile
--- historical full builds in parallel with the canonical loader.
-do
-    -- Legacy filesystem migration is a one-time manual-install job. Running folder
-    -- scans and rewrites on every successful Auto Load recreated the post-execute
-    -- hitch we are trying to eliminate.
-    if not __devkageMultiInjectAutoBoot and type(writefile) == "function" then
-        local tombstone = "-- DEVKAGE_LEGACY_PAYLOAD_DISABLED:r5\nreturn function() return true end\n"
-        for _, legacyName in ipairs({
-            "_devkage_autoload_payload_v5_2_21.lua",
-    "_devkage_autoload_payload_v5_2_20.lua",
-            "_devkage_autoload_payload_v5_2_19.lua",
-            "_devkage_autoload_payload_v5_2_18.lua",
-            "_devkage_autoload_payload_v5_2_17.lua",
-            "_devkage_autoload_payload_v5_2_16.lua",
-            "_devkage_autoload_payload_v5_2_12.lua",
-            "_devkage_autoload_payload_v5_2_11.lua",
-            "_devkage_autoload_payload_v5_2_10.lua",
-            "_devkage_autoload_payload_v5_2_9.lua",
-            "_devkage_autoload_payload_v5_2_8.lua",
-            "_devkage_autoload_payload_v5_2_7.lua",
-            "_devkage_autoload_payload_v5_2_6.lua",
-            "_devkage_autoload_payload_v5_2_3.lua",
-            "_devkage_autoload_payload.lua",
-        }) do
-            pcall(writefile, CONFIG_FOLDER .. "/" .. legacyName, tombstone)
-        end
-        for _, folder in ipairs(existing_autoexec_folders()) do
-            cleanLegacyDevKageAutoexec(folder)
-        end
-    end
-end
-
-local _script_boot_settings = read_script_settings()
-
-if _script_boot_settings.AutoLoad == true and not __devkageMultiInjectAutoBoot then
-    -- Manual execution may install/migrate the canonical payload. A successful
-    -- Auto Load never rewrites its own megabyte-scale payload on every join.
-    task.spawn(function()
-        local ok, err = configure_script_autoload(true, true)
-        if not ok then
-            warn("[DevKage AutoLoad] refresh failed: " .. tostring(err))
-        end
-    end)
+    return true, "Auto Load preference disabled"
 end
 
 local DEFAULT_VISUAL_STATE = serialiseRuntimeState(VisualsState)
@@ -21110,8 +20506,7 @@ lightingSlider("ambientStrength","Ambient Strength",0,10,2,"",function(v) if Adv
 lightingToggle("blueSkyEnabled","Blue Sky",function(v) setBlueSky(v,AdvancedLighting.blueSkyStrength) end)
 lightingSlider("blueSkyStrength","Blue Sky Strength",0,5,2,"",function(v) if AdvancedLighting.blueSkyEnabled then setBlueSky(true,v) end end)
 
-assert(loadstring([======[
-return function(context)
+(function(context)
 local AdvancedLighting=context.AdvancedLighting
 local WorldLightingRuntime=context.Runtime
 local lightingToggle=context.LightingToggle
@@ -21180,7 +20575,7 @@ lightingSlider("environmentSpecularScale","Specular Scale",0,1,2,"",function(val
 if AdvancedLighting.environmentSpecularEnabled then WorldLightingRuntime.SetEnvironmentSpecular(true,value) end
 end)
 end
-]======], "@DevKage/WorldLightingControls"))()({
+)({
 AdvancedLighting=AdvancedLighting,
 Runtime=WorldLightingRuntime,
 LightingToggle=lightingToggle,
@@ -24228,8 +23623,7 @@ rapidFireRateSlider = rapidFireSection:CreateSlider({
     end
 })
 
-local KnifeCombatRuntime = assert(loadstring([======[
-return function(context)
+local KnifeCombatRuntime = (function(context)
 local rapidFireSection = context.RapidFireSection
 local ReplicatedStorage = context.ReplicatedStorage
 local LocalPlayer = context.LocalPlayer
@@ -25048,7 +24442,7 @@ end
 
 return KnifeCombatRuntime
 end
-]======], "@DevKage/KnifeCombat"))()({
+)({
     RapidFireSection = rapidFireSection,
     ReplicatedStorage = ReplicatedStorage,
     LocalPlayer = LocalPlayer,
@@ -29415,7 +28809,7 @@ Callback = function() window:Unload() end
 })
 
 scriptAutoLoadToggle = scriptSettingsSection:CreateToggle({
-Name = "Auto Load",
+Name = "Auto Load Preference (external loader)",
 State = read_script_settings().AutoLoad == true,
 Flag = "script.auto_load",
 Callback = function(value)
