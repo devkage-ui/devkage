@@ -1,4 +1,4 @@
--- DEVKAGE v5.2.50: autoexec freeze/coexistence reliability - gameplay features unchanged
+-- DEVKAGE v5.2.51: auto-load reliability + bunny-hop-only combat cleanup + freeze reduction
 local __DEVKAGE_EMBEDDED_SOURCE = [============[
 
 
@@ -531,7 +531,7 @@ local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
 
 
 
-__devkageEnv.__DEVKAGE_RUNTIME_VERSION = "dual-script-autoload-v5"
+__devkageEnv.__DEVKAGE_RUNTIME_VERSION = "dual-script-autoload-v6-bhop-only"
 local __devkageMultiInjectAutoBoot = __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT == true
 
 -- Autoexec coexistence boot mutex.
@@ -603,7 +603,7 @@ local sections = {}
 -- Cooperative startup budget: constructing the full UI in one scheduler slice can
 -- stall the client, especially when DevKage is started beside another autoexec.
 -- Yield every N rendered objects only while the initial UI is being assembled.
-local __devkageStartupRenderBudget = __devkageMultiInjectAutoBoot and 60 or 140
+local __devkageStartupRenderBudget = __devkageMultiInjectAutoBoot and 36 or 120
 local __devkageStartupRenderCount = 0
 
 do
@@ -5760,6 +5760,7 @@ config.unlockEmotes = false
 config.unlockWeapons = false
 config.luaAutoExecute = false
 config.silentAimEnabled = false
+config.silentAimAutoShoot = false
 config.aimVisibleCheck = false
 config.noRecoilEnabled = false
 config.noSpreadEnabled = false
@@ -13782,11 +13783,11 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_50.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_51.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOLOAD_ENABLED_FILE = CONFIG_FOLDER .. "/_devkage_autoload_enabled.flag"
 local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_AutoLoad_LAST.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.50-autoexec-freeze-coexistence-20260907"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.51-autoload-bhop-freeze-fix-20260907"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -14145,6 +14146,13 @@ for k, v in pairs(profileData) do
     end
 end
 
+-- Removed combat features stay disabled even when an older config contains
+-- their legacy keys. Bunny Hop remains supported and continues to save/load.
+getgenv().__DevKageConfig.silentAimEnabled = false
+getgenv().__DevKageConfig.silentAimAutoShoot = false
+getgenv().__DevKageConfig.noRecoilEnabled = false
+getgenv().__DevKageConfig.noSpreadEnabled = false
+
 applyRuntimeState(VisualsState, data.visuals)
 VisualsState.animation_id=tostring(VisualsState.animation_id or ""):match("%d+") or ""
 VisualsState.animation_start_percent=math.clamp(tonumber(VisualsState.animation_start_percent) or 0,0,99)
@@ -14496,9 +14504,9 @@ task.spawn(function()
 
 
 
-        task.wait()
-
-
+        -- Controlled startup settling window. This lets the user's other
+        -- Auto Execute script finish its immediate work before DevKage compiles.
+        task.wait(0.8)
 
         local payloadOk, source = false, nil
         for _ = 1, 5 do
@@ -14684,19 +14692,16 @@ end
 
 
 
-for _, folder in ipairs(existing_autoexec_folders()) do
+local existingFolders = existing_autoexec_folders()
+for _, folder in ipairs(existingFolders) do
     tryWrite(folder)
-    if #installed > 0 then break end
 end
 
-
-
-
-
-if #installed == 0 then
+-- If folder detection is unavailable, try every known alias. Duplicate loader
+-- aliases are safe because the loader claims a same-build/same-server mutex.
+if #existingFolders == 0 then
     for _, folder in ipairs(AUTOEXEC_FOLDERS) do
         tryWrite(folder)
-        if #installed > 0 then break end
     end
 end
 
@@ -14763,6 +14768,7 @@ end
 local function remove_stale_devkage_payloads()
     if type(delfile) ~= "function" then return end
     for _, legacyName in ipairs({
+        "_devkage_autoload_payload_v5_2_50.lua",
         "_devkage_autoload_payload_v5_2_20.lua",
         "_devkage_autoload_payload_v5_2_19.lua",
         "_devkage_autoload_payload_v5_2_18.lua",
@@ -14794,6 +14800,7 @@ if not enabled then
     if type(delfile) == "function" then
         for _, path in ipairs({
             SCRIPT_PAYLOAD_FILE,
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_50.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_20.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_19.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_18.lua",
@@ -14909,14 +14916,11 @@ pcall(writefile, CONFIG_FOLDER .. "/_devkage_autoload_current.txt", SCRIPT_AUTOL
 
 local stub = build_script_autoload_stub()
 
--- Use one launch transport. Native autoexec is preferred; queue-on-teleport is
--- fallback-only. Running both is unnecessary and can duplicate the boot after
--- repeated teleports on some executors.
+-- Install the persistent Auto Execute loader and also queue the same guarded
+-- loader for teleports when supported. The loader's same-build/same-server
+-- mutex prevents the two launch paths from constructing duplicate runtimes.
 local autoexecWritten, autoexecPaths = write_autoexec_stubs(stub)
-local queued, queueError = false, nil
-if not autoexecWritten then
-    queued, queueError = queue_script_autoload(stub)
-end
+local queued, queueError = queue_script_autoload(stub)
 
 if not queued and not autoexecWritten then
     rollback_manual_enable()
@@ -14929,7 +14933,9 @@ env.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT = os.clock()
 
 local pathText = autoexecWritten and table.concat(autoexecPaths, ", ") or ""
 
-if queued then
+if queued and autoexecWritten then
+    return true, "Auto Load installed (autoexec + guarded teleport queue) | " .. pathText
+elseif queued then
     return true, "Auto Load enabled for teleports"
 else
     return true, "Auto Load installed in executor autoexec | " .. pathText
@@ -24285,1196 +24291,66 @@ rapidFireRateSlider = rapidFireSection:CreateSlider({
 local KnifeCombatRuntime = assert(loadstring([======[
 return function(context)
 local rapidFireSection = context.RapidFireSection
-local ReplicatedStorage = context.ReplicatedStorage
 local LocalPlayer = context.LocalPlayer
 local UserInputService = context.UserInputService or game:GetService("UserInputService")
-local Players = context.Players
-local RunService = context.RunService
-local window = context.Window
+local RunService = context.RunService or game:GetService("RunService")
 local library = context.Library
 local UI = context.UI
 local MaskShard = context.MaskShard
+local Environment = (type(getgenv) == "function" and getgenv()) or _G
 
--- Hot-path caches: these are stable Roblox/executor objects or immutable values.
--- Caching them avoids repeated service/global lookups without changing aim behavior.
-local Environment = getgenv()
-local Workspace = workspace
-local GuiService = game:GetService("GuiService")
-local ZeroVector2 = Vector2.zero
-local ZeroCFrame = CFrame.new()
-local WeaponOffsetCFrame = CFrame.new(0.43, 0.25, 0.42)
-local PayloadKey0 = utf8.char(0)
-local PayloadKey1 = utf8.char(1)
-local PayloadKey2 = utf8.char(2)
-local PayloadKey3 = utf8.char(3)
-local VisibilityParams = RaycastParams.new()
-VisibilityParams.IgnoreWater = true
-VisibilityParams.FilterType = Enum.RaycastFilterType.Exclude
-local VisibilityCharacter = nil
-local UniversalMouse = nil
-pcall(function() UniversalMouse = LocalPlayer:GetMouse() end)
-local UniversalRayMethods = {
-    Raycast = true,
-    FindPartOnRay = true,
-    FindPartOnRayWithIgnoreList = true,
-    FindPartOnRayWithWhitelist = true,
-}
-local CameraRayMethods = {
-    ViewportPointToRay = true,
-    ScreenPointToRay = true,
-}
+-- v5.2.51 intentionally removes the old aim/fire/recoil/spread workers.
+-- Only Bunny Hop remains in this runtime.
+local config = Environment.__DevKageConfig
+if type(config) == "table" then
+    config.silentAimEnabled = false
+    config.silentAimAutoShoot = false
+    config.noRecoilEnabled = false
+    config.noSpreadEnabled = false
+end
 
--- MASK SHARD + KNIFE COMBAT (integrated; no standalone ScreenGui)
-
-
+-- Restoration-only cleanup for a previous DevKage combat runtime.
+do
+    local previous = Environment.__DevKageCombatRuntime
+    if type(previous) == "table" then
+        previous.Alive = false
+        if type(previous.Connections) == "table" then
+            for _, connection in ipairs(previous.Connections) do
+                pcall(function() connection:Disconnect() end)
+            end
+        end
+        for _, methodName in ipairs({
+            "UninstallNoSpread",
+            "RestorePhantomGunData",
+            "RestoreItemLibraryWeaponMods",
+        }) do
+            local method = previous[methodName]
+            if type(method) == "function" then
+                pcall(method)
+            end
+        end
+    end
+end
 
 local KnifeCombatRuntime = {
-    GameId = 6035872082,
     Alive = true,
     Connections = {},
-    Loading = false,
-    Loaded = false,
-    NextLoadAttempt = 0,
-    LastAttempt = 0,
-    LastTargetScan = 0,
-    LastStatusUpdate = 0,
-    LastAppliedStatus = nil,
-    LastStatusControl = nil,
-    CurrentTarget = nil,
-    CurrentPart = nil,
-    Utility = nil,
-    EnumLibrary = nil,
-    FighterController = nil,
-    GameplayUtility = nil,
-    UseItemRemote = nil,
-    OriginalGetSpread = nil,
-    SpreadWrapper = nil,
-    SpreadInstalled = false,
-    UniversalInstalled = false,
-    UniversalGuard = false,
-    UniversalOldNamecall = nil,
-    UniversalOldIndex = nil,
-    BloxRaycastModule = nil,
-    BloxRaycastInstalled = false,
-    BloxRaycastNextSearch = 0,
-    BloxCastOriginal = nil,
-    BloxCastThroughOriginal = nil,
-    RivalsUtilityRaycastInstalled = false,
-    RivalsUtility = nil,
-    RivalsUtilityOriginal = nil,
-    RivalsUtilityWrapper = nil,
-    ItemLibrary = nil,
-    ItemLibraryOriginals = {},
-    LastItemStatApply = 0,
-    BloxWeaponModule = nil,
-    BloxRecoilOriginals = {},
-    BloxRecoilWrappers = {},
-    RivalsGunModule = nil,
-    RivalsRecoilOriginal = nil,
-    RivalsRecoilWrapper = nil,
-    PhantomCharacterModule = nil,
-    PhantomLoadGunOriginal = nil,
-    PhantomLoadGunWrapper = nil,
-    PhantomGunDataOriginals = setmetatable({}, {__mode = "k"}),
-    GenericRecoilPatched = setmetatable({}, {__mode = "k"}),
-    NoRecoilInstallStarted = false,
-    NoRecoilAdaptersInstalled = false,
-    GenericRecoilScanDone = false,
-    PhantomRecoilScanDone = false,
-    LastNoRecoilAttempt = 0,
-    BloxGameState = nil,
-    BloxGameStateSearched = false,
-    LastChanceRoll = 0,
-    LastChanceResult = true,
-    LastHeadRoll = 0,
-    LastHeadResult = true,
-    CachedPing = 0,
-    LastPingUpdate = 0,
-    LastAimPosition = nil,
-    LastAimUpdate = 0,
-    StatusControl = nil,
-    MaskStatusControl = nil,
     Controls = {},
-    StartupGate = true,
-    RivalsNativeCombatBridge = nil,
 }
 
-do
-    local previousRuntime = Environment.__DevKageCombatRuntime
-    if type(previousRuntime) == "table" and previousRuntime ~= KnifeCombatRuntime then
-        previousRuntime.Alive = false
-    end
-    Environment.__DevKageCombatRuntime = KnifeCombatRuntime
-end
+Environment.__DevKageCombatRuntime = KnifeCombatRuntime
 
-KnifeCombatRuntime.SetStatus = function(text)
-    local value = tostring(text or "")
-    KnifeCombatRuntime.LastStatus = value
-    local control = KnifeCombatRuntime.StatusControl
-    if control and type(control.SetText) == "function"
-        and (KnifeCombatRuntime.LastStatusControl ~= control
-            or KnifeCombatRuntime.LastAppliedStatus ~= value) then
-        control:SetText(value)
-        KnifeCombatRuntime.LastStatusControl = control
-        KnifeCombatRuntime.LastAppliedStatus = value
-    end
-end
-
-KnifeCombatRuntime.Track = function(connection)
-    if not connection then return connection end
-    KnifeCombatRuntime.Connections[#KnifeCombatRuntime.Connections + 1] = connection
-    if type(MaskShard) == "table" and type(MaskShard.Connections) == "table" then
-        MaskShard.Connections[#MaskShard.Connections + 1] = connection
+local function track(connection)
+    if connection then
+        KnifeCombatRuntime.Connections[#KnifeCombatRuntime.Connections + 1] = connection
     end
     return connection
 end
 
-KnifeCombatRuntime.IsRivals = function()
-    return tonumber(game.GameId) == KnifeCombatRuntime.GameId
-end
-
-KnifeCombatRuntime.IsBloxStrikes = function()
-    local shared = ReplicatedStorage:FindFirstChild("Shared")
-    local raycastModule = shared and shared:FindFirstChild("Raycast")
-    local components = ReplicatedStorage:FindFirstChild("Components")
-    local weaponModule = components and components:FindFirstChild("Weapon")
-    return raycastModule ~= nil or weaponModule ~= nil
-end
-
-KnifeCombatRuntime.IsTeammate = function(player)
-    local config = Environment.__DevKageConfig
-    if type(config) ~= "table" or config.aimTeamCheck ~= true then return false end
-    if player == LocalPlayer then return true end
-
-    local localTeamId = LocalPlayer:GetAttribute("TeamID")
-    local targetTeamId = player:GetAttribute("TeamID")
-    if localTeamId ~= nil or targetTeamId ~= nil then
-        return localTeamId ~= nil and localTeamId == targetTeamId
-    end
-
-    -- Blox Strikes exposes team as a Player attribute rather than TeamID.
-    local localTeamAttr = LocalPlayer:GetAttribute("Team")
-    local targetTeamAttr = player:GetAttribute("Team")
-    if localTeamAttr ~= nil or targetTeamAttr ~= nil then
-        return localTeamAttr ~= nil and localTeamAttr == targetTeamAttr
-    end
-
-    return LocalPlayer.Team ~= nil and LocalPlayer.Team == player.Team
-end
-
-KnifeCombatRuntime.GetAimCenter = function(camera)
-    camera = camera or Workspace.CurrentCamera
-    if not camera then return ZeroVector2 end
-
-    local config = Environment.__DevKageConfig
-    local originMode = tostring(type(config) == "table" and config.silentAimFOVOrigin or "Screen Center")
-
-    if originMode == "Mouse" and UserInputService.MouseBehavior ~= Enum.MouseBehavior.LockCenter then
-        local mousePosition = UserInputService:GetMouseLocation()
-        local inset = ZeroVector2
-        local insetOk, liveInset = pcall(GuiService.GetGuiInset, GuiService)
-        if insetOk and liveInset then inset = liveInset end
-        return mousePosition - inset
-    end
-
-    return camera.ViewportSize * 0.5
-end
-
-KnifeCombatRuntime.ResolvePart = function(character, wanted, camera)
-    if not character then return nil end
-    if wanted == nil then
-        local config = Environment.__DevKageConfig
-        wanted = tostring(type(config) == "table" and config.aimTargetPart or "Head")
-    end
-    local head = character:FindFirstChild("Head") or character:FindFirstChild("HitboxHead") or character:FindFirstChild("HitboxHeadSmall")
-    local root = character:FindFirstChild("HumanoidRootPart")
-    if wanted == "Head" then return head or root end
-    if wanted == "Body" or wanted == "Torso" then
-        return character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso") or character:FindFirstChild("LowerTorso") or root
-    elseif wanted == "Closest" then
-        camera = camera or Workspace.CurrentCamera
-        if not camera then return root or head end
-        local mouse = KnifeCombatRuntime.GetAimCenter(camera)
-        local best,bestD
-        for _,object in ipairs(character:GetChildren()) do
-            if object:IsA("BasePart") then
-                local p,on=camera:WorldToViewportPoint(object.Position)
-                if on and p.Z>0 then
-                    local dx,dy=p.X-mouse.X,p.Y-mouse.Y; local d=dx*dx+dy*dy
-                    if bestD==nil or d<bestD then best,bestD=object,d end
-                end
-            end
-        end
-        return best or head or root
-    elseif wanted == "Random" then
-        local parts={}
-        for _,object in ipairs(character:GetChildren()) do if object:IsA("BasePart") then parts[#parts+1]=object end end
-        return #parts>0 and parts[math.random(1,#parts)] or head or root
-    end
-    local part=character:FindFirstChild(wanted)
-    return part and part:IsA("BasePart") and part or head or root
-end
-
-KnifeCombatRuntime.IsVisible = function(part, camera, visibleCheck)
-    if visibleCheck == nil then
-        local config = Environment.__DevKageConfig
-        visibleCheck = type(config) == "table" and config.aimVisibleCheck == true
-    end
-    if not visibleCheck then return true end
-    camera = camera or Workspace.CurrentCamera
-    if not camera or not part or not part.Parent then return false end
-
-    local character = LocalPlayer.Character
-    if VisibilityCharacter ~= character then
-        VisibilityCharacter = character
-        VisibilityParams.FilterDescendantsInstances = character and {character} or {}
-    end
-
-    local origin = camera.CFrame.Position
-    local result = Workspace:Raycast(origin, part.Position - origin, VisibilityParams)
-    return result == nil or (result.Instance and result.Instance:IsDescendantOf(part.Parent))
-end
-
-KnifeCombatRuntime.FindTarget = function()
-    local camera = Workspace.CurrentCamera
-    if not camera then return nil,nil end
-
-    local config = Environment.__DevKageConfig
-    local radius = math.clamp(
-        tonumber(type(config)=="table" and config.silentAimRadius) or 300,
-        25,
-        2000
-    )
-    local radiusSquared = radius*radius
-    local infiniteFOV = type(config)=="table" and config.silentAimInfiniteFOV==true
-    local wanted = tostring(type(config)=="table" and config.aimTargetPart or "Head")
-    local visibleCheck = type(config)=="table" and config.aimVisibleCheck==true
-    local teamCheck = type(config)=="table" and config.aimTeamCheck==true
-    local priority = tostring(type(config)=="table" and config.silentAimPriority or "FOV")
-    local targetLock = type(config)~="table" or config.silentAimTargetLock~=false
-    local stickiness = math.clamp(
-        tonumber(type(config)=="table" and config.silentAimTargetStickiness) or 1.25,
-        1,
-        2
-    )
-    local maxDistance = math.clamp(
-        tonumber(type(config)=="table" and config.silentAimMaxDistance) or 2500,
-        50,
-        10000
-    )
-    local maxDistanceSquared=maxDistance*maxDistance
-    local cameraPosition=camera.CFrame.Position
-    local center=KnifeCombatRuntime.GetAimCenter(camera)
-
-    local localTeamId=teamCheck and LocalPlayer:GetAttribute("TeamID") or nil
-    local localTeamAttr=teamCheck and LocalPlayer:GetAttribute("Team") or nil
-    local localTeam=teamCheck and LocalPlayer.Team or nil
-
-    local currentTarget=targetLock and KnifeCombatRuntime.CurrentTarget or nil
-    local bestPlayer,bestPart,bestDistanceSquared,bestScore
-
-    for _,player in ipairs(Players:GetPlayers()) do
-        if player~=LocalPlayer then
-            local teammate=false
-            if teamCheck then
-                local targetTeamId=player:GetAttribute("TeamID")
-                if localTeamId~=nil or targetTeamId~=nil then
-                    teammate=localTeamId~=nil and localTeamId==targetTeamId
-                else
-                    local targetTeamAttr=player:GetAttribute("Team")
-                    if localTeamAttr~=nil or targetTeamAttr~=nil then
-                        teammate=localTeamAttr~=nil and localTeamAttr==targetTeamAttr
-                    else
-                        teammate=localTeam~=nil and localTeam==player.Team
-                    end
-                end
-            end
-
-            if not teammate then
-                local character=player.Character
-                local humanoid=character and character:FindFirstChildOfClass("Humanoid")
-                local deadAttribute=character and character:GetAttribute("Dead")==true
-                local blocked=false
-
-                if character and type(config)=="table" then
-                    if config.silentAimIgnoreDeflecting~=false
-                        and (character:GetAttribute("Deflecting")==true or character:FindFirstChild("Deflecting")) then
-                        blocked=true
-                    end
-                    if config.silentAimIgnoreShielded~=false
-                        and (character:GetAttribute("Shielded")==true
-                            or character:FindFirstChild("Shielded")
-                            or character:FindFirstChildOfClass("ForceField")) then
-                        blocked=true
-                    end
-                    if config.silentAimVulnerableOnly==true
-                        and character:GetAttribute("Vulnerable")==false then
-                        blocked=true
-                    end
-                end
-
-                if character and not deadAttribute and not blocked
-                    and (not humanoid or humanoid.Health>0) then
-
-                    local part=KnifeCombatRuntime.ResolvePart(character,wanted,camera)
-                    if part and part:IsDescendantOf(Workspace) then
-                        local worldOffset=part.Position-cameraPosition
-                        local worldDistanceSquared=worldOffset:Dot(worldOffset)
-
-                        if worldDistanceSquared<=maxDistanceSquared then
-                            local point=camera:WorldToViewportPoint(part.Position)
-                            if point.Z>0 then
-                                local dx=point.X-center.X
-                                local dy=point.Y-center.Y
-                                local screenDistanceSquared=dx*dx+dy*dy
-
-                                local candidateRadiusSquared=radiusSquared
-                                if targetLock and player==currentTarget then
-                                    candidateRadiusSquared=candidateRadiusSquared*stickiness*stickiness
-                                end
-
-                                if (infiniteFOV or screenDistanceSquared<=candidateRadiusSquared)
-                                    and KnifeCombatRuntime.IsVisible(part,camera,visibleCheck) then
-
-                                    local score
-                                    if priority=="Distance" then
-                                        score=worldDistanceSquared
-                                    elseif priority=="Lowest Health" then
-                                        local health=humanoid and humanoid.Health or 100
-                                        local maxHealth=humanoid and math.max(humanoid.MaxHealth,1) or 100
-                                        score=(health/maxHealth)*1000000+screenDistanceSquared
-                                    else
-                                        score=screenDistanceSquared
-                                    end
-
-                                    -- Keep the current target unless another candidate is
-                                    -- meaningfully better. This removes rapid target flicker.
-                                    if targetLock and player==currentTarget then
-                                        score=score/stickiness
-                                    end
-
-                                    if bestScore==nil or score<bestScore then
-                                        bestPlayer=player
-                                        bestPart=part
-                                        bestDistanceSquared=screenDistanceSquared
-                                        bestScore=score
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    local bestDistance=bestDistanceSquared and math.sqrt(bestDistanceSquared) or nil
-    return bestPlayer,bestPart,bestDistance,center
-end
-
-KnifeCombatRuntime.IsAimInputActive = function()
-    local config = Environment.__DevKageConfig
-    if type(config) ~= "table" or config.silentAimEnabled ~= true then return false end
-    if config.silentAimAutoShoot == true then return true end
-    local ok, pressed = pcall(UserInputService.IsMouseButtonPressed, UserInputService, Enum.UserInputType.MouseButton1)
-    return ok and pressed == true
-end
-
-KnifeCombatRuntime.ResolveShotPart = function(part)
-    if not part or not part.Parent then return part end
-    local config=Environment.__DevKageConfig
-    local chance=math.clamp(
-        tonumber(type(config)=="table" and config.silentAimHeadChance) or 100,
-        0,
-        100
-    )
-    if chance<=0 then return part end
-
-    local useHead=true
-    if chance<100 then
-        local interval=math.clamp(
-            tonumber(type(config)=="table" and config.silentAimFireInterval) or 0.05,
-            0.02,
-            0.5
-        )
-        local window=math.clamp(interval*0.9,0.02,0.08)
-        local now=os.clock()
-        if now-KnifeCombatRuntime.LastHeadRoll>window then
-            KnifeCombatRuntime.LastHeadRoll=now
-            KnifeCombatRuntime.LastHeadResult=math.random(1,100)<=chance
-        end
-        useHead=KnifeCombatRuntime.LastHeadResult
-    end
-
-    if not useHead then return part end
-    local character=part:FindFirstAncestorOfClass("Model")
-    local head=character and (
-        character:FindFirstChild("Head")
-        or character:FindFirstChild("HitboxHead")
-        or character:FindFirstChild("HitboxHeadSmall")
-    )
-    return head or part
-end
-
-KnifeCombatRuntime.GetPredictedPosition = function(part)
-    if not part or not part.Parent then return nil end
-
-    local position=part.Position
-    local config=Environment.__DevKageConfig
-    local prediction=math.clamp(
-        tonumber(type(config)=="table" and config.silentAimPrediction) or 0,
-        0,
-        0.5
-    )
-
-    if type(config)=="table" and config.silentAimAutoPrediction==true then
-        local now=os.clock()
-        if now-KnifeCombatRuntime.LastPingUpdate>0.5 then
-            KnifeCombatRuntime.LastPingUpdate=now
-            local ping=KnifeCombatRuntime.CachedPing or 0
-            pcall(function()
-                local stats=game:GetService("Stats")
-                local item=stats.Network.ServerStatsItem["Data Ping"]
-                local value=item and item:GetValue()
-                if tonumber(value) then ping=math.clamp(value/1000,0,0.5) end
-            end)
-            KnifeCombatRuntime.CachedPing=ping
-        end
-
-        local camera=Workspace.CurrentCamera
-        local origin=camera and camera.CFrame.Position
-        local root=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if not origin and root then origin=root.Position end
-        origin=origin or position
-
-        local speed=math.clamp(
-            tonumber(config.silentAimProjectileSpeed) or 3000,
-            250,
-            20000
-        )
-        local multiplier=math.clamp(
-            tonumber(config.silentAimPredictionMultiplier) or 1,
-            0,
-            3
-        )
-        local travel=(position-origin).Magnitude/speed
-        prediction=math.clamp(
-            ((KnifeCombatRuntime.CachedPing or 0)+travel)*multiplier,
-            0,
-            0.5
-        )
-    end
-
-    if prediction>0 then
-        local velocity=part.AssemblyLinearVelocity
-        position=position+velocity*prediction
-    end
-    return position
-end
-
-KnifeCombatRuntime.RefreshUniversalTarget = function(force, bypassInput)
-    if not KnifeCombatRuntime.Alive or (not bypassInput and not KnifeCombatRuntime.IsAimInputActive()) then
-        KnifeCombatRuntime.CurrentTarget = nil
-        KnifeCombatRuntime.CurrentPart = nil
-        KnifeCombatRuntime.LastAimPosition = nil
-        return nil
-    end
-
-    local now = os.clock()
-    if not force and KnifeCombatRuntime.CurrentPart and KnifeCombatRuntime.CurrentPart.Parent
-        and now - KnifeCombatRuntime.LastTargetScan < 0.016 then
-        KnifeCombatRuntime.LastAimPosition = KnifeCombatRuntime.GetPredictedPosition(KnifeCombatRuntime.CurrentPart)
-        return KnifeCombatRuntime.CurrentPart
-    end
-
-    KnifeCombatRuntime.LastTargetScan = now
-    local previousGuard = KnifeCombatRuntime.UniversalGuard
-    KnifeCombatRuntime.UniversalGuard = true
-    local ok, target, part = pcall(function()
-        local targetPlayer, targetPart = KnifeCombatRuntime.FindTarget()
-        return targetPlayer, targetPart
-    end)
-    KnifeCombatRuntime.UniversalGuard = previousGuard
-
-    if ok then
-        KnifeCombatRuntime.CurrentTarget = target
-        KnifeCombatRuntime.CurrentPart = part
-        KnifeCombatRuntime.LastAimPosition = KnifeCombatRuntime.GetPredictedPosition(part)
-        KnifeCombatRuntime.LastAimUpdate = now
-        return part
-    end
-
-    KnifeCombatRuntime.CurrentTarget = nil
-    KnifeCombatRuntime.CurrentPart = nil
-    KnifeCombatRuntime.LastAimPosition = nil
-    return nil
-end
-
-KnifeCombatRuntime.ShouldRedirectShot = function()
-    local config = Environment.__DevKageConfig
-    local chance = math.clamp(
-        math.floor((tonumber(type(config)=="table" and config.silentAimHitChance) or 100)+0.5),
-        0,
-        100
-    )
-    if chance<=0 then return false end
-    if chance>=100 then return true end
-
-    -- Reuse one roll for the duration of the shot. Shotguns and weapons that
-    -- perform several internal raycasts no longer get mixed hit/miss pellets.
-    local interval=math.clamp(
-        tonumber(type(config)=="table" and config.silentAimFireInterval) or 0.05,
-        0.02,
-        0.5
-    )
-    local chanceWindow=math.clamp(interval*0.9,0.02,0.08)
-    local now=os.clock()
-    if now-KnifeCombatRuntime.LastChanceRoll>chanceWindow then
-        KnifeCombatRuntime.LastChanceRoll=now
-        KnifeCombatRuntime.LastChanceResult=math.random(1,100)<=chance
-    end
-    return KnifeCombatRuntime.LastChanceResult
-end
-
-KnifeCombatRuntime.GetUniversalAimPart = function(bypassInput)
-    if not bypassInput and not KnifeCombatRuntime.IsAimInputActive() then return nil end
-    local part = KnifeCombatRuntime.CurrentPart
-    if not part or not part.Parent or os.clock() - KnifeCombatRuntime.LastTargetScan > 0.035 then
-        part = KnifeCombatRuntime.RefreshUniversalTarget(true, bypassInput)
-    else
-        KnifeCombatRuntime.LastAimPosition = KnifeCombatRuntime.GetPredictedPosition(part)
-    end
-    if not part or not KnifeCombatRuntime.ShouldRedirectShot() then return nil end
-    local resolved = KnifeCombatRuntime.ResolveShotPart(part)
-    if not resolved or not resolved.Parent then return nil end
-    KnifeCombatRuntime.LastAimPosition = KnifeCombatRuntime.GetPredictedPosition(resolved)
-    return resolved
-end
-
-KnifeCombatRuntime.IsPlausibleShotOrigin = function(origin, direction)
-    if typeof(origin) ~= "Vector3" or typeof(direction) ~= "Vector3" then return false end
-    local directionLengthSquared = direction:Dot(direction)
-    if directionLengthSquared < 4 then return false end
-
-    local camera = Workspace.CurrentCamera
-    if camera then
-        local delta = origin - camera.CFrame.Position
-        if delta:Dot(delta) <= 625 then return true end -- within 25 studs of camera
-    end
-
-    local character = LocalPlayer.Character
-    local root = character and character:FindFirstChild("HumanoidRootPart")
-    if root then
-        local delta = origin - root.Position
-        if delta:Dot(delta) <= 625 then return true end
-    end
-    return false
-end
-
-KnifeCombatRuntime.RedirectDirection = function(origin, direction, part)
-    local aimPosition = KnifeCombatRuntime.LastAimPosition or KnifeCombatRuntime.GetPredictedPosition(part)
-    if not aimPosition then return direction end
-    local delta = aimPosition - origin
-    local targetLengthSquared = delta:Dot(delta)
-    local originalLengthSquared = direction:Dot(direction)
-    if targetLengthSquared <= 0.000001 or originalLengthSquared <= 0.000001 then return direction end
-    return delta.Unit * math.sqrt(originalLengthSquared)
-end
-
-KnifeCombatRuntime.RedirectRay = function(ray, part)
-    if typeof(ray) ~= "Ray" then return ray end
-    if not KnifeCombatRuntime.IsPlausibleShotOrigin(ray.Origin, ray.Direction) then return ray end
-    return Ray.new(ray.Origin, KnifeCombatRuntime.RedirectDirection(ray.Origin, ray.Direction, part))
-end
-
-KnifeCombatRuntime.InstallUniversalSilentAim = function()
-    if KnifeCombatRuntime.UniversalInstalled then return true end
-    if type(hookmetamethod) ~= "function" or type(getnamecallmethod) ~= "function" then
-        return false
-    end
-
-    local oldNamecall
-    local namecallHook
-    namecallHook = function(self, ...)
-        if KnifeCombatRuntime.UniversalGuard or not KnifeCombatRuntime.Alive then
-            return oldNamecall(self, ...)
-        end
-
-        local config = Environment.__DevKageConfig
-        if type(config) ~= "table" or config.silentAimEnabled ~= true then
-            return oldNamecall(self, ...)
-        end
-
-        local method = getnamecallmethod()
-        local args = table.pack(...)
-
-        if self == Workspace and UniversalRayMethods[method] then
-            if method == "Raycast" then
-                local origin, direction = args[1], args[2]
-                if KnifeCombatRuntime.IsPlausibleShotOrigin(origin, direction) then
-                    local part = KnifeCombatRuntime.GetUniversalAimPart()
-                    if part then
-                        args[2] = KnifeCombatRuntime.RedirectDirection(origin, direction, part)
-                        return oldNamecall(self, table.unpack(args,1,args.n))
-                    end
-                end
-            else
-                local ray = args[1]
-                if typeof(ray) == "Ray" and KnifeCombatRuntime.IsPlausibleShotOrigin(ray.Origin, ray.Direction) then
-                    local part = KnifeCombatRuntime.GetUniversalAimPart()
-                    if part then
-                        args[1] = KnifeCombatRuntime.RedirectRay(ray, part)
-                        return oldNamecall(self, table.unpack(args,1,args.n))
-                    end
-                end
-            end
-        end
-
-        local camera = Workspace.CurrentCamera
-        if camera and self == camera and CameraRayMethods[method] and KnifeCombatRuntime.IsAimInputActive() then
-            KnifeCombatRuntime.UniversalGuard = true
-            local ok, ray = pcall(function()
-                return oldNamecall(self, table.unpack(args,1,args.n))
-            end)
-            KnifeCombatRuntime.UniversalGuard = false
-            if ok and typeof(ray) == "Ray" then
-                local part = KnifeCombatRuntime.GetUniversalAimPart()
-                if part then return KnifeCombatRuntime.RedirectRay(ray, part) end
-                return ray
-            end
-            return oldNamecall(self, table.unpack(args,1,args.n))
-        end
-
-        return oldNamecall(self, ...)
-    end
-
-    oldNamecall = hookmetamethod(game, "__namecall", namecallHook)
-    KnifeCombatRuntime.UniversalOldNamecall = oldNamecall
-
-    if UniversalMouse then
-        local oldIndex
-        local indexHook
-        indexHook = function(self, key)
-            if KnifeCombatRuntime.UniversalGuard or not KnifeCombatRuntime.Alive or self ~= UniversalMouse then
-                return oldIndex(self,key)
-            end
-
-            local config = Environment.__DevKageConfig
-            if type(config) ~= "table" or config.silentAimEnabled ~= true
-                or (key ~= "Hit" and key ~= "Target" and key ~= "UnitRay") then
-                return oldIndex(self,key)
-            end
-
-            local part = KnifeCombatRuntime.GetUniversalAimPart()
-            if not part then return oldIndex(self,key) end
-            local aimPosition = KnifeCombatRuntime.LastAimPosition or KnifeCombatRuntime.GetPredictedPosition(part)
-            if not aimPosition then return oldIndex(self,key) end
-
-            if key == "Target" then return part end
-            if key == "Hit" then return CFrame.new(aimPosition) end
-            if key == "UnitRay" then
-                local camera = Workspace.CurrentCamera
-                if camera then
-                    local origin = camera.CFrame.Position
-                    local delta = aimPosition - origin
-                    if delta.Magnitude > 0.0001 then return Ray.new(origin, delta.Unit) end
-                end
-            end
-            return oldIndex(self,key)
-        end
-        oldIndex = hookmetamethod(game, "__index", indexHook)
-        KnifeCombatRuntime.UniversalOldIndex = oldIndex
-    end
-
-    KnifeCombatRuntime.UniversalInstalled = true
-    return true
-end
-
-KnifeCombatRuntime.IsCurrentRuntime = function()
-    return KnifeCombatRuntime.Alive
-        and Environment.__DevKageCombatRuntime == KnifeCombatRuntime
-end
-
-KnifeCombatRuntime.InstallRivalsUtilitySilentAim = function()
-    if KnifeCombatRuntime.RivalsUtilityRaycastInstalled then return true end
-    local modules=ReplicatedStorage:FindFirstChild("Modules")
-    local utilityModule=modules and modules:FindFirstChild("Utility")
-    if not utilityModule or not utilityModule:IsA("ModuleScript") then return false end
-    local ok,utility=pcall(require,utilityModule)
-    if not ok or type(utility)~="table" or type(utility.Raycast)~="function" then return false end
-
-    local existing=Environment.__DevKageRivalsUtilityAimBridge
-    if type(existing)=="table" and existing.Utility==utility and type(existing.Wrapper)=="function" and utility.Raycast==existing.Wrapper then
-        existing.Runtime=KnifeCombatRuntime
-        KnifeCombatRuntime.RivalsUtility=utility
-        KnifeCombatRuntime.RivalsUtilityOriginal=existing.Original
-        KnifeCombatRuntime.RivalsUtilityWrapper=existing.Wrapper
-        KnifeCombatRuntime.RivalsUtilityRaycastInstalled=true
-        return true
-    end
-
-    local bridge={Runtime=KnifeCombatRuntime,Utility=utility,Original=utility.Raycast}
-    bridge.Wrapper=function(...)
-        local n=select("#",...); local args={...}; local runtime=bridge.Runtime
-        if runtime and runtime.Alive and Environment.__DevKageCombatRuntime==runtime then
-            local config=Environment.__DevKageConfig
-            if type(config)=="table" and config.silentAimEnabled==true then
-                local offset=(typeof(args[1])=="table" or typeof(args[1])=="Instance") and 1 or 0
-                local origin=args[offset+1]; local targetPos=args[offset+2]; local maxDist=args[offset+3]
-                if typeof(origin)=="Vector3" and typeof(targetPos)=="Vector3" and runtime.IsPlausibleShotOrigin(origin,targetPos-origin) then
-                    pcall(function()
-                        local part=runtime.GetUniversalAimPart(true)
-                        if part then
-                            local aimPos=runtime.LastAimPosition or runtime.GetPredictedPosition(part)
-                            if aimPos then
-                                local delta=aimPos-origin
-                                if delta.Magnitude>0.05 then
-                                    local distance=tonumber(maxDist) or (targetPos-origin).Magnitude
-                                    if distance<=0 then distance=1000 end
-                                    args[offset+2]=origin+delta.Unit*distance
-                                end
-                            end
-                        end
-                    end)
-                end
-            end
-        end
-        return bridge.Original(table.unpack(args,1,n))
-    end
-    utility.Raycast=bridge.Wrapper
-    Environment.__DevKageRivalsUtilityAimBridge=bridge
-    KnifeCombatRuntime.RivalsUtility=utility
-    KnifeCombatRuntime.RivalsUtilityOriginal=bridge.Original
-    KnifeCombatRuntime.RivalsUtilityWrapper=bridge.Wrapper
-    KnifeCombatRuntime.RivalsUtilityRaycastInstalled=true
-    return true
-end
-
-KnifeCombatRuntime.FindBloxRaycastModule = function()
-    if type(KnifeCombatRuntime.BloxRaycastModule) == "table" then
-        return KnifeCombatRuntime.BloxRaycastModule
-    end
-
-    local now = os.clock()
-    if now < KnifeCombatRuntime.BloxRaycastNextSearch then return nil end
-    KnifeCombatRuntime.BloxRaycastNextSearch = now + 1.5
-
-    -- Preferred path from the supplied Blox Strikes source.
-    local sharedFolder = ReplicatedStorage:FindFirstChild("Shared")
-    local moduleScript = sharedFolder and sharedFolder:FindFirstChild("Raycast")
-    if moduleScript and moduleScript:IsA("ModuleScript") then
-        local ok, module = pcall(require, moduleScript)
-        if ok and type(module) == "table"
-            and type(module.cast) == "function"
-            and type(module.castThrough) == "function" then
-            KnifeCombatRuntime.BloxRaycastModule = module
-            return module
-        end
-    end
-
-    -- Only GC-scan when the Blox-style Shared hierarchy exists. This avoids an
-    -- expensive scan on unrelated games while preserving the supplied fallback.
-    if sharedFolder and type(getgc) == "function" then
-        local ok, objects = pcall(getgc, true)
-        if ok and type(objects) == "table" then
-            for _, object in next, objects do
-                if type(object) == "table"
-                    and type(rawget(object,"cast")) == "function"
-                    and type(rawget(object,"castThrough")) == "function" then
-                    KnifeCombatRuntime.BloxRaycastModule = object
-                    return object
-                end
-            end
-        end
-    end
-    return nil
-end
-
-KnifeCombatRuntime.IsBloxShotOrigin = function(origin)
-    if typeof(origin) ~= "Vector3" then return false end
-    local character = LocalPlayer.Character
-    local head = character and character:FindFirstChild("Head")
-    if not head then return false end
-    local delta = origin - head.Position
-    return delta:Dot(delta) < 144 -- supplied source uses 12 studs
-end
-
-KnifeCombatRuntime.RedirectBloxDirection = function(origin, direction, part)
-    if typeof(origin) ~= "Vector3" or typeof(direction) ~= "Vector3" then return direction end
-    local aimPosition = KnifeCombatRuntime.LastAimPosition
-        or KnifeCombatRuntime.GetPredictedPosition(part)
-    if not aimPosition then return direction end
-    local delta = aimPosition - origin
-    if delta:Dot(delta) <= 0.000001 then return direction end
-    -- Blox Strikes' Shared.Raycast expects the point-to-target displacement,
-    -- matching the supplied cast/castThrough implementation.
-    return delta
-end
-
-KnifeCombatRuntime.InstallBloxStrikesSilentAim = function()
-    if KnifeCombatRuntime.BloxRaycastInstalled then return true end
-    local module=KnifeCombatRuntime.FindBloxRaycastModule()
-    if type(module)~="table" or type(module.cast)~="function" or type(module.castThrough)~="function" then return false end
-
-    local existing=Environment.__DevKageBloxRaycastBridge
-    if type(existing)=="table" and existing.Module==module then
-        existing.Runtime=KnifeCombatRuntime
-        KnifeCombatRuntime.BloxRaycastInstalled=true
-        KnifeCombatRuntime.BloxRaycastModule=module
-        return true
-    end
-
-    local bridge={Runtime=KnifeCombatRuntime,Module=module,OldCast=module.cast,OldCastThrough=module.castThrough}
-    local function redirect(origin,direction)
-        local runtime=bridge.Runtime
-        if not runtime or not runtime.Alive or Environment.__DevKageCombatRuntime~=runtime then return direction end
-        local config=Environment.__DevKageConfig
-        if type(config)~="table" or config.silentAimEnabled~=true or typeof(direction)~="Vector3" or not runtime.IsBloxShotOrigin(origin) then return direction end
-        local redirected=direction
-        pcall(function()
-            local part=runtime.GetUniversalAimPart(true)
-            if part then redirected=runtime.RedirectBloxDirection(origin,direction,part) end
-        end)
-        return redirected
-    end
-    bridge.CastWrapper=function(origin,direction,...)
-        return bridge.OldCast(origin,redirect(origin,direction),...)
-    end
-    bridge.CastThroughWrapper=function(origin,direction,...)
-        return bridge.OldCastThrough(origin,redirect(origin,direction),...)
-    end
-
-    local castHooked,throughHooked=false,false
-    if type(hookfunction)=="function" then
-        local ok1,old1=pcall(hookfunction,module.cast,bridge.CastWrapper)
-        if ok1 and type(old1)=="function" then bridge.OldCast=old1; castHooked=true end
-        local ok2,old2=pcall(hookfunction,module.castThrough,bridge.CastThroughWrapper)
-        if ok2 and type(old2)=="function" then bridge.OldCastThrough=old2; throughHooked=true end
-    end
-    if not castHooked then module.cast=bridge.CastWrapper end
-    if not throughHooked then module.castThrough=bridge.CastThroughWrapper end
-    bridge.Mode=(castHooked or throughHooked) and "hybrid" or "table"
-
-    Environment.__DevKageBloxRaycastBridge=bridge
-    KnifeCombatRuntime.BloxCastOriginal=bridge.OldCast
-    KnifeCombatRuntime.BloxCastThroughOriginal=bridge.OldCastThrough
-    KnifeCombatRuntime.BloxRaycastInstalled=true
-    return true
-end
-
-KnifeCombatRuntime.NoRecoilActive = function()
-    local config = Environment.__DevKageConfig
-    return KnifeCombatRuntime.IsCurrentRuntime()
-        and type(config) == "table"
-        and config.noRecoilEnabled == true
-end
-
-KnifeCombatRuntime.InstallRivalsNoRecoil = function()
-    local playerScripts=LocalPlayer:FindFirstChild("PlayerScripts")
-    local modules=playerScripts and playerScripts:FindFirstChild("Modules")
-    local itemTypes=modules and modules:FindFirstChild("ItemTypes")
-    local gunScript=itemTypes and itemTypes:FindFirstChild("Gun")
-    if not gunScript or not gunScript:IsA("ModuleScript") then return false end
-
-    local ok,gunModule=pcall(require,gunScript)
-    if not ok or type(gunModule)~="table" or type(gunModule._Recoil)~="function" then
-        return false
-    end
-
-    local existing=Environment.__DevKageRivalsNativeCombat
-    if type(existing)=="table"
-        and existing.Gun==gunModule
-        and type(existing.RecoilWrapper)=="function"
-        and gunModule._Recoil==existing.RecoilWrapper then
-        existing.Runtime=KnifeCombatRuntime
-        KnifeCombatRuntime.RivalsNativeCombatBridge=existing
-        KnifeCombatRuntime.RivalsGunModule=gunModule
-        KnifeCombatRuntime.RivalsRecoilWrapper=existing.RecoilWrapper
-        return true
-    end
-
-    local bridge=type(existing)=="table" and existing or {}
-    bridge.Runtime=KnifeCombatRuntime
-    bridge.Gun=gunModule
-    bridge.RecoilOriginal=gunModule._Recoil
-
-    bridge.RecoilWrapper=function(self,multiplier,...)
-        local runtime=bridge.Runtime
-        local config=Environment.__DevKageConfig
-        if runtime and runtime.Alive
-            and Environment.__DevKageCombatRuntime==runtime
-            and type(config)=="table"
-            and config.noRecoilEnabled==true then
-            return
-        end
-        return bridge.RecoilOriginal(self,multiplier,...)
-    end
-
-    gunModule._Recoil=bridge.RecoilWrapper
-    Environment.__DevKageRivalsNativeCombat=bridge
-    KnifeCombatRuntime.RivalsNativeCombatBridge=bridge
-    KnifeCombatRuntime.RivalsGunModule=gunModule
-    KnifeCombatRuntime.RivalsRecoilOriginal=bridge.RecoilOriginal
-    KnifeCombatRuntime.RivalsRecoilWrapper=bridge.RecoilWrapper
-    return true
-end
-
-KnifeCombatRuntime.InstallBloxNoRecoil = function()
-    if KnifeCombatRuntime.BloxWeaponModule then return true end
-    local components = ReplicatedStorage:FindFirstChild("Components")
-    local weaponScript = components and components:FindFirstChild("Weapon")
-    if not weaponScript or not weaponScript:IsA("ModuleScript") then return false end
-
-    local ok, weaponModule = pcall(require,weaponScript)
-    if not ok or type(weaponModule) ~= "table" then return false end
-
-    local patched = 0
-    for key, value in pairs(weaponModule) do
-        if type(value) == "function" then
-            local lower = tostring(key):lower()
-            local recoilLike = lower == "recoil" or lower == "_recoil"
-                or lower == "applyrecoil" or lower == "addrecoil"
-                or lower == "camerarecoil" or lower == "camera_recoil"
-                or lower == "recoilcamera"
-            local getterLike = lower:find("get",1,true) == 1
-                or lower:find("calc",1,true) == 1
-                or lower:find("compute",1,true) == 1
-            if recoilLike and not getterLike then
-                local original = value
-                local wrapper = function(...)
-                    if KnifeCombatRuntime.NoRecoilActive() then return end
-                    return original(...)
-                end
-                KnifeCombatRuntime.BloxRecoilOriginals[key] = original
-                KnifeCombatRuntime.BloxRecoilWrappers[key] = wrapper
-                weaponModule[key] = wrapper
-                patched = patched + 1
-            end
-        end
-    end
-
-    KnifeCombatRuntime.BloxWeaponModule = weaponModule
-    return patched > 0
-end
-
-local PhantomRecoilFields = {
-    "camkickmin","camkickmax","aimcamkickmin","aimcamkickmax",
-    "aimtranskickmin","aimtranskickmax","transkickmin","transkickmax",
-    "rotkickmin","rotkickmax","aimrotkickmin","aimrotkickmax",
-}
-
-KnifeCombatRuntime.CountPhantomRecoilFields = function(data)
-    if type(data) ~= "table" then return 0 end
-    local count = 0
-    for _, key in ipairs(PhantomRecoilFields) do
-        if rawget(data,key) ~= nil then count = count + 1 end
-    end
-    return count
-end
-
-KnifeCombatRuntime.ApplyPhantomGunData = function(data)
-    if type(data) ~= "table" or KnifeCombatRuntime.CountPhantomRecoilFields(data) < 3 then
-        return false
-    end
-    local originals = KnifeCombatRuntime.PhantomGunDataOriginals[data]
-    if not originals then
-        originals = {}
-        for _, key in ipairs(PhantomRecoilFields) do
-            if rawget(data,key) ~= nil then originals[key] = data[key] end
-        end
-        KnifeCombatRuntime.PhantomGunDataOriginals[data] = originals
-    end
-    for key in pairs(originals) do data[key] = Vector3.zero end
-    return true
-end
-
-KnifeCombatRuntime.RestorePhantomGunData = function()
-    for data, originals in pairs(KnifeCombatRuntime.PhantomGunDataOriginals) do
-        if type(data) == "table" and type(originals) == "table" then
-            for key, value in pairs(originals) do data[key] = value end
-        end
-        KnifeCombatRuntime.PhantomGunDataOriginals[data] = nil
-    end
-end
-
-KnifeCombatRuntime.InstallPhantomNoRecoil = function()
-    if KnifeCombatRuntime.PhantomLoadGunWrapper then return true end
-    if KnifeCombatRuntime.PhantomRecoilScanDone then return false end
-    KnifeCombatRuntime.PhantomRecoilScanDone = true
-    if type(getgc) ~= "function" then return false end
-
-    local ok, objects = pcall(getgc,true)
-    if not ok or type(objects) ~= "table" then return false end
-    local characterModule
-    for _, object in next, objects do
-        if type(object) == "table"
-            and type(rawget(object,"loadgun")) == "function"
-            and type(rawget(object,"loadgrenade")) == "function" then
-            characterModule = object
-            break
-        end
-    end
-    if not characterModule then return false end
-
-    local original = characterModule.loadgun
-    local wrapper
-    wrapper = function(...)
-        local args = table.pack(...)
-        if KnifeCombatRuntime.NoRecoilActive() then
-            for i = 1,args.n do
-                if type(args[i]) == "table" then
-                    KnifeCombatRuntime.ApplyPhantomGunData(args[i])
-                end
-            end
-        end
-        return original(table.unpack(args,1,args.n))
-    end
-
-    KnifeCombatRuntime.PhantomCharacterModule = characterModule
-    KnifeCombatRuntime.PhantomLoadGunOriginal = original
-    KnifeCombatRuntime.PhantomLoadGunWrapper = wrapper
-    characterModule.loadgun = wrapper
-
-    -- Apply immediately to already-loaded weapon data tables.
-    if KnifeCombatRuntime.NoRecoilActive() then
-        for _, object in next, objects do
-            if type(object) == "table" then
-                KnifeCombatRuntime.ApplyPhantomGunData(object)
-            end
-        end
-    end
-    return true
-end
-
-KnifeCombatRuntime.InstallGenericNoRecoil = function()
-    if KnifeCombatRuntime.GenericRecoilScanDone then return false end
-    KnifeCombatRuntime.GenericRecoilScanDone = true
-    if type(getgc) ~= "function" then return false end
-    local ok, objects = pcall(getgc,true)
-    if not ok or type(objects) ~= "table" then return false end
-    local patched = 0
-    for _, object in next, objects do
-        if type(object) == "table" and not KnifeCombatRuntime.GenericRecoilPatched[object] then
-            local shootLike = type(rawget(object,"StartShooting")) == "function"
-                or type(rawget(object,"Shoot")) == "function"
-                or type(rawget(object,"Fire")) == "function"
-            local recoilKey
-            for _, key in ipairs({"_Recoil","ApplyRecoil","applyRecoil","AddRecoil","addRecoil"}) do
-                if type(rawget(object,key)) == "function" then recoilKey = key break end
-            end
-            if shootLike and recoilKey then
-                local original = object[recoilKey]
-                local wrapper = function(...)
-                    if KnifeCombatRuntime.NoRecoilActive() then return end
-                    return original(...)
-                end
-                object[recoilKey] = wrapper
-                KnifeCombatRuntime.GenericRecoilPatched[object] = {
-                    Key=recoilKey,Original=original,Wrapper=wrapper
-                }
-                patched = patched + 1
-            end
-        end
-    end
-    return patched > 0
-end
-
-KnifeCombatRuntime.ApplyItemLibraryWeaponMods = function()
-    local config=Environment.__DevKageConfig
-    if type(config)~="table" then return false end
-    local modules=ReplicatedStorage:FindFirstChild("Modules")
-    local itemModule=modules and modules:FindFirstChild("ItemLibrary")
-    if not itemModule or not itemModule:IsA("ModuleScript") then return false end
-    local ok,itemLib=pcall(require,itemModule)
-    if not ok or type(itemLib)~="table" or type(itemLib.Items)~="table" then return false end
-    KnifeCombatRuntime.ItemLibrary=itemLib
-    for name,item in pairs(itemLib.Items) do
-        if type(item)=="table" then
-            local saved=KnifeCombatRuntime.ItemLibraryOriginals[name]
-            if not saved then
-                saved={}
-                for _,key in ipairs({"ShootRecoil","ShootSpread","AimSpreadMultiplier","ShootSpreadPerVelocityUnit","ShootSpreadPerVelocityLimit"}) do
-                    if item[key]~=nil then saved[key]=item[key] end
-                end
-                KnifeCombatRuntime.ItemLibraryOriginals[name]=saved
-            end
-            if config.noRecoilEnabled==true and saved.ShootRecoil~=nil then item.ShootRecoil=0 elseif saved.ShootRecoil~=nil then item.ShootRecoil=saved.ShootRecoil end
-            if config.noSpreadEnabled==true then
-                for _,key in ipairs({"ShootSpread","AimSpreadMultiplier","ShootSpreadPerVelocityUnit","ShootSpreadPerVelocityLimit"}) do
-                    if saved[key]~=nil then item[key]=0 end
-                end
-            else
-                for _,key in ipairs({"ShootSpread","AimSpreadMultiplier","ShootSpreadPerVelocityUnit","ShootSpreadPerVelocityLimit"}) do
-                    if saved[key]~=nil then item[key]=saved[key] end
-                end
-            end
-        end
-    end
-    return true
-end
-
-KnifeCombatRuntime.RestoreItemLibraryWeaponMods = function()
-    local itemLib=KnifeCombatRuntime.ItemLibrary
-    if type(itemLib)=="table" and type(itemLib.Items)=="table" then
-        for name,saved in pairs(KnifeCombatRuntime.ItemLibraryOriginals) do
-            local item=itemLib.Items[name]
-            if type(item)=="table" then for key,value in pairs(saved) do item[key]=value end end
-        end
-    end
-end
-
-KnifeCombatRuntime.InstallNoRecoilAdapters = function(force)
-    if KnifeCombatRuntime.NoRecoilInstallStarted then return end
-    if KnifeCombatRuntime.NoRecoilAdaptersInstalled and not force then return end
-    KnifeCombatRuntime.NoRecoilInstallStarted = true
-
-    task.spawn(function()
-        local installed = false
-
-        -- RIVALS: exact ItemTypes.Gun._Recoil adapter from the supplied source.
-        local rivalsOk, rivalsInstalled = pcall(KnifeCombatRuntime.InstallRivalsNoRecoil)
-        if rivalsOk and rivalsInstalled then installed = true end
-
-        -- Blox Strikes: only patch explicitly named recoil methods if the
-        -- current Weapon module actually exposes one. Never scan/hook unknown
-        -- functions because that can catch a firing method.
-        if KnifeCombatRuntime.IsBloxStrikes() then
-            local bloxOk, bloxInstalled = pcall(KnifeCombatRuntime.InstallBloxNoRecoil)
-            if bloxOk and bloxInstalled then installed = true end
-        end
-
-        -- Phantom-style gun-data tables use known camera/rotation kick fields.
-        if not KnifeCombatRuntime.IsRivals() and not KnifeCombatRuntime.IsBloxStrikes() then
-            local camera = Workspace.CurrentCamera
-            local looksPhantom = Workspace:FindFirstChild("Players") ~= nil
-                and camera ~= nil and camera:FindFirstChild("Main") ~= nil
-            if looksPhantom then
-                local pfOk, pfInstalled = pcall(KnifeCombatRuntime.InstallPhantomNoRecoil)
-                if pfOk and pfInstalled then installed = true end
-            end
-        end
-
-        KnifeCombatRuntime.NoRecoilAdaptersInstalled = installed
-        KnifeCombatRuntime.NoRecoilInstallStarted = false
-    end)
-end
-
-KnifeCombatRuntime.FindBloxGameState = function()
-    if KnifeCombatRuntime.BloxGameStateSearched then return KnifeCombatRuntime.BloxGameState end
-    KnifeCombatRuntime.BloxGameStateSearched = true
-    local database = ReplicatedStorage:FindFirstChild("Database")
-    local components = database and database:FindFirstChild("Components")
-    local moduleScript = components and components:FindFirstChild("GameState")
-    if moduleScript and moduleScript:IsA("ModuleScript") then
-        local ok, value = pcall(require,moduleScript)
-        if ok and type(value) == "table" then KnifeCombatRuntime.BloxGameState = value end
-    end
-    return KnifeCombatRuntime.BloxGameState
-end
-
-KnifeCombatRuntime.StepBunnyHop = function(dt)
-    local config = Environment.__DevKageConfig
-    if type(config) ~= "table" or config.bunnyHopEnabled ~= true then return end
+local function stepBunnyHop(dt)
+    if not KnifeCombatRuntime.Alive then return end
+    local liveConfig = Environment.__DevKageConfig
+    if type(liveConfig) ~= "table" or liveConfig.bunnyHopEnabled ~= true then return end
 
     local focused
     pcall(function() focused = UserInputService:GetFocusedTextBox() end)
@@ -25501,32 +24377,29 @@ KnifeCombatRuntime.StepBunnyHop = function(dt)
     end
 
     local velocity = root.AssemblyLinearVelocity
-    local horizontal = Vector3.new(velocity.X,0,velocity.Z)
+    local horizontal = Vector3.new(velocity.X, 0, velocity.Z)
     local speed = horizontal.Magnitude
 
     local moveDirection = humanoid.MoveDirection
     local direction
     if moveDirection.Magnitude > 0.05 then
-        direction = Vector3.new(moveDirection.X,0,moveDirection.Z).Unit
+        direction = Vector3.new(moveDirection.X, 0, moveDirection.Z).Unit
     elseif speed > 0.05 then
         direction = horizontal.Unit
     else
         return
     end
 
-    local maxSpeed = math.clamp(tonumber(config.bunnyHopMaxSpeed) or 28,16,120)
-    local boost = math.clamp(tonumber(config.bunnyHopBoost) or 0.4,0,3)
-    local frameScale = math.clamp((tonumber(dt) or (1/60)) * 60,0.25,4)
+    local maxSpeed = math.clamp(tonumber(liveConfig.bunnyHopMaxSpeed) or 28, 16, 120)
+    local boost = math.clamp(tonumber(liveConfig.bunnyHopBoost) or 0.4, 0, 3)
+    local frameScale = math.clamp((tonumber(dt) or (1 / 60)) * 60, 0.25, 4)
 
-    -- Start from the character's actual horizontal speed. When a custom
-    -- controller zeroes horizontal velocity during the jump, use WalkSpeed as
-    -- a conservative baseline instead of doing nothing.
     local baseSpeed = speed
     if baseSpeed < 0.1 then
-        baseSpeed = math.min(math.max(tonumber(humanoid.WalkSpeed) or 16,16),maxSpeed)
+        baseSpeed = math.min(math.max(tonumber(humanoid.WalkSpeed) or 16, 16), maxSpeed)
     end
 
-    local newSpeed = math.min(baseSpeed + boost * frameScale,maxSpeed)
+    local newSpeed = math.min(baseSpeed + boost * frameScale, maxSpeed)
     local newVelocity = Vector3.new(
         direction.X * newSpeed,
         velocity.Y,
@@ -25534,694 +24407,58 @@ KnifeCombatRuntime.StepBunnyHop = function(dt)
     )
 
     pcall(function() root.AssemblyLinearVelocity = newVelocity end)
-    -- Compatibility fallback for controllers that still observe BasePart.Velocity.
     pcall(function() root.Velocity = newVelocity end)
 end
 
-KnifeCombatRuntime.GetAimBackendName = function()
-    if KnifeCombatRuntime.BloxRaycastInstalled then return "Blox Shared.Raycast" end
-    if KnifeCombatRuntime.RivalsUtilityRaycastInstalled then return "Utility.Raycast silent aim" end
-    if KnifeCombatRuntime.IsRivals() and KnifeCombatRuntime.Loaded then return "RIVALS native" end
-    if KnifeCombatRuntime.UniversalInstalled then return "Roblox ray/mouse APIs" end
-    return "Mouse fallback"
-end
-
-KnifeCombatRuntime.UninstallNoSpread = function()
-    if KnifeCombatRuntime.SpreadInstalled
-        and type(KnifeCombatRuntime.GameplayUtility) == "table"
-        and KnifeCombatRuntime.GameplayUtility.GetSpread == KnifeCombatRuntime.SpreadWrapper
-        and type(KnifeCombatRuntime.OriginalGetSpread) == "function" then
-        KnifeCombatRuntime.GameplayUtility.GetSpread = KnifeCombatRuntime.OriginalGetSpread
-    end
-    KnifeCombatRuntime.SpreadInstalled = false
-    KnifeCombatRuntime.SpreadWrapper = nil
-    KnifeCombatRuntime.OriginalGetSpread = nil
-end
-
-KnifeCombatRuntime.InstallNoSpread = function()
-    local config=Environment.__DevKageConfig
-    if not KnifeCombatRuntime.Alive or type(config)~="table"
-        or config.noSpreadEnabled~=true then
-        return false
-    end
-
-    if KnifeCombatRuntime.IsRivals() then
-        local modules=ReplicatedStorage:FindFirstChild("Modules")
-        local gameplayScript=modules and modules:FindFirstChild("GameplayUtility")
-        if not gameplayScript or not gameplayScript:IsA("ModuleScript") then return false end
-
-        local ok,gameplay=pcall(require,gameplayScript)
-        if not ok or type(gameplay)~="table" or type(gameplay.GetSpread)~="function" then
-            return false
-        end
-
-        local bridge=Environment.__DevKageRivalsNativeCombat
-        if type(bridge)~="table" then
-            bridge={Runtime=KnifeCombatRuntime}
-            Environment.__DevKageRivalsNativeCombat=bridge
-        end
-
-        bridge.Runtime=KnifeCombatRuntime
-
-        if bridge.Gameplay==gameplay
-            and type(bridge.SpreadWrapper)=="function"
-            and gameplay.GetSpread==bridge.SpreadWrapper then
-            KnifeCombatRuntime.RivalsNativeCombatBridge=bridge
-            KnifeCombatRuntime.GameplayUtility=gameplay
-            KnifeCombatRuntime.SpreadWrapper=bridge.SpreadWrapper
-            KnifeCombatRuntime.SpreadInstalled=true
-            return true
-        end
-
-        bridge.Gameplay=gameplay
-        bridge.SpreadOriginal=gameplay.GetSpread
-        bridge.SpreadWrapper=function(spread,aimMultiplier,isAiming,isCrouching,pelletIndex,totalPellets,consistent,...)
-            local runtime=bridge.Runtime
-            local liveConfig=Environment.__DevKageConfig
-            if runtime and runtime.Alive
-                and Environment.__DevKageCombatRuntime==runtime
-                and type(liveConfig)=="table"
-                and liveConfig.noSpreadEnabled==true then
-                return ZeroCFrame
-            end
-            return bridge.SpreadOriginal(
-                spread,aimMultiplier,isAiming,isCrouching,pelletIndex,totalPellets,consistent,...
-            )
-        end
-
-        gameplay.GetSpread=bridge.SpreadWrapper
-        KnifeCombatRuntime.RivalsNativeCombatBridge=bridge
-        KnifeCombatRuntime.GameplayUtility=gameplay
-        KnifeCombatRuntime.OriginalGetSpread=bridge.SpreadOriginal
-        KnifeCombatRuntime.SpreadWrapper=bridge.SpreadWrapper
-        KnifeCombatRuntime.SpreadInstalled=true
-        return true
-    end
-
-    local gameplay=KnifeCombatRuntime.GameplayUtility
-    if type(gameplay)~="table" or type(gameplay.GetSpread)~="function" then return false end
-    if KnifeCombatRuntime.SpreadInstalled and gameplay.GetSpread==KnifeCombatRuntime.SpreadWrapper then
-        return true
-    end
-
-    local original=gameplay.GetSpread
-    local wrapper
-    wrapper=function(...)
-        local liveConfig=Environment.__DevKageConfig
-        if KnifeCombatRuntime.Alive and type(liveConfig)=="table"
-            and liveConfig.noSpreadEnabled==true then
-            return ZeroCFrame
-        end
-        return original(...)
-    end
-
-    KnifeCombatRuntime.OriginalGetSpread=original
-    KnifeCombatRuntime.SpreadWrapper=wrapper
-    gameplay.GetSpread=wrapper
-    KnifeCombatRuntime.SpreadInstalled=true
-    return true
-end
-
-KnifeCombatRuntime.LoadModules = function()
-    if not KnifeCombatRuntime.Alive or not KnifeCombatRuntime.IsRivals() then return false end
-    local modules = ReplicatedStorage:FindFirstChild("Modules")
-    local utilityModule = modules and modules:FindFirstChild("Utility")
-    local enumModule = modules and modules:FindFirstChild("EnumLibrary")
-    local gameplayModule = modules and modules:FindFirstChild("GameplayUtility")
-    local playerScripts = LocalPlayer:FindFirstChild("PlayerScripts")
-    local controllers = playerScripts and playerScripts:FindFirstChild("Controllers")
-    local fighterModule = controllers and controllers:FindFirstChild("FighterController")
-    if utilityModule and utilityModule:IsA("ModuleScript") then
-        local ok, value = pcall(require, utilityModule)
-        if ok and type(value) == "table" then KnifeCombatRuntime.Utility = value end
-    end
-    if enumModule and enumModule:IsA("ModuleScript") then
-        local ok, value = pcall(require, enumModule)
-        if ok and type(value) == "table" then KnifeCombatRuntime.EnumLibrary = value end
-    end
-    if gameplayModule and gameplayModule:IsA("ModuleScript") then
-        local ok, value = pcall(require, gameplayModule)
-        if ok and type(value) == "table" then KnifeCombatRuntime.GameplayUtility = value end
-    end
-    if fighterModule and fighterModule:IsA("ModuleScript") then
-        local ok, value = pcall(require, fighterModule)
-        if ok and type(value) == "table" then KnifeCombatRuntime.FighterController = value end
-    end
-    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-    local replication = remotes and remotes:FindFirstChild("Replication")
-    local fighterRemotes = replication and replication:FindFirstChild("Fighter")
-    local useItem = fighterRemotes and fighterRemotes:FindFirstChild("UseItem")
-    KnifeCombatRuntime.UseItemRemote =
-        useItem and useItem:IsA("RemoteEvent") and useItem or nil
-    KnifeCombatRuntime.Loaded =
-        type(KnifeCombatRuntime.Utility) == "table"
-        and type(KnifeCombatRuntime.EnumLibrary) == "table"
-        and type(KnifeCombatRuntime.FighterController) == "table"
-        and KnifeCombatRuntime.UseItemRemote ~= nil
-    KnifeCombatRuntime.InstallNoSpread()
-    return KnifeCombatRuntime.Loaded
-end
-
-KnifeCombatRuntime.QueueModuleLoad = function(force)
-    if KnifeCombatRuntime.Loading or not KnifeCombatRuntime.Alive then return end
-    local now = os.clock()
-    if not force and now < KnifeCombatRuntime.NextLoadAttempt then return end
-    KnifeCombatRuntime.NextLoadAttempt = now + 1
-    KnifeCombatRuntime.Loading = true
-    task.spawn(function()
-        local ok, loaded = pcall(KnifeCombatRuntime.LoadModules)
-        KnifeCombatRuntime.Loading = false
-        if not KnifeCombatRuntime.Alive then return end
-        if not ok then
-            KnifeCombatRuntime.SetStatus("Combat modules failed to load")
-        elseif loaded then
-            KnifeCombatRuntime.SetStatus("RIVALS silent aim ready")
-        elseif KnifeCombatRuntime.IsRivals() then
-            KnifeCombatRuntime.SetStatus("Waiting for RIVALS match modules")
-        else
-            KnifeCombatRuntime.SetStatus("Fallback mouse aim ready")
-        end
-    end)
-end
-
-KnifeCombatRuntime.GetLocalFighter = function()
-    local controller = KnifeCombatRuntime.FighterController
-    return type(controller) == "table" and controller.LocalFighter or nil
-end
-
-KnifeCombatRuntime.FireAt = function(part)
-    if not KnifeCombatRuntime.Loaded or not part or not part.Parent then return false end
-    local fighter = KnifeCombatRuntime.GetLocalFighter()
-    local equipped = fighter and fighter.EquippedItem
-    if not equipped or type(equipped.Get) ~= "function" then return false end
-    local ok, objectId = pcall(equipped.Get, equipped, "ObjectID")
-    if not ok or objectId == nil then return false end
-    local entityRoot = fighter.Entity and fighter.Entity.RootPart
-    local character = LocalPlayer.Character
-    local root = entityRoot or (character and character:FindFirstChild("HumanoidRootPart"))
-    if not root then return false end
-    local utility, enumLibrary, remote =
-        KnifeCombatRuntime.Utility,
-        KnifeCombatRuntime.EnumLibrary,
-        KnifeCombatRuntime.UseItemRemote
-    if type(utility.EncodeCFrame) ~= "function"
-        or type(enumLibrary.ToEnum) ~= "function"
-        or not remote or not remote.Parent then return false end
-    local aimPosition = KnifeCombatRuntime.LastAimPosition
-        or KnifeCombatRuntime.GetPredictedPosition(part)
-        or part.Position
-    if typeof(aimPosition) ~= "Vector3" then return false end
-    local delta = aimPosition - root.Position
-    if delta:Dot(delta) <= 0.0001 then return false end
-    local aim = CFrame.lookAt(root.Position, aimPosition)
-    local okFire = pcall(function()
-        local data = {
-            [PayloadKey1] = {
-                [PayloadKey0] = utility:EncodeCFrame(aim),
-                [PayloadKey1] = utility:EncodeCFrame(aim),
-                [PayloadKey2] = part,
-                [PayloadKey3] = utility:EncodeCFrame(WeaponOffsetCFrame),
-            },
-        }
-        remote:FireServer(objectId, enumLibrary:ToEnum("StartShooting"), data, nil)
-    end)
-    return okFire
-end
-
-KnifeCombatRuntime.MoveMouseTo = function(part, center)
-    if type(mousemoverel) ~= "function" or not part then return false end
-    local camera = Workspace.CurrentCamera
-    if not camera then return false end
-    local point, onScreen = camera:WorldToViewportPoint(part.Position)
-    if not onScreen or point.Z <= 0 then return false end
-    center = center or UserInputService:GetMouseLocation()
-    local config = Environment.__DevKageConfig
-    local smoothing = math.clamp(tonumber(type(config) == "table" and config.aimSmoothing) or 0, 0, 100)
-    local factor = smoothing <= 0 and 1 or math.clamp(1 / (1 + smoothing * 0.12), 0.04, 1)
-    local dx, dy = (point.X - center.X) * factor, (point.Y - center.Y) * factor
-    pcall(mousemoverel,
-        math.floor(dx + (dx >= 0 and 0.5 or -0.5)),
-        math.floor(dy + (dy >= 0 and 0.5 or -0.5)))
-    return true
-end
-
-KnifeCombatRuntime.Step = function(dt)
-    if not KnifeCombatRuntime.Alive then return end
-    local config = Environment.__DevKageConfig
-    if type(config) ~= "table" then return end
-    local now = os.clock()
-
-    if KnifeCombatRuntime.StartupGate then return end
-    KnifeCombatRuntime.StepBunnyHop(dt)
-
-    if not KnifeCombatRuntime.IsRivals()
-        and (config.noRecoilEnabled==true or config.noSpreadEnabled==true)
-        and now-KnifeCombatRuntime.LastItemStatApply>0.5 then
-        KnifeCombatRuntime.LastItemStatApply=now
-        pcall(KnifeCombatRuntime.ApplyItemLibraryWeaponMods)
-    end
-
-    if config.noRecoilEnabled == true
-        and not KnifeCombatRuntime.NoRecoilAdaptersInstalled
-        and now - KnifeCombatRuntime.LastNoRecoilAttempt > 2 then
-        KnifeCombatRuntime.LastNoRecoilAttempt = now
-        KnifeCombatRuntime.InstallNoRecoilAdapters()
-    end
-
-    if config.noSpreadEnabled == true
-        and (not KnifeCombatRuntime.SpreadInstalled
-            or type(KnifeCombatRuntime.GameplayUtility) ~= "table"
-            or KnifeCombatRuntime.GameplayUtility.GetSpread ~= KnifeCombatRuntime.SpreadWrapper) then
-        KnifeCombatRuntime.QueueModuleLoad(false)
-        KnifeCombatRuntime.InstallNoSpread()
-    end
-
-    if config.silentAimEnabled ~= true then
-        KnifeCombatRuntime.CurrentTarget = nil
-        KnifeCombatRuntime.CurrentPart = nil
-        KnifeCombatRuntime.LastAimPosition = nil
-        return
-    end
-    if KnifeCombatRuntime.IsBloxStrikes() then
-        if not KnifeCombatRuntime.BloxRaycastInstalled then
-            KnifeCombatRuntime.InstallBloxStrikesSilentAim()
-        end
-    elseif KnifeCombatRuntime.IsRivals() then
-        if not KnifeCombatRuntime.Loaded then
-            KnifeCombatRuntime.QueueModuleLoad(false)
-        end
-    elseif not KnifeCombatRuntime.UniversalInstalled then
-        KnifeCombatRuntime.InstallUniversalSilentAim()
-    end
-
-    local active = KnifeCombatRuntime.IsAimInputActive()
-    if not active then
-        KnifeCombatRuntime.CurrentTarget = nil
-        KnifeCombatRuntime.CurrentPart = nil
-        KnifeCombatRuntime.LastAimPosition = nil
-        return
-    end
-
-    -- Target acquisition is independent of the weapon's firing interval. The
-    -- actual Raycast/Mouse hooks then consume this cached result very cheaply.
-    if now - KnifeCombatRuntime.LastTargetScan >= 0.016 then
-        KnifeCombatRuntime.RefreshUniversalTarget(true, false)
-    elseif KnifeCombatRuntime.CurrentPart then
-        KnifeCombatRuntime.LastAimPosition = KnifeCombatRuntime.GetPredictedPosition(KnifeCombatRuntime.CurrentPart)
-    end
-
-    local target = KnifeCombatRuntime.CurrentTarget
-    local part = KnifeCombatRuntime.CurrentPart
-    if not part then
-        if now - KnifeCombatRuntime.LastStatusUpdate > 0.5 then
-            KnifeCombatRuntime.LastStatusUpdate = now
-            KnifeCombatRuntime.SetStatus("Universal silent aim: no target in FOV")
-        end
-        return
-    end
-
-    -- RIVALS follows the supplied native implementation: while Silent Aim is
-    -- enabled, either Auto Shoot OR a held left mouse button sends the encoded
-    -- StartShooting payload directly at the resolved part. No ray-hook success
-    -- is required and no fallback shot is fired into empty space.
-    if KnifeCombatRuntime.IsRivals() then
-        local wantsShot = config.silentAimAutoShoot == true
-            or UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
-
-        if wantsShot then
-            local interval=math.clamp(tonumber(config.silentAimFireInterval) or 0.05,0.02,1)
-            if now-KnifeCombatRuntime.LastAttempt>=interval then
-                local shotPart=KnifeCombatRuntime.GetUniversalAimPart(true)
-                if shotPart then
-                    if not KnifeCombatRuntime.Loaded then
-                        KnifeCombatRuntime.QueueModuleLoad(false)
-                    end
-                    if KnifeCombatRuntime.Loaded and KnifeCombatRuntime.FireAt(shotPart) then
-                        KnifeCombatRuntime.LastAttempt=now
-                    end
-                end
-            end
-        end
-    elseif config.silentAimAutoShoot == true then
-        local interval=math.clamp(tonumber(config.silentAimFireInterval) or 0.05,0.02,1)
-        if now-KnifeCombatRuntime.LastAttempt>=interval then
-            local shotPart=KnifeCombatRuntime.GetUniversalAimPart(true)
-            if shotPart then
-                local fired=false
-                if KnifeCombatRuntime.IsBloxStrikes() then
-                    if KnifeCombatRuntime.BloxRaycastInstalled and type(mouse1click)=="function" then
-                        fired=pcall(mouse1click)
-                    end
-                elseif KnifeCombatRuntime.UniversalInstalled and type(mouse1click)=="function" then
-                    fired=pcall(mouse1click)
-                end
-                if fired then KnifeCombatRuntime.LastAttempt=now end
-            end
-        end
-    elseif not KnifeCombatRuntime.UniversalInstalled
-        and not KnifeCombatRuntime.BloxRaycastInstalled then
-        if now-KnifeCombatRuntime.LastStatusUpdate>0.5 then
-            KnifeCombatRuntime.LastStatusUpdate=now
-            KnifeCombatRuntime.SetStatus("No silent backend detected for this weapon")
-        end
-    end
-
-    if now - KnifeCombatRuntime.LastStatusUpdate > 0.25 then
-        KnifeCombatRuntime.LastStatusUpdate = now
-        KnifeCombatRuntime.SetStatus(
-            KnifeCombatRuntime.GetAimBackendName()
-            .. " • " .. tostring(target and target.Name or part.Parent.Name)
-            .. " • " .. tostring(part.Name)
-            .. " • " .. tostring(math.floor(tonumber(config.silentAimHitChance) or 100)) .. "%"
-        )
-    end
-end
-
-KnifeCombatRuntime.StatusControl = rapidFireSection:CreateLabel({
-    Text = "Mask Shard: Always On"
+rapidFireSection:CreateLabel({
+    Text = "Bunny Hop • lightweight runtime"
 })
-KnifeCombatRuntime.MaskStatusControl = KnifeCombatRuntime.StatusControl
 
-KnifeCombatRuntime.Controls.SilentAim = rapidFireSection:CreateToggle({
-    Name = "Silent Aim",
-    State = Environment.__DevKageConfig.silentAimEnabled == true,
-    Flag = "knife.silentAimEnabled",
-    Callback = function(value)
-        KnifeCombatRuntime.StartupGate = false
-        Environment.__DevKagePassiveBoot = false
-        Environment.__DevKageConfig.silentAimEnabled = value == true
-        if value then
-            if KnifeCombatRuntime.IsBloxStrikes() then
-                KnifeCombatRuntime.InstallBloxStrikesSilentAim()
-            elseif KnifeCombatRuntime.IsRivals() then
-                KnifeCombatRuntime.QueueModuleLoad(true)
-            else
-                KnifeCombatRuntime.InstallUniversalSilentAim()
-            end
-            KnifeCombatRuntime.RefreshUniversalTarget(true)
-        else
-            KnifeCombatRuntime.CurrentTarget, KnifeCombatRuntime.CurrentPart = nil, nil
-            KnifeCombatRuntime.LastAimPosition = nil
-        end
-    end
-})
-KnifeCombatRuntime.Controls.HitChance = rapidFireSection:CreateSlider({
-    Name = "Hit Chance",
-    State = tonumber(Environment.__DevKageConfig.silentAimHitChance) or 100,
-    Min = 0,
-    Max = 100,
-    Decimals = 0,
-    Suffix = "%",
-    Flag = "knife.silentAimHitChance",
-    Callback = function(value)
-        Environment.__DevKageConfig.silentAimHitChance =
-            math.clamp(math.floor((tonumber(value) or 100) + 0.5), 0, 100)
-    end
-})
-KnifeCombatRuntime.Controls.Radius = rapidFireSection:CreateSlider({
-    Name = "FOV Radius",
-    State = tonumber(Environment.__DevKageConfig.silentAimRadius) or 300,
-    Min = 25,
-    Max = 2000,
-    Decimals = 0,
-    Suffix = " px",
-    Flag = "knife.silentAimRadius",
-    Callback = function(value)
-        Environment.__DevKageConfig.silentAimRadius =
-            math.clamp(math.floor((tonumber(value) or 300) + 0.5), 25, 2000)
-    end
-})
-KnifeCombatRuntime.Controls.InfiniteFOV = rapidFireSection:CreateToggle({
-    Name = "Unlimited FOV",
-    State = Environment.__DevKageConfig.silentAimInfiniteFOV == true,
-    Flag = "knife.silentAimInfiniteFOV",
-    Callback = function(value)
-        Environment.__DevKageConfig.silentAimInfiniteFOV = value == true
-    end
-})
-KnifeCombatRuntime.Controls.FOVOrigin = rapidFireSection:CreateDropdown({
-    Name = "FOV Origin",
-    Options = {"Screen Center","Mouse"},
-    State = table.find(
-        {"Screen Center","Mouse"},
-        tostring(Environment.__DevKageConfig.silentAimFOVOrigin or "Screen Center")
-    ) or 1,
-    Flag = "knife.silentAimFOVOrigin",
-    Callback = function(index)
-        Environment.__DevKageConfig.silentAimFOVOrigin =
-            ({"Screen Center","Mouse"})[index] or "Screen Center"
-    end
-})
-KnifeCombatRuntime.Controls.Priority = rapidFireSection:CreateDropdown({
-    Name = "Target Priority",
-    Options = {"FOV","Distance","Lowest Health"},
-    State = table.find(
-        {"FOV","Distance","Lowest Health"},
-        tostring(Environment.__DevKageConfig.silentAimPriority or "FOV")
-    ) or 1,
-    Flag = "knife.silentAimPriority",
-    Callback = function(index)
-        Environment.__DevKageConfig.silentAimPriority =
-            ({"FOV","Distance","Lowest Health"})[index] or "FOV"
-    end
-})
-KnifeCombatRuntime.Controls.TargetLock = rapidFireSection:CreateToggle({
-    Name = "Sticky Target",
-    State = Environment.__DevKageConfig.silentAimTargetLock ~= false,
-    Flag = "knife.silentAimTargetLock",
-    Callback = function(value)
-        Environment.__DevKageConfig.silentAimTargetLock = value == true
-    end
-})
-KnifeCombatRuntime.Controls.Stickiness = rapidFireSection:CreateSlider({
-    Name = "Target Stickiness",
-    State = tonumber(Environment.__DevKageConfig.silentAimTargetStickiness) or 1.25,
-    Min = 1,
-    Max = 2,
-    Decimals = 2,
-    Suffix = "x",
-    Flag = "knife.silentAimTargetStickiness",
-    Callback = function(value)
-        Environment.__DevKageConfig.silentAimTargetStickiness =
-            math.clamp(tonumber(value) or 1.25,1,2)
-    end
-})
-KnifeCombatRuntime.Controls.Prediction = rapidFireSection:CreateSlider({
-    Name = "Manual Prediction",
-    State = tonumber(Environment.__DevKageConfig.silentAimPrediction) or 0,
-    Min = 0,
-    Max = 0.5,
-    Decimals = 3,
-    Suffix = " s",
-    Flag = "knife.silentAimPrediction",
-    Callback = function(value)
-        Environment.__DevKageConfig.silentAimPrediction =
-            math.clamp(tonumber(value) or 0,0,0.5)
-    end
-})
-KnifeCombatRuntime.Controls.AutoPrediction = rapidFireSection:CreateToggle({
-    Name = "Auto Prediction",
-    State = Environment.__DevKageConfig.silentAimAutoPrediction == true,
-    Flag = "knife.silentAimAutoPrediction",
-    Callback = function(value)
-        Environment.__DevKageConfig.silentAimAutoPrediction = value == true
-    end
-})
-KnifeCombatRuntime.Controls.PredictionMultiplier = rapidFireSection:CreateSlider({
-    Name = "Prediction Multiplier",
-    State = tonumber(Environment.__DevKageConfig.silentAimPredictionMultiplier) or 1,
-    Min = 0,
-    Max = 3,
-    Decimals = 2,
-    Suffix = "x",
-    Flag = "knife.silentAimPredictionMultiplier",
-    Callback = function(value)
-        Environment.__DevKageConfig.silentAimPredictionMultiplier =
-            math.clamp(tonumber(value) or 1,0,3)
-    end
-})
-KnifeCombatRuntime.Controls.ProjectileSpeed = rapidFireSection:CreateSlider({
-    Name = "Projectile Speed",
-    State = tonumber(Environment.__DevKageConfig.silentAimProjectileSpeed) or 3000,
-    Min = 250,
-    Max = 20000,
-    Decimals = 0,
-    Suffix = " studs/s",
-    Flag = "knife.silentAimProjectileSpeed",
-    Callback = function(value)
-        Environment.__DevKageConfig.silentAimProjectileSpeed =
-            math.clamp(math.floor((tonumber(value) or 3000)+0.5),250,20000)
-    end
-})
-KnifeCombatRuntime.Controls.MaxDistance = rapidFireSection:CreateSlider({
-    Name = "Max Target Distance",
-    State = tonumber(Environment.__DevKageConfig.silentAimMaxDistance) or 2500,
-    Min = 50,
-    Max = 10000,
-    Decimals = 0,
-    Suffix = " studs",
-    Flag = "knife.silentAimMaxDistance",
-    Callback = function(value)
-        Environment.__DevKageConfig.silentAimMaxDistance =
-            math.clamp(math.floor((tonumber(value) or 2500) + 0.5),50,10000)
-    end
-})
-KnifeCombatRuntime.Controls.TargetPart = rapidFireSection:CreateDropdown({
-    Name = "Target Part",
-    Options = {"Head", "HumanoidRootPart", "Torso", "Closest", "Random"},
-    State = table.find(
-        {"Head", "HumanoidRootPart", "Torso", "Closest", "Random"},
-        tostring(Environment.__DevKageConfig.aimTargetPart or "Head")
-    ) or 1,
-    Flag = "knife.aimTargetPart",
-    Callback = function(index)
-        local options = {"Head", "HumanoidRootPart", "Torso", "Closest", "Random"}
-        Environment.__DevKageConfig.aimTargetPart = options[index] or "Head"
-    end
-})
-KnifeCombatRuntime.Controls.HeadChance = rapidFireSection:CreateSlider({
-    Name = "Head Chance",
-    State = tonumber(Environment.__DevKageConfig.silentAimHeadChance) or 100,
-    Min = 0, Max = 100, Decimals = 0, Suffix = "%", Flag = "knife.silentAimHeadChance",
-    Callback = function(value) Environment.__DevKageConfig.silentAimHeadChance=math.clamp(math.floor((tonumber(value) or 100)+0.5),0,100) end
-})
-KnifeCombatRuntime.Controls.IgnoreDeflecting = rapidFireSection:CreateToggle({
-    Name="Ignore Deflecting",State=Environment.__DevKageConfig.silentAimIgnoreDeflecting~=false,Flag="knife.silentAimIgnoreDeflecting",
-    Callback=function(value) Environment.__DevKageConfig.silentAimIgnoreDeflecting=value==true end
-})
-KnifeCombatRuntime.Controls.IgnoreShielded = rapidFireSection:CreateToggle({
-    Name="Ignore Shielded",State=Environment.__DevKageConfig.silentAimIgnoreShielded~=false,Flag="knife.silentAimIgnoreShielded",
-    Callback=function(value) Environment.__DevKageConfig.silentAimIgnoreShielded=value==true end
-})
-KnifeCombatRuntime.Controls.TeamCheck = rapidFireSection:CreateToggle({
-    Name = "Team Check",
-    State = Environment.__DevKageConfig.aimTeamCheck ~= false,
-    Flag = "knife.aimTeamCheck",
-    Callback = function(value) Environment.__DevKageConfig.aimTeamCheck = value == true end
-})
-KnifeCombatRuntime.Controls.WallCheck = rapidFireSection:CreateToggle({
-    Name = "Wall Check (Require LOS)",
-    State = Environment.__DevKageConfig.aimVisibleCheck == true,
-    Flag = "knife.aimVisibleCheck",
-    Callback = function(value) Environment.__DevKageConfig.aimVisibleCheck = value == true end
-})
-KnifeCombatRuntime.Controls.AutoShoot = rapidFireSection:CreateToggle({
-    Name = "Auto Shoot",
-    State = Environment.__DevKageConfig.silentAimAutoShoot == true,
-    Flag = "knife.silentAimAutoShoot",
-    Callback = function(value) Environment.__DevKageConfig.silentAimAutoShoot = value == true end
-})
-KnifeCombatRuntime.Controls.Smoothing = rapidFireSection:CreateSlider({
-    Name = "Mouse Fallback Smoothing",
-    State = tonumber(Environment.__DevKageConfig.aimSmoothing) or 0,
-    Min = 0,
-    Max = 100,
-    Decimals = 0,
-    Suffix = "%",
-    Flag = "knife.aimSmoothing",
-    Callback = function(value)
-        Environment.__DevKageConfig.aimSmoothing =
-            math.clamp(math.floor((tonumber(value) or 0) + 0.5), 0, 100)
-    end
-})
-KnifeCombatRuntime.Controls.Interval = rapidFireSection:CreateSlider({
-    Name = "Shot Interval",
-    State = tonumber(Environment.__DevKageConfig.silentAimFireInterval) or 0.05,
-    Min = 0.02,
-    Max = 0.5,
-    Decimals = 2,
-    Suffix = " s",
-    Flag = "knife.silentAimFireInterval",
-    Callback = function(value)
-        Environment.__DevKageConfig.silentAimFireInterval =
-            math.clamp(tonumber(value) or 0.05, 0.02, 0.5)
-    end
-})
-KnifeCombatRuntime.Controls.NoSpread = rapidFireSection:CreateToggle({
-    Name = "No Spread",
-    State = Environment.__DevKageConfig.noSpreadEnabled == true,
-    Flag = "knife.noSpreadEnabled",
-    Callback = function(value)
-        KnifeCombatRuntime.StartupGate = false
-        Environment.__DevKagePassiveBoot = false
-        Environment.__DevKageConfig.noSpreadEnabled = value == true
-        if value then
-            if KnifeCombatRuntime.IsRivals() then
-                KnifeCombatRuntime.InstallNoSpread()
-            else
-                KnifeCombatRuntime.QueueModuleLoad(true)
-            end
-        else
-            KnifeCombatRuntime.UninstallNoSpread()
-        end
-        if not KnifeCombatRuntime.IsRivals() then
-            pcall(KnifeCombatRuntime.ApplyItemLibraryWeaponMods)
-        end
-    end
-})
-KnifeCombatRuntime.Controls.NoRecoil = rapidFireSection:CreateToggle({
-    Name = "No Recoil",
-    State = Environment.__DevKageConfig.noRecoilEnabled == true,
-    Flag = "knife.noRecoilEnabled",
-    Callback = function(value)
-        KnifeCombatRuntime.StartupGate = false
-        Environment.__DevKagePassiveBoot = false
-        Environment.__DevKageConfig.noRecoilEnabled = value == true
-        if value then
-            KnifeCombatRuntime.GenericRecoilScanDone = false
-            KnifeCombatRuntime.PhantomRecoilScanDone = false
-            KnifeCombatRuntime.NoRecoilAdaptersInstalled = false
-            if KnifeCombatRuntime.IsRivals() then
-                KnifeCombatRuntime.InstallRivalsNoRecoil()
-            end
-            KnifeCombatRuntime.InstallNoRecoilAdapters(true)
-        else
-            KnifeCombatRuntime.RestorePhantomGunData()
-            pcall(KnifeCombatRuntime.ApplyItemLibraryWeaponMods)
-        end
-    end
-})
 KnifeCombatRuntime.Controls.BunnyHop = rapidFireSection:CreateToggle({
     Name = "Bunny Hop",
-    State = Environment.__DevKageConfig.bunnyHopEnabled == true,
+    State = type(config) == "table" and config.bunnyHopEnabled == true,
     Flag = "knife.bunnyHopEnabled",
     Callback = function(value)
-        KnifeCombatRuntime.StartupGate = false
-        Environment.__DevKagePassiveBoot = false
-        Environment.__DevKageConfig.bunnyHopEnabled = value == true
+        local liveConfig = Environment.__DevKageConfig
+        if type(liveConfig) == "table" then
+            liveConfig.bunnyHopEnabled = value == true
+        end
     end
 })
+
 KnifeCombatRuntime.Controls.BunnyHopBoost = rapidFireSection:CreateSlider({
     Name = "BHop Air Boost",
-    State = tonumber(Environment.__DevKageConfig.bunnyHopBoost) or 0.4,
+    State = type(config) == "table" and tonumber(config.bunnyHopBoost) or 0.4,
     Min = 0,
     Max = 3,
     Decimals = 2,
     Flag = "knife.bunnyHopBoost",
     Callback = function(value)
-        Environment.__DevKageConfig.bunnyHopBoost = math.clamp(tonumber(value) or 0.4,0,3)
+        local liveConfig = Environment.__DevKageConfig
+        if type(liveConfig) == "table" then
+            liveConfig.bunnyHopBoost = math.clamp(tonumber(value) or 0.4, 0, 3)
+        end
     end
 })
+
 KnifeCombatRuntime.Controls.BunnyHopMaxSpeed = rapidFireSection:CreateSlider({
     Name = "BHop Max Speed",
-    State = tonumber(Environment.__DevKageConfig.bunnyHopMaxSpeed) or 28,
+    State = type(config) == "table" and tonumber(config.bunnyHopMaxSpeed) or 28,
     Min = 16,
     Max = 120,
     Decimals = 0,
     Suffix = " studs/s",
     Flag = "knife.bunnyHopMaxSpeed",
     Callback = function(value)
-        Environment.__DevKageConfig.bunnyHopMaxSpeed =
-            math.clamp(math.floor((tonumber(value) or 28) + 0.5),16,120)
+        local liveConfig = Environment.__DevKageConfig
+        if type(liveConfig) == "table" then
+            liveConfig.bunnyHopMaxSpeed =
+                math.clamp(math.floor((tonumber(value) or 28) + 0.5), 16, 120)
+        end
     end
 })
-KnifeCombatRuntime.StatusControl = rapidFireSection:CreateLabel({
-    Text = type(hookmetamethod) == "function"
-        and "Silent aim • Roblox APIs + game adapters"
-        or "Metamethod hooks unavailable • module/mouse fallback"
-})
 
-KnifeCombatRuntime.Track(RunService.Heartbeat:Connect(KnifeCombatRuntime.Step))
+track(RunService.Heartbeat:Connect(stepBunnyHop))
 
 if type(MaskShard) == "table" and type(MaskShard.Runtime) == "table" then
     MaskShard.Runtime.KnifeCombat = KnifeCombatRuntime
@@ -26235,16 +24472,7 @@ table.insert(library.CleanupCallbacks, function()
         pcall(function() connection:Disconnect() end)
     end
     table.clear(KnifeCombatRuntime.Connections)
-    KnifeCombatRuntime.UninstallNoSpread()
-    KnifeCombatRuntime.RestorePhantomGunData()
-    KnifeCombatRuntime.RestoreItemLibraryWeaponMods()
-    if type(Environment.__DevKageRivalsUtilityAimBridge)=="table" and Environment.__DevKageRivalsUtilityAimBridge.Runtime==KnifeCombatRuntime then Environment.__DevKageRivalsUtilityAimBridge.Runtime=nil end
-    if type(Environment.__DevKageRivalsNativeCombat)=="table"
-        and Environment.__DevKageRivalsNativeCombat.Runtime==KnifeCombatRuntime then
-        Environment.__DevKageRivalsNativeCombat.Runtime=nil
-    end
-    if type(Environment.__DevKageBloxRaycastBridge)=="table" and Environment.__DevKageBloxRaycastBridge.Runtime==KnifeCombatRuntime then Environment.__DevKageBloxRaycastBridge.Runtime=nil end
-    KnifeCombatRuntime.CurrentTarget, KnifeCombatRuntime.CurrentPart = nil, nil
+
     if Environment.__DevKageCombatRuntime == KnifeCombatRuntime then
         Environment.__DevKageCombatRuntime = nil
     end
@@ -26253,13 +24481,6 @@ table.insert(library.CleanupCallbacks, function()
         MaskShard.Runtime.KnifeCombat = nil
     end
 end)
-
-do
-    -- Opiumware safe-start: never install combat hooks from stale/default config
-    -- during injection. The first explicit combat toggle arms the runtime.
-    KnifeCombatRuntime.StartupGate = true
-    KnifeCombatRuntime.SetStatus("Combat safe-loaded • toggle feature to activate")
-end
 
 return KnifeCombatRuntime
 end
@@ -30362,6 +28583,12 @@ for key,value in pairs(profile) do
 if defaultConfig[key]~=nil then getgenv().__DevKageConfig[key]=value end
 end
 
+-- Removed in v5.2.51. Old config keys are accepted but cannot re-arm them.
+getgenv().__DevKageConfig.silentAimEnabled = false
+getgenv().__DevKageConfig.silentAimAutoShoot = false
+getgenv().__DevKageConfig.noRecoilEnabled = false
+getgenv().__DevKageConfig.noSpreadEnabled = false
+
 getgenv().__DevKageConfig.eloLiveSyncAutoLoad =
     getgenv().__DevKageConfig.eloLiveSyncAutoLoad == true
     or SpooferState.savedELOAutoLoad == true
@@ -31740,10 +29967,10 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
 ]============]
 
 local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
-__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.50-autoexec-freeze-coexistence-20260907"
+__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.51-autoload-bhop-freeze-fix-20260907"
 __devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
 
--- CURRENT AUTO-LOAD MIGRATION BRIDGE (v5.2.50)
+-- CURRENT AUTO-LOAD MIGRATION BRIDGE (v5.2.51)
 -- Runs immediately at package top-level. It only touches DevKage's own auto-load
 -- files and exists so a previously-installed old loader cannot keep serving an
 -- older payload before this current package gets its normal late-boot turn.
@@ -31785,7 +30012,7 @@ pcall(function()
     local currentSource = __DEVKAGE_EMBEDDED_SOURCE
     local currentBuild = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
     local currentPayload = "-- DEVKAGE_AUTOLOAD_BUILD:" .. currentBuild .. "\n" .. currentSource
-    local currentPath = configFolder .. "/_devkage_autoload_payload_v5_2_50.lua"
+    local currentPath = configFolder .. "/_devkage_autoload_payload_v5_2_51.lua"
     local buildPath = configFolder .. "/_devkage_autoload_build.txt"
 
     -- Avoid rewriting the full embedded source into every historical payload on
@@ -31809,6 +30036,7 @@ pcall(function()
     -- fail closed instead of resurrecting a previous build.
     if type(delfile) == "function" then
         for _, legacyName in ipairs({
+            "_devkage_autoload_payload_v5_2_50.lua",
             "_devkage_autoload_payload_v5_2_20.lua",
             "_devkage_autoload_payload_v5_2_19.lua",
             "_devkage_autoload_payload_v5_2_18.lua",
@@ -31929,9 +30157,8 @@ task.spawn(function()
         __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
         __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = os.clock()
 
-        -- One scheduling turn keeps this package cooperative with other
-        -- Auto Execute scripts even on executors with a very eager dispatcher.
-        task.wait()
+        -- Controlled startup settling window after this build owns the lock.
+        task.wait(0.8)
 
         local loader = loadstring or load
         if type(loader) ~= "function" then
@@ -31993,10 +30220,10 @@ end)
 -- 16 A successful runtime records the completed job.
 -- 17 Teleport queue remains supported.
 -- 18 Existing real Auto Execute folders remain supported.
--- 19 Only one existing Auto Execute folder receives the last-named loader.
+-- 19 All detected DevKage Auto Execute aliases receive the guarded loader.
 -- 20 The old exact DevKage_AutoLoad.lua is removed during refresh.
--- 21 Alias folders are not filled with duplicate DevKage loaders.
--- 22 Guess folders are skipped when teleport queue already works.
+-- 21 Duplicate loader aliases share the same-build/same-server mutex.
+-- 22 Teleport queue and native Auto Execute may coexist through one boot mutex.
 -- 22 Config serialization is unchanged.
 -- 23 ELO persistence is unchanged.
 -- 24 Cursor behavior is unchanged.
