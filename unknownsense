@@ -1,4 +1,4 @@
--- DEVKAGE v5.2.56: reliable late-boot autoexec + local-register fix
+-- DEVKAGE v5.2.57: global 360-degree atmosphere coverage + working offset
 local __DEVKAGE_EMBEDDED_SOURCE = [============[
 
 
@@ -11459,7 +11459,7 @@ return function(context)
 local LightingService=context.LightingService
 local AdvancedLighting=context.AdvancedLighting
 local getOrCreateEffect=context.GetOrCreateEffect
-local WorldLightingRuntime={Suspended={}}
+local WorldLightingRuntime={Suspended={},AtmosphereCoverageActive=false}
 
 WorldLightingRuntime.SnapshotMapAtmosphere=function(object)
 local snapshot=WorldLightingRuntime.Suspended[object]
@@ -11514,6 +11514,55 @@ local glow=AdvancedLighting.atmosphereGlow
 if glow then pcall(function() glow.Enabled=false end) end
 end
 
+-- Roblox Atmosphere is technically global, but Decay/sun direction can make a
+-- strong atmosphere look concentrated on one side of a map. DevKage now pairs
+-- its Atmosphere with a very light 360-degree distance-haze envelope so the
+-- effect reads consistently in every camera direction and on maps with unusual
+-- sky/lighting setups. This envelope is owned only while Atmosphere is enabled.
+WorldLightingRuntime.GetAtmosphereCoverageEnd=function(density,offset)
+local d=math.clamp(tonumber(density) or 0,0,1)
+local o=math.clamp(tonumber(offset) or 0,-1,1)
+
+-- Density controls the base world visibility distance.
+local baseDistance=300+(3800*math.exp(-3.4*d))
+
+-- Offset now has a strong, predictable global effect:
+-- negative = atmosphere pulled closer/heavier
+-- positive = atmosphere pushed farther/lighter
+local offsetMultiplier=2^(o*2.0)
+return math.clamp(baseDistance*offsetMultiplier,75,16000)
+end
+
+WorldLightingRuntime.ApplyAtmosphereCoverage=function(density,offset,color,decay)
+local coverageColor=typeof(color)=="Color3" and color or AdvancedLighting.atmosphereColor
+local decayColor=typeof(decay)=="Color3" and decay or AdvancedLighting.atmosphereDecay
+
+-- Keep the all-around haze close to the main atmosphere color. A small decay
+-- blend preserves the user's color styling without creating a one-corner look.
+coverageColor=coverageColor:Lerp(decayColor,0.10)
+
+local coverageEnd=WorldLightingRuntime.GetAtmosphereCoverageEnd(density,offset)
+pcall(function()
+LightingService.FogColor=coverageColor
+LightingService.FogStart=0
+LightingService.FogEnd=coverageEnd
+end)
+WorldLightingRuntime.AtmosphereCoverageActive=true
+end
+
+WorldLightingRuntime.RestoreAtmosphereCoverage=function()
+if AdvancedLighting.fogEnabled then
+WorldLightingRuntime.AtmosphereCoverageActive=false
+return
+end
+pcall(function()
+LightingService.FogColor=AdvancedLighting.original.FogColor
+LightingService.FogStart=AdvancedLighting.original.FogStart
+LightingService.FogEnd=AdvancedLighting.original.FogEnd
+end)
+WorldLightingRuntime.AtmosphereCoverageActive=false
+end
+
 WorldLightingRuntime.SetAtmosphereGlow=function(enabled,intensity)
 local glowOn=enabled==true and AdvancedLighting.atmosphereEnabled==true and AdvancedLighting.fogEnabled~=true
 local e=AdvancedLighting.atmosphereGlow
@@ -11540,15 +11589,41 @@ if not e or not e.Parent or not e:IsA("Atmosphere") then
 e=getOrCreateEffect("Atmosphere","DevKage_Atmosphere")
 AdvancedLighting.atmosphere=e
 end
-e.Density=math.clamp(tonumber(density) or 0,0,1)
-e.Offset=math.clamp(tonumber(offset) or 0,-1,1)
-e.Color=typeof(color)=="Color3" and color or AdvancedLighting.atmosphereColor
-e.Decay=typeof(decay)=="Color3" and decay or AdvancedLighting.atmosphereDecay
+
+local d=math.clamp(tonumber(density) or 0,0,1)
+local userOffset=math.clamp(tonumber(offset) or 0,-1,1)
+local effectiveOffset=math.clamp(userOffset*1.75,-1,1)
+local atmosphereColor=typeof(color)=="Color3" and color or AdvancedLighting.atmosphereColor
+local requestedDecay=typeof(decay)=="Color3" and decay or AdvancedLighting.atmosphereDecay
+
+e.Density=d
+
+-- The native Offset property is subtle on many maps. Keep the real property,
+-- but amplify the requested value and also feed it into global coverage depth.
+e.Offset=effectiveOffset
+
+e.Color=atmosphereColor
+
+-- A heavily different Decay color is directional around the sun and is the
+-- main reason Atmosphere can appear to live in a corner. Keep the requested
+-- decay styling, but bias it toward the global atmosphere color for uniformity.
+e.Decay=atmosphereColor:Lerp(requestedDecay,0.38)
+
 e.Glare=math.clamp(tonumber(glare) or 0,0,10)
-e.Haze=math.clamp(tonumber(haze) or 0,0,10)
+
+-- Preserve the user's haze while guaranteeing enough broad haze for density
+-- changes to remain visible across the full map.
+e.Haze=math.clamp(math.max(tonumber(haze) or 0,d*1.15),0,10)
+
+WorldLightingRuntime.ApplyAtmosphereCoverage(d,userOffset,atmosphereColor,requestedDecay)
 else
 WorldLightingRuntime.DestroyDevKageAtmosphere()
-if AdvancedLighting.fogEnabled then WorldLightingRuntime.SuspendMapAtmospheres() else WorldLightingRuntime.RestoreMapAtmospheres() end
+if AdvancedLighting.fogEnabled then
+WorldLightingRuntime.SuspendMapAtmospheres()
+else
+WorldLightingRuntime.RestoreAtmosphereCoverage()
+WorldLightingRuntime.RestoreMapAtmospheres()
+end
 end
 WorldLightingRuntime.SetAtmosphereGlow(atmosphereOn and AdvancedLighting.atmosphereGlowEnabled,AdvancedLighting.atmosphereGlowIntensity)
 end
@@ -11800,6 +11875,7 @@ end
 local function refreshCustomFog()
 if AdvancedLighting.fogEnabled then
 WorldLightingRuntime.DestroyDevKageAtmosphere()
+WorldLightingRuntime.AtmosphereCoverageActive=false
 WorldLightingRuntime.SuspendMapAtmospheres()
 local configuredStart,effectiveEnd=getCustomFogTargets()
 setLightingProperty("FogColor",AdvancedLighting.fogColor)
@@ -13772,12 +13848,12 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_56.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_57.lua"
 local SCRIPT_STABLE_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_current.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOLOAD_ENABLED_FILE = CONFIG_FOLDER .. "/_devkage_autoload_enabled.flag"
 local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_AutoLoad_LAST.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.56-lateboot-autoexec-reliable-20260907"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.57-global-atmosphere-20260908"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -14716,6 +14792,7 @@ end
 local function remove_stale_devkage_payloads()
     if type(delfile) ~= "function" then return end
     for _, legacyName in ipairs({
+        "_devkage_autoload_payload_v5_2_56.lua",
         "_devkage_autoload_payload_v5_2_55.lua",
         "_devkage_autoload_payload_v5_2_54.lua",
         "_devkage_autoload_payload_v5_2_53.lua",
@@ -14754,6 +14831,7 @@ if not enabled then
         for _, path in ipairs({
             SCRIPT_PAYLOAD_FILE,
             SCRIPT_STABLE_PAYLOAD_FILE,
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_56.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_55.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_54.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_53.lua",
@@ -21279,7 +21357,7 @@ lightingColor("atmosphereColor","Atmosphere Color",function() markAtmosphereCust
 lightingColor("atmosphereDecay","Atmosphere Decay",function() markAtmosphereCustom(); refreshAtmosphere() end)
 lightingToggle("atmosphereGlowEnabled","Atmosphere Glow",function() refreshAtmosphere() end)
 lightingSlider("atmosphereGlowIntensity","Glow Intensity",0,5,2,"",function() if AdvancedLighting.atmosphereGlowEnabled then refreshAtmosphere() end end)
-lightingSection:CreateLabel({Text="Fog and Atmosphere are separate modes; the last one enabled takes control."})
+lightingSection:CreateLabel({Text="Atmosphere is 360° global. Offset now controls world coverage depth."})
 
 applyAtmosphereProfile=function(name)
 local profile=AtmosphereProfiles[name]
@@ -21699,6 +21777,12 @@ LightingService.FogColor=AdvancedLighting.fogColor
 LightingService.FogStart=fogStart
 LightingService.FogEnd=fogEnd
 end)
+elseif AdvancedLighting.atmosphereEnabled then
+pcall(WorldLightingRuntime.ApplyAtmosphereCoverage,
+AdvancedLighting.atmosphereDensity,
+AdvancedLighting.atmosphereOffset,
+AdvancedLighting.atmosphereColor,
+AdvancedLighting.atmosphereDecay)
 end
 
 if AdvancedLighting.atmosphereEnabled or AdvancedLighting.fogEnabled or AdvancedLighting.atmosphere then
@@ -29623,7 +29707,7 @@ end
 for player in pairs(VisualsState.chams_table) do destroyChams(player) end
 apply_fov(false); apply_fullbright(false); apply_ambient(false); apply_fog(false); setMotionBlur(false,0)
 setColorCorrection(false,AdvancedLighting.tintColor,0,0,0); setBloom(false,0,0,0); setSunRays(false,0,0); setDepthOfField(false,0,0,0,0); WorldLightingRuntime.SetAtmosphere(false,0,0,Color3.new(),Color3.new(),0,0)
-AdvancedLighting.fogEnabled=false; refreshCustomFog(); WorldLightingRuntime.RestoreMapAtmospheres()
+AdvancedLighting.fogEnabled=false; WorldLightingRuntime.RestoreAtmosphereCoverage(); refreshCustomFog(); WorldLightingRuntime.RestoreMapAtmospheres()
 setBlueSky(false,AdvancedLighting.blueSkyStrength); setAdvancedAmbient(false,AdvancedLighting.ambientColor,AdvancedLighting.ambientStrength); setReflectionQuality(false,AdvancedLighting.reflectionQuality)
 setColorShift(false); setLightingStyle(false)
 for property,value in pairs(AdvancedLighting.original) do
@@ -29921,7 +30005,7 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
 ]============]
 
 local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
-__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.56-lateboot-autoexec-reliable-20260907"
+__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.57-global-atmosphere-20260908"
 __devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
 
 -- CURRENT LATE-BOOT AUTOEXEC OWNERSHIP (v5.2.55)
@@ -29929,7 +30013,7 @@ __devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
 -- DevKage's exact loader/payload files and refreshes them through
 -- configure_script_autoload(). Unrelated Auto Execute scripts are untouched.
 
--- AUTOEXEC COEXISTENCE / LATE-BOOT SINGLE-BOOT ENTRYPOINT (v5.2.56)
+-- AUTOEXEC COEXISTENCE / LATE-BOOT SINGLE-BOOT ENTRYPOINT (v5.2.57)
 --
 -- This is intentionally modeled after the supplied working LateBoot build:
 -- schedule immediately, let the executor continue launching its other Auto
