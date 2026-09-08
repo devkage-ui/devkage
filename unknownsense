@@ -1,6 +1,11 @@
--- DEVKAGE v5.2.49 STABILITY BUILD r6 MAIN
--- Silent Aim removed. Slim runtime: no self-embedded package wrapper.
--- Duplicate live executions are ignored; startup work is cooperatively staggered.
+-- DEVKAGE v5.2.50: autoexec freeze/coexistence reliability - gameplay features unchanged
+local __DEVKAGE_EMBEDDED_SOURCE = [============[
+
+
+
+
+
+
 local maskShardShutdownKey = {}
 
 -- ============================================================
@@ -523,71 +528,60 @@ MaskShardV96:Activate()
 
 
 local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
--- r5: keep only the current file path during normal/manual execution. Holding the
--- entire ~30k-line source in getgenv for the whole session caused needless memory
--- retention and made repeated autoexec launches more expensive.
-local __devkageSelfSourcePath = nil
-if type(debug) == "table" and type(debug.info) == "function" then
-    pcall(function()
-        local sourceId = debug.info(1, "s")
-        if type(sourceId) == "string" and sourceId:sub(1, 1) == "@" then
-            __devkageSelfSourcePath = sourceId:sub(2)
-        end
-    end)
-end
 
 
 
-__devkageEnv.__DEVKAGE_RUNTIME_VERSION = "DevKage-v5.2.49-stability-nosilentaim-20260907-r6-main"
-
--- Re-execution guard. Auto Execute can occasionally launch both the package and its
--- generated loader close together. A second copy used to synchronously unload the
--- first window, which runs the full cleanup stack and can stall the client.
-do
-    local existingWindow = __devkageEnv.__DevKageWindow
-    -- Stability rule: never tear down/rebuild a live DevKage instance in-place.
-    -- Synchronous cleanup from an older build can stall the whole client.
-    if type(existingWindow) == "table"
-        and type(existingWindow.Toggle) == "function" then
-        __devkageEnv.__DEVKAGE_DUPLICATE_EXECUTIONS_SKIPPED =
-            (tonumber(__devkageEnv.__DEVKAGE_DUPLICATE_EXECUTIONS_SKIPPED) or 0) + 1
-        __devkageEnv.__DEVKAGE_LAST_DUPLICATE_SKIP_AT = os.clock()
-        return
-    end
-
-    local startingAt = tonumber(__devkageEnv.__DEVKAGE_RUNTIME_STARTING_AT) or 0
-    local startingBuild = __devkageEnv.__DEVKAGE_RUNTIME_STARTING_BUILD
-    local age = startingAt > 0 and (os.clock() - startingAt) or math.huge
-    -- Build-agnostic lock: an older DevKage build that is already starting must not
-    -- race this build into a second full UI/runtime construction pass.
-    if startingBuild ~= nil and age >= 0 and age < 60 then
-        __devkageEnv.__DEVKAGE_DUPLICATE_EXECUTIONS_SKIPPED =
-            (tonumber(__devkageEnv.__DEVKAGE_DUPLICATE_EXECUTIONS_SKIPPED) or 0) + 1
-        __devkageEnv.__DEVKAGE_LAST_DUPLICATE_SKIP_AT = os.clock()
-        return
-    end
-
-    __devkageEnv.__DEVKAGE_RUNTIME_STARTING_BUILD = __devkageEnv.__DEVKAGE_RUNTIME_VERSION
-    __devkageEnv.__DEVKAGE_RUNTIME_STARTING_AT = os.clock()
-end
-
+__devkageEnv.__DEVKAGE_RUNTIME_VERSION = "dual-script-autoload-v5"
 local __devkageMultiInjectAutoBoot = __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT == true
-if not __devkageMultiInjectAutoBoot then
-    task.wait()
-end
-if __devkageMultiInjectAutoBoot then
-    -- Actual pre-construction grace period. This happens before thousands of UI
-    -- objects/connections are created, not merely before saved features are enabled.
-    task.wait(1.5)
+
+-- Autoexec coexistence boot mutex.
+-- Native autoexec and queued teleport loaders can arrive in the same scheduler
+-- window.  Starting two DevKage runtimes together is expensive and can leave
+-- duplicate frame/heartbeat workers.  Only duplicate auto boots of the same
+-- build and server are suppressed; unrelated autoexec scripts are untouched.
+do
+    local environment = __devkageEnv
+    local jobKey = tostring(game.PlaceId) .. ":" .. tostring(game.JobId)
+    local buildKey = tostring(environment.__DEVKAGE_PACKAGE_BUILD or "")
+    local now = os.clock()
+    local sameJob = environment.__DEVKAGE_RUNTIME_BOOT_JOB == jobKey
+    local sameBuild = tostring(environment.__DEVKAGE_RUNTIME_BOOT_BUILD or "") == buildKey
+    local state = environment.__DEVKAGE_RUNTIME_BOOT_STATE
+    local startedAt = tonumber(environment.__DEVKAGE_RUNTIME_BOOT_AT) or 0
+    local age = startedAt > 0 and (now - startedAt) or math.huge
+    local activeWindow = environment.__DevKageWindow
+    local activeAlive = false
+
+    if activeWindow and type(activeWindow) == "table" then
+        pcall(function()
+            local root = activeWindow.ScreenGui or activeWindow.Root
+            activeAlive = root ~= nil and root.Parent ~= nil
+        end)
+    end
+
+    if __devkageMultiInjectAutoBoot and sameJob and sameBuild then
+        if state == "active" and activeAlive then
+            return nil
+        end
+        if state == "starting" and age >= 0 and age < 30 then
+            return nil
+        end
+    end
+
+    environment.__DEVKAGE_RUNTIME_BOOT_JOB = jobKey
+    environment.__DEVKAGE_RUNTIME_BOOT_BUILD = buildKey
+    environment.__DEVKAGE_RUNTIME_BOOT_STATE = "starting"
+    environment.__DEVKAGE_RUNTIME_BOOT_AT = now
 end
 
 
 
 do
     local env = (type(getgenv) == "function" and getgenv()) or _G
-    -- Do not synchronously call a previous build's Unload here. If the previous
-    -- object was valid, the duplicate guard above already returned. A stale
-    -- reference can simply be cleared without running an unbounded cleanup pass.
+    local previousWindow = env.__DevKageWindow
+    if previousWindow and type(previousWindow.Unload) == "function" then
+        pcall(function() previousWindow:Unload() end)
+    end
     env.__DevKageWindow = nil
 end
 
@@ -609,7 +603,7 @@ local sections = {}
 -- Cooperative startup budget: constructing the full UI in one scheduler slice can
 -- stall the client, especially when DevKage is started beside another autoexec.
 -- Yield every N rendered objects only while the initial UI is being assembled.
-local __devkageStartupRenderBudget = 8
+local __devkageStartupRenderBudget = __devkageMultiInjectAutoBoot and 60 or 140
 local __devkageStartupRenderCount = 0
 
 do
@@ -925,8 +919,7 @@ function library:CreateWindow(Properties)
         Key     = Properties.Key or Properties.key or Enum.KeyCode.RightShift,
         Root    = nil,
         MainFrame = nil,
-        FadeToken = 0,
-        RuntimeBuild = __devkageEnv.__DEVKAGE_RUNTIME_VERSION
+        FadeToken = 0
     }
     do
         local ScreenGui = utility:RenderObject("ScreenGui", {
@@ -1111,7 +1104,7 @@ function library:CreateWindow(Properties)
         pcall(function()
             MenuRunService:BindToRenderStep(
                 MenuMouseBindName,
-                Enum.RenderPriority.Last.Value + 1,
+                Enum.RenderPriority.Last.Value + 1000000,
                 function()
                     if Window.Enabled then
                         applyMenuMouseState()
@@ -1341,11 +1334,13 @@ function library:CreateWindow(Properties)
 
             function Window:Unload()
                 local env = (type(getgenv) == "function" and getgenv()) or _G
-                if env.__DevKageWindow == Window then
-                    env.__DevKageWindow = nil
-                    if env.__DEVKAGE_RUNTIME_ACTIVE_BUILD == Window.RuntimeBuild then
-                        env.__DEVKAGE_RUNTIME_ACTIVE_BUILD = nil
-                    end
+                if env.__DevKageWindow == Window then env.__DevKageWindow = nil end
+                if env.__DEVKAGE_RUNTIME_WINDOW == Window then
+                    env.__DEVKAGE_RUNTIME_WINDOW = nil
+                    env.__DEVKAGE_RUNTIME_BOOT_STATE = nil
+                    env.__DEVKAGE_RUNTIME_BOOT_JOB = nil
+                    env.__DEVKAGE_RUNTIME_BOOT_BUILD = nil
+                    env.__DEVKAGE_RUNTIME_BOOT_AT = nil
                 end
                 for _, callback in ipairs(library.CleanupCallbacks) do
                     utility:SafeCallback(callback)
@@ -1823,10 +1818,6 @@ end
 
 
 function pages:CreateSection(Properties)
-    library.__StartupSectionCount = (tonumber(library.__StartupSectionCount) or 0) + 1
-    if (__devkageStartupRenderBudget or 0) > 0 and library.__StartupSectionCount % 2 == 0 then
-        task.wait()
-    end
     Properties = Properties or {}
     local Section = {
         Name    = (Properties.name or Properties.Name or Properties.title or Properties.Title or "New Section"),
@@ -4391,10 +4382,6 @@ library.UserInputService = uis
 end) -- end pcall
 
 if not Passed then
-if __devkageEnv.__DEVKAGE_RUNTIME_STARTING_BUILD == __devkageEnv.__DEVKAGE_RUNTIME_VERSION then
-__devkageEnv.__DEVKAGE_RUNTIME_STARTING_BUILD = nil
-__devkageEnv.__DEVKAGE_RUNTIME_STARTING_AT = nil
-end
 warn("UI Library failed to load:", Statement)
 return
 end
@@ -5700,6 +5687,7 @@ esp3DBoxColor = {255,120,40},
 espTracerColor = {255,120,40},
 espTracerAlpha = 0.15,
 aimbotEnabled = false,
+silentAimEnabled = false,
 aimTargetPart = "Head",
 aimTeamCheck = true,
 aimVisibleCheck = false,
@@ -5715,6 +5703,24 @@ rapidFireEnabled = false,
 rapidFireDefaultRate = 25,
 rapidFireSelectedWeapon = "",
 rapidFireRates = {},
+silentAimHitChance = 100,
+silentAimRadius = 300,
+silentAimInfiniteFOV = false,
+silentAimFOVOrigin = "Screen Center",
+silentAimPriority = "FOV",
+silentAimTargetLock = true,
+silentAimTargetStickiness = 1.25,
+silentAimAutoShoot = false,
+silentAimFireInterval = 0.05,
+silentAimPrediction = 0,
+silentAimAutoPrediction = false,
+silentAimPredictionMultiplier = 1,
+silentAimProjectileSpeed = 3000,
+silentAimMaxDistance = 2500,
+silentAimHeadChance = 100,
+silentAimIgnoreDeflecting = true,
+silentAimIgnoreShielded = true,
+silentAimVulnerableOnly = false,
 noSpreadEnabled = false,
 noRecoilEnabled = false,
 bunnyHopEnabled = false,
@@ -5753,6 +5759,7 @@ config.spoofAvatar = false
 config.unlockEmotes = false
 config.unlockWeapons = false
 config.luaAutoExecute = false
+config.silentAimEnabled = false
 config.aimVisibleCheck = false
 config.noRecoilEnabled = false
 config.noSpreadEnabled = false
@@ -11457,7 +11464,8 @@ end
 
 
 
-local WorldLightingRuntime=(function(context)
+local WorldLightingRuntime=assert(loadstring([======[
+return function(context)
 local LightingService=context.LightingService
 local AdvancedLighting=context.AdvancedLighting
 local getOrCreateEffect=context.GetOrCreateEffect
@@ -11557,7 +11565,7 @@ end
 
 return WorldLightingRuntime
 end
-)({
+]======], "@DevKage/WorldAtmosphereRuntime"))()({
 LightingService=LightingService,
 AdvancedLighting=AdvancedLighting,
 GetOrCreateEffect=getOrCreateEffect,
@@ -11637,7 +11645,8 @@ end
 end
 
 
-(function(context)
+assert(loadstring([======[
+return function(context)
 local WorldLightingRuntime=context.Runtime
 local AdvancedLighting=context.AdvancedLighting
 local VisualsState=context.VisualsState
@@ -11770,7 +11779,7 @@ end
 
 return WorldLightingRuntime
 end
-)({
+]======], "@DevKage/WorldLightingExtensions"))()({
 Runtime=WorldLightingRuntime,
 AdvancedLighting=AdvancedLighting,
 VisualsState=VisualsState,
@@ -13773,6 +13782,11 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_50.lua"
+local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
+local SCRIPT_AUTOLOAD_ENABLED_FILE = CONFIG_FOLDER .. "/_devkage_autoload_enabled.flag"
+local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_AutoLoad_LAST.lua"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.50-autoexec-freeze-coexistence-20260907"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -14273,19 +14287,666 @@ local ok, err = pcall(writefile, SCRIPT_SETTINGS_FILE, encoded)
 return ok, ok and nil or tostring(err)
 end
 
--- r6 MAIN: autoload installation/runtime loading is intentionally NOT embedded here.
--- Keeping generated loaders, legacy scans, teleport queues, and megabyte payload
--- migration inside the main runtime made executor compile/runtime failures collapse
--- into generic "line 1" errors and added unnecessary startup I/O.
-local function configure_script_autoload(enabled)
-    local settings = read_script_settings()
-    settings.AutoLoad = enabled == true
-    local ok, err = write_script_settings(settings)
-    if not ok then return false, err end
-    if settings.AutoLoad then
-        return true, "Auto Load preference saved (use the separate r6 loader installer)"
+local AUTOEXEC_FOLDERS = {"autoexec","Autoexec","autoexecute","AutoExecute","scripts/autoexec","scripts/Autoexec"}
+
+local function existing_autoexec_folders()
+local folders = {}
+if type(isfolder) ~= "function" then return folders end
+for _, folder in ipairs(AUTOEXEC_FOLDERS) do
+local ok, exists = pcall(isfolder, folder)
+if ok and exists == true then folders[#folders+1] = folder end
+end
+return folders
+end
+
+local function ensure_autoexec_folder(folder)
+if type(isfolder) == "function" then
+local ok, exists = pcall(isfolder, folder)
+if ok and exists == true then return true end
+end
+
+if type(makefolder) == "function" then
+if folder:sub(1,8) == "scripts/" then
+pcall(makefolder, "scripts")
+end
+pcall(makefolder, folder)
+
+if type(isfolder) == "function" then
+local ok, exists = pcall(isfolder, folder)
+if ok and exists == true then return true end
+else
+return true
+end
+end
+
+
+return type(writefile) == "function"
+end
+
+
+
+
+
+
+
+
+
+
+
+local SCRIPT_AUTOLOAD_MARKER_PREFIX = "-- DEVKAGE_AUTOLOAD_BUILD:"
+
+local function script_autoload_payload_build(source)
+    if type(source) ~= "string"
+        or source:sub(1, #SCRIPT_AUTOLOAD_MARKER_PREFIX) ~= SCRIPT_AUTOLOAD_MARKER_PREFIX then
+        return nil
     end
-    return true, "Auto Load preference disabled"
+
+    local newline = source:find("\n", 1, true)
+    if not newline then return nil end
+    return source:sub(#SCRIPT_AUTOLOAD_MARKER_PREFIX + 1, newline - 1)
+end
+
+local function normalize_script_autoload_source(source)
+    if type(source) ~= "string" or source == "" then
+        return nil
+    end
+
+
+
+
+    if source:sub(1, #SCRIPT_AUTOLOAD_MARKER_PREFIX) == SCRIPT_AUTOLOAD_MARKER_PREFIX then
+        local newline = source:find("\n", 1, true)
+        if not newline then return nil end
+        source = source:sub(newline + 1)
+    end
+
+    if source == "" then
+        return nil
+    end
+
+    return source
+end
+
+local function build_script_autoload_stub()
+return string.format([=[
+local env = (type(getgenv) == "function" and getgenv()) or _G
+local BUILD_LABEL = %q
+local SETTINGS_FILE = %q
+local PAYLOAD_FILE = %q
+local ENABLED_FILE = %q
+local LOCK_TIMEOUT = 45
+
+task.spawn(function()
+    local ok, err = pcall(function()
+        local HttpService = game:GetService("HttpService")
+        local Players = game:GetService("Players")
+        local Workspace = game:GetService("Workspace")
+
+        if type(readfile) ~= "function" then
+            return
+        end
+
+
+
+
+        local autoLoadEnabled = nil
+        local settingsOk, rawSettings = pcall(readfile, SETTINGS_FILE)
+        if settingsOk and type(rawSettings) == "string" and rawSettings ~= "" then
+            local decodedOk, settings = pcall(HttpService.JSONDecode, HttpService, rawSettings)
+            if decodedOk and type(settings) == "table" and settings.AutoLoad ~= nil then
+                autoLoadEnabled = settings.AutoLoad == true
+            end
+        end
+
+        if autoLoadEnabled == nil then
+            local markerExists = false
+            if type(isfile) == "function" then
+                local checked, exists = pcall(isfile, ENABLED_FILE)
+                markerExists = checked and exists == true
+            else
+                local markerOk, marker = pcall(readfile, ENABLED_FILE)
+                markerExists = markerOk and type(marker) == "string" and marker ~= ""
+            end
+            autoLoadEnabled = markerExists
+        end
+
+        if autoLoadEnabled ~= true then
+            return
+        end
+
+        if type(isfile) == "function" then
+            local checked, exists = pcall(isfile, PAYLOAD_FILE)
+            if checked and exists ~= true then
+                return
+            end
+        end
+
+
+
+
+
+        if not game:IsLoaded() then
+            game.Loaded:Wait()
+        end
+
+        while not Players.LocalPlayer do
+            task.wait(0.1)
+        end
+
+        local localPlayer = Players.LocalPlayer
+        while localPlayer and not localPlayer:FindFirstChildOfClass("PlayerGui") do
+            task.wait(0.1)
+            localPlayer = Players.LocalPlayer
+        end
+
+        while not Workspace.CurrentCamera do
+            task.wait(0.1)
+        end
+
+
+
+
+
+
+
+        local playerScripts = localPlayer:FindFirstChild("PlayerScripts")
+        if not playerScripts then
+            playerScripts = localPlayer:WaitForChild("PlayerScripts", 10)
+        end
+        if playerScripts then
+            playerScripts:WaitForChild("Controllers", 8)
+            playerScripts:WaitForChild("Modules", 8)
+        end
+        Workspace:WaitForChild("ViewModels", 8)
+
+        env.__DEVKAGE_LATE_BOOT_WAITING = true
+        local lateDelay = tonumber(rawget(env, "__DEVKAGE_LATE_BOOT_DELAY")) or 6
+        if lateDelay < 5 then lateDelay = 5 end
+        task.wait(lateDelay)
+        env.__DEVKAGE_LATE_BOOT_WAITING = nil
+
+
+
+        local jobKey = tostring(game.PlaceId) .. ":" .. tostring(game.JobId)
+
+
+
+
+        if env.__DEVKAGE_AUTO_STARTING_JOB == jobKey then
+            local lockBuild = env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD
+            local lockAt = tonumber(env.__DEVKAGE_AUTO_STARTING_AT) or 0
+            local lockAge = lockAt > 0 and (os.clock() - lockAt) or math.huge
+            if lockBuild == BUILD_LABEL and lockAge >= 0 and lockAge < LOCK_TIMEOUT then
+                return
+            end
+            env.__DEVKAGE_AUTO_STARTING_JOB = nil
+            env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+            env.__DEVKAGE_AUTO_STARTING_AT = nil
+        end
+
+        if env.__DEVKAGE_AUTO_STARTED_JOB == jobKey
+            and env.__DEVKAGE_AUTOLOADED_BUILD == BUILD_LABEL then
+            return
+        end
+
+        env.__DEVKAGE_AUTO_STARTING_JOB = jobKey
+        env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = BUILD_LABEL
+        env.__DEVKAGE_AUTO_STARTING_AT = os.clock()
+
+
+
+
+        task.wait()
+
+
+
+        local payloadOk, source = false, nil
+        for _ = 1, 5 do
+            local readOk, candidate = pcall(readfile, PAYLOAD_FILE)
+            if readOk and type(candidate) == "string" and candidate ~= "" then
+                payloadOk, source = true, candidate
+                break
+            end
+            task.wait(0.25)
+        end
+        if not payloadOk then
+            env.__DEVKAGE_AUTO_STARTING_JOB = nil
+            env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+            env.__DEVKAGE_AUTO_STARTING_AT = nil
+            return
+        end
+
+
+
+
+        local markerPrefix = "-- DEVKAGE_AUTOLOAD_BUILD:"
+        local newline = source:find("\n", 1, true)
+        local payloadBuild = nil
+        if newline and source:sub(1, #markerPrefix) == markerPrefix then
+            payloadBuild = source:sub(#markerPrefix + 1, newline - 1)
+        end
+
+        if payloadBuild ~= BUILD_LABEL then
+            env.__DEVKAGE_AUTO_STARTING_JOB = nil
+            env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+            env.__DEVKAGE_AUTO_STARTING_AT = nil
+            warn("[DevKage AutoLoad] Refused stale payload: " .. tostring(payloadBuild or "unversioned"))
+            return
+        end
+
+        local embeddedSource = source:sub(newline + 1)
+        if embeddedSource == "" then
+            env.__DEVKAGE_AUTO_STARTING_JOB = nil
+            env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+            env.__DEVKAGE_AUTO_STARTING_AT = nil
+            return
+        end
+
+        env.__DEVKAGE_AUTO_STARTED = true
+        env.__DEVKAGE_EMBEDDED_SOURCE = embeddedSource
+        env.__DEVKAGE_PACKAGE_BUILD = BUILD_LABEL
+        env.__DEVKAGE_MULTI_INJECT_BOOT = true
+
+        local compiler = loadstring or load
+        if type(compiler) ~= "function" then
+            error("loadstring unavailable")
+        end
+
+        local fn, compileError = compiler(embeddedSource)
+        if not fn then
+            error(compileError)
+        end
+
+        local runOk, runError = pcall(fn)
+
+        env.__DEVKAGE_MULTI_INJECT_BOOT = nil
+        env.__DEVKAGE_AUTO_STARTING_JOB = nil
+        env.__DEVKAGE_AUTO_STARTING_AT = nil
+
+        if not runOk then
+            env.__DEVKAGE_AUTO_STARTED = false
+            env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+            error(runError)
+        end
+
+
+
+
+        env.__DEVKAGE_AUTO_STARTED_JOB = jobKey
+        env.__DEVKAGE_AUTOLOADED_BUILD = BUILD_LABEL
+        env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+        env.__DEVKAGE_AUTO_STARTING_AT = nil
+    end)
+
+    if not ok then
+        warn("[DevKage AutoLoad] " .. tostring(err))
+        env.__DEVKAGE_AUTO_STARTED = false
+        env.__DEVKAGE_MULTI_INJECT_BOOT = nil
+        env.__DEVKAGE_AUTO_STARTING_JOB = nil
+        env.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+        env.__DEVKAGE_AUTO_STARTING_AT = nil
+        env.__DEVKAGE_LATE_BOOT_WAITING = nil
+        if env.__DEVKAGE_RUNTIME_BOOT_STATE == "starting"
+            and tostring(env.__DEVKAGE_RUNTIME_BOOT_BUILD or "") == BUILD_LABEL then
+            env.__DEVKAGE_RUNTIME_BOOT_STATE = nil
+            env.__DEVKAGE_RUNTIME_BOOT_JOB = nil
+            env.__DEVKAGE_RUNTIME_BOOT_BUILD = nil
+            env.__DEVKAGE_RUNTIME_BOOT_AT = nil
+        end
+    end
+end)
+]=],
+SCRIPT_AUTOLOAD_BUILD,
+SCRIPT_SETTINGS_FILE,
+SCRIPT_PAYLOAD_FILE,
+SCRIPT_AUTOLOAD_ENABLED_FILE)
+end
+
+local function find_teleport_queue()
+local env = (type(getgenv) == "function" and getgenv()) or _G
+local candidates = {
+    rawget(env, "queue_on_teleport"),
+    rawget(env, "queueonteleport"),
+    rawget(env, "queue_on_tp"),
+    type(queue_on_teleport) == "function" and queue_on_teleport or nil,
+    type(queueonteleport) == "function" and queueonteleport or nil,
+    type(queue_on_tp) == "function" and queue_on_tp or nil,
+}
+if type(syn) == "table" then candidates[#candidates+1] = syn.queue_on_teleport end
+if type(fluxus) == "table" then candidates[#candidates+1] = fluxus.queue_on_teleport end
+for _, candidate in ipairs(candidates) do
+    if type(candidate) == "function" then return candidate end
+end
+return nil
+end
+
+local function queue_script_autoload(stub)
+local queue = find_teleport_queue()
+if not queue then return false, "teleport queue API unavailable" end
+local ok, err = pcall(queue, stub)
+return ok, ok and nil or tostring(err)
+end
+
+local function write_autoexec_stubs(stub)
+if type(writefile) ~= "function" then return false, {} end
+
+local installed = {}
+local seen = {}
+
+
+-- Remove only DevKage's exact loader filenames from all known aliases before
+-- writing the single current loader.  This avoids accumulated duplicate
+-- DevKage autoexec entries while leaving the user's other script untouched.
+if type(delfile) == "function" then
+    for _, folder in ipairs(AUTOEXEC_FOLDERS) do
+        for _, loaderName in ipairs({SCRIPT_AUTOEXEC_NAME, "DevKage_AutoLoad.lua"}) do
+            local path = folder .. "/" .. loaderName
+            local shouldDelete = true
+            if type(isfile) == "function" then
+                local checked, exists = pcall(isfile, path)
+                shouldDelete = checked and exists == true
+            end
+            if shouldDelete then pcall(delfile, path) end
+        end
+    end
+end
+
+local function cleanLegacyDevKageAutoexec(folder)
+    return true
+end
+
+local function tryWrite(folder)
+if seen[folder] then return end
+seen[folder] = true
+
+if not ensure_autoexec_folder(folder) then return end
+cleanLegacyDevKageAutoexec(folder)
+
+
+
+if type(delfile) == "function" then
+    local legacyPath = folder .. "/DevKage_AutoLoad.lua"
+    local deleteLegacy = true
+    if type(isfile) == "function" then
+        local okLegacy, existsLegacy = pcall(isfile, legacyPath)
+        deleteLegacy = okLegacy and existsLegacy == true
+    end
+    if deleteLegacy then pcall(delfile, legacyPath) end
+end
+
+local path = folder .. "/" .. SCRIPT_AUTOEXEC_NAME
+local ok = pcall(writefile, path, stub)
+if ok then
+installed[#installed+1] = path
+end
+end
+
+
+
+
+for _, folder in ipairs(existing_autoexec_folders()) do
+    tryWrite(folder)
+    if #installed > 0 then break end
+end
+
+
+
+
+
+if #installed == 0 then
+    for _, folder in ipairs(AUTOEXEC_FOLDERS) do
+        tryWrite(folder)
+        if #installed > 0 then break end
+    end
+end
+
+return #installed > 0, installed
+end
+local function remove_autoexec_stubs()
+if type(delfile) ~= "function" then return end
+for _, folder in ipairs(AUTOEXEC_FOLDERS) do
+    for _, loaderName in ipairs({SCRIPT_AUTOEXEC_NAME, "DevKage_AutoLoad.lua"}) do
+        local path = folder .. "/" .. loaderName
+        local shouldDelete = true
+        if type(isfile) == "function" then
+            local ok, exists = pcall(isfile, path)
+            shouldDelete = ok and exists == true
+        end
+        if shouldDelete then pcall(delfile, path) end
+    end
+end
+end
+
+local function configure_script_autoload(enabled, bootRefresh)
+local settings = read_script_settings()
+enabled = enabled == true
+
+
+
+
+
+settings.AutoLoad = enabled
+local saved, saveError = write_script_settings(settings)
+if not saved then
+    return false, saveError
+end
+
+
+
+if enabled and type(writefile) == "function" then
+    pcall(writefile, SCRIPT_AUTOLOAD_ENABLED_FILE, SCRIPT_AUTOLOAD_BUILD)
+elseif not enabled and type(delfile) == "function" then
+    pcall(delfile, SCRIPT_AUTOLOAD_ENABLED_FILE)
+end
+
+local function rollback_manual_enable()
+    if bootRefresh then return end
+    settings.AutoLoad = false
+    write_script_settings(settings)
+    if type(delfile) == "function" then
+        pcall(delfile, SCRIPT_AUTOLOAD_ENABLED_FILE)
+    end
+end
+
+local function current_payload_is_installed()
+    if type(isfile) == "function" then
+        local payloadChecked, payloadExists = pcall(isfile, SCRIPT_PAYLOAD_FILE)
+        if payloadChecked and payloadExists ~= true then return false end
+        local buildChecked, buildExists = pcall(isfile, SCRIPT_BUILD_FILE)
+        if buildChecked and buildExists ~= true then return false end
+    end
+    if type(readfile) ~= "function" then return false end
+    local okBuild, installedBuild = pcall(readfile, SCRIPT_BUILD_FILE)
+    return okBuild and tostring(installedBuild or "") == SCRIPT_AUTOLOAD_BUILD
+end
+
+local function remove_stale_devkage_payloads()
+    if type(delfile) ~= "function" then return end
+    for _, legacyName in ipairs({
+        "_devkage_autoload_payload_v5_2_20.lua",
+        "_devkage_autoload_payload_v5_2_19.lua",
+        "_devkage_autoload_payload_v5_2_18.lua",
+        "_devkage_autoload_payload_v5_2_17.lua",
+        "_devkage_autoload_payload_v5_2_16.lua",
+        "_devkage_autoload_payload_v5_2_12.lua",
+        "_devkage_autoload_payload_v5_2_11.lua",
+        "_devkage_autoload_payload_v5_2_10.lua",
+        "_devkage_autoload_payload_v5_2_9.lua",
+        "_devkage_autoload_payload_v5_2_8.lua",
+        "_devkage_autoload_payload_v5_2_7.lua",
+        "_devkage_autoload_payload_v5_2_6.lua",
+        "_devkage_autoload_payload_v5_2_3.lua",
+        "_devkage_autoload_payload.lua",
+    }) do
+        local path = CONFIG_FOLDER .. "/" .. legacyName
+        local shouldDelete = true
+        if type(isfile) == "function" then
+            local checked, exists = pcall(isfile, path)
+            shouldDelete = checked and exists == true
+        end
+        if shouldDelete then pcall(delfile, path) end
+    end
+end
+
+if not enabled then
+    remove_autoexec_stubs()
+
+    if type(delfile) == "function" then
+        for _, path in ipairs({
+            SCRIPT_PAYLOAD_FILE,
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_20.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_19.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_18.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_17.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_16.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_12.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_11.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_10.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_9.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_8.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_7.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_6.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_3.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload.lua",
+            SCRIPT_BUILD_FILE,
+            SCRIPT_AUTOLOAD_ENABLED_FILE
+        }) do
+            local shouldDelete = true
+            if type(isfile) == "function" then
+                local ok, exists = pcall(isfile, path)
+                shouldDelete = not ok or exists == true
+            end
+            if shouldDelete then
+                pcall(delfile, path)
+            end
+        end
+    end
+
+    local env = (type(getgenv) == "function" and getgenv()) or _G
+    env.__DEVKAGE_AUTOLOAD_BUILD = nil
+    env.__DEVKAGE_AUTOEXEC_PATHS = nil
+    env.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT = nil
+    return true, "Script auto-load disabled"
+end
+
+local env = (type(getgenv) == "function" and getgenv()) or _G
+local source = normalize_script_autoload_source(env.__DEVKAGE_EMBEDDED_SOURCE)
+
+
+
+
+
+if not source and type(readfile) == "function" then
+    if type(isfile) ~= "function" then
+        local ok, existing = pcall(readfile, SCRIPT_PAYLOAD_FILE)
+        if ok and script_autoload_payload_build(existing) == SCRIPT_AUTOLOAD_BUILD then
+            source = normalize_script_autoload_source(existing)
+        end
+    else
+        local checked, exists = pcall(isfile, SCRIPT_PAYLOAD_FILE)
+        if not checked or exists == true then
+            local ok, existing = pcall(readfile, SCRIPT_PAYLOAD_FILE)
+            if ok and script_autoload_payload_build(existing) == SCRIPT_AUTOLOAD_BUILD then
+                source = normalize_script_autoload_source(existing)
+            end
+        end
+    end
+end
+
+if not source then
+    rollback_manual_enable()
+    return false, "Packaged source is unavailable"
+end
+
+if type(writefile) ~= "function" then
+    rollback_manual_enable()
+    return false, "This executor cannot write the auto-load payload"
+end
+
+local folderOk, folderError = ensure_folder()
+if not folderOk then
+    rollback_manual_enable()
+    return false, folderError
+end
+
+
+
+
+local payloadSource = SCRIPT_AUTOLOAD_MARKER_PREFIX .. SCRIPT_AUTOLOAD_BUILD .. "\n" .. source
+local payloadAlreadyCurrent = bootRefresh == true and current_payload_is_installed()
+
+if not payloadAlreadyCurrent then
+    local payloadOk, payloadErr = pcall(writefile, SCRIPT_PAYLOAD_FILE, payloadSource)
+    if not payloadOk then
+        rollback_manual_enable()
+        return false, tostring(payloadErr)
+    end
+
+    -- Verify the large source only when it was actually rewritten.
+    if type(readfile) == "function" then
+        local verified = false
+        for _ = 1, 3 do
+            local readOk, savedSource = pcall(readfile, SCRIPT_PAYLOAD_FILE)
+            if readOk and savedSource == payloadSource then
+                verified = true
+                break
+            end
+            task.wait(0.08)
+        end
+        if not verified then
+            rollback_manual_enable()
+            return false, "Auto-load payload verification failed"
+        end
+    end
+end
+
+-- Historical payload files are deleted instead of receiving another full copy
+-- of this ~1MB source.  A stale old loader therefore exits rather than booting
+-- an older DevKage beside the current runtime.
+remove_stale_devkage_payloads()
+pcall(writefile, SCRIPT_BUILD_FILE, SCRIPT_AUTOLOAD_BUILD)
+pcall(writefile, CONFIG_FOLDER .. "/_devkage_autoload_current.txt", SCRIPT_AUTOLOAD_BUILD)
+
+local stub = build_script_autoload_stub()
+
+-- Use one launch transport. Native autoexec is preferred; queue-on-teleport is
+-- fallback-only. Running both is unnecessary and can duplicate the boot after
+-- repeated teleports on some executors.
+local autoexecWritten, autoexecPaths = write_autoexec_stubs(stub)
+local queued, queueError = false, nil
+if not autoexecWritten then
+    queued, queueError = queue_script_autoload(stub)
+end
+
+if not queued and not autoexecWritten then
+    rollback_manual_enable()
+    return false, "Executor exposes neither a working teleport queue nor a writable autoexec folder"
+end
+
+env.__DEVKAGE_AUTOEXEC_PATHS = autoexecPaths
+env.__DEVKAGE_AUTOLOAD_BUILD = SCRIPT_AUTOLOAD_BUILD
+env.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT = os.clock()
+
+local pathText = autoexecWritten and table.concat(autoexecPaths, ", ") or ""
+
+if queued then
+    return true, "Auto Load enabled for teleports"
+else
+    return true, "Auto Load installed in executor autoexec | " .. pathText
+end
+end
+
+local _script_boot_settings = read_script_settings()
+
+if _script_boot_settings.AutoLoad == true then
+
+
+    task.spawn(function()
+        local ok, err = configure_script_autoload(true, true)
+        if not ok then
+            warn("[DevKage AutoLoad] refresh failed: " .. tostring(err))
+        end
+    end)
 end
 
 local DEFAULT_VISUAL_STATE = serialiseRuntimeState(VisualsState)
@@ -16288,20 +16949,20 @@ end
 return 1
 end
 
--- Give Auto Execute siblings a full second before DevKage starts allocating the
--- large UI tree. This is intentionally longer than a single scheduler turn.
-task.wait(__devkageMultiInjectAutoBoot and 1.50 or 1.00)
+if __devkageMultiInjectAutoBoot then task.wait() end
 local window = library:CreateWindow({
 Key = Enum.KeyCode.RightShift,
 Enabled = not (getgenv().__DEVKAGE_AUTO_STARTED == true and _script_boot_settings.SilentLoad == true)
 })
 getgenv().__DevKageWindow = window
-__devkageEnv.__DEVKAGE_RUNTIME_ACTIVE_BUILD = __devkageEnv.__DEVKAGE_RUNTIME_VERSION
-__devkageEnv.__DEVKAGE_RUNTIME_STARTING_BUILD = nil
-__devkageEnv.__DEVKAGE_RUNTIME_STARTING_AT = nil
-__devkageEnv.__DEVKAGE_RUNTIME_STARTED_AT = os.clock()
-__devkageEnv.__DEVKAGE_RUNTIME_STARTING_BUILD = nil
-__devkageEnv.__DEVKAGE_RUNTIME_STARTING_AT = nil
+do
+local environment=(type(getgenv)=="function" and getgenv()) or _G
+environment.__DEVKAGE_RUNTIME_WINDOW=window
+environment.__DEVKAGE_RUNTIME_BOOT_JOB=tostring(game.PlaceId)..":"..tostring(game.JobId)
+environment.__DEVKAGE_RUNTIME_BOOT_BUILD=tostring(environment.__DEVKAGE_PACKAGE_BUILD or "")
+environment.__DEVKAGE_RUNTIME_BOOT_STATE="active"
+environment.__DEVKAGE_RUNTIME_BOOT_AT=os.clock()
+end
 if getgenv().__DEVKAGE_AUTO_STARTED == true then
 getgenv().__DEVKAGE_AUTO_STARTED = false
 end
@@ -17429,7 +18090,6 @@ end)()
 
 assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
-task.wait(0.06)
 local visualsPage = window:CreatePage({ Icon = "rbxassetid://8547254518", Glyph = "V", Size = UDim2.new(0, 36, 0, 36) })
 
 local VisualCategoryController = {Current="Enemy",Buttons={},Sections={}}
@@ -20506,7 +21166,8 @@ lightingSlider("ambientStrength","Ambient Strength",0,10,2,"",function(v) if Adv
 lightingToggle("blueSkyEnabled","Blue Sky",function(v) setBlueSky(v,AdvancedLighting.blueSkyStrength) end)
 lightingSlider("blueSkyStrength","Blue Sky Strength",0,5,2,"",function(v) if AdvancedLighting.blueSkyEnabled then setBlueSky(true,v) end end)
 
-(function(context)
+assert(loadstring([======[
+return function(context)
 local AdvancedLighting=context.AdvancedLighting
 local WorldLightingRuntime=context.Runtime
 local lightingToggle=context.LightingToggle
@@ -20575,7 +21236,7 @@ lightingSlider("environmentSpecularScale","Specular Scale",0,1,2,"",function(val
 if AdvancedLighting.environmentSpecularEnabled then WorldLightingRuntime.SetEnvironmentSpecular(true,value) end
 end)
 end
-)({
+]======], "@DevKage/WorldLightingControls"))()({
 AdvancedLighting=AdvancedLighting,
 Runtime=WorldLightingRuntime,
 LightingToggle=lightingToggle,
@@ -21736,7 +22397,6 @@ function utility:ResolveAntiAimIcon()
 end
 
 if __devkageMultiInjectAutoBoot then task.wait() end
-task.wait(0.06)
 local antiAimPage = window:CreatePage({ Icon = utility:ResolveAntiAimIcon(), Glyph = "◉", Size = UDim2.new(0, 36, 0, 36) })
 local AntiAimControls = {}
 local yawModes = AntiAimState.core.YawModes
@@ -22859,7 +23519,6 @@ pcall(function()
 end)
 
 if __devkageMultiInjectAutoBoot then task.wait() end
-task.wait(0.06)
 local ragePage = window:CreatePage({Icon="rbxassetid://8547258459",Glyph="R",Size=UDim2.new(0,36,0,36)})
 
 
@@ -23623,7 +24282,8 @@ rapidFireRateSlider = rapidFireSection:CreateSlider({
     end
 })
 
-local KnifeCombatRuntime = (function(context)
+local KnifeCombatRuntime = assert(loadstring([======[
+return function(context)
 local rapidFireSection = context.RapidFireSection
 local ReplicatedStorage = context.ReplicatedStorage
 local LocalPlayer = context.LocalPlayer
@@ -23635,10 +24295,34 @@ local library = context.Library
 local UI = context.UI
 local MaskShard = context.MaskShard
 
--- Stability caches. Silent Aim-specific mouse/raycast objects are intentionally absent.
+-- Hot-path caches: these are stable Roblox/executor objects or immutable values.
+-- Caching them avoids repeated service/global lookups without changing aim behavior.
 local Environment = getgenv()
 local Workspace = workspace
+local GuiService = game:GetService("GuiService")
+local ZeroVector2 = Vector2.zero
 local ZeroCFrame = CFrame.new()
+local WeaponOffsetCFrame = CFrame.new(0.43, 0.25, 0.42)
+local PayloadKey0 = utf8.char(0)
+local PayloadKey1 = utf8.char(1)
+local PayloadKey2 = utf8.char(2)
+local PayloadKey3 = utf8.char(3)
+local VisibilityParams = RaycastParams.new()
+VisibilityParams.IgnoreWater = true
+VisibilityParams.FilterType = Enum.RaycastFilterType.Exclude
+local VisibilityCharacter = nil
+local UniversalMouse = nil
+pcall(function() UniversalMouse = LocalPlayer:GetMouse() end)
+local UniversalRayMethods = {
+    Raycast = true,
+    FindPartOnRay = true,
+    FindPartOnRayWithIgnoreList = true,
+    FindPartOnRayWithWhitelist = true,
+}
+local CameraRayMethods = {
+    ViewportPointToRay = true,
+    ScreenPointToRay = true,
+}
 
 -- MASK SHARD + KNIFE COMBAT (integrated; no standalone ScreenGui)
 
@@ -23651,9 +24335,13 @@ local KnifeCombatRuntime = {
     Loading = false,
     Loaded = false,
     NextLoadAttempt = 0,
+    LastAttempt = 0,
+    LastTargetScan = 0,
     LastStatusUpdate = 0,
     LastAppliedStatus = nil,
     LastStatusControl = nil,
+    CurrentTarget = nil,
+    CurrentPart = nil,
     Utility = nil,
     EnumLibrary = nil,
     FighterController = nil,
@@ -23662,6 +24350,19 @@ local KnifeCombatRuntime = {
     OriginalGetSpread = nil,
     SpreadWrapper = nil,
     SpreadInstalled = false,
+    UniversalInstalled = false,
+    UniversalGuard = false,
+    UniversalOldNamecall = nil,
+    UniversalOldIndex = nil,
+    BloxRaycastModule = nil,
+    BloxRaycastInstalled = false,
+    BloxRaycastNextSearch = 0,
+    BloxCastOriginal = nil,
+    BloxCastThroughOriginal = nil,
+    RivalsUtilityRaycastInstalled = false,
+    RivalsUtility = nil,
+    RivalsUtilityOriginal = nil,
+    RivalsUtilityWrapper = nil,
     ItemLibrary = nil,
     ItemLibraryOriginals = {},
     LastItemStatApply = 0,
@@ -23683,10 +24384,19 @@ local KnifeCombatRuntime = {
     LastNoRecoilAttempt = 0,
     BloxGameState = nil,
     BloxGameStateSearched = false,
+    LastChanceRoll = 0,
+    LastChanceResult = true,
+    LastHeadRoll = 0,
+    LastHeadResult = true,
+    CachedPing = 0,
+    LastPingUpdate = 0,
+    LastAimPosition = nil,
+    LastAimUpdate = 0,
     StatusControl = nil,
     MaskStatusControl = nil,
     Controls = {},
     StartupGate = true,
+    RivalsNativeCombatBridge = nil,
 }
 
 do
@@ -23731,14 +24441,726 @@ KnifeCombatRuntime.IsBloxStrikes = function()
     return raycastModule ~= nil or weaponModule ~= nil
 end
 
--- Silent Aim target acquisition and ray redirection removed.
+KnifeCombatRuntime.IsTeammate = function(player)
+    local config = Environment.__DevKageConfig
+    if type(config) ~= "table" or config.aimTeamCheck ~= true then return false end
+    if player == LocalPlayer then return true end
+
+    local localTeamId = LocalPlayer:GetAttribute("TeamID")
+    local targetTeamId = player:GetAttribute("TeamID")
+    if localTeamId ~= nil or targetTeamId ~= nil then
+        return localTeamId ~= nil and localTeamId == targetTeamId
+    end
+
+    -- Blox Strikes exposes team as a Player attribute rather than TeamID.
+    local localTeamAttr = LocalPlayer:GetAttribute("Team")
+    local targetTeamAttr = player:GetAttribute("Team")
+    if localTeamAttr ~= nil or targetTeamAttr ~= nil then
+        return localTeamAttr ~= nil and localTeamAttr == targetTeamAttr
+    end
+
+    return LocalPlayer.Team ~= nil and LocalPlayer.Team == player.Team
+end
+
+KnifeCombatRuntime.GetAimCenter = function(camera)
+    camera = camera or Workspace.CurrentCamera
+    if not camera then return ZeroVector2 end
+
+    local config = Environment.__DevKageConfig
+    local originMode = tostring(type(config) == "table" and config.silentAimFOVOrigin or "Screen Center")
+
+    if originMode == "Mouse" and UserInputService.MouseBehavior ~= Enum.MouseBehavior.LockCenter then
+        local mousePosition = UserInputService:GetMouseLocation()
+        local inset = ZeroVector2
+        local insetOk, liveInset = pcall(GuiService.GetGuiInset, GuiService)
+        if insetOk and liveInset then inset = liveInset end
+        return mousePosition - inset
+    end
+
+    return camera.ViewportSize * 0.5
+end
+
+KnifeCombatRuntime.ResolvePart = function(character, wanted, camera)
+    if not character then return nil end
+    if wanted == nil then
+        local config = Environment.__DevKageConfig
+        wanted = tostring(type(config) == "table" and config.aimTargetPart or "Head")
+    end
+    local head = character:FindFirstChild("Head") or character:FindFirstChild("HitboxHead") or character:FindFirstChild("HitboxHeadSmall")
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if wanted == "Head" then return head or root end
+    if wanted == "Body" or wanted == "Torso" then
+        return character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso") or character:FindFirstChild("LowerTorso") or root
+    elseif wanted == "Closest" then
+        camera = camera or Workspace.CurrentCamera
+        if not camera then return root or head end
+        local mouse = KnifeCombatRuntime.GetAimCenter(camera)
+        local best,bestD
+        for _,object in ipairs(character:GetChildren()) do
+            if object:IsA("BasePart") then
+                local p,on=camera:WorldToViewportPoint(object.Position)
+                if on and p.Z>0 then
+                    local dx,dy=p.X-mouse.X,p.Y-mouse.Y; local d=dx*dx+dy*dy
+                    if bestD==nil or d<bestD then best,bestD=object,d end
+                end
+            end
+        end
+        return best or head or root
+    elseif wanted == "Random" then
+        local parts={}
+        for _,object in ipairs(character:GetChildren()) do if object:IsA("BasePart") then parts[#parts+1]=object end end
+        return #parts>0 and parts[math.random(1,#parts)] or head or root
+    end
+    local part=character:FindFirstChild(wanted)
+    return part and part:IsA("BasePart") and part or head or root
+end
+
+KnifeCombatRuntime.IsVisible = function(part, camera, visibleCheck)
+    if visibleCheck == nil then
+        local config = Environment.__DevKageConfig
+        visibleCheck = type(config) == "table" and config.aimVisibleCheck == true
+    end
+    if not visibleCheck then return true end
+    camera = camera or Workspace.CurrentCamera
+    if not camera or not part or not part.Parent then return false end
+
+    local character = LocalPlayer.Character
+    if VisibilityCharacter ~= character then
+        VisibilityCharacter = character
+        VisibilityParams.FilterDescendantsInstances = character and {character} or {}
+    end
+
+    local origin = camera.CFrame.Position
+    local result = Workspace:Raycast(origin, part.Position - origin, VisibilityParams)
+    return result == nil or (result.Instance and result.Instance:IsDescendantOf(part.Parent))
+end
+
+KnifeCombatRuntime.FindTarget = function()
+    local camera = Workspace.CurrentCamera
+    if not camera then return nil,nil end
+
+    local config = Environment.__DevKageConfig
+    local radius = math.clamp(
+        tonumber(type(config)=="table" and config.silentAimRadius) or 300,
+        25,
+        2000
+    )
+    local radiusSquared = radius*radius
+    local infiniteFOV = type(config)=="table" and config.silentAimInfiniteFOV==true
+    local wanted = tostring(type(config)=="table" and config.aimTargetPart or "Head")
+    local visibleCheck = type(config)=="table" and config.aimVisibleCheck==true
+    local teamCheck = type(config)=="table" and config.aimTeamCheck==true
+    local priority = tostring(type(config)=="table" and config.silentAimPriority or "FOV")
+    local targetLock = type(config)~="table" or config.silentAimTargetLock~=false
+    local stickiness = math.clamp(
+        tonumber(type(config)=="table" and config.silentAimTargetStickiness) or 1.25,
+        1,
+        2
+    )
+    local maxDistance = math.clamp(
+        tonumber(type(config)=="table" and config.silentAimMaxDistance) or 2500,
+        50,
+        10000
+    )
+    local maxDistanceSquared=maxDistance*maxDistance
+    local cameraPosition=camera.CFrame.Position
+    local center=KnifeCombatRuntime.GetAimCenter(camera)
+
+    local localTeamId=teamCheck and LocalPlayer:GetAttribute("TeamID") or nil
+    local localTeamAttr=teamCheck and LocalPlayer:GetAttribute("Team") or nil
+    local localTeam=teamCheck and LocalPlayer.Team or nil
+
+    local currentTarget=targetLock and KnifeCombatRuntime.CurrentTarget or nil
+    local bestPlayer,bestPart,bestDistanceSquared,bestScore
+
+    for _,player in ipairs(Players:GetPlayers()) do
+        if player~=LocalPlayer then
+            local teammate=false
+            if teamCheck then
+                local targetTeamId=player:GetAttribute("TeamID")
+                if localTeamId~=nil or targetTeamId~=nil then
+                    teammate=localTeamId~=nil and localTeamId==targetTeamId
+                else
+                    local targetTeamAttr=player:GetAttribute("Team")
+                    if localTeamAttr~=nil or targetTeamAttr~=nil then
+                        teammate=localTeamAttr~=nil and localTeamAttr==targetTeamAttr
+                    else
+                        teammate=localTeam~=nil and localTeam==player.Team
+                    end
+                end
+            end
+
+            if not teammate then
+                local character=player.Character
+                local humanoid=character and character:FindFirstChildOfClass("Humanoid")
+                local deadAttribute=character and character:GetAttribute("Dead")==true
+                local blocked=false
+
+                if character and type(config)=="table" then
+                    if config.silentAimIgnoreDeflecting~=false
+                        and (character:GetAttribute("Deflecting")==true or character:FindFirstChild("Deflecting")) then
+                        blocked=true
+                    end
+                    if config.silentAimIgnoreShielded~=false
+                        and (character:GetAttribute("Shielded")==true
+                            or character:FindFirstChild("Shielded")
+                            or character:FindFirstChildOfClass("ForceField")) then
+                        blocked=true
+                    end
+                    if config.silentAimVulnerableOnly==true
+                        and character:GetAttribute("Vulnerable")==false then
+                        blocked=true
+                    end
+                end
+
+                if character and not deadAttribute and not blocked
+                    and (not humanoid or humanoid.Health>0) then
+
+                    local part=KnifeCombatRuntime.ResolvePart(character,wanted,camera)
+                    if part and part:IsDescendantOf(Workspace) then
+                        local worldOffset=part.Position-cameraPosition
+                        local worldDistanceSquared=worldOffset:Dot(worldOffset)
+
+                        if worldDistanceSquared<=maxDistanceSquared then
+                            local point=camera:WorldToViewportPoint(part.Position)
+                            if point.Z>0 then
+                                local dx=point.X-center.X
+                                local dy=point.Y-center.Y
+                                local screenDistanceSquared=dx*dx+dy*dy
+
+                                local candidateRadiusSquared=radiusSquared
+                                if targetLock and player==currentTarget then
+                                    candidateRadiusSquared=candidateRadiusSquared*stickiness*stickiness
+                                end
+
+                                if (infiniteFOV or screenDistanceSquared<=candidateRadiusSquared)
+                                    and KnifeCombatRuntime.IsVisible(part,camera,visibleCheck) then
+
+                                    local score
+                                    if priority=="Distance" then
+                                        score=worldDistanceSquared
+                                    elseif priority=="Lowest Health" then
+                                        local health=humanoid and humanoid.Health or 100
+                                        local maxHealth=humanoid and math.max(humanoid.MaxHealth,1) or 100
+                                        score=(health/maxHealth)*1000000+screenDistanceSquared
+                                    else
+                                        score=screenDistanceSquared
+                                    end
+
+                                    -- Keep the current target unless another candidate is
+                                    -- meaningfully better. This removes rapid target flicker.
+                                    if targetLock and player==currentTarget then
+                                        score=score/stickiness
+                                    end
+
+                                    if bestScore==nil or score<bestScore then
+                                        bestPlayer=player
+                                        bestPart=part
+                                        bestDistanceSquared=screenDistanceSquared
+                                        bestScore=score
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    local bestDistance=bestDistanceSquared and math.sqrt(bestDistanceSquared) or nil
+    return bestPlayer,bestPart,bestDistance,center
+end
+
+KnifeCombatRuntime.IsAimInputActive = function()
+    local config = Environment.__DevKageConfig
+    if type(config) ~= "table" or config.silentAimEnabled ~= true then return false end
+    if config.silentAimAutoShoot == true then return true end
+    local ok, pressed = pcall(UserInputService.IsMouseButtonPressed, UserInputService, Enum.UserInputType.MouseButton1)
+    return ok and pressed == true
+end
+
+KnifeCombatRuntime.ResolveShotPart = function(part)
+    if not part or not part.Parent then return part end
+    local config=Environment.__DevKageConfig
+    local chance=math.clamp(
+        tonumber(type(config)=="table" and config.silentAimHeadChance) or 100,
+        0,
+        100
+    )
+    if chance<=0 then return part end
+
+    local useHead=true
+    if chance<100 then
+        local interval=math.clamp(
+            tonumber(type(config)=="table" and config.silentAimFireInterval) or 0.05,
+            0.02,
+            0.5
+        )
+        local window=math.clamp(interval*0.9,0.02,0.08)
+        local now=os.clock()
+        if now-KnifeCombatRuntime.LastHeadRoll>window then
+            KnifeCombatRuntime.LastHeadRoll=now
+            KnifeCombatRuntime.LastHeadResult=math.random(1,100)<=chance
+        end
+        useHead=KnifeCombatRuntime.LastHeadResult
+    end
+
+    if not useHead then return part end
+    local character=part:FindFirstAncestorOfClass("Model")
+    local head=character and (
+        character:FindFirstChild("Head")
+        or character:FindFirstChild("HitboxHead")
+        or character:FindFirstChild("HitboxHeadSmall")
+    )
+    return head or part
+end
+
+KnifeCombatRuntime.GetPredictedPosition = function(part)
+    if not part or not part.Parent then return nil end
+
+    local position=part.Position
+    local config=Environment.__DevKageConfig
+    local prediction=math.clamp(
+        tonumber(type(config)=="table" and config.silentAimPrediction) or 0,
+        0,
+        0.5
+    )
+
+    if type(config)=="table" and config.silentAimAutoPrediction==true then
+        local now=os.clock()
+        if now-KnifeCombatRuntime.LastPingUpdate>0.5 then
+            KnifeCombatRuntime.LastPingUpdate=now
+            local ping=KnifeCombatRuntime.CachedPing or 0
+            pcall(function()
+                local stats=game:GetService("Stats")
+                local item=stats.Network.ServerStatsItem["Data Ping"]
+                local value=item and item:GetValue()
+                if tonumber(value) then ping=math.clamp(value/1000,0,0.5) end
+            end)
+            KnifeCombatRuntime.CachedPing=ping
+        end
+
+        local camera=Workspace.CurrentCamera
+        local origin=camera and camera.CFrame.Position
+        local root=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not origin and root then origin=root.Position end
+        origin=origin or position
+
+        local speed=math.clamp(
+            tonumber(config.silentAimProjectileSpeed) or 3000,
+            250,
+            20000
+        )
+        local multiplier=math.clamp(
+            tonumber(config.silentAimPredictionMultiplier) or 1,
+            0,
+            3
+        )
+        local travel=(position-origin).Magnitude/speed
+        prediction=math.clamp(
+            ((KnifeCombatRuntime.CachedPing or 0)+travel)*multiplier,
+            0,
+            0.5
+        )
+    end
+
+    if prediction>0 then
+        local velocity=part.AssemblyLinearVelocity
+        position=position+velocity*prediction
+    end
+    return position
+end
+
+KnifeCombatRuntime.RefreshUniversalTarget = function(force, bypassInput)
+    if not KnifeCombatRuntime.Alive or (not bypassInput and not KnifeCombatRuntime.IsAimInputActive()) then
+        KnifeCombatRuntime.CurrentTarget = nil
+        KnifeCombatRuntime.CurrentPart = nil
+        KnifeCombatRuntime.LastAimPosition = nil
+        return nil
+    end
+
+    local now = os.clock()
+    if not force and KnifeCombatRuntime.CurrentPart and KnifeCombatRuntime.CurrentPart.Parent
+        and now - KnifeCombatRuntime.LastTargetScan < 0.016 then
+        KnifeCombatRuntime.LastAimPosition = KnifeCombatRuntime.GetPredictedPosition(KnifeCombatRuntime.CurrentPart)
+        return KnifeCombatRuntime.CurrentPart
+    end
+
+    KnifeCombatRuntime.LastTargetScan = now
+    local previousGuard = KnifeCombatRuntime.UniversalGuard
+    KnifeCombatRuntime.UniversalGuard = true
+    local ok, target, part = pcall(function()
+        local targetPlayer, targetPart = KnifeCombatRuntime.FindTarget()
+        return targetPlayer, targetPart
+    end)
+    KnifeCombatRuntime.UniversalGuard = previousGuard
+
+    if ok then
+        KnifeCombatRuntime.CurrentTarget = target
+        KnifeCombatRuntime.CurrentPart = part
+        KnifeCombatRuntime.LastAimPosition = KnifeCombatRuntime.GetPredictedPosition(part)
+        KnifeCombatRuntime.LastAimUpdate = now
+        return part
+    end
+
+    KnifeCombatRuntime.CurrentTarget = nil
+    KnifeCombatRuntime.CurrentPart = nil
+    KnifeCombatRuntime.LastAimPosition = nil
+    return nil
+end
+
+KnifeCombatRuntime.ShouldRedirectShot = function()
+    local config = Environment.__DevKageConfig
+    local chance = math.clamp(
+        math.floor((tonumber(type(config)=="table" and config.silentAimHitChance) or 100)+0.5),
+        0,
+        100
+    )
+    if chance<=0 then return false end
+    if chance>=100 then return true end
+
+    -- Reuse one roll for the duration of the shot. Shotguns and weapons that
+    -- perform several internal raycasts no longer get mixed hit/miss pellets.
+    local interval=math.clamp(
+        tonumber(type(config)=="table" and config.silentAimFireInterval) or 0.05,
+        0.02,
+        0.5
+    )
+    local chanceWindow=math.clamp(interval*0.9,0.02,0.08)
+    local now=os.clock()
+    if now-KnifeCombatRuntime.LastChanceRoll>chanceWindow then
+        KnifeCombatRuntime.LastChanceRoll=now
+        KnifeCombatRuntime.LastChanceResult=math.random(1,100)<=chance
+    end
+    return KnifeCombatRuntime.LastChanceResult
+end
+
+KnifeCombatRuntime.GetUniversalAimPart = function(bypassInput)
+    if not bypassInput and not KnifeCombatRuntime.IsAimInputActive() then return nil end
+    local part = KnifeCombatRuntime.CurrentPart
+    if not part or not part.Parent or os.clock() - KnifeCombatRuntime.LastTargetScan > 0.035 then
+        part = KnifeCombatRuntime.RefreshUniversalTarget(true, bypassInput)
+    else
+        KnifeCombatRuntime.LastAimPosition = KnifeCombatRuntime.GetPredictedPosition(part)
+    end
+    if not part or not KnifeCombatRuntime.ShouldRedirectShot() then return nil end
+    local resolved = KnifeCombatRuntime.ResolveShotPart(part)
+    if not resolved or not resolved.Parent then return nil end
+    KnifeCombatRuntime.LastAimPosition = KnifeCombatRuntime.GetPredictedPosition(resolved)
+    return resolved
+end
+
+KnifeCombatRuntime.IsPlausibleShotOrigin = function(origin, direction)
+    if typeof(origin) ~= "Vector3" or typeof(direction) ~= "Vector3" then return false end
+    local directionLengthSquared = direction:Dot(direction)
+    if directionLengthSquared < 4 then return false end
+
+    local camera = Workspace.CurrentCamera
+    if camera then
+        local delta = origin - camera.CFrame.Position
+        if delta:Dot(delta) <= 625 then return true end -- within 25 studs of camera
+    end
+
+    local character = LocalPlayer.Character
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+    if root then
+        local delta = origin - root.Position
+        if delta:Dot(delta) <= 625 then return true end
+    end
+    return false
+end
+
+KnifeCombatRuntime.RedirectDirection = function(origin, direction, part)
+    local aimPosition = KnifeCombatRuntime.LastAimPosition or KnifeCombatRuntime.GetPredictedPosition(part)
+    if not aimPosition then return direction end
+    local delta = aimPosition - origin
+    local targetLengthSquared = delta:Dot(delta)
+    local originalLengthSquared = direction:Dot(direction)
+    if targetLengthSquared <= 0.000001 or originalLengthSquared <= 0.000001 then return direction end
+    return delta.Unit * math.sqrt(originalLengthSquared)
+end
+
+KnifeCombatRuntime.RedirectRay = function(ray, part)
+    if typeof(ray) ~= "Ray" then return ray end
+    if not KnifeCombatRuntime.IsPlausibleShotOrigin(ray.Origin, ray.Direction) then return ray end
+    return Ray.new(ray.Origin, KnifeCombatRuntime.RedirectDirection(ray.Origin, ray.Direction, part))
+end
+
+KnifeCombatRuntime.InstallUniversalSilentAim = function()
+    if KnifeCombatRuntime.UniversalInstalled then return true end
+    if type(hookmetamethod) ~= "function" or type(getnamecallmethod) ~= "function" then
+        return false
+    end
+
+    local oldNamecall
+    local namecallHook
+    namecallHook = function(self, ...)
+        if KnifeCombatRuntime.UniversalGuard or not KnifeCombatRuntime.Alive then
+            return oldNamecall(self, ...)
+        end
+
+        local config = Environment.__DevKageConfig
+        if type(config) ~= "table" or config.silentAimEnabled ~= true then
+            return oldNamecall(self, ...)
+        end
+
+        local method = getnamecallmethod()
+        local args = table.pack(...)
+
+        if self == Workspace and UniversalRayMethods[method] then
+            if method == "Raycast" then
+                local origin, direction = args[1], args[2]
+                if KnifeCombatRuntime.IsPlausibleShotOrigin(origin, direction) then
+                    local part = KnifeCombatRuntime.GetUniversalAimPart()
+                    if part then
+                        args[2] = KnifeCombatRuntime.RedirectDirection(origin, direction, part)
+                        return oldNamecall(self, table.unpack(args,1,args.n))
+                    end
+                end
+            else
+                local ray = args[1]
+                if typeof(ray) == "Ray" and KnifeCombatRuntime.IsPlausibleShotOrigin(ray.Origin, ray.Direction) then
+                    local part = KnifeCombatRuntime.GetUniversalAimPart()
+                    if part then
+                        args[1] = KnifeCombatRuntime.RedirectRay(ray, part)
+                        return oldNamecall(self, table.unpack(args,1,args.n))
+                    end
+                end
+            end
+        end
+
+        local camera = Workspace.CurrentCamera
+        if camera and self == camera and CameraRayMethods[method] and KnifeCombatRuntime.IsAimInputActive() then
+            KnifeCombatRuntime.UniversalGuard = true
+            local ok, ray = pcall(function()
+                return oldNamecall(self, table.unpack(args,1,args.n))
+            end)
+            KnifeCombatRuntime.UniversalGuard = false
+            if ok and typeof(ray) == "Ray" then
+                local part = KnifeCombatRuntime.GetUniversalAimPart()
+                if part then return KnifeCombatRuntime.RedirectRay(ray, part) end
+                return ray
+            end
+            return oldNamecall(self, table.unpack(args,1,args.n))
+        end
+
+        return oldNamecall(self, ...)
+    end
+
+    oldNamecall = hookmetamethod(game, "__namecall", namecallHook)
+    KnifeCombatRuntime.UniversalOldNamecall = oldNamecall
+
+    if UniversalMouse then
+        local oldIndex
+        local indexHook
+        indexHook = function(self, key)
+            if KnifeCombatRuntime.UniversalGuard or not KnifeCombatRuntime.Alive or self ~= UniversalMouse then
+                return oldIndex(self,key)
+            end
+
+            local config = Environment.__DevKageConfig
+            if type(config) ~= "table" or config.silentAimEnabled ~= true
+                or (key ~= "Hit" and key ~= "Target" and key ~= "UnitRay") then
+                return oldIndex(self,key)
+            end
+
+            local part = KnifeCombatRuntime.GetUniversalAimPart()
+            if not part then return oldIndex(self,key) end
+            local aimPosition = KnifeCombatRuntime.LastAimPosition or KnifeCombatRuntime.GetPredictedPosition(part)
+            if not aimPosition then return oldIndex(self,key) end
+
+            if key == "Target" then return part end
+            if key == "Hit" then return CFrame.new(aimPosition) end
+            if key == "UnitRay" then
+                local camera = Workspace.CurrentCamera
+                if camera then
+                    local origin = camera.CFrame.Position
+                    local delta = aimPosition - origin
+                    if delta.Magnitude > 0.0001 then return Ray.new(origin, delta.Unit) end
+                end
+            end
+            return oldIndex(self,key)
+        end
+        oldIndex = hookmetamethod(game, "__index", indexHook)
+        KnifeCombatRuntime.UniversalOldIndex = oldIndex
+    end
+
+    KnifeCombatRuntime.UniversalInstalled = true
+    return true
+end
 
 KnifeCombatRuntime.IsCurrentRuntime = function()
     return KnifeCombatRuntime.Alive
         and Environment.__DevKageCombatRuntime == KnifeCombatRuntime
 end
 
--- Silent Aim game-specific raycast adapters removed.
+KnifeCombatRuntime.InstallRivalsUtilitySilentAim = function()
+    if KnifeCombatRuntime.RivalsUtilityRaycastInstalled then return true end
+    local modules=ReplicatedStorage:FindFirstChild("Modules")
+    local utilityModule=modules and modules:FindFirstChild("Utility")
+    if not utilityModule or not utilityModule:IsA("ModuleScript") then return false end
+    local ok,utility=pcall(require,utilityModule)
+    if not ok or type(utility)~="table" or type(utility.Raycast)~="function" then return false end
+
+    local existing=Environment.__DevKageRivalsUtilityAimBridge
+    if type(existing)=="table" and existing.Utility==utility and type(existing.Wrapper)=="function" and utility.Raycast==existing.Wrapper then
+        existing.Runtime=KnifeCombatRuntime
+        KnifeCombatRuntime.RivalsUtility=utility
+        KnifeCombatRuntime.RivalsUtilityOriginal=existing.Original
+        KnifeCombatRuntime.RivalsUtilityWrapper=existing.Wrapper
+        KnifeCombatRuntime.RivalsUtilityRaycastInstalled=true
+        return true
+    end
+
+    local bridge={Runtime=KnifeCombatRuntime,Utility=utility,Original=utility.Raycast}
+    bridge.Wrapper=function(...)
+        local n=select("#",...); local args={...}; local runtime=bridge.Runtime
+        if runtime and runtime.Alive and Environment.__DevKageCombatRuntime==runtime then
+            local config=Environment.__DevKageConfig
+            if type(config)=="table" and config.silentAimEnabled==true then
+                local offset=(typeof(args[1])=="table" or typeof(args[1])=="Instance") and 1 or 0
+                local origin=args[offset+1]; local targetPos=args[offset+2]; local maxDist=args[offset+3]
+                if typeof(origin)=="Vector3" and typeof(targetPos)=="Vector3" and runtime.IsPlausibleShotOrigin(origin,targetPos-origin) then
+                    pcall(function()
+                        local part=runtime.GetUniversalAimPart(true)
+                        if part then
+                            local aimPos=runtime.LastAimPosition or runtime.GetPredictedPosition(part)
+                            if aimPos then
+                                local delta=aimPos-origin
+                                if delta.Magnitude>0.05 then
+                                    local distance=tonumber(maxDist) or (targetPos-origin).Magnitude
+                                    if distance<=0 then distance=1000 end
+                                    args[offset+2]=origin+delta.Unit*distance
+                                end
+                            end
+                        end
+                    end)
+                end
+            end
+        end
+        return bridge.Original(table.unpack(args,1,n))
+    end
+    utility.Raycast=bridge.Wrapper
+    Environment.__DevKageRivalsUtilityAimBridge=bridge
+    KnifeCombatRuntime.RivalsUtility=utility
+    KnifeCombatRuntime.RivalsUtilityOriginal=bridge.Original
+    KnifeCombatRuntime.RivalsUtilityWrapper=bridge.Wrapper
+    KnifeCombatRuntime.RivalsUtilityRaycastInstalled=true
+    return true
+end
+
+KnifeCombatRuntime.FindBloxRaycastModule = function()
+    if type(KnifeCombatRuntime.BloxRaycastModule) == "table" then
+        return KnifeCombatRuntime.BloxRaycastModule
+    end
+
+    local now = os.clock()
+    if now < KnifeCombatRuntime.BloxRaycastNextSearch then return nil end
+    KnifeCombatRuntime.BloxRaycastNextSearch = now + 1.5
+
+    -- Preferred path from the supplied Blox Strikes source.
+    local sharedFolder = ReplicatedStorage:FindFirstChild("Shared")
+    local moduleScript = sharedFolder and sharedFolder:FindFirstChild("Raycast")
+    if moduleScript and moduleScript:IsA("ModuleScript") then
+        local ok, module = pcall(require, moduleScript)
+        if ok and type(module) == "table"
+            and type(module.cast) == "function"
+            and type(module.castThrough) == "function" then
+            KnifeCombatRuntime.BloxRaycastModule = module
+            return module
+        end
+    end
+
+    -- Only GC-scan when the Blox-style Shared hierarchy exists. This avoids an
+    -- expensive scan on unrelated games while preserving the supplied fallback.
+    if sharedFolder and type(getgc) == "function" then
+        local ok, objects = pcall(getgc, true)
+        if ok and type(objects) == "table" then
+            for _, object in next, objects do
+                if type(object) == "table"
+                    and type(rawget(object,"cast")) == "function"
+                    and type(rawget(object,"castThrough")) == "function" then
+                    KnifeCombatRuntime.BloxRaycastModule = object
+                    return object
+                end
+            end
+        end
+    end
+    return nil
+end
+
+KnifeCombatRuntime.IsBloxShotOrigin = function(origin)
+    if typeof(origin) ~= "Vector3" then return false end
+    local character = LocalPlayer.Character
+    local head = character and character:FindFirstChild("Head")
+    if not head then return false end
+    local delta = origin - head.Position
+    return delta:Dot(delta) < 144 -- supplied source uses 12 studs
+end
+
+KnifeCombatRuntime.RedirectBloxDirection = function(origin, direction, part)
+    if typeof(origin) ~= "Vector3" or typeof(direction) ~= "Vector3" then return direction end
+    local aimPosition = KnifeCombatRuntime.LastAimPosition
+        or KnifeCombatRuntime.GetPredictedPosition(part)
+    if not aimPosition then return direction end
+    local delta = aimPosition - origin
+    if delta:Dot(delta) <= 0.000001 then return direction end
+    -- Blox Strikes' Shared.Raycast expects the point-to-target displacement,
+    -- matching the supplied cast/castThrough implementation.
+    return delta
+end
+
+KnifeCombatRuntime.InstallBloxStrikesSilentAim = function()
+    if KnifeCombatRuntime.BloxRaycastInstalled then return true end
+    local module=KnifeCombatRuntime.FindBloxRaycastModule()
+    if type(module)~="table" or type(module.cast)~="function" or type(module.castThrough)~="function" then return false end
+
+    local existing=Environment.__DevKageBloxRaycastBridge
+    if type(existing)=="table" and existing.Module==module then
+        existing.Runtime=KnifeCombatRuntime
+        KnifeCombatRuntime.BloxRaycastInstalled=true
+        KnifeCombatRuntime.BloxRaycastModule=module
+        return true
+    end
+
+    local bridge={Runtime=KnifeCombatRuntime,Module=module,OldCast=module.cast,OldCastThrough=module.castThrough}
+    local function redirect(origin,direction)
+        local runtime=bridge.Runtime
+        if not runtime or not runtime.Alive or Environment.__DevKageCombatRuntime~=runtime then return direction end
+        local config=Environment.__DevKageConfig
+        if type(config)~="table" or config.silentAimEnabled~=true or typeof(direction)~="Vector3" or not runtime.IsBloxShotOrigin(origin) then return direction end
+        local redirected=direction
+        pcall(function()
+            local part=runtime.GetUniversalAimPart(true)
+            if part then redirected=runtime.RedirectBloxDirection(origin,direction,part) end
+        end)
+        return redirected
+    end
+    bridge.CastWrapper=function(origin,direction,...)
+        return bridge.OldCast(origin,redirect(origin,direction),...)
+    end
+    bridge.CastThroughWrapper=function(origin,direction,...)
+        return bridge.OldCastThrough(origin,redirect(origin,direction),...)
+    end
+
+    local castHooked,throughHooked=false,false
+    if type(hookfunction)=="function" then
+        local ok1,old1=pcall(hookfunction,module.cast,bridge.CastWrapper)
+        if ok1 and type(old1)=="function" then bridge.OldCast=old1; castHooked=true end
+        local ok2,old2=pcall(hookfunction,module.castThrough,bridge.CastThroughWrapper)
+        if ok2 and type(old2)=="function" then bridge.OldCastThrough=old2; throughHooked=true end
+    end
+    if not castHooked then module.cast=bridge.CastWrapper end
+    if not throughHooked then module.castThrough=bridge.CastThroughWrapper end
+    bridge.Mode=(castHooked or throughHooked) and "hybrid" or "table"
+
+    Environment.__DevKageBloxRaycastBridge=bridge
+    KnifeCombatRuntime.BloxCastOriginal=bridge.OldCast
+    KnifeCombatRuntime.BloxCastThroughOriginal=bridge.OldCastThrough
+    KnifeCombatRuntime.BloxRaycastInstalled=true
+    return true
+end
 
 KnifeCombatRuntime.NoRecoilActive = function()
     local config = Environment.__DevKageConfig
@@ -24116,6 +25538,14 @@ KnifeCombatRuntime.StepBunnyHop = function(dt)
     pcall(function() root.Velocity = newVelocity end)
 end
 
+KnifeCombatRuntime.GetAimBackendName = function()
+    if KnifeCombatRuntime.BloxRaycastInstalled then return "Blox Shared.Raycast" end
+    if KnifeCombatRuntime.RivalsUtilityRaycastInstalled then return "Utility.Raycast silent aim" end
+    if KnifeCombatRuntime.IsRivals() and KnifeCombatRuntime.Loaded then return "RIVALS native" end
+    if KnifeCombatRuntime.UniversalInstalled then return "Roblox ray/mouse APIs" end
+    return "Mouse fallback"
+end
+
 KnifeCombatRuntime.UninstallNoSpread = function()
     if KnifeCombatRuntime.SpreadInstalled
         and type(KnifeCombatRuntime.GameplayUtility) == "table"
@@ -24265,11 +25695,11 @@ KnifeCombatRuntime.QueueModuleLoad = function(force)
         if not ok then
             KnifeCombatRuntime.SetStatus("Combat modules failed to load")
         elseif loaded then
-            KnifeCombatRuntime.SetStatus("RIVALS combat modules ready")
+            KnifeCombatRuntime.SetStatus("RIVALS silent aim ready")
         elseif KnifeCombatRuntime.IsRivals() then
             KnifeCombatRuntime.SetStatus("Waiting for RIVALS match modules")
         else
-            KnifeCombatRuntime.SetStatus("Generic combat helpers ready")
+            KnifeCombatRuntime.SetStatus("Fallback mouse aim ready")
         end
     end)
 end
@@ -24279,7 +25709,61 @@ KnifeCombatRuntime.GetLocalFighter = function()
     return type(controller) == "table" and controller.LocalFighter or nil
 end
 
--- Removed aim backends have no callable installer in this build.
+KnifeCombatRuntime.FireAt = function(part)
+    if not KnifeCombatRuntime.Loaded or not part or not part.Parent then return false end
+    local fighter = KnifeCombatRuntime.GetLocalFighter()
+    local equipped = fighter and fighter.EquippedItem
+    if not equipped or type(equipped.Get) ~= "function" then return false end
+    local ok, objectId = pcall(equipped.Get, equipped, "ObjectID")
+    if not ok or objectId == nil then return false end
+    local entityRoot = fighter.Entity and fighter.Entity.RootPart
+    local character = LocalPlayer.Character
+    local root = entityRoot or (character and character:FindFirstChild("HumanoidRootPart"))
+    if not root then return false end
+    local utility, enumLibrary, remote =
+        KnifeCombatRuntime.Utility,
+        KnifeCombatRuntime.EnumLibrary,
+        KnifeCombatRuntime.UseItemRemote
+    if type(utility.EncodeCFrame) ~= "function"
+        or type(enumLibrary.ToEnum) ~= "function"
+        or not remote or not remote.Parent then return false end
+    local aimPosition = KnifeCombatRuntime.LastAimPosition
+        or KnifeCombatRuntime.GetPredictedPosition(part)
+        or part.Position
+    if typeof(aimPosition) ~= "Vector3" then return false end
+    local delta = aimPosition - root.Position
+    if delta:Dot(delta) <= 0.0001 then return false end
+    local aim = CFrame.lookAt(root.Position, aimPosition)
+    local okFire = pcall(function()
+        local data = {
+            [PayloadKey1] = {
+                [PayloadKey0] = utility:EncodeCFrame(aim),
+                [PayloadKey1] = utility:EncodeCFrame(aim),
+                [PayloadKey2] = part,
+                [PayloadKey3] = utility:EncodeCFrame(WeaponOffsetCFrame),
+            },
+        }
+        remote:FireServer(objectId, enumLibrary:ToEnum("StartShooting"), data, nil)
+    end)
+    return okFire
+end
+
+KnifeCombatRuntime.MoveMouseTo = function(part, center)
+    if type(mousemoverel) ~= "function" or not part then return false end
+    local camera = Workspace.CurrentCamera
+    if not camera then return false end
+    local point, onScreen = camera:WorldToViewportPoint(part.Position)
+    if not onScreen or point.Z <= 0 then return false end
+    center = center or UserInputService:GetMouseLocation()
+    local config = Environment.__DevKageConfig
+    local smoothing = math.clamp(tonumber(type(config) == "table" and config.aimSmoothing) or 0, 0, 100)
+    local factor = smoothing <= 0 and 1 or math.clamp(1 / (1 + smoothing * 0.12), 0.04, 1)
+    local dx, dy = (point.X - center.X) * factor, (point.Y - center.Y) * factor
+    pcall(mousemoverel,
+        math.floor(dx + (dx >= 0 and 0.5 or -0.5)),
+        math.floor(dy + (dy >= 0 and 0.5 or -0.5)))
+    return true
+end
 
 KnifeCombatRuntime.Step = function(dt)
     if not KnifeCombatRuntime.Alive then return end
@@ -24312,7 +25796,105 @@ KnifeCombatRuntime.Step = function(dt)
         KnifeCombatRuntime.InstallNoSpread()
     end
 
-    -- Silent Aim removed: only non-aim combat helpers run here.
+    if config.silentAimEnabled ~= true then
+        KnifeCombatRuntime.CurrentTarget = nil
+        KnifeCombatRuntime.CurrentPart = nil
+        KnifeCombatRuntime.LastAimPosition = nil
+        return
+    end
+    if KnifeCombatRuntime.IsBloxStrikes() then
+        if not KnifeCombatRuntime.BloxRaycastInstalled then
+            KnifeCombatRuntime.InstallBloxStrikesSilentAim()
+        end
+    elseif KnifeCombatRuntime.IsRivals() then
+        if not KnifeCombatRuntime.Loaded then
+            KnifeCombatRuntime.QueueModuleLoad(false)
+        end
+    elseif not KnifeCombatRuntime.UniversalInstalled then
+        KnifeCombatRuntime.InstallUniversalSilentAim()
+    end
+
+    local active = KnifeCombatRuntime.IsAimInputActive()
+    if not active then
+        KnifeCombatRuntime.CurrentTarget = nil
+        KnifeCombatRuntime.CurrentPart = nil
+        KnifeCombatRuntime.LastAimPosition = nil
+        return
+    end
+
+    -- Target acquisition is independent of the weapon's firing interval. The
+    -- actual Raycast/Mouse hooks then consume this cached result very cheaply.
+    if now - KnifeCombatRuntime.LastTargetScan >= 0.016 then
+        KnifeCombatRuntime.RefreshUniversalTarget(true, false)
+    elseif KnifeCombatRuntime.CurrentPart then
+        KnifeCombatRuntime.LastAimPosition = KnifeCombatRuntime.GetPredictedPosition(KnifeCombatRuntime.CurrentPart)
+    end
+
+    local target = KnifeCombatRuntime.CurrentTarget
+    local part = KnifeCombatRuntime.CurrentPart
+    if not part then
+        if now - KnifeCombatRuntime.LastStatusUpdate > 0.5 then
+            KnifeCombatRuntime.LastStatusUpdate = now
+            KnifeCombatRuntime.SetStatus("Universal silent aim: no target in FOV")
+        end
+        return
+    end
+
+    -- RIVALS follows the supplied native implementation: while Silent Aim is
+    -- enabled, either Auto Shoot OR a held left mouse button sends the encoded
+    -- StartShooting payload directly at the resolved part. No ray-hook success
+    -- is required and no fallback shot is fired into empty space.
+    if KnifeCombatRuntime.IsRivals() then
+        local wantsShot = config.silentAimAutoShoot == true
+            or UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+
+        if wantsShot then
+            local interval=math.clamp(tonumber(config.silentAimFireInterval) or 0.05,0.02,1)
+            if now-KnifeCombatRuntime.LastAttempt>=interval then
+                local shotPart=KnifeCombatRuntime.GetUniversalAimPart(true)
+                if shotPart then
+                    if not KnifeCombatRuntime.Loaded then
+                        KnifeCombatRuntime.QueueModuleLoad(false)
+                    end
+                    if KnifeCombatRuntime.Loaded and KnifeCombatRuntime.FireAt(shotPart) then
+                        KnifeCombatRuntime.LastAttempt=now
+                    end
+                end
+            end
+        end
+    elseif config.silentAimAutoShoot == true then
+        local interval=math.clamp(tonumber(config.silentAimFireInterval) or 0.05,0.02,1)
+        if now-KnifeCombatRuntime.LastAttempt>=interval then
+            local shotPart=KnifeCombatRuntime.GetUniversalAimPart(true)
+            if shotPart then
+                local fired=false
+                if KnifeCombatRuntime.IsBloxStrikes() then
+                    if KnifeCombatRuntime.BloxRaycastInstalled and type(mouse1click)=="function" then
+                        fired=pcall(mouse1click)
+                    end
+                elseif KnifeCombatRuntime.UniversalInstalled and type(mouse1click)=="function" then
+                    fired=pcall(mouse1click)
+                end
+                if fired then KnifeCombatRuntime.LastAttempt=now end
+            end
+        end
+    elseif not KnifeCombatRuntime.UniversalInstalled
+        and not KnifeCombatRuntime.BloxRaycastInstalled then
+        if now-KnifeCombatRuntime.LastStatusUpdate>0.5 then
+            KnifeCombatRuntime.LastStatusUpdate=now
+            KnifeCombatRuntime.SetStatus("No silent backend detected for this weapon")
+        end
+    end
+
+    if now - KnifeCombatRuntime.LastStatusUpdate > 0.25 then
+        KnifeCombatRuntime.LastStatusUpdate = now
+        KnifeCombatRuntime.SetStatus(
+            KnifeCombatRuntime.GetAimBackendName()
+            .. " • " .. tostring(target and target.Name or part.Parent.Name)
+            .. " • " .. tostring(part.Name)
+            .. " • " .. tostring(math.floor(tonumber(config.silentAimHitChance) or 100)) .. "%"
+        )
+    end
 end
 
 KnifeCombatRuntime.StatusControl = rapidFireSection:CreateLabel({
@@ -24320,9 +25902,241 @@ KnifeCombatRuntime.StatusControl = rapidFireSection:CreateLabel({
 })
 KnifeCombatRuntime.MaskStatusControl = KnifeCombatRuntime.StatusControl
 
--- Silent Aim and all related targeting/auto-shoot controls were removed from
--- this stability build. No raycast/namecall aim hook is armed by the UI.
-
+KnifeCombatRuntime.Controls.SilentAim = rapidFireSection:CreateToggle({
+    Name = "Silent Aim",
+    State = Environment.__DevKageConfig.silentAimEnabled == true,
+    Flag = "knife.silentAimEnabled",
+    Callback = function(value)
+        KnifeCombatRuntime.StartupGate = false
+        Environment.__DevKagePassiveBoot = false
+        Environment.__DevKageConfig.silentAimEnabled = value == true
+        if value then
+            if KnifeCombatRuntime.IsBloxStrikes() then
+                KnifeCombatRuntime.InstallBloxStrikesSilentAim()
+            elseif KnifeCombatRuntime.IsRivals() then
+                KnifeCombatRuntime.QueueModuleLoad(true)
+            else
+                KnifeCombatRuntime.InstallUniversalSilentAim()
+            end
+            KnifeCombatRuntime.RefreshUniversalTarget(true)
+        else
+            KnifeCombatRuntime.CurrentTarget, KnifeCombatRuntime.CurrentPart = nil, nil
+            KnifeCombatRuntime.LastAimPosition = nil
+        end
+    end
+})
+KnifeCombatRuntime.Controls.HitChance = rapidFireSection:CreateSlider({
+    Name = "Hit Chance",
+    State = tonumber(Environment.__DevKageConfig.silentAimHitChance) or 100,
+    Min = 0,
+    Max = 100,
+    Decimals = 0,
+    Suffix = "%",
+    Flag = "knife.silentAimHitChance",
+    Callback = function(value)
+        Environment.__DevKageConfig.silentAimHitChance =
+            math.clamp(math.floor((tonumber(value) or 100) + 0.5), 0, 100)
+    end
+})
+KnifeCombatRuntime.Controls.Radius = rapidFireSection:CreateSlider({
+    Name = "FOV Radius",
+    State = tonumber(Environment.__DevKageConfig.silentAimRadius) or 300,
+    Min = 25,
+    Max = 2000,
+    Decimals = 0,
+    Suffix = " px",
+    Flag = "knife.silentAimRadius",
+    Callback = function(value)
+        Environment.__DevKageConfig.silentAimRadius =
+            math.clamp(math.floor((tonumber(value) or 300) + 0.5), 25, 2000)
+    end
+})
+KnifeCombatRuntime.Controls.InfiniteFOV = rapidFireSection:CreateToggle({
+    Name = "Unlimited FOV",
+    State = Environment.__DevKageConfig.silentAimInfiniteFOV == true,
+    Flag = "knife.silentAimInfiniteFOV",
+    Callback = function(value)
+        Environment.__DevKageConfig.silentAimInfiniteFOV = value == true
+    end
+})
+KnifeCombatRuntime.Controls.FOVOrigin = rapidFireSection:CreateDropdown({
+    Name = "FOV Origin",
+    Options = {"Screen Center","Mouse"},
+    State = table.find(
+        {"Screen Center","Mouse"},
+        tostring(Environment.__DevKageConfig.silentAimFOVOrigin or "Screen Center")
+    ) or 1,
+    Flag = "knife.silentAimFOVOrigin",
+    Callback = function(index)
+        Environment.__DevKageConfig.silentAimFOVOrigin =
+            ({"Screen Center","Mouse"})[index] or "Screen Center"
+    end
+})
+KnifeCombatRuntime.Controls.Priority = rapidFireSection:CreateDropdown({
+    Name = "Target Priority",
+    Options = {"FOV","Distance","Lowest Health"},
+    State = table.find(
+        {"FOV","Distance","Lowest Health"},
+        tostring(Environment.__DevKageConfig.silentAimPriority or "FOV")
+    ) or 1,
+    Flag = "knife.silentAimPriority",
+    Callback = function(index)
+        Environment.__DevKageConfig.silentAimPriority =
+            ({"FOV","Distance","Lowest Health"})[index] or "FOV"
+    end
+})
+KnifeCombatRuntime.Controls.TargetLock = rapidFireSection:CreateToggle({
+    Name = "Sticky Target",
+    State = Environment.__DevKageConfig.silentAimTargetLock ~= false,
+    Flag = "knife.silentAimTargetLock",
+    Callback = function(value)
+        Environment.__DevKageConfig.silentAimTargetLock = value == true
+    end
+})
+KnifeCombatRuntime.Controls.Stickiness = rapidFireSection:CreateSlider({
+    Name = "Target Stickiness",
+    State = tonumber(Environment.__DevKageConfig.silentAimTargetStickiness) or 1.25,
+    Min = 1,
+    Max = 2,
+    Decimals = 2,
+    Suffix = "x",
+    Flag = "knife.silentAimTargetStickiness",
+    Callback = function(value)
+        Environment.__DevKageConfig.silentAimTargetStickiness =
+            math.clamp(tonumber(value) or 1.25,1,2)
+    end
+})
+KnifeCombatRuntime.Controls.Prediction = rapidFireSection:CreateSlider({
+    Name = "Manual Prediction",
+    State = tonumber(Environment.__DevKageConfig.silentAimPrediction) or 0,
+    Min = 0,
+    Max = 0.5,
+    Decimals = 3,
+    Suffix = " s",
+    Flag = "knife.silentAimPrediction",
+    Callback = function(value)
+        Environment.__DevKageConfig.silentAimPrediction =
+            math.clamp(tonumber(value) or 0,0,0.5)
+    end
+})
+KnifeCombatRuntime.Controls.AutoPrediction = rapidFireSection:CreateToggle({
+    Name = "Auto Prediction",
+    State = Environment.__DevKageConfig.silentAimAutoPrediction == true,
+    Flag = "knife.silentAimAutoPrediction",
+    Callback = function(value)
+        Environment.__DevKageConfig.silentAimAutoPrediction = value == true
+    end
+})
+KnifeCombatRuntime.Controls.PredictionMultiplier = rapidFireSection:CreateSlider({
+    Name = "Prediction Multiplier",
+    State = tonumber(Environment.__DevKageConfig.silentAimPredictionMultiplier) or 1,
+    Min = 0,
+    Max = 3,
+    Decimals = 2,
+    Suffix = "x",
+    Flag = "knife.silentAimPredictionMultiplier",
+    Callback = function(value)
+        Environment.__DevKageConfig.silentAimPredictionMultiplier =
+            math.clamp(tonumber(value) or 1,0,3)
+    end
+})
+KnifeCombatRuntime.Controls.ProjectileSpeed = rapidFireSection:CreateSlider({
+    Name = "Projectile Speed",
+    State = tonumber(Environment.__DevKageConfig.silentAimProjectileSpeed) or 3000,
+    Min = 250,
+    Max = 20000,
+    Decimals = 0,
+    Suffix = " studs/s",
+    Flag = "knife.silentAimProjectileSpeed",
+    Callback = function(value)
+        Environment.__DevKageConfig.silentAimProjectileSpeed =
+            math.clamp(math.floor((tonumber(value) or 3000)+0.5),250,20000)
+    end
+})
+KnifeCombatRuntime.Controls.MaxDistance = rapidFireSection:CreateSlider({
+    Name = "Max Target Distance",
+    State = tonumber(Environment.__DevKageConfig.silentAimMaxDistance) or 2500,
+    Min = 50,
+    Max = 10000,
+    Decimals = 0,
+    Suffix = " studs",
+    Flag = "knife.silentAimMaxDistance",
+    Callback = function(value)
+        Environment.__DevKageConfig.silentAimMaxDistance =
+            math.clamp(math.floor((tonumber(value) or 2500) + 0.5),50,10000)
+    end
+})
+KnifeCombatRuntime.Controls.TargetPart = rapidFireSection:CreateDropdown({
+    Name = "Target Part",
+    Options = {"Head", "HumanoidRootPart", "Torso", "Closest", "Random"},
+    State = table.find(
+        {"Head", "HumanoidRootPart", "Torso", "Closest", "Random"},
+        tostring(Environment.__DevKageConfig.aimTargetPart or "Head")
+    ) or 1,
+    Flag = "knife.aimTargetPart",
+    Callback = function(index)
+        local options = {"Head", "HumanoidRootPart", "Torso", "Closest", "Random"}
+        Environment.__DevKageConfig.aimTargetPart = options[index] or "Head"
+    end
+})
+KnifeCombatRuntime.Controls.HeadChance = rapidFireSection:CreateSlider({
+    Name = "Head Chance",
+    State = tonumber(Environment.__DevKageConfig.silentAimHeadChance) or 100,
+    Min = 0, Max = 100, Decimals = 0, Suffix = "%", Flag = "knife.silentAimHeadChance",
+    Callback = function(value) Environment.__DevKageConfig.silentAimHeadChance=math.clamp(math.floor((tonumber(value) or 100)+0.5),0,100) end
+})
+KnifeCombatRuntime.Controls.IgnoreDeflecting = rapidFireSection:CreateToggle({
+    Name="Ignore Deflecting",State=Environment.__DevKageConfig.silentAimIgnoreDeflecting~=false,Flag="knife.silentAimIgnoreDeflecting",
+    Callback=function(value) Environment.__DevKageConfig.silentAimIgnoreDeflecting=value==true end
+})
+KnifeCombatRuntime.Controls.IgnoreShielded = rapidFireSection:CreateToggle({
+    Name="Ignore Shielded",State=Environment.__DevKageConfig.silentAimIgnoreShielded~=false,Flag="knife.silentAimIgnoreShielded",
+    Callback=function(value) Environment.__DevKageConfig.silentAimIgnoreShielded=value==true end
+})
+KnifeCombatRuntime.Controls.TeamCheck = rapidFireSection:CreateToggle({
+    Name = "Team Check",
+    State = Environment.__DevKageConfig.aimTeamCheck ~= false,
+    Flag = "knife.aimTeamCheck",
+    Callback = function(value) Environment.__DevKageConfig.aimTeamCheck = value == true end
+})
+KnifeCombatRuntime.Controls.WallCheck = rapidFireSection:CreateToggle({
+    Name = "Wall Check (Require LOS)",
+    State = Environment.__DevKageConfig.aimVisibleCheck == true,
+    Flag = "knife.aimVisibleCheck",
+    Callback = function(value) Environment.__DevKageConfig.aimVisibleCheck = value == true end
+})
+KnifeCombatRuntime.Controls.AutoShoot = rapidFireSection:CreateToggle({
+    Name = "Auto Shoot",
+    State = Environment.__DevKageConfig.silentAimAutoShoot == true,
+    Flag = "knife.silentAimAutoShoot",
+    Callback = function(value) Environment.__DevKageConfig.silentAimAutoShoot = value == true end
+})
+KnifeCombatRuntime.Controls.Smoothing = rapidFireSection:CreateSlider({
+    Name = "Mouse Fallback Smoothing",
+    State = tonumber(Environment.__DevKageConfig.aimSmoothing) or 0,
+    Min = 0,
+    Max = 100,
+    Decimals = 0,
+    Suffix = "%",
+    Flag = "knife.aimSmoothing",
+    Callback = function(value)
+        Environment.__DevKageConfig.aimSmoothing =
+            math.clamp(math.floor((tonumber(value) or 0) + 0.5), 0, 100)
+    end
+})
+KnifeCombatRuntime.Controls.Interval = rapidFireSection:CreateSlider({
+    Name = "Shot Interval",
+    State = tonumber(Environment.__DevKageConfig.silentAimFireInterval) or 0.05,
+    Min = 0.02,
+    Max = 0.5,
+    Decimals = 2,
+    Suffix = " s",
+    Flag = "knife.silentAimFireInterval",
+    Callback = function(value)
+        Environment.__DevKageConfig.silentAimFireInterval =
+            math.clamp(tonumber(value) or 0.05, 0.02, 0.5)
+    end
+})
 KnifeCombatRuntime.Controls.NoSpread = rapidFireSection:CreateToggle({
     Name = "No Spread",
     State = Environment.__DevKageConfig.noSpreadEnabled == true,
@@ -24403,8 +26217,8 @@ KnifeCombatRuntime.Controls.BunnyHopMaxSpeed = rapidFireSection:CreateSlider({
 })
 KnifeCombatRuntime.StatusControl = rapidFireSection:CreateLabel({
     Text = type(hookmetamethod) == "function"
-        and "Combat runtime • Silent Aim removed"
-        or "Combat runtime • Silent Aim removed"
+        and "Silent aim • Roblox APIs + game adapters"
+        or "Metamethod hooks unavailable • module/mouse fallback"
 })
 
 KnifeCombatRuntime.Track(RunService.Heartbeat:Connect(KnifeCombatRuntime.Step))
@@ -24424,6 +26238,13 @@ table.insert(library.CleanupCallbacks, function()
     KnifeCombatRuntime.UninstallNoSpread()
     KnifeCombatRuntime.RestorePhantomGunData()
     KnifeCombatRuntime.RestoreItemLibraryWeaponMods()
+    if type(Environment.__DevKageRivalsUtilityAimBridge)=="table" and Environment.__DevKageRivalsUtilityAimBridge.Runtime==KnifeCombatRuntime then Environment.__DevKageRivalsUtilityAimBridge.Runtime=nil end
+    if type(Environment.__DevKageRivalsNativeCombat)=="table"
+        and Environment.__DevKageRivalsNativeCombat.Runtime==KnifeCombatRuntime then
+        Environment.__DevKageRivalsNativeCombat.Runtime=nil
+    end
+    if type(Environment.__DevKageBloxRaycastBridge)=="table" and Environment.__DevKageBloxRaycastBridge.Runtime==KnifeCombatRuntime then Environment.__DevKageBloxRaycastBridge.Runtime=nil end
+    KnifeCombatRuntime.CurrentTarget, KnifeCombatRuntime.CurrentPart = nil, nil
     if Environment.__DevKageCombatRuntime == KnifeCombatRuntime then
         Environment.__DevKageCombatRuntime = nil
     end
@@ -24437,12 +26258,12 @@ do
     -- Opiumware safe-start: never install combat hooks from stale/default config
     -- during injection. The first explicit combat toggle arms the runtime.
     KnifeCombatRuntime.StartupGate = true
-    KnifeCombatRuntime.SetStatus("Combat safe-loaded • Silent Aim removed")
+    KnifeCombatRuntime.SetStatus("Combat safe-loaded • toggle feature to activate")
 end
 
 return KnifeCombatRuntime
 end
-)({
+]======], "@DevKage/KnifeCombat"))()({
     RapidFireSection = rapidFireSection,
     ReplicatedStorage = ReplicatedStorage,
     LocalPlayer = LocalPlayer,
@@ -25564,7 +27385,6 @@ end)()
 
 assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
-task.wait(0.06)
 local mouseLockPage = window:CreatePage({Icon="rbxassetid://8547249956",Glyph="A",Size=UDim2.new(0,36,0,36)})
 local crosshairSection = mouseLockPage:CreateSection({Name="Crosshair",Side="Left",Size=650})
 local textSection = mouseLockPage:CreateSection({Name="Crosshair Text",Side="Left",Size=360})
@@ -27957,7 +29777,6 @@ end)()
 
 assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
-task.wait(0.06)
 local settingPage = window:CreatePage({ Icon = "rbxassetid://8547256547", Glyph = "L", Size = UDim2.new(0, 36, 0, 36) })
 UI.LuaPage = settingPage
 local luaSection = settingPage:CreateSection({ Name = "Lua Editor", Side = "Left", Size = 520 })
@@ -28266,7 +30085,6 @@ end)()
 
 assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
-task.wait(0.06)
 local configPage = window:CreatePage({ Icon = "rbxassetid://8547269749", Glyph = "C", Size = UDim2.new(0, 36, 0, 36) })
 
 local configSelected = nil
@@ -28809,7 +30627,7 @@ Callback = function() window:Unload() end
 })
 
 scriptAutoLoadToggle = scriptSettingsSection:CreateToggle({
-Name = "Auto Load Preference (external loader)",
+Name = "Auto Load",
 State = read_script_settings().AutoLoad == true,
 Flag = "script.auto_load",
 Callback = function(value)
@@ -29654,10 +31472,7 @@ end
 rebuildConfigList()
 
 task.spawn(function()
-    -- Saved features are intentionally delayed after an Auto Load. Restoring them
-    -- on the same frame as the UI/config pass was the remaining source of short
-    -- whole-client stalls on some executors.
-    task.wait(__devkageMultiInjectAutoBoot and 2.25 or 1.25)
+    task.wait()
 
     -- Start persisted heavy runtimes only after UI/config construction has yielded
     -- and batching has been released. Stagger them so two autoexec scripts do not
@@ -29666,13 +31481,13 @@ task.spawn(function()
     if type(bootConfig) == "table" then
         if bootConfig.autoLoadSpoofer == true and not SpooferState.IsActive() then
             task.spawn(function()
-                task.wait(__devkageMultiInjectAutoBoot and 0.80 or 0.35)
+                task.wait(__devkageMultiInjectAutoBoot and 0.45 or 0.12)
                 pcall(StartSpoofer, getgenv().__DevKageConfig)
             end)
         end
         if bootConfig.eloLiveSyncAutoLoad == true or SpooferState.savedELOAutoLoad == true then
             task.spawn(function()
-                task.wait(__devkageMultiInjectAutoBoot and 1.10 or 0.55)
+                task.wait(__devkageMultiInjectAutoBoot and 0.75 or 0.22)
                 pcall(function() ELOAutoLoadRuntime:SetEnabled(true) end)
             end)
         end
@@ -29680,70 +31495,43 @@ task.spawn(function()
 
     if VisualsState.esp_enabled and HighQualityESPRuntime.StartupReady then
         pcall(refreshDetailedESP)
-        task.wait(0.08)
+        task.wait()
         pcall(refresh_esp_highlights)
         if VisualsState.chams or VisualsState.devkage_stretch then pcall(refreshChams) end
     end
 
-    task.wait(0.08)
+    task.wait()
     if VisualsState.fov_changer then pcall(apply_fov, true, VisualsState.fov_value) end
-    task.wait(0.03)
     if VisualsState.fullbright then pcall(apply_fullbright, true, VisualsState.fullbright_value) end
-    task.wait(0.03)
     if VisualsState.ambient_override then pcall(apply_ambient, true, VisualsState.ambient_color) end
-    task.wait(0.03)
     if VisualsState.fog_remove and not AdvancedLighting.fogEnabled then pcall(apply_fog, true) end
-    task.wait(0.03)
     if VisualsState.motion_blur then pcall(setMotionBlur, true, VisualsState.motion_blur_intensity) end
-    task.wait(0.03)
     if VisualsState.color_shift then pcall(setColorShift, true, VisualsState.color_shift_top, VisualsState.color_shift_bottom) end
-    task.wait(0.03)
     if VisualsState.lighting_style then pcall(setLightingStyle, true, VisualsState.lighting_style_value) end
-    task.wait(0.03)
 
-    task.wait(0.08)
+    task.wait()
     if AdvancedLighting.colorCorrectionEnabled then pcall(setColorCorrection, true, AdvancedLighting.tintColor, AdvancedLighting.brightness, AdvancedLighting.contrast, AdvancedLighting.saturation) end
-    task.wait(0.03)
     if AdvancedLighting.bloomEnabled then pcall(setBloom, true, AdvancedLighting.bloomIntensity, AdvancedLighting.bloomSize, AdvancedLighting.bloomThreshold) end
-    task.wait(0.03)
     if AdvancedLighting.sunRaysEnabled then pcall(setSunRays, true, AdvancedLighting.sunIntensity, AdvancedLighting.sunSpread) end
-    task.wait(0.03)
     if AdvancedLighting.depthOfFieldEnabled then pcall(setDepthOfField, true, AdvancedLighting.focusDistance, AdvancedLighting.focusRadius, AdvancedLighting.nearBlur, AdvancedLighting.farBlur) end
-    task.wait(0.03)
     if AdvancedLighting.atmosphereEnabled then pcall(WorldLightingRuntime.SetAtmosphere, true, AdvancedLighting.atmosphereDensity, AdvancedLighting.atmosphereOffset, AdvancedLighting.atmosphereColor, AdvancedLighting.atmosphereDecay, AdvancedLighting.atmosphereGlare, AdvancedLighting.atmosphereHaze) end
-    task.wait(0.03)
     if AdvancedLighting.fogEnabled then pcall(refreshCustomFog) end
-    task.wait(0.03)
     if AdvancedLighting.ambientEnabled then pcall(setAdvancedAmbient, true, AdvancedLighting.ambientColor, AdvancedLighting.ambientStrength) end
-    task.wait(0.03)
     if AdvancedLighting.blueSkyEnabled then pcall(setBlueSky, true, AdvancedLighting.blueSkyStrength) end
-    task.wait(0.03)
     if AdvancedLighting.reflectionQuality and AdvancedLighting.reflectionQuality ~= 5 then pcall(setReflectionQuality, true, AdvancedLighting.reflectionQuality) end
-    task.wait(0.03)
     pcall(WorldLightingRuntime.RefreshExtended)
-    task.wait(0.03)
     if AdvancedLighting.snowEnabled then pcall(refreshSnow) end
-    task.wait(0.03)
     if AdvancedLighting.weatherEnabled then pcall(refreshPremiumWeather) end
-    task.wait(0.03)
     if AdvancedLighting.visualPreset and AdvancedLighting.visualPreset~="Neutral" then pcall(applyLightingPreset,AdvancedLighting.visualPreset) end
-    task.wait(0.03)
 
-    task.wait(0.08)
+    task.wait()
     if UI.applyDevKageWorldPreset and VisualsState.devkage_world_preset and VisualsState.devkage_world_preset~="Custom" then pcall(UI.applyDevKageWorldPreset,VisualsState.devkage_world_preset) end
-    task.wait(0.03)
     if VisualsState.skybox_enabled then pcall(applyPlayerESPSkybox) end
-    task.wait(0.03)
     if AntiAimState.enabled then pcall(aa_apply, true) end
-    task.wait(0.03)
     if AntiAimState.noclip_enabled then pcall(function() AntiAimMovement:SetNoClip(true) end) end
-    task.wait(0.03)
     if AntiAimState.flight_enabled then pcall(function() AntiAimMovement:SetFlight(true) end) end
-    task.wait(0.03)
     if getgenv().__DevKageConfig.chinaHatEnabled then pcall(StartChinaHat) end
-    task.wait(0.03)
     if getgenv().__DevKageConfig.rainbowAuraEnabled then pcall(startRainbowAura) end
-    task.wait(0.03)
 end)
 
 end)()
@@ -29757,7 +31545,7 @@ task.spawn(function()
     local objects = root:GetDescendants()
     for index, object in ipairs(objects) do
         if object and object.Parent then library:ApplyThemeObject(object) end
-        if index % 24 == 0 then task.wait() end
+        if index % 80 == 0 then task.wait() end
     end
     local manager = library and library.KeybindManager
     if manager and manager.Overlay and manager.Overlay.Parent then
@@ -29765,7 +31553,7 @@ task.spawn(function()
         local overlayObjects = manager.Overlay:GetDescendants()
         for index, object in ipairs(overlayObjects) do
             if object and object.Parent then library:ApplyThemeObject(object) end
-            if index % 24 == 0 then task.wait() end
+            if index % 80 == 0 then task.wait() end
         end
     end
 end)
@@ -29949,3 +31737,293 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
 
 -- END OF FILE
 
+]============]
+
+local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
+__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.50-autoexec-freeze-coexistence-20260907"
+__devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
+
+-- CURRENT AUTO-LOAD MIGRATION BRIDGE (v5.2.50)
+-- Runs immediately at package top-level. It only touches DevKage's own auto-load
+-- files and exists so a previously-installed old loader cannot keep serving an
+-- older payload before this current package gets its normal late-boot turn.
+pcall(function()
+    if type(writefile) ~= "function" or type(readfile) ~= "function" then return end
+
+    local configFolder = "DevKage_Configs"
+    local settingsPath = configFolder .. "/_script_settings.json"
+    local enabledFlagPath = configFolder .. "/_devkage_autoload_enabled.flag"
+    local autoLoadEnabled = false
+
+    local okSettings, rawSettings = pcall(readfile, settingsPath)
+    if okSettings and type(rawSettings) == "string" and rawSettings ~= "" then
+        local okHttp, http = pcall(game.GetService, game, "HttpService")
+        if okHttp and http then
+            local okDecode, decoded = pcall(http.JSONDecode, http, rawSettings)
+            if okDecode and type(decoded) == "table" and decoded.AutoLoad == true then
+                autoLoadEnabled = true
+            end
+        end
+    end
+
+    if not autoLoadEnabled then
+        if type(isfile) == "function" then
+            local okFlag, existsFlag = pcall(isfile, enabledFlagPath)
+            autoLoadEnabled = okFlag and existsFlag == true
+        else
+            local okFlag = pcall(readfile, enabledFlagPath)
+            autoLoadEnabled = okFlag
+        end
+    end
+
+    if not autoLoadEnabled then return end
+
+    if type(makefolder) == "function" then
+        pcall(makefolder, configFolder)
+    end
+
+    local currentSource = __DEVKAGE_EMBEDDED_SOURCE
+    local currentBuild = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
+    local currentPayload = "-- DEVKAGE_AUTOLOAD_BUILD:" .. currentBuild .. "\n" .. currentSource
+    local currentPath = configFolder .. "/_devkage_autoload_payload_v5_2_50.lua"
+    local buildPath = configFolder .. "/_devkage_autoload_build.txt"
+
+    -- Avoid rewriting the full embedded source into every historical payload on
+    -- every execution.  That repeated synchronous file I/O is especially costly
+    -- when another autoexec script is starting at the same time.
+    local payloadCurrent = false
+    if type(isfile) == "function" then
+        local okPayload, payloadExists = pcall(isfile, currentPath)
+        local okBuild, buildExists = pcall(isfile, buildPath)
+        if okPayload and payloadExists == true and okBuild and buildExists == true then
+            local readOk, installedBuild = pcall(readfile, buildPath)
+            payloadCurrent = readOk and tostring(installedBuild or "") == currentBuild
+        end
+    end
+
+    if not payloadCurrent then
+        pcall(writefile, currentPath, currentPayload)
+    end
+
+    -- Remove only DevKage-owned old payload filenames.  Old queued loaders then
+    -- fail closed instead of resurrecting a previous build.
+    if type(delfile) == "function" then
+        for _, legacyName in ipairs({
+            "_devkage_autoload_payload_v5_2_20.lua",
+            "_devkage_autoload_payload_v5_2_19.lua",
+            "_devkage_autoload_payload_v5_2_18.lua",
+            "_devkage_autoload_payload_v5_2_17.lua",
+            "_devkage_autoload_payload_v5_2_16.lua",
+            "_devkage_autoload_payload_v5_2_12.lua",
+            "_devkage_autoload_payload_v5_2_11.lua",
+            "_devkage_autoload_payload_v5_2_10.lua",
+            "_devkage_autoload_payload_v5_2_9.lua",
+            "_devkage_autoload_payload_v5_2_8.lua",
+            "_devkage_autoload_payload_v5_2_7.lua",
+            "_devkage_autoload_payload_v5_2_6.lua",
+            "_devkage_autoload_payload_v5_2_3.lua",
+            "_devkage_autoload_payload.lua",
+        }) do
+            local path = configFolder .. "/" .. legacyName
+            local shouldDelete = true
+            if type(isfile) == "function" then
+                local checked, exists = pcall(isfile, path)
+                shouldDelete = checked and exists == true
+            end
+            if shouldDelete then pcall(delfile, path) end
+        end
+    end
+
+    pcall(writefile, configFolder .. "/_devkage_autoload_current.txt", currentBuild)
+    pcall(writefile, buildPath, currentBuild)
+    pcall(writefile, enabledFlagPath, currentBuild)
+
+    __devkageEnv.__DEVKAGE_AUTOLOAD_BUILD = currentBuild
+    __devkageEnv.__DEVKAGE_AUTOLOAD_PAYLOAD_REFRESHED_AT = os.clock()
+end)
+
+-- AUTOEXEC COEXISTENCE / LATE-BOOT SINGLE-BOOT ENTRYPOINT (v5.2.3)
+--
+-- Do not inspect or delete anything else in the executor Auto Execute folder.
+-- Older v5.2.x builds attempted sibling cleanup here; that can interfere with a
+-- completely separate script sharing Auto Execute.  Current ownership is now
+-- limited to DevKage's exact canonical loader/payload files inside its own
+-- config path.
+--
+-- Also do not block the executor's Auto Execute dispatcher while Roblox is
+-- loading.  Some executors launch Auto Execute files sequentially; a synchronous
+-- game.Loaded/PlayerGui/Camera wait here can prevent the next script from ever
+-- getting its startup turn.  DevKage now boots in its own task.
+task.spawn(function()
+    local ok, err = pcall(function()
+        local players = game:GetService("Players")
+        local workspaceService = game:GetService("Workspace")
+
+        if not game:IsLoaded() then
+            game.Loaded:Wait()
+        end
+
+        while tostring(game.JobId) == "" do
+            task.wait(0.1)
+        end
+
+        while not players.LocalPlayer do
+            task.wait(0.1)
+        end
+
+        local localPlayer = players.LocalPlayer
+        while localPlayer and not localPlayer:FindFirstChildOfClass("PlayerGui") do
+            task.wait(0.1)
+            localPlayer = players.LocalPlayer
+        end
+
+        while not workspaceService.CurrentCamera do
+            task.wait(0.1)
+        end
+
+        -- LATE-BOOT AUTOEXEC COEXISTENCE (v5.2.3)
+        -- Wait for the match's own client controllers/viewmodel to appear, then
+        -- deliberately leave a grace period for every other native Auto Execute
+        -- script.  This package returns immediately at top level, so this wait
+        -- happens only inside DevKage's background boot task.
+        local playerScripts = localPlayer:FindFirstChild("PlayerScripts")
+        if not playerScripts then
+            playerScripts = localPlayer:WaitForChild("PlayerScripts", 10)
+        end
+        if playerScripts then
+            playerScripts:WaitForChild("Controllers", 8)
+            playerScripts:WaitForChild("Modules", 8)
+        end
+        workspaceService:WaitForChild("ViewModels", 8)
+
+        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = true
+        local lateDelay = tonumber(rawget(__devkageEnv, "__DEVKAGE_LATE_BOOT_DELAY")) or 6
+        if lateDelay < 5 then lateDelay = 5 end
+        task.wait(lateDelay)
+        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = nil
+
+        -- Full native Auto Execute and DevKage_AutoLoad.lua use the same job
+        -- ownership keys, but neither is allowed to claim the match until the
+        -- late-boot grace period has completed.
+        local jobKey = tostring(game.PlaceId) .. ":" .. tostring(game.JobId)
+
+        if __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB == jobKey then
+            local lockBuild = __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD
+            local lockAt = tonumber(__devkageEnv.__DEVKAGE_AUTO_STARTING_AT) or 0
+            local lockAge = lockAt > 0 and (os.clock() - lockAt) or math.huge
+            if lockBuild == __devkageEnv.__DEVKAGE_PACKAGE_BUILD
+                and lockAge >= 0 and lockAge < 45 then
+                return
+            end
+            __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
+            __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+            __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
+        end
+
+        if __devkageEnv.__DEVKAGE_AUTO_STARTED_JOB == jobKey
+            and __devkageEnv.__DEVKAGE_AUTOLOADED_BUILD == __devkageEnv.__DEVKAGE_PACKAGE_BUILD then
+            return
+        end
+
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = jobKey
+        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = os.clock()
+
+        -- One scheduling turn keeps this package cooperative with other
+        -- Auto Execute scripts even on executors with a very eager dispatcher.
+        task.wait()
+
+        local loader = loadstring or load
+        if type(loader) ~= "function" then
+            error("DevKage requires loadstring support")
+        end
+
+        local chunk, compileError = loader(__DEVKAGE_EMBEDDED_SOURCE)
+        if not chunk then
+            error(compileError)
+        end
+
+        __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT = true
+        local runOk, runError = pcall(chunk)
+        __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT = nil
+        if not runOk then
+            error(runError)
+        end
+
+        __devkageEnv.__DEVKAGE_AUTO_STARTED_JOB = jobKey
+        __devkageEnv.__DEVKAGE_AUTOLOADED_BUILD = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
+        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
+    end)
+
+    if not ok then
+        __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT = nil
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
+        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
+        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = nil
+        if __devkageEnv.__DEVKAGE_RUNTIME_BOOT_STATE == "starting"
+            and tostring(__devkageEnv.__DEVKAGE_RUNTIME_BOOT_BUILD or "") == tostring(__devkageEnv.__DEVKAGE_PACKAGE_BUILD or "") then
+            __devkageEnv.__DEVKAGE_RUNTIME_BOOT_STATE = nil
+            __devkageEnv.__DEVKAGE_RUNTIME_BOOT_JOB = nil
+            __devkageEnv.__DEVKAGE_RUNTIME_BOOT_BUILD = nil
+            __devkageEnv.__DEVKAGE_RUNTIME_BOOT_AT = nil
+        end
+        warn("[DevKage Package Boot] " .. tostring(err))
+    end
+end)
+
+-- COEXISTENCE NOTES (non-executable documentation)
+-- 01 DevKage does not enumerate sibling Auto Execute files.
+-- 02 DevKage does not read sibling Auto Execute files.
+-- 03 DevKage does not delete sibling Auto Execute files.
+-- 04 DevKage only replaces its own zzzz_DevKage_AutoLoad_LAST.lua loader.
+-- 05 Other executor scripts remain independent.
+-- 06 Full-package startup is asynchronous.
+-- 07 Roblox readiness waits happen inside the DevKage task.
+-- 08 The executor dispatcher is not held by those waits.
+-- 09 Native Auto Execute and queued DevKage share one job guard.
+-- 10 Duplicate DevKage startup exits before runtime installation.
+-- 11 PlayerGui readiness is still required before DevKage starts.
+-- 12 CurrentCamera readiness is still required before DevKage starts.
+-- 13 A non-empty JobId is required before claiming the run.
+-- 14 A failed compile clears the in-progress ownership marker.
+-- 15 A failed runtime clears the in-progress ownership marker.
+-- 16 A successful runtime records the completed job.
+-- 17 Teleport queue remains supported.
+-- 18 Existing real Auto Execute folders remain supported.
+-- 19 Only one existing Auto Execute folder receives the last-named loader.
+-- 20 The old exact DevKage_AutoLoad.lua is removed during refresh.
+-- 21 Alias folders are not filled with duplicate DevKage loaders.
+-- 22 Guess folders are skipped when teleport queue already works.
+-- 22 Config serialization is unchanged.
+-- 23 ELO persistence is unchanged.
+-- 24 Cursor behavior is unchanged.
+-- 25 Rapid Fire behavior is unchanged.
+-- 26 Weapon/viewmodel appearance is unchanged.
+-- 27 Moderator detector behavior is unchanged.
+-- 28 Slider controls are unchanged.
+-- 29 Named config auto-load is unchanged.
+-- 30 Script Auto Load remains user-toggle controlled.
+-- 31 Legacy payload compatibility remains intact.
+-- 32 Current payload remains versioned.
+-- 33 Auto Load settings remain in the same settings file.
+-- 34 The package source remains embedded exactly once.
+-- 35 The outer package returns immediately after scheduling boot.
+-- 36 DevKage waits for PlayerScripts before claiming a match.
+-- 37 DevKage waits for Controllers/Modules when exposed by the game.
+-- 38 DevKage waits briefly for ViewModels when exposed by the game.
+-- 39 DevKage then yields a default 6-second late-boot grace period.
+-- 40 The late-boot delay can be increased through __DEVKAGE_LATE_BOOT_DELAY.
+-- 41 The minimum late-boot delay is five seconds.
+-- 42 No DevKage ownership flag is set during the grace period.
+-- 43 This block intentionally contains comments only.
+-- 44 No gameplay feature is initialized from this documentation.
+-- 45 No input state is changed from this documentation.
+-- 46 No executor file is touched from this documentation.
+-- 47 End coexistence notes.
+
+-- Return immediately so the executor can continue launching any other
+-- Auto Execute scripts in the same folder/session.
+return nil
