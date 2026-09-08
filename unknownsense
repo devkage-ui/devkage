@@ -1,5 +1,4 @@
--- DEVKAGE v5.2.54: local-register compiler fix + single-source autoexec
-local __DEVKAGE_EMBEDDED_SOURCE = [============[
+local _a=[============[
 
 
 
@@ -13772,12 +13771,12 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_54.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_55.lua"
 local SCRIPT_STABLE_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_current.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOLOAD_ENABLED_FILE = CONFIG_FOLDER .. "/_devkage_autoload_enabled.flag"
 local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_AutoLoad_LAST.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.54-local-register-fix-20260907"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.55-lateboot-autoexec-one-code-20260907"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -14449,8 +14448,8 @@ task.spawn(function()
         env.__DEVKAGE_LATE_BOOT_WAITING = true
         local delayJobKey = tostring(game.PlaceId) .. ":" .. tostring(game.JobId)
         local delayAlreadySatisfied = tostring(rawget(env, "__DEVKAGE_EXTERNAL_DELAY_DONE_JOB") or "") == delayJobKey
-        local lateDelay = delayAlreadySatisfied and 0 or (tonumber(rawget(env, "__DEVKAGE_LATE_BOOT_DELAY")) or 8)
-        if not delayAlreadySatisfied and lateDelay < 7.5 then lateDelay = 7.5 end
+        local lateDelay = delayAlreadySatisfied and 0 or (tonumber(rawget(env, "__DEVKAGE_LATE_BOOT_DELAY")) or 9.5)
+        if not delayAlreadySatisfied and lateDelay < 8 then lateDelay = 8 end
         if lateDelay > 0 then task.wait(lateDelay) end
         env.__DEVKAGE_LATE_BOOT_WAITING = nil
 
@@ -14672,17 +14671,15 @@ end
 
 
 local existingFolders = existing_autoexec_folders()
-for _, folder in ipairs(existingFolders) do
-    tryWrite(folder)
-    if #installed > 0 then break end
-end
-
--- If folder detection is unavailable, stop after the first writable alias. This
--- avoids creating multiple dormant DevKage loaders in the executor filesystem.
-if #installed == 0 then
+if #existingFolders > 0 then
+    for _, folder in ipairs(existingFolders) do
+        tryWrite(folder)
+    end
+else
+    -- Some executors do not expose isfolder/listfiles for the executor-owned
+    -- Auto Execute alias. Try every common alias with the SAME guarded stub.
     for _, folder in ipairs(AUTOEXEC_FOLDERS) do
         tryWrite(folder)
-        if #installed > 0 then break end
     end
 end
 
@@ -14749,6 +14746,9 @@ end
 local function remove_stale_devkage_payloads()
     if type(delfile) ~= "function" then return end
     for _, legacyName in ipairs({
+        "_devkage_autoload_payload_v5_2_54.lua",
+        "_devkage_autoload_payload_v5_2_53.lua",
+        "_devkage_autoload_payload_v5_2_52.lua",
         "_devkage_autoload_payload_v5_2_51.lua",
         "_devkage_autoload_payload_v5_2_50.lua",
         "_devkage_autoload_payload_v5_2_20.lua",
@@ -14783,6 +14783,9 @@ if not enabled then
         for _, path in ipairs({
             SCRIPT_PAYLOAD_FILE,
             SCRIPT_STABLE_PAYLOAD_FILE,
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_54.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_53.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_52.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_51.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_50.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_20.lua",
@@ -14932,10 +14935,24 @@ end
 
 local _script_boot_settings = read_script_settings()
 
--- v5.2.53 SINGLE-SOURCE AUTOEXEC MODE
--- The executor's existing Auto Execute loadstring is the only persistent
--- launcher. Do not install or refresh a second DevKage loader from inside
--- this ~1.3MB source; duplicate launch paths were a major source of hitches.
+-- v5.2.55 ONE-CODE LATE-BOOT AUTOEXEC
+-- Manual execution installs the current payload + guarded late-boot loader.
+-- Auto-loaded executions do not recursively install another runtime.
+if ((type(getgenv) == "function" and getgenv()) or _G).__DEVKAGE_AUTO_STARTED ~= true then
+    task.defer(function()
+        local ok, err = configure_script_autoload(true, false)
+        if not ok then
+            warn("[DevKage AutoLoad] install failed: " .. tostring(err))
+        end
+    end)
+elseif _script_boot_settings.AutoLoad == true then
+    task.defer(function()
+        local ok, err = configure_script_autoload(true, true)
+        if not ok then
+            warn("[DevKage AutoLoad] refresh failed: " .. tostring(err))
+        end
+    end)
+end
 
 local DEFAULT_VISUAL_STATE = serialiseRuntimeState(VisualsState)
 local DEFAULT_ANTI_AIM_STATE = serialiseRuntimeState(AntiAimState)
@@ -28802,7 +28819,7 @@ end
 local configMain = configPage:CreateSection({ Name = "Configs", Side = "Left", Size = 535 })
 local playerSection = configPage:CreateSection({ Name = "Players", Side = "Right", Size = 585 })
 local configActions = configPage:CreateSection({ Name = "Config Auto-Load", Side = "Right", Size = 210 })
-local scriptSettingsSection = configPage:CreateSection({ Name = "Script Settings", Side = "Right", Size = 115 })
+local scriptSettingsSection = configPage:CreateSection({ Name = "Script Settings", Side = "Right", Size = 150 })
 local configPhotoRoot=Instance.new("Frame")
 configPhotoRoot.Name="ConfigPhotoRoot"
 configPhotoRoot.BackgroundTransparency=1
@@ -28826,8 +28843,24 @@ Name = "Unload Script",
 Callback = function() library.Window:Unload() end
 })
 
-scriptSettingsSection:CreateLabel({
-Text = "Auto Execute: external loadstring"
+library.ScriptAutoLoadToggle = scriptSettingsSection:CreateToggle({
+Name = "Auto Load",
+State = read_script_settings().AutoLoad == true,
+Flag = "script.auto_load",
+Callback = function(value)
+local ok, message = configure_script_autoload(value)
+if not ok and value then
+    local persisted = read_script_settings().AutoLoad == true
+    if not persisted then
+        task.defer(function()
+            if library and library.ScriptAutoLoadToggle then
+                library.ScriptAutoLoadToggle:Set(false, true)
+            end
+        end)
+    end
+end
+library:Notify({Message=ok and tostring(message) or ("Auto Load: "..tostring(message)),Duration=4})
+end
 })
 
 scriptSilentLoadToggle = scriptSettingsSection:CreateToggle({
@@ -29923,295 +29956,4 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
 
 -- END OF FILE
 
-]============]
-
-local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
-__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.54-local-register-fix-20260907"
-__devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
-
--- SINGLE-SOURCE EXTERNAL-AUTOEXEC CLEANUP (v5.2.53)
--- The user's executor Auto Execute loadstring is the single launcher.
--- Disable DevKage's historical self-installed loader state so old payloads
--- cannot race this current source. Only exact DevKage-owned names are touched.
-pcall(function()
-    local configFolder = "DevKage_Configs"
-    local settingsPath = configFolder .. "/_script_settings.json"
-    local enabledFlagPath = configFolder .. "/_devkage_autoload_enabled.flag"
-
-    if type(readfile) == "function" and type(writefile) == "function" then
-        local okHttp, http = pcall(game.GetService, game, "HttpService")
-        local okRead, raw = pcall(readfile, settingsPath)
-        if okHttp and http and okRead and type(raw) == "string" and raw ~= "" then
-            local okDecode, settings = pcall(http.JSONDecode, http, raw)
-            if okDecode and type(settings) == "table" then
-                local changed = settings.AutoLoad ~= false
-                settings.AutoLoad = false
-                if changed then
-                    local okEncode, encoded = pcall(http.JSONEncode, http, settings)
-                    if okEncode and type(encoded) == "string" then
-                        pcall(writefile, settingsPath, encoded)
-                    end
-                end
-            end
-        end
-    end
-
-    if type(delfile) == "function" then
-        pcall(delfile, enabledFlagPath)
-
-        for _, fileName in ipairs({
-            "_devkage_autoload_current.lua",
-            "_devkage_autoload_build.txt",
-            "_devkage_autoload_current.txt",
-            "_devkage_autoload_payload_v5_2_54.lua",
-            "_devkage_autoload_payload_v5_2_53.lua",
-            "_devkage_autoload_payload_v5_2_52.lua",
-            "_devkage_autoload_payload_v5_2_51.lua",
-            "_devkage_autoload_payload_v5_2_50.lua",
-            "_devkage_autoload_payload_v5_2_20.lua",
-            "_devkage_autoload_payload_v5_2_19.lua",
-            "_devkage_autoload_payload_v5_2_18.lua",
-            "_devkage_autoload_payload_v5_2_17.lua",
-            "_devkage_autoload_payload_v5_2_16.lua",
-            "_devkage_autoload_payload_v5_2_12.lua",
-            "_devkage_autoload_payload_v5_2_11.lua",
-            "_devkage_autoload_payload_v5_2_10.lua",
-            "_devkage_autoload_payload_v5_2_9.lua",
-            "_devkage_autoload_payload_v5_2_8.lua",
-            "_devkage_autoload_payload_v5_2_7.lua",
-            "_devkage_autoload_payload_v5_2_6.lua",
-            "_devkage_autoload_payload_v5_2_3.lua",
-            "_devkage_autoload_payload.lua",
-        }) do
-            local path = configFolder .. "/" .. fileName
-            local shouldDelete = true
-            if type(isfile) == "function" then
-                local checked, exists = pcall(isfile, path)
-                shouldDelete = checked and exists == true
-            end
-            if shouldDelete then pcall(delfile, path) end
-        end
-
-        -- Delete only DevKage's known self-installed loader filenames.
-        -- Never enumerate/read/delete sibling autoexec scripts.
-        for _, folder in ipairs({
-            "autoexec","Autoexec","autoexecute","AutoExecute",
-            "scripts/autoexec","scripts/Autoexec"
-        }) do
-            for _, loaderName in ipairs({
-                "zzzz_DevKage_AutoLoad_LAST.lua",
-                "DevKage_AutoLoad.lua",
-                "zzzz_DevKage_AutoExecute_Stable_Loader.lua",
-            }) do
-                local path = folder .. "/" .. loaderName
-                local shouldDelete = true
-                if type(isfile) == "function" then
-                    local checked, exists = pcall(isfile, path)
-                    shouldDelete = checked and exists == true
-                end
-                if shouldDelete then pcall(delfile, path) end
-            end
-        end
-    end
-end)
-
--- AUTOEXEC COEXISTENCE / LATE-BOOT SINGLE-BOOT ENTRYPOINT (v5.2.3)
---
--- Do not inspect or delete anything else in the executor Auto Execute folder.
--- Older v5.2.x builds attempted sibling cleanup here; that can interfere with a
--- completely separate script sharing Auto Execute.  Current ownership is now
--- limited to DevKage's exact canonical loader/payload files inside its own
--- config path.
---
--- Also do not block the executor's Auto Execute dispatcher while Roblox is
--- loading.  Some executors launch Auto Execute files sequentially; a synchronous
--- game.Loaded/PlayerGui/Camera wait here can prevent the next script from ever
--- getting its startup turn.  DevKage now boots in its own task.
-do
-    local scheduledJob = tostring(game.PlaceId) .. ":" .. tostring(game.JobId or "")
-    local scheduledBuild = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
-    local scheduledAt = tonumber(__devkageEnv.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_AT) or 0
-    local scheduledAge = scheduledAt > 0 and (os.clock() - scheduledAt) or math.huge
-
-    if __devkageEnv.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_JOB == scheduledJob
-        and __devkageEnv.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_BUILD == scheduledBuild
-        and scheduledAge >= 0 and scheduledAge < 30 then
-        return nil
-    end
-
-    __devkageEnv.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_JOB = scheduledJob
-    __devkageEnv.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_BUILD = scheduledBuild
-    __devkageEnv.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_AT = os.clock()
-end
-
-task.spawn(function()
-    local ok, err = pcall(function()
-        local players = game:GetService("Players")
-        local workspaceService = game:GetService("Workspace")
-
-        if not game:IsLoaded() then
-            game.Loaded:Wait()
-        end
-
-        while tostring(game.JobId) == "" do
-            task.wait(0.1)
-        end
-
-        while not players.LocalPlayer do
-            task.wait(0.1)
-        end
-
-        local localPlayer = players.LocalPlayer
-        while localPlayer and not localPlayer:FindFirstChildOfClass("PlayerGui") do
-            task.wait(0.1)
-            localPlayer = players.LocalPlayer
-        end
-
-        while not workspaceService.CurrentCamera do
-            task.wait(0.1)
-        end
-
-        -- LATE-BOOT AUTOEXEC COEXISTENCE (v5.2.3)
-        -- Wait for the match's own client controllers/viewmodel to appear, then
-        -- deliberately leave a grace period for every other native Auto Execute
-        -- script.  This package returns immediately at top level, so this wait
-        -- happens only inside DevKage's background boot task.
-        -- Fixed universal coexistence delay. Game-specific Controller/Module/
-        -- ViewModel names are not required, so this works across maps/games.
-        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = true
-        local delayJobKey = tostring(game.PlaceId) .. ":" .. tostring(game.JobId)
-        local delayAlreadySatisfied = tostring(rawget(__devkageEnv, "__DEVKAGE_EXTERNAL_DELAY_DONE_JOB") or "") == delayJobKey
-        local lateDelay = delayAlreadySatisfied and 0 or (tonumber(rawget(__devkageEnv, "__DEVKAGE_LATE_BOOT_DELAY")) or 8)
-        if not delayAlreadySatisfied and lateDelay < 7.5 then lateDelay = 7.5 end
-        if lateDelay > 0 then task.wait(lateDelay) end
-        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = nil
-
-        -- Full native Auto Execute and DevKage_AutoLoad.lua use the same job
-        -- ownership keys, but neither is allowed to claim the match until the
-        -- late-boot grace period has completed.
-        local jobKey = tostring(game.PlaceId) .. ":" .. tostring(game.JobId)
-
-        if __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB == jobKey then
-            local lockBuild = __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD
-            local lockAt = tonumber(__devkageEnv.__DEVKAGE_AUTO_STARTING_AT) or 0
-            local lockAge = lockAt > 0 and (os.clock() - lockAt) or math.huge
-            if lockBuild == __devkageEnv.__DEVKAGE_PACKAGE_BUILD
-                and lockAge >= 0 and lockAge < 45 then
-                return
-            end
-            __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
-            __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
-            __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
-        end
-
-        if __devkageEnv.__DEVKAGE_AUTO_STARTED_JOB == jobKey
-            and __devkageEnv.__DEVKAGE_AUTOLOADED_BUILD == __devkageEnv.__DEVKAGE_PACKAGE_BUILD then
-            return
-        end
-
-        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = jobKey
-        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
-        __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = os.clock()
-
-        -- Coexistence delay is already complete; compile immediately.
-
-        local loader = loadstring or load
-        if type(loader) ~= "function" then
-            error("DevKage requires loadstring support")
-        end
-
-        local chunk, compileError = loader(__DEVKAGE_EMBEDDED_SOURCE)
-        if not chunk then
-            error(compileError)
-        end
-
-        __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT = true
-        local runOk, runError = pcall(chunk)
-        __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT = nil
-        if not runOk then
-            error(runError)
-        end
-
-        __devkageEnv.__DEVKAGE_AUTO_STARTED_JOB = jobKey
-        __devkageEnv.__DEVKAGE_AUTOLOADED_BUILD = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
-        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
-        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
-        __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
-        __devkageEnv.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_JOB = nil
-        __devkageEnv.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_BUILD = nil
-        __devkageEnv.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_AT = nil
-    end)
-
-    if not ok then
-        __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT = nil
-        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
-        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
-        __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
-        __devkageEnv.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_JOB = nil
-        __devkageEnv.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_BUILD = nil
-        __devkageEnv.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_AT = nil
-        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = nil
-        if __devkageEnv.__DEVKAGE_RUNTIME_BOOT_STATE == "starting"
-            and tostring(__devkageEnv.__DEVKAGE_RUNTIME_BOOT_BUILD or "") == tostring(__devkageEnv.__DEVKAGE_PACKAGE_BUILD or "") then
-            __devkageEnv.__DEVKAGE_RUNTIME_BOOT_STATE = nil
-            __devkageEnv.__DEVKAGE_RUNTIME_BOOT_JOB = nil
-            __devkageEnv.__DEVKAGE_RUNTIME_BOOT_BUILD = nil
-            __devkageEnv.__DEVKAGE_RUNTIME_BOOT_AT = nil
-        end
-        warn("[DevKage Package Boot] " .. tostring(err))
-    end
-end)
-
--- COEXISTENCE NOTES (non-executable documentation)
--- 01 DevKage does not enumerate sibling Auto Execute files.
--- 02 DevKage does not read sibling Auto Execute files.
--- 03 DevKage does not delete sibling Auto Execute files.
--- 04 DevKage only replaces its own zzzz_DevKage_AutoLoad_LAST.lua loader.
--- 05 Other executor scripts remain independent.
--- 06 Full-package startup is asynchronous.
--- 07 Roblox readiness waits happen inside the DevKage task.
--- 08 The executor dispatcher is not held by those waits.
--- 09 The executor's external loadstring is the only intended launcher.
--- 10 Duplicate DevKage startup exits before runtime installation.
--- 11 PlayerGui readiness is still required before DevKage starts.
--- 12 CurrentCamera readiness is still required before DevKage starts.
--- 13 A non-empty JobId is required before claiming the run.
--- 14 A failed compile clears the in-progress ownership marker.
--- 15 A failed runtime clears the in-progress ownership marker.
--- 16 A successful runtime records the completed job.
--- 17 DevKage does not install an additional teleport-queue loader in this build.
--- 18 Existing executor Auto Execute loadstrings remain supported.
--- 19 Historical DevKage-owned loader filenames are cleaned up when accessible.
--- 20 The old exact DevKage_AutoLoad.lua is removed during refresh.
--- 21 Duplicate loader aliases share the same-build/same-server mutex.
--- 22 Same-build duplicate source executions share one scheduling/boot mutex.
--- 22 Config serialization is unchanged.
--- 23 ELO persistence is unchanged.
--- 24 Cursor behavior is unchanged.
--- 25 Rapid Fire behavior is unchanged.
--- 26 Weapon/viewmodel appearance is unchanged.
--- 27 Moderator detector behavior is unchanged.
--- 28 Slider controls are unchanged.
--- 29 Named config auto-load is unchanged.
--- 30 Persistence is controlled by the executor's existing Auto Execute loadstring.
--- 31 Legacy payload compatibility remains intact.
--- 32 Current payload remains versioned.
--- 33 Auto Load settings remain in the same settings file.
--- 34 The package source remains embedded exactly once.
--- 35 The outer package returns immediately after scheduling boot.
--- 36 DevKage waits for PlayerScripts before claiming a match.
--- 37 DevKage does not depend on game-specific Controllers/Modules folders.
--- 38 DevKage does not depend on a game-specific ViewModels folder.
--- 39 DevKage yields a default 8-second grace period for the other autoexec script.
--- 40 The late-boot delay can be increased through __DEVKAGE_LATE_BOOT_DELAY.
--- 41 The minimum late-boot delay is 7.5 seconds unless an external loader already waited.
--- 42 No DevKage ownership flag is set during the grace period.
--- 43 This block intentionally contains comments only.
--- 44 No gameplay feature is initialized from this documentation.
--- 45 No input state is changed from this documentation.
--- 46 No executor file is touched from this documentation.
--- 47 End coexistence notes.
-
--- Return immediately so the executor can continue launching any other
--- Auto Execute scripts in the same folder/session.
-return nil
+]============]local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,53,53,45,108,97,116,101,98,111,111,116,45,97,117,116,111,101,120,101,99,45,111,110,101,45,99,111,100,101,45,50,48,50,54,48,57,48,55)_b._a=_a do local _c=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId or"")local _d=_b.__DEVKAGE_PACKAGE_BUILD local _e=tonumber(_b.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_AT)or 0 local _f=_e>0 and(os.clock()-_e)or math.huge if _b.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_JOB==_c and _b.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_BUILD==_d and _f>=0 and _f<30 then return nil end _b.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_JOB=_c _b.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_BUILD=_d _b.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_AT=os.clock()end task.spawn(function()local _g,_h=pcall(function()local _i=game:GetService(string.char(80,108,97,121,101,114,115))local _j=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end while tostring(game.JobId)==""do task.wait(0.1)end while not _i.LocalPlayer do task.wait(0.1)end local _k=_i.LocalPlayer while _k and not _k:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))do task.wait(0.1)_k=_i.LocalPlayer end while not _j.CurrentCamera do task.wait(0.1)end _b.__DEVKAGE_LATE_BOOT_WAITING=true local _l=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)local _m=tostring(rawget(_b,string.char(95,95,68,69,86,75,65,71,69,95,69,88,84,69,82,78,65,76,95,68,69,76,65,89,95,68,79,78,69,95,74,79,66))or"")==_l local _n=_m and 0 or(tonumber(rawget(_b,string.char(95,95,68,69,86,75,65,71,69,95,76,65,84,69,95,66,79,79,84,95,68,69,76,65,89)))or 9.5)if not _m and _n<8 then _n=8 end if _n>0 then task.wait(_n)end _b.__DEVKAGE_LATE_BOOT_WAITING=nil local _o=tostring(game.PlaceId)..string.char(58)..tostring(game.JobId)if _b.__DEVKAGE_AUTO_STARTING_JOB==_o then local _p=_b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD local _q=tonumber(_b.__DEVKAGE_AUTO_STARTING_AT)or 0 local _r=_q>0 and(os.clock()-_q)or math.huge if _p==_b.__DEVKAGE_PACKAGE_BUILD and _r>=0 and _r<45 then return end _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end if _b.__DEVKAGE_AUTO_STARTED_JOB==_o and _b.__DEVKAGE_AUTOLOADED_BUILD==_b.__DEVKAGE_PACKAGE_BUILD then return end _b.__DEVKAGE_AUTO_STARTING_JOB=_o _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_AT=os.clock()local _s=loadstring or load if type(_s)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _t,_u=_s(_a)if not _t then error(_u)end _b.__DEVKAGE_MULTI_INJECT_BOOT=true local _v,_w=pcall(_t)_b.__DEVKAGE_MULTI_INJECT_BOOT=nil if not _v then error(_w)end _b.__DEVKAGE_AUTO_STARTED_JOB=_o _b.__DEVKAGE_AUTOLOADED_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil _b.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_JOB=nil _b.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_BUILD=nil _b.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_AT=nil end)if not _g then _b.__DEVKAGE_MULTI_INJECT_BOOT=nil _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil _b.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_JOB=nil _b.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_BUILD=nil _b.__DEVKAGE_SINGLE_SOURCE_SCHEDULED_AT=nil _b.__DEVKAGE_LATE_BOOT_WAITING=nil if _b.__DEVKAGE_RUNTIME_BOOT_STATE==string.char(115,116,97,114,116,105,110,103)and tostring(_b.__DEVKAGE_RUNTIME_BOOT_BUILD or"")==tostring(_b.__DEVKAGE_PACKAGE_BUILD or"")then _b.__DEVKAGE_RUNTIME_BOOT_STATE=nil _b.__DEVKAGE_RUNTIME_BOOT_JOB=nil _b.__DEVKAGE_RUNTIME_BOOT_BUILD=nil _b.__DEVKAGE_RUNTIME_BOOT_AT=nil end warn(string.char(91,68,101,118,75,97,103,101,32,80,97,99,107,97,103,101,32,66,111,111,116,93,32)..tostring(_h))end end)return nil
