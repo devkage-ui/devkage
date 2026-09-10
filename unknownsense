@@ -9011,6 +9011,8 @@ devkage_cursor_text           = true,
 skybox_enabled           = false,
 skybox_preset            = "Default",
 skybox_mood_strength     = 0.65,
+skybox_rotation_enabled  = false,
+skybox_rotation_speed    = 5,
 devkage_world_preset     = "Custom",
 devkage_preset_avatar    = true,
 kill_sound_enabled       = false,
@@ -19366,6 +19368,7 @@ sky = nil,
 skyMood = nil,
 originalSky = nil,
 originalSkyCaptured = false,
+skyRotationAngle = 0,
 killSound = nil,
 hitSound = nil,
 killLastAt = setmetatable({}, {__mode="k"}),
@@ -19393,7 +19396,7 @@ killFeedTexts = setmetatable({}, {__mode="k"})
 }
 local PlayerESPSkyboxes = {
 Default = {SkyboxBk="rbxassetid://91458024",SkyboxDn="rbxassetid://91457980",SkyboxFt="rbxassetid://91458024",SkyboxLf="rbxassetid://91458024",SkyboxRt="rbxassetid://91458024",SkyboxUp="rbxassetid://91458002"},
-["DevKage Skybox"] = {SkyboxBk="rbxassetid://11363682343",SkyboxDn="rbxassetid://11363682343",SkyboxFt="rbxassetid://11363682343",SkyboxLf="rbxassetid://11363682343",SkyboxRt="rbxassetid://11363682343",SkyboxUp="rbxassetid://11363682343"},
+["DevKage Skybox"] = {SkyboxBk="rbxassetid://2569949776",SkyboxDn="rbxassetid://2569949776",SkyboxFt="rbxassetid://2569949776",SkyboxLf="rbxassetid://2569949776",SkyboxRt="rbxassetid://2569949776",SkyboxUp="rbxassetid://2569949776"},
 Neptune = {SkyboxBk="rbxassetid://218955819",SkyboxDn="rbxassetid://218953419",SkyboxFt="rbxassetid://218954524",SkyboxLf="rbxassetid://218958493",SkyboxRt="rbxassetid://218957134",SkyboxUp="rbxassetid://218950090"},
 ["Among Us"] = {SkyboxBk="rbxassetid://5752463190",SkyboxDn="rbxassetid://5752463190",SkyboxFt="rbxassetid://5752463190",SkyboxLf="rbxassetid://5752463190",SkyboxRt="rbxassetid://5752463190",SkyboxUp="rbxassetid://5752463190"},
 Nebula = {SkyboxBk="rbxassetid://159454299",SkyboxDn="rbxassetid://159454296",SkyboxFt="rbxassetid://159454293",SkyboxLf="rbxassetid://159454286",SkyboxRt="rbxassetid://159454300",SkyboxUp="rbxassetid://159454288"},
@@ -19449,7 +19452,7 @@ local PlayerESPSkyboxNames = {}
 for name in pairs(PlayerESPSkyboxes) do PlayerESPSkyboxNames[#PlayerESPSkyboxNames+1]=name end
 table.sort(PlayerESPSkyboxNames,function(a,b) return tostring(a):lower()<tostring(b):lower() end)
 PlayerESPUtilityRuntime.skyboxAssetIds={
-["DevKage Skybox"]="rbxassetid://11363682343",
+["DevKage Skybox"]="rbxassetid://2569949776",
 Heaven="rbxassetid://15359965253",
 ["Ethereal Heaven"]="rbxassetid://15359965253",
 }
@@ -19560,6 +19563,9 @@ end
 local assetTextures=PlayerESPUtilityRuntime.LoadSkyboxAsset(VisualsState.skybox_preset)
 local selectedTextures=assetTextures or textures
 for property,value in pairs(selectedTextures) do pcall(function() sky[property]=value end) end
+pcall(function()
+sky.SkyboxOrientation=Vector3.new(0,PlayerESPUtilityRuntime.skyRotationAngle or 0,0)
+end)
 task.defer(function()
 if not sky.Parent then return end
 local contentProvider=game:GetService("ContentProvider")
@@ -19577,6 +19583,27 @@ VisualsState.skybox_preset=PlayerESPSkyboxNames[index] or "Default"
 if VisualsState.skybox_enabled then applyPlayerESPSkybox() end
 end})
 visualSlider(clientEffects,"skybox_mood_strength","Skybox Mood Strength",0,1,2,"",function() if VisualsState.skybox_enabled then applyPlayerESPSkybox() end end)
+
+VisualControls.skybox_rotation_enabled=clientEffects:CreateToggle({
+Name="Skybox Rotation",
+State=VisualsState.skybox_rotation_enabled,
+Flag="visuals.skybox_rotation_enabled",
+Callback=function(v)
+VisualsState.skybox_rotation_enabled=v
+end
+})
+visualSlider(clientEffects,"skybox_rotation_speed","Skybox Rotation Speed",0,30,1,"°/s",function() end)
+
+utility:CreateConnection(game:GetService("RunService").Heartbeat,function(dt)
+if not VisualsState.skybox_enabled or not VisualsState.skybox_rotation_enabled then return end
+local sky=PlayerESPUtilityRuntime.sky
+if not sky or not sky.Parent then return end
+local speed=math.max(0,tonumber(VisualsState.skybox_rotation_speed) or 0)
+PlayerESPUtilityRuntime.skyRotationAngle=((PlayerESPUtilityRuntime.skyRotationAngle or 0)+(speed*math.max(tonumber(dt) or 0,0)))%360
+pcall(function()
+sky.SkyboxOrientation=Vector3.new(0,PlayerESPUtilityRuntime.skyRotationAngle,0)
+end)
+end)
 
 local PlayerESPSoundService=game:GetService("SoundService")
 local PlayerESPDebris=game:GetService("Debris")
