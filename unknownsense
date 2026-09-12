@@ -2843,7 +2843,11 @@ function BindManager:RefreshActive()
     local count = 0
     for index, control in ipairs(self.Order) do
         local configured = control.BindConfigured == true
-        local active = configured and control:Get() == true
+        local keyText = configured and self:KeyText(control.BindKey) or "-"
+        local hasKey = configured and keyText ~= "-"
+        local hudEligible = hasKey
+            or (configured and (control.BindMode == "Always" or control.BindMode == "Hold"))
+        local active = hudEligible and control:Get() == true
         local record = self.ActiveRows[control]
         if active then
             count = count + 1
@@ -2865,8 +2869,7 @@ function BindManager:RefreshActive()
             record.Row.Visible = true; record.Row.LayoutOrder = index
             record.Name.Text = tostring(control.Name)
             local modeText = control.BindMode == "Always" and "always on" or string.lower(tostring(control.BindMode or "Toggle"))
-            local keyText = self:KeyText(control.BindKey)
-            record.State.Text = "[" .. modeText .. "]" .. (keyText ~= "-" and (" [" .. keyText .. "]") or "")
+            record.State.Text = "[" .. modeText .. "]" .. (hasKey and (" [" .. keyText .. "]") or "")
             record.State.TextColor3 = control.Window and control.Window.Accent or Color3.fromRGB(175,205,75)
         elseif record then
             record.Row.Visible = false
@@ -20200,7 +20203,7 @@ PlayerESPUtilityRuntime.combatSoundInstances[sound]=true
 if kind=="hit" then PlayerESPUtilityRuntime.hitSound=sound else PlayerESPUtilityRuntime.killSound=sound end
 
 local completed=false
-local playAttempts=0
+local playbackRequested=false
 local endedConnection
 local loadedConnection
 local playedConnection
@@ -20230,11 +20233,15 @@ if completed or not sound.Parent then return end
 if sound.IsPlaying and (sound.IsLoaded or sound.TimeLength>0) then markPlayed() end
 end
 local function requestPlayback()
-if completed or not sound.Parent or sound:GetAttribute("DevKageCancelled")==true or playAttempts>=2 then return false end
-playAttempts=playAttempts+1
+if completed or playbackRequested or not sound.Parent or sound:GetAttribute("DevKageCancelled")==true then return false end
+playbackRequested=true
 local requested=startCombatSound(sound)
-if requested then task.delay(0.06,confirmPlayback) end
-return requested
+if not requested then
+playbackRequested=false
+return false
+end
+task.delay(0.06,confirmPlayback)
+return true
 end
 local function playWhenReady()
 if not sound.Parent or sound:GetAttribute("DevKageCancelled")==true then return end
@@ -20255,21 +20262,20 @@ if sound.IsLoaded or sound.TimeLength>0 then markPlayed() else task.delay(0.06,c
 end)
 registerPlayerESPCombatConnection(playedConnection)
 
-if sound.IsLoaded then
+if sound.IsLoaded or sound.TimeLength>0 then
 playWhenReady()
 else
 setCombatSoundStatus("Loading "..((kind=="hit") and "hit" or "kill").." sound…")
-
-
-
-requestPlayback()
 task.spawn(function()
 pcall(function() PlayerESPContentProvider:PreloadAsync({sound}) end)
-if not completed and not sound.IsPlaying then requestPlayback() else confirmPlayback() end
+if not completed and sound.Parent then
+requestPlayback()
+confirmPlayback()
+end
 end)
 end
 
-task.delay(1.35,function()
+task.delay(3,function()
 if completed or not sound.Parent then return end
 if sound.IsPlaying and (sound.IsLoaded or sound.TimeLength>0) then markPlayed(); return end
 sound:SetAttribute("DevKageCancelled",true)
@@ -20317,7 +20323,7 @@ if not force and not enabled then return false end
 
 local now=tick()
 local stampKey=(kind=="hit") and "hitGlobalLastAt" or "killGlobalLastAt"
-local minGap=(kind=="hit") and 0.045 or 0.12
+local minGap=(kind=="hit") and 0.045 or 0.35
 if not force and now-(tonumber(PlayerESPUtilityRuntime[stampKey]) or 0)<minGap then return false end
 PlayerESPUtilityRuntime[stampKey]=now
 local maxLength=0
@@ -20386,8 +20392,6 @@ newHp=tonumber(newHp) or 0
 if lastHp<=0 or newHp>0 then return end
 
 local credited=playerESPCombatCreditedToLocal(plr,humanoid)
-if not credited then credited=recentlyAttackedPlayer(plr,8) end
-if not credited and tick()-(tonumber(PlayerESPUtilityRuntime.killRecentAttackAt) or 0)<=4 then credited=true end
 if not credited then return end
 
 local now=tick()
@@ -20611,15 +20615,12 @@ local function combatRemoteName(name)
 local lower=tostring(name or ""):lower()
 return lower:find("kill",1,true)~=nil
 or lower:find("elim",1,true)~=nil
-or lower:find("combat",1,true)~=nil
-or lower:find("death",1,true)~=nil
 or lower:find("frag",1,true)~=nil
-or lower:find("feed",1,true)~=nil
 end
 
 local function combatPayloadCreditsLocal(...)
 local packed=table.pack(...)
-local state={credited=false,localPosition=nil,otherPlayerPosition=nil,visited=setmetatable({}, {__mode="k"})}
+local state={credited=false,visited=setmetatable({}, {__mode="k"})}
 local creditKeys={killer=true,attacker=true,creator=true,source=true,owner=true,winner=true,eliminator=true,lastHitBy=true,last_hit_by=true}
 local function isLocalValue(value)
 if typeof(value)=="Instance" then
@@ -20638,8 +20639,6 @@ local function scan(value,key,depth,position)
 if state.credited or depth>3 then return end
 local valueType=typeof(value)
 if creditKeys[tostring(key or "")] and isLocalValue(value) then state.credited=true; return end
-if isLocalValue(value) and not state.localPosition then state.localPosition=position end
-if valueType=="Instance" and value:IsA("Player") and value~=LocalPlayer and not state.otherPlayerPosition then state.otherPlayerPosition=position end
 if type(value)=="string" and combatTextCreditsLocal(value) then state.credited=true; return end
 if type(value)=="table" and not state.visited[value] then
 state.visited[value]=true
@@ -20647,9 +20646,6 @@ for childKey,childValue in pairs(value) do scan(childValue,childKey,depth+1,posi
 end
 end
 for index=1,packed.n do scan(packed[index],nil,0,index) end
-if not state.credited and state.localPosition and state.otherPlayerPosition and state.localPosition<state.otherPlayerPosition then
-state.credited=true
-end
 return state.credited
 end
 
