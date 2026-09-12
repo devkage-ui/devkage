@@ -1077,16 +1077,18 @@ function library:CreateWindow(Properties)
         end
 
         function Window:SetCursorControlMode(mode)
-
-
-
-
             local previousMode = Window.CursorControlMode
-            mode = "Mouse"
+            mode = tostring(mode or "Mouse")
+            if mode ~= "Cursor Lock" then
+                mode = "Mouse"
+            end
             Window.CursorControlMode = mode
 
             if Window.Enabled then
                 applyMenuMouseState()
+            elseif mode == "Cursor Lock" then
+                captureGameplayMouseState()
+                applyGameplayMouseState()
             elseif previousMode == "Cursor Lock" then
                 restoreSavedMouseState()
             end
@@ -2538,10 +2540,20 @@ function BindManager:EnsureUI(window)
             end
 
             if uis:GetFocusedTextBox() then return end
+
+            local inputType = input.UserInputType
+            local processedMouse =
+                gameProcessed == true
+                and (
+                    inputType == Enum.UserInputType.MouseButton1
+                    or inputType == Enum.UserInputType.MouseButton2
+                    or inputType == Enum.UserInputType.MouseButton3
+                )
+
             for _, control in ipairs(self.Order) do
                 if control.BindConfigured == true
                     and self:Matches(control.BindKey, input)
-                    and not (control.InlineBind and gameProcessed) then
+                    and not processedMouse then
                     if control.BindMode == "Hold" then
                         control:Set(true)
                     elseif control.BindMode == "Toggle" then
@@ -14064,12 +14076,12 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_62.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_63.lua"
 local SCRIPT_STABLE_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_current.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOLOAD_ENABLED_FILE = CONFIG_FOLDER .. "/_devkage_autoload_enabled.flag"
 local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_AutoLoad_LAST.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.62-world-visuals-keybind-polish-20260912"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.63-thirdperson-keybind-cursor-fix-20260912"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -29578,7 +29590,7 @@ local function addColor(section,key,name)
 end
 
 addToggle(crosshairSection,"devkage_cursor_enabled","Enabled")
-addDropdown(crosshairSection,"devkage_cursor_control_mode","Cursor Control",{"Mouse"})
+addDropdown(crosshairSection,"devkage_cursor_control_mode","Cursor Control",{"Mouse","Cursor Lock"})
 if library.Window and library.Window.SetCursorControlMode then
     library.Window:SetCursorControlMode(VisualsState.devkage_cursor_control_mode)
 end
@@ -30274,7 +30286,9 @@ applyRuntimeState(VisualsState,data.visuals)
 applyRuntimeState(VisualsState,data)
 VisualsState.devkage_cursor_enabled = cursorEnabledBeforeLoad ~= false
 VisualsState.devkage_cursor_position_mode = "Mouse"
+if VisualsState.devkage_cursor_control_mode ~= "Cursor Lock" then
 VisualsState.devkage_cursor_control_mode = "Mouse"
+end
 if library.Window and library.Window.SetCursorControlMode then
 library.Window:SetCursorControlMode(VisualsState.devkage_cursor_control_mode)
 end
@@ -31639,7 +31653,7 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
 })
 
 local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
-__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.62-world-visuals-keybind-polish-20260912"
+__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.63-thirdperson-keybind-cursor-fix-20260912"
 __devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
 
 -- CURRENT LATE-BOOT AUTOEXEC OWNERSHIP (v5.2.55)
