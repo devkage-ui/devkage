@@ -2409,7 +2409,7 @@ function BindManager:EnsureUI(window)
         button.TextSize = 9
         button.TextColor3 = Color3.fromRGB(195, 195, 195)
         button.TextXAlignment = Enum.TextXAlignment.Left
-        button.Text = "   " .. (mode == "Always" and "always on" or string.lower(mode))
+        button.Text = "   " .. string.lower(mode)
         button.ZIndex = 50002
         button.Parent = menu
         self.MenuButtons[mode] = button
@@ -2510,7 +2510,6 @@ function BindManager:EnsureUI(window)
                     local control = self.CaptureControl
                     self.CaptureControl = nil
                     control.BindKey = binding
-                    control.BindConfigured = true
                     if control.InlineBind and control.BindMode == "Hold" then control:Set(false) end
                     self:RefreshControl(control)
                     self:RefreshMenu()
@@ -2529,8 +2528,7 @@ function BindManager:EnsureUI(window)
 
             if uis:GetFocusedTextBox() then return end
             for _, control in ipairs(self.Order) do
-                if control.BindConfigured == true
-                    and self:Matches(control.BindKey, input)
+                if self:Matches(control.BindKey, input)
                     and not (control.InlineBind and gameProcessed) then
                     if control.BindMode == "Hold" then
                         control:Set(true)
@@ -2545,7 +2543,7 @@ function BindManager:EnsureUI(window)
 
         utility:CreateConnection(uis.InputEnded, function(input)
             for _, control in ipairs(self.Order) do
-                if control.BindConfigured == true and control.BindMode == "Hold" and self:Matches(control.BindKey, input) then
+                if control.BindMode == "Hold" and self:Matches(control.BindKey, input) then
                     control:Set(false)
                 end
             end
@@ -2553,7 +2551,7 @@ function BindManager:EnsureUI(window)
 
         utility:CreateConnection(uis.WindowFocusReleased, function()
             for _, control in ipairs(self.Order) do
-                if control.BindConfigured == true and control.BindMode == "Hold" and control:Get() then
+                if control.BindMode == "Hold" and control:Get() then
                     control:Set(false)
                 end
             end
@@ -2628,31 +2626,16 @@ function BindManager:SetHackerAlert(active, window, durationSeconds)
 end
 
 function BindManager:RefreshControl(control)
-    if not control or not control.BindValueLabel then return end
-    local configured = control.BindConfigured == true
-    local key = configured and self:KeyText(control.BindKey) or "-"
-    local hasKey = configured and key ~= "-"
-    if control.InlineBind then
-        if control.BindModeButton then
-            local modeText = "bind"
-            if configured then
-                if control.BindMode == "Always" then modeText = "always"
-                elseif control.BindMode == "Hold" then modeText = "hold"
-                else modeText = "toggle" end
-            end
-            control.BindModeButton.Text = modeText
-            control.BindModeButton.TextColor3 = configured
-                and (control.BindMode == "Always" and control.Window.Accent or Color3.fromRGB(205,205,205))
-                or Color3.fromRGB(115,115,115)
+    if control and control.BindValueLabel then
+        local key = self:KeyText(control.BindKey)
+        if control.InlineBind then
+            control.BindValueLabel.Text = self.CaptureControl == control and "..." or key
+            if control.BindModeButton then control.BindModeButton.Text = control.BindMode or "Toggle" end
+        else
+            control.BindValueLabel.Text = key ~= "-" and ("[" .. key .. "]") or ""
         end
-        control.BindValueLabel.Text = self.CaptureControl == control and "..." or (hasKey and key or "")
-        control.BindValueLabel.TextColor3 = self.CaptureControl == control
-            and control.Window.Accent
-            or (hasKey and Color3.fromRGB(205,205,205) or Color3.fromRGB(115,115,115))
-    else
-        control.BindValueLabel.Text = hasKey and ("[" .. key .. "]") or ""
         control.BindValueLabel.TextColor3 = control.BindMode == "Always"
-            and control.Window.Accent or Color3.fromRGB(125,125,125)
+            and control.Window.Accent or Color3.fromRGB(125, 125, 125)
     end
 end
 
@@ -2666,11 +2649,11 @@ function BindManager:RefreshActive()
     for _, child in ipairs(self.ActiveList:GetChildren()) do
         if child.Name == "BindEntry" then child:Destroy() end
     end
+
     local count = 0
     for index, control in ipairs(self.Order) do
-        local configured = control.BindConfigured == true
-        local hasBind = configured and type(control.BindKey) == "table" and control.BindKey[2] ~= nil
-        local active = configured and control:Get() == true
+        local hasBind = type(control.BindKey) == "table" and control.BindKey[2] ~= nil
+        local active = control:Get() == true and (hasBind or control.BindMode == "Always")
         if active then
             count = count + 1
             local row = Instance.new("Frame")
@@ -2680,29 +2663,29 @@ function BindManager:RefreshActive()
             row.LayoutOrder = index
             row.ZIndex = 40002
             row.Parent = self.ActiveList
+
             local name = Instance.new("TextLabel")
             name.BackgroundTransparency = 1
             name.Position = UDim2.new(0, 2, 0, 0)
-            name.Size = UDim2.new(0.54, -2, 1, 0)
+            name.Size = UDim2.new(0.70, -2, 1, 0)
             name.Font = Enum.Font.Code
             name.TextSize = 9
-            name.TextColor3 = Color3.fromRGB(195,195,195)
+            name.TextColor3 = Color3.fromRGB(195, 195, 195)
             name.TextXAlignment = Enum.TextXAlignment.Left
             name.TextTruncate = Enum.TextTruncate.AtEnd
             name.Text = tostring(control.Name)
             name.ZIndex = 40003
             name.Parent = row
+
             local state = Instance.new("TextLabel")
             state.BackgroundTransparency = 1
-            state.Position = UDim2.new(0.54, 0, 0, 0)
-            state.Size = UDim2.new(0.46, -2, 1, 0)
+            state.Position = UDim2.new(0.70, 0, 0, 0)
+            state.Size = UDim2.new(0.30, -2, 1, 0)
             state.Font = Enum.Font.Code
             state.TextSize = 9
-            state.TextColor3 = control.Window and control.Window.Accent or Color3.fromRGB(175,205,75)
+            state.TextColor3 = control.Window and control.Window.Accent or Color3.fromRGB(175, 205, 75)
             state.TextXAlignment = Enum.TextXAlignment.Right
-            local modeText = control.BindMode == "Always" and "always on" or string.lower(tostring(control.BindMode or "toggle"))
-            local keyText = hasBind and self:KeyText(control.BindKey) or "-"
-            state.Text = "[" .. modeText .. "]" .. (keyText ~= "-" and (" [" .. keyText .. "]") or "")
+            state.Text = "[" .. string.lower(tostring(control.BindMode or "toggle")) .. "]"
             state.ZIndex = 40003
             state.Parent = row
         end
@@ -2715,17 +2698,16 @@ function BindManager:RefreshMenu()
     if not control or not self.Menu then return end
     self.MenuTitle.Text = "bind  •  " .. string.lower(tostring(control.Name))
     for mode, button in pairs(self.MenuButtons) do
-        local selected = control.BindConfigured == true and control.BindMode == mode
-        button.BackgroundColor3 = selected and Color3.fromRGB(31,34,27) or Color3.fromRGB(24,24,24)
-        button.TextColor3 = selected and control.Window.Accent or Color3.fromRGB(195,195,195)
+        local selected = control.BindMode == mode
+        button.BackgroundColor3 = selected and Color3.fromRGB(31, 34, 27) or Color3.fromRGB(24, 24, 24)
+        button.TextColor3 = selected and control.Window.Accent or Color3.fromRGB(195, 195, 195)
     end
     if self.CaptureControl == control then
         self.MenuKeyButton.Text = "press a key..."
         self.MenuKeyButton.TextColor3 = control.Window.Accent
     else
-        local key = self:KeyText(control.BindKey)
-        self.MenuKeyButton.Text = key ~= "-" and ("key  [ " .. key .. " ]") or "set key"
-        self.MenuKeyButton.TextColor3 = Color3.fromRGB(205,205,205)
+        self.MenuKeyButton.Text = "key  [ " .. self:KeyText(control.BindKey) .. " ]"
+        self.MenuKeyButton.TextColor3 = Color3.fromRGB(205, 205, 205)
     end
 end
 
@@ -2733,7 +2715,6 @@ function BindManager:SetMode(control, mode)
     if mode ~= "Hold" and mode ~= "Toggle" and mode ~= "Always" then return end
     if control.InlineBind and self.CaptureControl == control then self.CaptureControl = nil end
     control.BindMode = mode
-    control.BindConfigured = true
     if mode == "Always" then
         control:Set(true)
     elseif mode == "Hold" and (control.BindKey or control.InlineBind) then
@@ -2779,7 +2760,6 @@ function BindManager:Register(control, properties)
     control.BindId = id
     control.BindMode = control.BindMode or "Toggle"
     control.BindKey = control.BindKey or nil
-    control.BindConfigured = control.BindConfigured == true
     self.Controls[id] = control
     table.insert(self.Order, control)
 
@@ -2794,13 +2774,8 @@ function BindManager:Register(control, properties)
         elseif control.InlineBind then
             control.BindKey = nil
         end
-        if data.configured ~= nil then
-            control.BindConfigured = data.configured == true
-        else
-            control.BindConfigured = (type(data.keyType) == "string" and type(data.keyName) == "string") or data.mode == "Always"
-        end
         if control.InlineBind and control.BindMode == "Hold" then control:Set(false) end
-        if control.BindConfigured and control.BindMode == "Always" then control:Set(true) end
+        if control.BindMode == "Always" then control:Set(true) end
     end
     self:RefreshControl(control)
     self:RefreshActive()
@@ -2810,10 +2785,9 @@ function BindManager:Serialize()
     local output = {}
     for id, control in pairs(self.Controls) do
         output[id] = {
-            configured = control.BindConfigured == true,
             mode = control.BindMode or "Toggle",
-            keyType = (control.BindConfigured == true and control.BindKey) and control.BindKey[1] or nil,
-            keyName = (control.BindConfigured == true and control.BindKey) and control.BindKey[2] or nil,
+            keyType = control.BindKey and control.BindKey[1] or nil,
+            keyName = control.BindKey and control.BindKey[2] or nil,
         }
     end
     return output
@@ -2833,13 +2807,8 @@ function BindManager:Apply(data)
             else
                 control.BindKey = nil
             end
-            if bind.configured ~= nil then
-                control.BindConfigured = bind.configured == true
-            else
-                control.BindConfigured = (type(bind.keyType) == "string" and type(bind.keyName) == "string") or bind.mode == "Always"
-            end
             if control.InlineBind and control.BindMode == "Hold" then control:Set(false) end
-            if control.BindConfigured and control.BindMode == "Always" then control:Set(true) end
+            if control.BindMode == "Always" then control:Set(true) end
             self:RefreshControl(control)
         end
     end
@@ -2852,9 +2821,8 @@ function sections:CreateToggle(Properties)
         Name     = (Properties.name or Properties.Name or Properties.title or Properties.Title or "New Toggle"),
         State    = utility:GetProperty(Properties, {"state", "State", "def", "Def", "default", "Default"}, false) == true,
         Callback = (Properties.callback or Properties.Callback or Properties.callBack or Properties.CallBack or function() end),
-        InlineBind = Properties.InlineBind ~= false,
-        BindConfigured = Properties.BindConfigured == true,
-        BindKey = Properties.BindKey or nil,
+        InlineBind = Properties.InlineBind == true,
+        BindKey = Properties.InlineBind == true and Properties.BindKey or nil,
         Window   = self.Window,
         Page     = self.Page,
         Section  = self
@@ -9032,13 +9000,9 @@ world_object_esp_highlight    = true,
 world_object_esp_prompts      = true,
 world_object_esp_loot         = true,
 world_object_esp_objectives   = true,
-world_object_esp_environment  = true,
-world_object_esp_show_distance= true,
 world_object_esp_max_distance = 1200,
 world_object_esp_scan_rate    = 1.5,
-world_object_esp_marker_limit = 180,
 world_object_esp_color        = Color3.fromRGB(255,190,65),
-world_object_esp_environment_color = Color3.fromRGB(120,220,150),
 world_object_esp_prompt_color = Color3.fromRGB(90,210,255),
 world_object_esp_objective_color = Color3.fromRGB(205,115,255),
 world_waypoint_enabled        = false,
@@ -11451,13 +11415,6 @@ return ok and value or fallback
 end
 local AdvancedLighting={
 colorCorrection=nil, bloom=nil, sunRays=nil, depthOfField=nil, atmosphere=nil,
-atmosphereUniform=true,
-weatherRoofOcclusion=true, weatherCoverage=120, weatherTurbulence=0.35,
-extraClouds=false, extraCloudDrift=true, extraCloudCover=0.55, extraCloudDensity=0.65,
-extraCloudColor=Color3.fromRGB(240,244,252), extraDayCycle=false, extraDayLength=300,
-extraAutoExposure=false, extraIndoorExposure=0.35, extraOutdoorExposure=-0.05, extraExposureSpeed=2,
-extraWater=false, extraWaterColor=Color3.fromRGB(32,115,140), extraWaterTransparency=0.3,
-extraWaterReflectance=0.65, extraWaterWaveSize=0.18, extraWaterWaveSpeed=12,
 colorCorrectionEnabled=false, tintColor=Color3.fromRGB(255,255,255), brightness=0, contrast=0, saturation=0,
 bloomEnabled=false, bloomIntensity=1, bloomSize=24, bloomThreshold=1,
 sunRaysEnabled=false, sunIntensity=0.1, sunSpread=0.2,
@@ -11664,16 +11621,12 @@ return math.clamp(baseDistance*offsetMultiplier,75,16000)
 end
 
 WorldLightingRuntime.ApplyAtmosphereCoverage=function(density,offset,color,decay)
-if AdvancedLighting.atmosphereUniform==false then
-WorldLightingRuntime.RestoreAtmosphereCoverage()
-return
-end
 local coverageColor=typeof(color)=="Color3" and color or AdvancedLighting.atmosphereColor
 local decayColor=typeof(decay)=="Color3" and decay or AdvancedLighting.atmosphereDecay
 
 -- Keep the all-around haze close to the main atmosphere color. A small decay
 -- blend preserves the user's color styling without creating a one-corner look.
-coverageColor=coverageColor:Lerp(decayColor,0.04)
+coverageColor=coverageColor:Lerp(decayColor,0.10)
 
 local coverageEnd=WorldLightingRuntime.GetAtmosphereCoverageEnd(density,offset)
 pcall(function()
@@ -11741,7 +11694,7 @@ e.Color=atmosphereColor
 -- A heavily different Decay color is directional around the sun and is the
 -- main reason Atmosphere can appear to live in a corner. Keep the requested
 -- decay styling, but bias it toward the global atmosphere color for uniformity.
-e.Decay=atmosphereColor:Lerp(requestedDecay,0.18)
+e.Decay=atmosphereColor:Lerp(requestedDecay,0.38)
 
 e.Glare=math.clamp(tonumber(glare) or 0,0,10)
 
@@ -12027,223 +11980,262 @@ end
 end
 end
 
-AdvancedLighting.WeatherRenderer=assert(loadstring([======[
-return function(context)
-    local settings, RunService = context.Settings, context.RunService
-    local localPlayer, Workspace = context.LocalPlayer, context.Workspace
-    local renderer = {Alive = true, Snow = {Layers = {}}, Weather = {Layers = {}}, Connections = {}}
-    local snowProfile = {Texture="rbxasset://textures/particles/sparkles_main.dds",Fall=0.18,Size=0.7,Drag=0.18,Spread=9,Opacity=0.10,Acceleration=-0.3,Height=20,Depth=28}
-    local profiles = {
-        Rain={Texture="rbxasset://textures/particles/sparkles_main.dds",Fall=1,Size=0.13,Drag=0,Spread=2,Opacity=0.38,Acceleration=-10,Height=32,Depth=18,Squash=9,Streak=true},
-        Storm={Texture="rbxasset://textures/particles/sparkles_main.dds",Fall=1.2,Size=0.16,Drag=0,Spread=5,Opacity=0.3,Acceleration=-12,Height=32,Depth=18,Squash=10,Streak=true},
-        Embers={Texture="rbxasset://textures/particles/fire_main.dds",Fall=0.12,Size=0.35,Drag=0.6,Spread=28,Opacity=0.16,Acceleration=0.4,Height=-8,Depth=22,Rise=true,Glow=0.9,Rate=0.23,Tint=Color3.fromRGB(255,133,52)},
-        Ash={Texture="rbxasset://textures/particles/smoke_main.dds",Fall=0.08,Size=0.34,Drag=0.12,Spread=15,Opacity=0.35,Acceleration=-0.15,Height=14,Depth=24,Rate=0.28,Tint=Color3.fromRGB(145,146,152)},
-        Leaves={Texture="rbxasset://textures/particles/sparkles_main.dds",Fall=0.13,Size=0.7,Drag=0.25,Spread=18,Opacity=0.22,Acceleration=-0.5,Height=18,Depth=28,Squash=1.6,Rate=0.18,Tint=Color3.fromRGB(163,180,83)},
-        Stars={Texture="rbxasset://textures/particles/sparkles_main.dds",Fall=0.015,Size=0.32,Drag=0.2,Spread=180,Opacity=0.1,Acceleration=0,Height=0,Depth=42,Rise=true,Glow=0.8,Rate=0.10,Lifetime=5},
-        Mist={Texture="rbxasset://textures/particles/smoke_main.dds",Fall=0.015,Size=8,Drag=0.15,Spread=80,Opacity=0.87,Acceleration=0,Height=-3,Depth=5,Rise=true,Rate=0.02,Lifetime=5},
-        Sakura={Texture="rbxasset://textures/particles/sparkles_main.dds",Fall=0.1,Size=0.55,Drag=0.12,Spread=18,Opacity=0.18,Acceleration=-0.25,Height=16,Depth=26,Squash=-0.45,Rate=0.22,Tint=Color3.fromRGB(255,172,210)},
-    }
-    local function n(value, default, minimum, maximum)
-        value=tonumber(value)
-        if not value or value~=value or math.abs(value)==math.huge then value=default end
-        return math.clamp(value,minimum,maximum)
-    end
-    local function disconnect(connection) if connection then connection:Disconnect() end end
-    function renderer:Stop(kind)
-        local state=self[kind]
-        if state.Folder then state.Folder:Destroy() end
-        state.Folder,state.folder=nil,nil
-        state.Layers={};state.layers=state.Layers;state.Signature=nil
-        state.LastPosition=nil;state.OcclusionAt=0;state.Shelter=false
-    end
-    function renderer:Parameters(kind)
-        local snow=kind=="Snow"
-        local style=snow and "Snow" or tostring(settings.weatherType or "Rain")
-        local quality=snow and settings.snowQuality or settings.weatherQuality
-        local profile=snow and snowProfile or profiles[style] or profiles.Rain
-        local intensity=n(snow and settings.snowAmount or settings.weatherIntensity,snow and 650 or 700,0,5000)
-        local amount=quality=="Performance" and 1 or (quality=="Ultra" and 3 or 2)
-        local speed=n(snow and settings.snowSpeed or settings.weatherSpeed,55,1,300)*profile.Fall
-        local size=n(snow and settings.snowSize or settings.weatherSize,0.45,0.05,4)
-        local wind=n(snow and settings.snowWind or settings.weatherWind,0,-180,180)
-        local coverage=n(settings.weatherCoverage,120,50,260)
-        local tint=snow and settings.snowColor or settings.weatherColor
-        if typeof(tint)~="Color3" then tint=Color3.new(1,1,1) end
-        if profile.Tint then tint=tint:Lerp(profile.Tint,0.75) end
-        return {Enabled=snow and settings.snowEnabled==true or (not snow and settings.weatherEnabled==true),
-            Style=style,Profile=profile,Quality=quality,LayerCount=amount,Speed=math.max(speed,profile.Rise and 0.2 or 3),Size=size,
-            Intensity=intensity,Wind=wind,Coverage=coverage,Color=tint,
-            Signature=style..":"..tostring(quality)..":"..tostring(coverage)}
-    end
-    function renderer:Rebuild(kind)
-        self:Stop(kind)
-        local p=self:Parameters(kind)
-        if not p.Enabled or not self.Alive then return end
-        local state=self[kind]
-        local folder=Instance.new("Folder")
-        folder.Name="DevKage_Weather_"..kind;folder.Parent=Workspace
-        state.Folder,state.folder=folder,folder
-        state.Signature=p.Signature;state.layers=state.Layers
-        local camera=Workspace.CurrentCamera
-        local origin=camera and camera.CFrame.Position or Vector3.new(0,-10000,0)
-        -- Separate cells let covered areas stop emitting without removing rain
-        -- outside a window. No emitter exceeds the platform's individual cap.
-        local cells=3
-        for layer=1,p.LayerCount do
-            for x=-1,1 do for z=-1,1 do
-                local anchor=Instance.new("Part")
-                anchor.Name="Cell_"..layer.."_"..x.."_"..z
-                anchor.Anchored=true;anchor.CanCollide=false;anchor.CanTouch=false;anchor.CanQuery=false
-                anchor.CastShadow=false;anchor.Transparency=1
-                anchor.Size=Vector3.new(p.Coverage/cells,1,p.Coverage/cells)
-                anchor.CFrame=CFrame.new(origin+Vector3.new(x*p.Coverage/cells,p.Profile.Height,z*p.Coverage/cells))
-                anchor.Parent=folder
-                local emitter=Instance.new("ParticleEmitter")
-                emitter.Name="Particles";emitter.Enabled=false;emitter.Rate=0
-                emitter.Texture=p.Profile.Texture
-                emitter.LockedToPart=false;emitter.VelocityInheritance=0
-                emitter.EmissionDirection=p.Profile.Rise and Enum.NormalId.Top or Enum.NormalId.Bottom
-                emitter.Shape=Enum.ParticleEmitterShape.Box;emitter.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
-                emitter.Orientation=p.Profile.Streak and Enum.ParticleOrientation.VelocityParallel or Enum.ParticleOrientation.FacingCamera
-                emitter.Rotation=NumberRange.new(p.Profile.Streak and 0 or -180,p.Profile.Streak and 0 or 180)
-                emitter.RotSpeed=NumberRange.new(p.Profile.Streak and 0 or -32,p.Profile.Streak and 0 or 32)
-                emitter.LightEmission=p.Profile.Glow or 0
-                emitter.LightInfluence=0.25
-                emitter.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(0.12,p.Profile.Opacity),NumberSequenceKeypoint.new(0.82,p.Profile.Opacity+0.08),NumberSequenceKeypoint.new(1,1)})
-                emitter.Squash=NumberSequence.new(p.Profile.Squash or 0)
-                emitter.Parent=anchor
-                state.Layers[#state.Layers+1]={Anchor=anchor,Emitter=emitter,Layer=layer,X=x,Z=z,Blocked=false,BaseRate=0}
-            end end
-        end
-        self:Refresh(kind)
-    end
-    function renderer:Refresh(kind)
-        local p=self:Parameters(kind)
-        if not p.Enabled then self:Stop(kind);return end
-        local state=self[kind]
-        if not state.Folder or not state.Folder.Parent or state.Signature~=p.Signature then
-            self:Rebuild(kind);return
-        end
-        local userInput=context.UserInputService
-        local cap=userInput.TouchEnabled and not userInput.KeyboardEnabled and 100 or 400
-        local totalBudget=p.Quality=="Performance" and 650 or (p.Quality=="Ultra" and 1900 or 1150)
-        local weightSum=0
-        for layer=1,p.LayerCount do weightSum=weightSum+1/layer end
-        for _,cell in ipairs(state.Layers) do
-            local emitter=cell.Emitter
-            local scale=1/(1+(cell.Layer-1)*0.4)
-            local velocity=p.Speed*(0.9+(cell.Layer-1)*0.12)
-            local height=math.abs(p.Profile.Height)+(cell.Layer-1)*6
-            -- Account for the entire path below eye level, not just the distance
-            -- to the camera. Bound count using lifetime as well as emission rate.
-            local lifetime=p.Profile.Lifetime or (height+p.Profile.Depth)/math.max(velocity,0.2)
-            lifetime=n(lifetime,4,0.6,15)
-            cell.BaseRate=math.min(cap,totalBudget/math.max(lifetime,1)/9/weightSum/cell.Layer,
-                p.Intensity*(p.Profile.Rate or 1)/9/weightSum/cell.Layer)
-            emitter.Lifetime=NumberRange.new(lifetime*0.88,math.min(20,lifetime*1.12))
-            emitter.Speed=NumberRange.new(velocity*0.88,velocity*1.12)
-            emitter.Drag=p.Profile.Drag
-            emitter.SpreadAngle=Vector2.new(p.Profile.Spread,p.Profile.Spread)
-            emitter.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,p.Size*p.Profile.Size*scale*0.7),NumberSequenceKeypoint.new(0.25,p.Size*p.Profile.Size*scale),NumberSequenceKeypoint.new(1,p.Size*p.Profile.Size*scale*0.6)})
-            emitter.Color=ColorSequence.new(p.Color:Lerp(Color3.new(1,1,1),0.2),p.Color)
-            emitter.Acceleration=Vector3.new(p.Wind*0.14,p.Profile.Acceleration,p.Wind*0.025)
-            emitter.Enabled=Workspace.CurrentCamera~=nil and not cell.Blocked
-            emitter.Rate=emitter.Enabled and cell.BaseRate or 0
-        end
-        state.Parameters=p
-    end
-    function renderer:RoofAt(position, state)
-        local params=RaycastParams.new()
-        params.FilterType=Enum.RaycastFilterType.Exclude
-        local exclude={}
-        if localPlayer.Character then exclude[#exclude+1]=localPlayer.Character end
-        if self.Snow.Folder then exclude[#exclude+1]=self.Snow.Folder end
-        if self.Weather.Folder then exclude[#exclude+1]=self.Weather.Folder end
-        params.FilterDescendantsInstances=exclude
-        params.IgnoreWater=false
-        -- Respect actual collision geometry; transparent roof panes can shelter.
-        params.RespectCanCollide=true
-        return Workspace:Raycast(position,Vector3.new(0,300,0),params)~=nil
-    end
-    function renderer:StepKind(kind,dt,now)
-        local p=self:Parameters(kind)
-        local state=self[kind]
-        if not p.Enabled then if state.Folder then self:Stop(kind) end;return end
-        if not state.Folder or state.Signature~=p.Signature then self:Rebuild(kind) end
-        local camera=Workspace.CurrentCamera
-        if not camera then
-            for _,cell in ipairs(state.Layers) do cell.Emitter.Enabled=false;cell.Emitter:Clear() end
-            state.LastPosition=nil;return
-        end
-        if not state.Parameters or now-(state.SettingsAt or 0)>0.25 then
-            state.SettingsAt=now;self:Refresh(kind)
-        end
-        local pos=camera.CFrame.Position
-        if state.LastPosition and (pos-state.LastPosition).Magnitude>p.Coverage*0.65 then
-            for _,cell in ipairs(state.Layers) do cell.Emitter:Clear() end
-            state.OcclusionAt=0
-        end
-        state.LastPosition=pos
-        local occlusion=settings.weatherRoofOcclusion~=false and not p.Profile.Rise
-        local roofCheck=now-(state.OcclusionAt or 0)>=0.2
-        if roofCheck then
-            state.OcclusionAt=now
-            local sheltered=occlusion and self:RoofAt(pos,state) or false
-            if sheltered~=state.Shelter then
-                for _,cell in ipairs(state.Layers) do cell.Emitter:Clear() end
-            end
-            state.Shelter=sheltered
-        end
-        local gust=math.sin(now*0.7)*math.sin(now*0.19)*n(settings.weatherTurbulence,0.35,0,2)
-        for _,cell in ipairs(state.Layers) do
-            local offset=Vector3.new(cell.X*p.Coverage/3,0,cell.Z*p.Coverage/3)
-            local base=pos+offset
-            if roofCheck then cell.Blocked=occlusion and self:RoofAt(base,state) or false end
-            local height=p.Profile.Height+(p.Profile.Rise and -1 or 1)*(cell.Layer-1)*6
-            cell.Anchor.CFrame=CFrame.new(base+Vector3.new(0,height,0))
-            cell.Emitter.Enabled=not cell.Blocked
-            cell.Emitter.Rate=cell.Blocked and 0 or cell.BaseRate
-            cell.Emitter.Acceleration=Vector3.new(p.Wind*0.14+gust*2,p.Profile.Acceleration,gust+p.Wind*0.025)
-        end
-    end
-    function renderer:Destroy()
-        if not self.Alive then return end
-        self.Alive=false;self:Stop("Snow");self:Stop("Weather")
-        for _,connection in ipairs(self.Connections) do disconnect(connection) end
-        table.clear(self.Connections)
-    end
-    local elapsed=0
-    renderer.Connections[#renderer.Connections+1]=RunService.Heartbeat:Connect(function(dt)
-        if not renderer.Alive then return end
-        elapsed=elapsed+n(dt,0,0,0.25)
-        if elapsed<1/30 then return end
-        local step=elapsed;elapsed=0
-        local ok,err=pcall(function()
-            local now=os.clock()
-            renderer:StepKind("Snow",step,now);renderer:StepKind("Weather",step,now)
-        end)
-        if not ok then
-            renderer:Stop("Snow");renderer:Stop("Weather")
-            if renderer.LastError~=tostring(err) then warn("[DevKage Weather] "..tostring(err)) end
-            renderer.LastError=tostring(err)
-        end
-    end)
-    return renderer
+local SnowRuntime = {folder=nil, layers={}, connection=nil}
+local SnowLayerProfiles = {
+{weight=0.48, height=34, radius=110, speed=1.00, size=1.00, texture="rbxasset://textures/particles/sparkles_main.dds"},
+{weight=0.34, height=52, radius=150, speed=0.72, size=0.62, texture="rbxasset://textures/particles/smoke_main.dds"},
+{weight=0.18, height=24, radius=80,  speed=1.28, size=1.45, texture="rbxasset://textures/particles/sparkles_main.dds"}
+}
+
+local function stopSnow()
+if SnowRuntime.connection then pcall(function() SnowRuntime.connection:Disconnect() end); SnowRuntime.connection=nil end
+if SnowRuntime.folder then pcall(function() SnowRuntime.folder:Destroy() end); SnowRuntime.folder=nil end
+SnowRuntime.layers={}
 end
 
-]======], "@DevKage/WeatherRenderer"))()({
-Settings=AdvancedLighting, RunService=RunService, LocalPlayer=LocalPlayer,
-Workspace=workspace, UserInputService=game:GetService("UserInputService"),
+local function snowLayerCount()
+if AdvancedLighting.snowQuality == "Performance" then return 1 end
+if AdvancedLighting.snowQuality == "High" then return 2 end
+return 3
+end
+
+local function buildSnow()
+stopSnow()
+if not AdvancedLighting.snowEnabled then return end
+local folder=Instance.new("Folder")
+folder.Name="DevKage_LocalSnow"
+folder.Parent=workspace
+SnowRuntime.folder=folder
+for i=1,snowLayerCount() do
+local profile=SnowLayerProfiles[i]
+local anchor=Instance.new("Part")
+anchor.Name="SnowLayer"..i
+anchor.Anchored=true
+anchor.CanCollide=false
+anchor.CanTouch=false
+pcall(function() anchor.CanQuery=false end)
+anchor.Transparency=1
+anchor.Size=Vector3.new(profile.radius,1,profile.radius)
+anchor.Parent=folder
+local emitter=Instance.new("ParticleEmitter")
+emitter.Name="SnowEmitter"
+emitter.Texture=profile.texture
+emitter.EmissionDirection=Enum.NormalId.Bottom
+emitter.SpreadAngle=Vector2.new(16,16)
+emitter.LightInfluence=0
+emitter.LightEmission=0.08
+emitter.LockedToPart=false
+emitter.Orientation=Enum.ParticleOrientation.FacingCamera
+emitter.Rotation=NumberRange.new(-180,180)
+emitter.RotSpeed=NumberRange.new(-40,40)
+emitter.Transparency=NumberSequence.new({
+NumberSequenceKeypoint.new(0,0.35),
+NumberSequenceKeypoint.new(0.12,0.05),
+NumberSequenceKeypoint.new(0.82,0.12),
+NumberSequenceKeypoint.new(1,1)
 })
-local SnowRuntime=AdvancedLighting.WeatherRenderer.Snow
-local PremiumWeatherRuntime=AdvancedLighting.WeatherRenderer.Weather
-local function stopSnow() AdvancedLighting.WeatherRenderer:Stop("Snow") end
-local function buildSnow() AdvancedLighting.WeatherRenderer:Rebuild("Snow") end
-local function refreshSnow() AdvancedLighting.WeatherRenderer:Refresh("Snow") end
-local function stopPremiumWeather() AdvancedLighting.WeatherRenderer:Stop("Weather") end
-local function buildPremiumWeather() AdvancedLighting.WeatherRenderer:Rebuild("Weather") end
-local function refreshPremiumWeather() AdvancedLighting.WeatherRenderer:Refresh("Weather") end
-table.insert(library.CleanupCallbacks,function() AdvancedLighting.WeatherRenderer:Destroy() end)
+pcall(function() emitter.Shape=Enum.ParticleEmitterShape.Box end)
+pcall(function() emitter.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume end)
+pcall(function() emitter.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward end)
+emitter.Parent=anchor
+table.insert(SnowRuntime.layers,{anchor=anchor,emitter=emitter,profile=profile})
+end
+SnowRuntime.connection=RunService.RenderStepped:Connect(function()
+local camera=workspace.CurrentCamera
+if not camera or not SnowRuntime.folder then return end
+for _, layer in ipairs(SnowRuntime.layers) do
+if layer.anchor and layer.anchor.Parent then
+layer.anchor.CFrame=CFrame.new(camera.CFrame.Position + Vector3.new(0,layer.profile.height,0))
+end
+end
+end)
+end
+
+local function refreshSnow()
+if not AdvancedLighting.snowEnabled then stopSnow(); return end
+if not SnowRuntime.folder or #SnowRuntime.layers ~= snowLayerCount() then buildSnow() end
+for _, layer in ipairs(SnowRuntime.layers) do
+local e=layer.emitter
+local profile=layer.profile
+if e then
+local amount=math.clamp(tonumber(AdvancedLighting.snowAmount) or 0,0,5000)
+local speed=math.clamp(tonumber(AdvancedLighting.snowSpeed) or 1,1,300)
+local size=math.clamp(tonumber(AdvancedLighting.snowSize) or 0.45,0.05,4)
+local wind=math.clamp(tonumber(AdvancedLighting.snowWind) or 0,-150,150)
+local snowBudget = AdvancedLighting.snowQuality == "Performance" and 900 or (AdvancedLighting.snowQuality == "High" and 1500 or 2400)
+local renderAmount = math.min(amount, snowBudget)
+e.Rate=renderAmount*profile.weight
+e.Speed=NumberRange.new(speed*profile.speed*0.78,speed*profile.speed*1.18)
+e.Lifetime=NumberRange.new(math.max(0.8,profile.height/(speed*1.15)),math.max(1.2,profile.height/(speed*0.72)))
+e.Acceleration=Vector3.new(wind,-speed*0.12,wind*0.15)
+e.Color=ColorSequence.new(AdvancedLighting.snowColor)
+e.Size=NumberSequence.new({
+NumberSequenceKeypoint.new(0,size*profile.size*0.65),
+NumberSequenceKeypoint.new(0.4,size*profile.size),
+NumberSequenceKeypoint.new(1,size*profile.size*0.72)
+})
+end
+end
+end
+
+local PremiumWeatherRuntime={Folder=nil,Layers={},Connection=nil,BuildToken=0,Type=nil,Quality=nil}
+
+
+
+local PremiumWeatherProfiles={
+Rain={Style="Rain",Texture="rbxasset://textures/particles/sparkles_main.dds",Origin="Above",Rise=false,Speed=1.00,Lifetime=1.12,Size=0.16,Spread=7,Emission=0.22,Transparency=0.02,Acceleration=-22,RateScale=1,Depth=1,Orientation="Velocity",Squash=7.5,Drag=0,Rotation=0,RotSpeed=0,Tint=Color3.fromRGB(185,220,255),TintBlend=0.55},
+Embers={Style="Embers",Texture="rbxasset://textures/particles/fire_main.dds",Origin="Below",Rise=true,Speed=0.30,Lifetime=2.35,Size=0.30,Spread=32,Emission=1,Transparency=0.08,Acceleration=5.5,RateScale=0.30,Depth=9,Orientation="Facing",Squash=-0.12,Drag=1.2,Rotation=180,RotSpeed=115,Tint=Color3.fromRGB(255,92,25),TintBlend=0.78},
+Ash={Style="Ash",Texture="rbxasset://textures/particles/smoke_main.dds",Origin="Above",Rise=false,Speed=0.16,Lifetime=3.60,Size=0.48,Spread=48,Emission=0.04,Transparency=0.34,Acceleration=-1.8,RateScale=0.22,Depth=6,Orientation="Facing",Squash=0.25,Drag=2.4,Rotation=180,RotSpeed=55,Tint=Color3.fromRGB(92,94,102),TintBlend=0.72},
+Leaves={Style="Leaves",Texture="rbxasset://textures/particles/sparkles_main.dds",Origin="Above",Rise=false,Speed=0.38,Lifetime=3.20,Size=0.56,Spread=42,Emission=0.05,Transparency=0.12,Acceleration=-5.5,RateScale=0.16,Depth=5,Orientation="Facing",Squash=1.35,Drag=1.1,Rotation=180,RotSpeed=185,Tint=Color3.fromRGB(135,178,62),TintBlend=0.65},
+Stars={Style="Stars",Texture="rbxasset://textures/particles/sparkles_main.dds",Origin="Around",Rise=true,Speed=0.09,Lifetime=4.20,Size=0.18,Spread=180,Emission=1,Transparency=0.04,Acceleration=0.35,RateScale=0.10,Depth=22,Orientation="Facing",Squash=0,Drag=3.2,Rotation=180,RotSpeed=22,Tint=Color3.fromRGB(175,205,255),TintBlend=0.48},
+Mist={Style="Mist",Texture="rbxasset://textures/particles/smoke_main.dds",Origin="Low",Rise=true,Speed=0.055,Lifetime=6.20,Size=2.60,Spread=82,Emission=0,Transparency=0.70,Acceleration=0.12,RateScale=0.028,Depth=8,Orientation="Facing",Squash=-0.28,Drag=4.5,Rotation=180,RotSpeed=12,Tint=Color3.fromRGB(195,210,225),TintBlend=0.38},
+Sakura={Style="Sakura",Texture="rbxasset://textures/particles/sparkles_main.dds",Origin="Above",Rise=false,Speed=0.25,Lifetime=3.45,Size=0.40,Spread=46,Emission=0.14,Transparency=0.10,Acceleration=-3.8,RateScale=0.22,Depth=6,Orientation="Facing",Squash=-0.48,Drag=1.35,Rotation=45,RotSpeed=92,Tint=Color3.fromRGB(255,154,205),TintBlend=0.78},
+}
+
+local function premiumWeatherLayerCount()
+if AdvancedLighting.weatherQuality=="Performance" then return 1 end
+if AdvancedLighting.weatherQuality=="Ultra" then return 3 end
+return 2
+end
+
+local function stopPremiumWeather()
+PremiumWeatherRuntime.BuildToken=PremiumWeatherRuntime.BuildToken+1
+if PremiumWeatherRuntime.Connection then pcall(function() PremiumWeatherRuntime.Connection:Disconnect() end); PremiumWeatherRuntime.Connection=nil end
+if PremiumWeatherRuntime.Folder then pcall(function() PremiumWeatherRuntime.Folder:Destroy() end); PremiumWeatherRuntime.Folder=nil end
+PremiumWeatherRuntime.Layers={}
+PremiumWeatherRuntime.Type=nil; PremiumWeatherRuntime.Quality=nil
+end
+
+local function premiumWeatherHeight(profile,layerProfile,index)
+if profile.Origin=="Below" then return -6-(index-1)*3 end
+if profile.Origin=="Low" then return -1+(index-1)*3 end
+if profile.Origin=="Around" then return 5+(index-1)*8 end
+return layerProfile.Height
+end
+
+local function premiumWeatherTransparency(profile)
+if profile.Style=="Rain" then
+return NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(0.03,0.02),NumberSequenceKeypoint.new(0.88,0.10),NumberSequenceKeypoint.new(1,1)})
+elseif profile.Style=="Mist" then
+return NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(0.16,0.72),NumberSequenceKeypoint.new(0.72,0.78),NumberSequenceKeypoint.new(1,1)})
+elseif profile.Style=="Stars" then
+return NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(0.18,0.05),NumberSequenceKeypoint.new(0.68,0.18),NumberSequenceKeypoint.new(1,1)})
+end
+return NumberSequence.new({
+NumberSequenceKeypoint.new(0,1),
+NumberSequenceKeypoint.new(0.08,profile.Transparency),
+NumberSequenceKeypoint.new(0.82,math.clamp(profile.Transparency+0.14,0,0.95)),
+NumberSequenceKeypoint.new(1,1)
+})
+end
+
+local function premiumWeatherSize(profile,size,layerScale)
+local base=size*profile.Size*layerScale
+if profile.Style=="Rain" then
+return NumberSequence.new({NumberSequenceKeypoint.new(0,base*0.72),NumberSequenceKeypoint.new(0.15,base),NumberSequenceKeypoint.new(1,base*0.84)})
+elseif profile.Style=="Mist" then
+return NumberSequence.new({NumberSequenceKeypoint.new(0,base*0.38),NumberSequenceKeypoint.new(0.48,base),NumberSequenceKeypoint.new(1,base*1.35)})
+elseif profile.Style=="Stars" then
+return NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(0.28,base),NumberSequenceKeypoint.new(0.62,base*1.32),NumberSequenceKeypoint.new(1,0)})
+elseif profile.Style=="Embers" then
+return NumberSequence.new({NumberSequenceKeypoint.new(0,base*0.35),NumberSequenceKeypoint.new(0.32,base),NumberSequenceKeypoint.new(1,base*0.18)})
+end
+return NumberSequence.new({NumberSequenceKeypoint.new(0,base*0.58),NumberSequenceKeypoint.new(0.35,base),NumberSequenceKeypoint.new(1,base*0.70)})
+end
+
+local function applyPremiumWeatherEmitter(emitter,profile)
+emitter.Texture=profile.Texture
+emitter.EmissionDirection=profile.Rise and Enum.NormalId.Top or Enum.NormalId.Bottom
+emitter.SpreadAngle=Vector2.new(profile.Spread,profile.Spread)
+emitter.LightInfluence=0
+emitter.LightEmission=profile.Emission
+emitter.LockedToPart=false
+emitter.Rotation=NumberRange.new(-profile.Rotation,profile.Rotation)
+emitter.RotSpeed=NumberRange.new(-profile.RotSpeed,profile.RotSpeed)
+emitter.Transparency=premiumWeatherTransparency(profile)
+pcall(function() emitter.Orientation=profile.Orientation=="Velocity" and Enum.ParticleOrientation.VelocityParallel or Enum.ParticleOrientation.FacingCamera end)
+pcall(function() emitter.Squash=NumberSequence.new(profile.Squash or 0) end)
+pcall(function() emitter.Drag=profile.Drag or 0 end)
+pcall(function() emitter.VelocityInheritance=0 end)
+pcall(function() emitter.Shape=Enum.ParticleEmitterShape.Box end)
+pcall(function() emitter.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume end)
+pcall(function() emitter.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward end)
+emitter:SetAttribute("DevKageWeatherStyle",profile.Style)
+end
+
+local function buildPremiumWeather()
+stopPremiumWeather()
+if not AdvancedLighting.weatherEnabled then return end
+local profile=PremiumWeatherProfiles[AdvancedLighting.weatherType] or PremiumWeatherProfiles.Rain
+local folder=Instance.new("Folder")
+folder.Name="DevKage_PremiumWeather"
+folder.Parent=workspace
+PremiumWeatherRuntime.Folder=folder
+PremiumWeatherRuntime.Type=tostring(AdvancedLighting.weatherType)
+PremiumWeatherRuntime.Quality=tostring(AdvancedLighting.weatherQuality)
+local layerProfiles={
+{Height=36,Radius=95,Weight=0.52,Scale=1.0,Speed=1.0},
+{Height=54,Radius=145,Weight=0.31,Scale=0.62,Speed=0.74},
+{Height=22,Radius=68,Weight=0.17,Scale=1.42,Speed=1.28},
+}
+for index=1,premiumWeatherLayerCount() do
+local layerProfile=layerProfiles[index]
+local anchor=Instance.new("Part")
+anchor.Name="WeatherLayer"..index
+anchor.Anchored=true
+anchor.CanCollide=false
+anchor.CanTouch=false
+pcall(function() anchor.CanQuery=false end)
+anchor.CastShadow=false
+anchor.Transparency=1
+anchor.Size=Vector3.new(layerProfile.Radius,profile.Depth or 1,layerProfile.Radius)
+anchor.Parent=folder
+local emitter=Instance.new("ParticleEmitter")
+emitter.Name="Premium"..tostring(AdvancedLighting.weatherType)
+applyPremiumWeatherEmitter(emitter,profile)
+emitter.Parent=anchor
+PremiumWeatherRuntime.Layers[#PremiumWeatherRuntime.Layers+1]={Anchor=anchor,Emitter=emitter,Profile=layerProfile,Weather=profile,Index=index}
+end
+PremiumWeatherRuntime.Connection=utility:CreateConnection(RunService.RenderStepped,function()
+local camera=workspace.CurrentCamera
+if not camera or not PremiumWeatherRuntime.Folder then return end
+for _,layer in ipairs(PremiumWeatherRuntime.Layers) do
+if layer.Anchor and layer.Anchor.Parent then
+local height=premiumWeatherHeight(layer.Weather,layer.Profile,layer.Index or 1)
+layer.Anchor.CFrame=CFrame.new(camera.CFrame.Position+Vector3.new(0,height,0))
+end
+end
+end)
+end
+
+local function refreshPremiumWeather()
+if not AdvancedLighting.weatherEnabled then stopPremiumWeather(); return end
+if not PremiumWeatherRuntime.Folder or #PremiumWeatherRuntime.Layers~=premiumWeatherLayerCount()
+or PremiumWeatherRuntime.Type~=tostring(AdvancedLighting.weatherType)
+or PremiumWeatherRuntime.Quality~=tostring(AdvancedLighting.weatherQuality) then buildPremiumWeather() end
+local profile=PremiumWeatherProfiles[AdvancedLighting.weatherType] or PremiumWeatherProfiles.Rain
+for _,layer in ipairs(PremiumWeatherRuntime.Layers) do
+local emitter=layer.Emitter
+if emitter then
+local intensity=math.clamp(tonumber(AdvancedLighting.weatherIntensity) or 700,0,5000)
+local qualityBudget=AdvancedLighting.weatherQuality=="Performance" and 700 or (AdvancedLighting.weatherQuality=="Ultra" and 2400 or 1500)
+local renderAmount=math.min(intensity,qualityBudget)
+local speed=math.clamp(tonumber(AdvancedLighting.weatherSpeed) or 70,1,300)
+local size=math.clamp(tonumber(AdvancedLighting.weatherSize) or 0.45,0.05,4)
+local wind=math.clamp(tonumber(AdvancedLighting.weatherWind) or 0,-180,180)
+applyPremiumWeatherEmitter(emitter,profile)
+emitter.Rate=renderAmount*layer.Profile.Weight*(profile.RateScale or 1)
+emitter.Speed=NumberRange.new(speed*profile.Speed*layer.Profile.Speed*0.75,speed*profile.Speed*layer.Profile.Speed*1.2)
+emitter.Lifetime=NumberRange.new(profile.Lifetime*0.72,profile.Lifetime*1.24)
+emitter.Acceleration=Vector3.new(wind,profile.Acceleration*speed*0.12,wind*0.18)
+local baseColor=AdvancedLighting.weatherColor:Lerp(profile.Tint,profile.TintBlend or 0.5)
+local highlight=profile.Style=="Ash" and baseColor:Lerp(Color3.fromRGB(170,170,175),0.20)
+or (profile.Style=="Embers" and Color3.fromRGB(255,225,100) or baseColor:Lerp(Color3.new(1,1,1),0.28))
+emitter.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,highlight),ColorSequenceKeypoint.new(0.45,baseColor),ColorSequenceKeypoint.new(1,profile.Style=="Embers" and Color3.fromRGB(175,25,8) or baseColor)})
+emitter.Size=premiumWeatherSize(profile,size,layer.Profile.Scale)
+end
+end
+end
 
 local LightingPresetProfiles={
 Neutral={Tint=Color3.fromRGB(255,255,255),Brightness=0,Contrast=0,Saturation=0,Bloom=false,BloomIntensity=1,BloomSize=24,Exposure=0,Clock=nil},
@@ -13943,12 +13935,12 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_61.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_57.lua"
 local SCRIPT_STABLE_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_current.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOLOAD_ENABLED_FILE = CONFIG_FOLDER .. "/_devkage_autoload_enabled.flag"
 local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_AutoLoad_LAST.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.61-visual-world-keybind-safe-20260912"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.58-knife-movement-20260912"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -20582,10 +20574,6 @@ visualSlider(espExtra,"tracer_outline_thickness","Outline Thickness",0.25,12,2,"
 visualToggle(espExtra,"dormant","Hide Dead Players",function() refresh_esp_highlights(); rebuildESPObjects(); refreshChams() end)
 
 local WorldMarkerRuntime={Markers=setmetatable({}, {__mode="k"}),Connection=nil,Scanning=false,Elapsed=0,Token=0}
-WorldMarkerRuntime.EnvironmentWords={
-"door","gate","vehicle","car","truck","boat","elevator","switch","lever",
-"button","container","locker","safe","cabinet","machine","generator","terminal"
-}
 local WorldMarkerLootWords={"loot","drop","chest","crate","pickup","coin","cash","money","weapon","ammo","key","item","reward","treasure"}
 local WorldMarkerObjectiveWords={"objective","capture","control","terminal","generator","bomb","flag","checkpoint","extract","exit","portal","quest"}
 
@@ -20626,14 +20614,12 @@ if worldMarkerCharacterObject(object) then return nil end
 if (object:IsA("ProximityPrompt") or object:IsA("ClickDetector")) and VisualsState.world_object_esp_prompts then return "PROMPT" end
 if VisualsState.world_object_esp_objectives and worldMarkerContains(object.Name,WorldMarkerObjectiveWords) then return "OBJECTIVE" end
 if VisualsState.world_object_esp_loot and (object:IsA("Tool") or worldMarkerContains(object.Name,WorldMarkerLootWords)) then return "LOOT" end
-if VisualsState.world_object_esp_environment and worldMarkerContains(object.Name,WorldMarkerRuntime.EnvironmentWords) then return "WORLD" end
 return nil
 end
 
 local function worldMarkerColor(kind)
 if kind=="PROMPT" then return VisualsState.world_object_esp_prompt_color end
 if kind=="OBJECTIVE" then return VisualsState.world_object_esp_objective_color end
-if kind=="WORLD" then return VisualsState.world_object_esp_environment_color end
 return VisualsState.world_object_esp_color
 end
 
@@ -20748,7 +20734,7 @@ if distance<=math.max(50,tonumber(VisualsState.world_object_esp_max_distance) or
 seen[object]=true
 self:Create(object,kind)
 count=count+1
-if count>=math.clamp(math.floor(tonumber(VisualsState.world_object_esp_marker_limit) or 180),25,500) then break end
+if count>=180 then break end
 end
 end
 end
@@ -20781,7 +20767,7 @@ local color=worldMarkerColor(marker.Kind)
 local distance=localRoot and (marker.Anchor.Position-localRoot.Position).Magnitude or 0
 marker.Gui.Enabled=VisualsState.world_object_esp_labels==true and distance<=math.max(50,tonumber(VisualsState.world_object_esp_max_distance) or 1200)
 marker.Gui.MaxDistance=math.max(50,tonumber(VisualsState.world_object_esp_max_distance) or 1200)
-marker.Detail.Text=VisualsState.world_object_esp_show_distance and string.format("%s  •  %.0f studs",marker.Kind,distance) or tostring(marker.Kind)
+marker.Detail.Text=string.format("%s  •  %.0f studs",marker.Kind,distance)
 marker.Detail.TextColor3=color; marker.Stroke.Color=color; marker.Accent.BackgroundColor3=color
 if marker.Highlight then
 marker.Highlight.Enabled=VisualsState.world_object_esp_highlight==true
@@ -21195,7 +21181,7 @@ end
 CreatorOverlayRuntime.Connection=utility:CreateConnection(RunService.RenderStepped,function(dt) CreatorOverlayRuntime:Update(dt) end)
 table.insert(library.CleanupCallbacks,function() CreatorOverlayRuntime:Destroy() end)
 
-local worldSection = visualsPage:CreateSection({Name="World & Camera",Side="Left",Size=470})
+local worldSection = visualsPage:CreateSection({Name="Camera & World",Side="Left",Size=470})
 visualToggle(worldSection,"third_person","Third Person",function(v) library.ExtraVisualRuntime:SetThirdPerson(v) end)
 visualSlider(worldSection,"third_person_distance","Third Person Distance",5,90,1," studs",function() if VisualsState.third_person then library.ExtraVisualRuntime:SetThirdPerson(true) end end)
 visualToggle(worldSection,"fov_changer","FOV Changer",function(v) apply_fov(v,VisualsState.fov_value) end)
@@ -21211,23 +21197,18 @@ visualColor(worldSection,"world_tool_esp_color",nil,"Tool ESP Color",function() 
 visualToggle(worldSection,"world_tool_esp_through_walls","Tool ESP Through Walls",function() library.ExtraVisualRuntime:RefreshWorldTools() end)
 visualToggle(worldSection,"world_tool_esp_glow","Tool ESP Glow",function() library.ExtraVisualRuntime:RefreshWorldTools() end)
 
-local worldIntelSection=visualsPage:CreateSection({Name="World ESP",Side="Left",Size=520})
+local worldIntelSection=visualsPage:CreateSection({Name="World Intel",Side="Left",Size=430})
 visualToggle(worldIntelSection,"world_object_esp","Object ESP",function(v) if v then WorldMarkerRuntime:Refresh() else WorldMarkerRuntime:Update(99) end end)
 visualToggle(worldIntelSection,"world_object_esp_labels","Object Labels")
 visualToggle(worldIntelSection,"world_object_esp_highlight","Object Highlights",function() WorldMarkerRuntime:Refresh() end)
 visualToggle(worldIntelSection,"world_object_esp_prompts","Prompts",function() WorldMarkerRuntime:Refresh() end)
 visualToggle(worldIntelSection,"world_object_esp_loot","Loot & Drops",function() WorldMarkerRuntime:Refresh() end)
 visualToggle(worldIntelSection,"world_object_esp_objectives","Objectives",function() WorldMarkerRuntime:Refresh() end)
-visualToggle(worldIntelSection,"world_object_esp_environment","Doors / Vehicles / World Objects",function() WorldMarkerRuntime:Refresh() end)
-visualToggle(worldIntelSection,"world_object_esp_show_distance","Show Distance")
 visualSlider(worldIntelSection,"world_object_esp_max_distance","Maximum Distance",50,5000,0," studs",function() WorldMarkerRuntime:Refresh() end)
 visualSlider(worldIntelSection,"world_object_esp_scan_rate","Scan Interval",0.25,5,2,"s")
-visualSlider(worldIntelSection,"world_object_esp_marker_limit","Marker Limit",25,500,0,"",function() WorldMarkerRuntime:Refresh() end)
 visualColor(worldIntelSection,"world_object_esp_color",nil,"Loot Color")
 visualColor(worldIntelSection,"world_object_esp_prompt_color",nil,"Prompt Color")
 visualColor(worldIntelSection,"world_object_esp_objective_color",nil,"Objective Color")
-visualColor(worldIntelSection,"world_object_esp_environment_color",nil,"World Object Color")
-worldIntelSection:CreateLabel({Text="Generic world markers stay local and clean up as objects disappear."})
 
 local waypointSection=visualsPage:CreateSection({Name="World Waypoint",Side="Left",Size=430})
 visualToggle(waypointSection,"world_waypoint_enabled","Enabled",function(v)
@@ -21290,7 +21271,7 @@ visualSlider(creatorSection,"creator_vignette_strength","Vignette Strength",0,10
 visualToggle(creatorSection,"creator_center_dot","Recording Center Dot",function() CreatorOverlayRuntime:ApplyLayout() end)
 visualToggle(creatorSection,"creator_hide_when_menu_open","Hide Overlay With Menu")
 
-local lightingSection = visualsPage:CreateSection({Name="Lighting & Atmosphere",Side="Right",Size=2005})
+local lightingSection = visualsPage:CreateSection({Name="Advanced Lighting",Side="Right",Size=1965})
 LightingControls = {}
 local function lightingToggle(key,name,changed)
 LightingControls[key]=lightingSection:CreateToggle({Name=name,State=AdvancedLighting[key],Flag="lighting."..key,Callback=function(value) AdvancedLighting[key]=value; changed(value) end})
@@ -21480,13 +21461,6 @@ refreshCustomFog()
 end
 refreshAtmosphere()
 end)
-LightingControls.atmosphereUniform=lightingSection:CreateToggle({
-Name="Uniform 360° Coverage",State=AdvancedLighting.atmosphereUniform~=false,Flag="lighting.atmosphereUniform",
-Callback=function(value)
-AdvancedLighting.atmosphereUniform=value==true
-refreshAtmosphere()
-end
-})
 lightingSlider("atmosphereDensity","Atmosphere Density",0,1,2,"",function() markAtmosphereCustom(); refreshAtmosphere() end)
 lightingSlider("atmosphereHaze","Atmosphere Haze",0,10,2,"",function() markAtmosphereCustom(); refreshAtmosphere() end)
 lightingSlider("atmosphereGlare","Atmosphere Glare",0,10,2,"",function() markAtmosphereCustom(); refreshAtmosphere() end)
@@ -21559,7 +21533,7 @@ lightingSlider("nearBlur","Near Blur",0,1,2,"",refreshDepthOfField)
 lightingSlider("farBlur","Far Blur",0,1,2,"",refreshDepthOfField)
 lightingSlider("exposure","Exposure",-5,5,2,"",function(v) setLightingProperty("ExposureCompensation",v) end)
 
-local snowSection = visualsPage:CreateSection({Name="Snowfall",Side="Left",Size=360})
+local snowSection = visualsPage:CreateSection({Name="Ultra Snow",Side="Left",Size=360})
 local function snowToggle(key,name,changed)
 LightingControls[key]=snowSection:CreateToggle({Name=name,State=AdvancedLighting[key],Flag="lighting."..key,Callback=function(value) AdvancedLighting[key]=value; changed(value) end})
 end
@@ -21579,9 +21553,9 @@ snowSlider("snowSpeed","Snow Speed",1,300,0,"",function() refreshSnow() end)
 snowSlider("snowSize","Snow Size",0.05,4,2,"x",function() refreshSnow() end)
 snowSlider("snowWind","Snow Wind",-150,150,0,"",function() refreshSnow() end)
 snowColor("snowColor","Snow Color",function() refreshSnow() end)
-snowSection:CreateLabel({Text="Depth layers, soft fades, wind drift, and roof occlusion follow your camera."})
+snowSection:CreateLabel({Text="Layered local particles follow your camera for a dense, high-fidelity snow look."})
 
-local weatherSection=visualsPage:CreateSection({Name="Weather",Side="Right",Size=560})
+local weatherSection=visualsPage:CreateSection({Name="Premium Weather",Side="Right",Size=560})
 local function weatherToggle(key,name,changed)
 LightingControls[key]=weatherSection:CreateToggle({Name=name,State=AdvancedLighting[key],Flag="lighting."..key,Callback=function(value) AdvancedLighting[key]=value; changed(value) end})
 end
@@ -21595,16 +21569,13 @@ local function weatherDropdown(key,name,options,changed)
 LightingControls[key]=weatherSection:CreateDropdown({Name=name,Options=options,State=library.OptionIndex(options,AdvancedLighting[key]),Flag="lighting."..key,Callback=function(index) AdvancedLighting[key]=options[index] or options[1]; changed(AdvancedLighting[key]) end})
 end
 weatherToggle("weatherEnabled","Enable Weather",function() refreshPremiumWeather() end)
-weatherDropdown("weatherType","Weather Type",{"Rain","Storm","Embers","Ash","Leaves","Stars","Mist","Sakura"},function() buildPremiumWeather(); refreshPremiumWeather() end)
+weatherDropdown("weatherType","Weather Type",{"Rain","Embers","Ash","Leaves","Stars","Mist","Sakura"},function() buildPremiumWeather(); refreshPremiumWeather() end)
 weatherDropdown("weatherQuality","Weather Quality",{"Performance","High","Ultra"},function() buildPremiumWeather(); refreshPremiumWeather() end)
 weatherSlider("weatherIntensity","Weather Amount",0,5000,0," particles/s",function() refreshPremiumWeather() end)
 weatherSlider("weatherSpeed","Weather Speed",1,300,0,"",function() refreshPremiumWeather() end)
 weatherSlider("weatherSize","Particle Size",0.05,4,2,"x",function() refreshPremiumWeather() end)
 weatherSlider("weatherWind","Wind",-180,180,0,"",function() refreshPremiumWeather() end)
 weatherColor("weatherColor","Weather Color",function() refreshPremiumWeather() end)
-LightingControls.weatherRoofOcclusion=weatherSection:CreateToggle({Name="Weather Roof Occlusion",State=AdvancedLighting.weatherRoofOcclusion,Flag="lighting.weatherRoofOcclusion",PreserveLegacyIndex=true,Callback=function(value) AdvancedLighting.weatherRoofOcclusion=value; refreshSnow(); refreshPremiumWeather() end})
-weatherSlider("weatherCoverage","Weather Coverage",60,240,0," studs",function() refreshSnow(); refreshPremiumWeather() end)
-weatherSlider("weatherTurbulence","Wind Turbulence",0,1,2,"",function() refreshSnow(); refreshPremiumWeather() end)
 local weatherStatusLabel=weatherSection:CreateLabel({Text="Renderer ready • each weather type uses a separate motion and shape profile"})
 weatherSection:CreateButton({Name="Restart Weather Renderer",Callback=function()
 stopPremiumWeather()
@@ -22363,169 +22334,12 @@ makeVisualSectionFolder(weatherSection)
 makeVisualSectionFolder(devkagePresetSection)
 makeVisualSectionFolder(animationSection)
 
-AdvancedLighting.ExtraVisuals=assert(loadstring([======[
-return function(context)
-    local settings,Lighting,Workspace=context.Settings,context.Lighting,context.Workspace
-    local RunService,library=context.RunService,context.Library
-    local runtime={Alive=true,Saved={},Objects={},Sections={},CycleTime=nil,Exposure=nil,ProbeAt=0}
-    local function n(value,default,minimum,maximum)
-        value=tonumber(value)
-        if not value or value~=value or math.abs(value)==math.huge then value=default end
-        return math.clamp(value,minimum,maximum)
-    end
-    function runtime:Write(object,key,value)
-        local saved=self.Saved[object]
-        if not saved then saved={};self.Saved[object]=saved end
-        local entry=saved[key]
-        local current=object[key]
-        if not entry then entry={Original=current,Applied=current};saved[key]=entry end
-        if current~=entry.Applied then entry.Original=current end
-        if current~=value then object[key]=value end
-        entry.Applied=value
-    end
-    function runtime:Restore(object,key)
-        local saved=self.Saved[object];local entry=saved and saved[key]
-        if not entry then return end
-        pcall(function() if object[key]==entry.Applied then object[key]=entry.Original end end)
-        saved[key]=nil
-        if next(saved)==nil then self.Saved[object]=nil end
-    end
-    function runtime:Step(dt)
-        if not self.Alive then return end
-        dt=n(dt,0,0,0.25)
-        if settings.extraDayCycle and self.CycleTime==nil and context.Sky then context.Sky:RestoreClock() end
-        if settings.extraDayCycle then
-            if not self.CycleTime then self.CycleTime=Lighting.ClockTime end
-            self.CycleTime=(self.CycleTime+dt*24/n(settings.extraDayLength,300,30,3600))%24
-            self:Write(Lighting,"ClockTime",self.CycleTime)
-        else
-            if self.CycleTime then self:Restore(Lighting,"ClockTime");self.CycleTime=nil end
-        end
-        if context.Sky then context.Sky:ClockStep() end
-        local terrain=Workspace:FindFirstChildOfClass("Terrain")
-        if settings.extraClouds and terrain then
-            local clouds=self.Objects.Clouds
-            if not clouds or not clouds.Parent then
-                clouds=terrain:FindFirstChildOfClass("Clouds")
-                if not clouds then
-                    clouds=Instance.new("Clouds");clouds.Name="DevKage_Extra_Clouds";clouds.Parent=terrain
-                    self.OwnClouds=true
-                else self.OwnClouds=false end
-                self.Objects.Clouds=clouds
-            end
-            self:Write(clouds,"Enabled",true)
-            local drift=settings.extraCloudDrift and math.sin(os.clock()*0.025)*0.025 or 0
-            self:Write(clouds,"Cover",math.clamp(n(settings.extraCloudCover,0.55,0,1)+drift,0,1))
-            self:Write(clouds,"Density",n(settings.extraCloudDensity,0.65,0,1))
-            self:Write(clouds,"Color",typeof(settings.extraCloudColor)=="Color3" and settings.extraCloudColor or Color3.fromRGB(240,244,252))
-        elseif self.Objects.Clouds then
-            local clouds=self.Objects.Clouds
-            for _,key in ipairs({"Enabled","Cover","Density","Color"}) do self:Restore(clouds,key) end
-            if self.OwnClouds then clouds:Destroy() end
-            self.Objects.Clouds=nil;self.OwnClouds=false
-        end
-        if terrain then
-            for _,pair in ipairs({{"WaterColor","extraWaterColor"},{"WaterTransparency","extraWaterTransparency"},{"WaterReflectance","extraWaterReflectance"},{"WaterWaveSize","extraWaterWaveSize"},{"WaterWaveSpeed","extraWaterWaveSpeed"}}) do
-                if settings.extraWater then
-                    local value=settings[pair[2]]
-                    if pair[1]=="WaterColor" then value=typeof(value)=="Color3" and value or Color3.fromRGB(32,115,140)
-                    else value=n(value,pair[1]=="WaterWaveSpeed" and 12 or 0.3,0,pair[1]=="WaterWaveSpeed" and 100 or 1) end
-                    self:Write(terrain,pair[1],value)
-                else self:Restore(terrain,pair[1]) end
-            end
-        end
-        if settings.extraAutoExposure then
-            local camera=Workspace.CurrentCamera
-            if camera and os.clock()>=self.ProbeAt then
-                self.ProbeAt=os.clock()+0.2
-                local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude
-                local exclude={camera}
-                if context.LocalPlayer.Character then exclude[#exclude+1]=context.LocalPlayer.Character end
-                params.FilterDescendantsInstances=exclude;params.RespectCanCollide=true
-                local covered=Workspace:Raycast(camera.CFrame.Position,Vector3.new(0,100,0),params)~=nil
-                self.ExposureTarget=covered and n(settings.extraIndoorExposure,0.35,-2,2) or n(settings.extraOutdoorExposure,-0.05,-2,2)
-            end
-            if self.Exposure==nil then self.Exposure=Lighting.ExposureCompensation end
-            local alpha=1-math.exp(-dt*n(settings.extraExposureSpeed,2,0.2,10))
-            self.Exposure=self.Exposure+((self.ExposureTarget or 0)-self.Exposure)*alpha
-            self:Write(Lighting,"ExposureCompensation",self.Exposure)
-        else
-            if self.Exposure~=nil then self:Restore(Lighting,"ExposureCompensation");self.Exposure=nil end
-        end
-    end
-    function runtime:Destroy()
-        if not self.Alive then return end
-        self.Alive=false
-        pcall(function() RunService:UnbindFromRenderStep(self.BindName) end)
-        local restore={}
-        for object,properties in pairs(self.Saved) do for key in pairs(properties) do restore[#restore+1]={object,key} end end
-        for _,entry in ipairs(restore) do self:Restore(entry[1],entry[2]) end
-        if self.OwnClouds and self.Objects.Clouds then self.Objects.Clouds:Destroy() end
-        table.clear(self.Objects)
-    end
-    local function section(name,side,size)
-        local result=context.Page:CreateSection({Name=name,Side=side,Size=size})
-        runtime.Sections[#runtime.Sections+1]=result
-        return result
-    end
-    local function toggle(section,key,name)
-        context.Controls[key]=section:CreateToggle({Name=name,State=settings[key]==true,Flag="lighting."..key,PreserveLegacyIndex=true,
-            Callback=function(v) settings[key]=v==true end})
-    end
-    local function slider(section,key,name,min,max,default,decimals,suffix)
-        context.Controls[key]=section:CreateSlider({Name=name,State=n(settings[key],default,min,max),Min=min,Max=max,Decimals=decimals or 0,Suffix=suffix or "",Flag="lighting."..key,
-            Callback=function(v) settings[key]=n(v,default,min,max) end})
-    end
-    local function color(section,key,name)
-        context.Controls[key]=section:CreateColorpicker({Name=name,State=settings[key],Flag="lighting."..key,Callback=function(v) settings[key]=v end})
-    end
-    local sky=section("Clouds & Daylight","Right",330)
-    toggle(sky,"extraClouds","Dynamic Clouds")
-    slider(sky,"extraCloudCover","Cloud Cover",0,1,0.55,2)
-    slider(sky,"extraCloudDensity","Cloud Density",0,1,0.65,2)
-    color(sky,"extraCloudColor","Cloud Color")
-    toggle(sky,"extraCloudDrift","Slow Cloud Variation")
-    toggle(sky,"extraDayCycle","Day / Night Cycle")
-    slider(sky,"extraDayLength","Full Day Length",30,3600,300,0," s")
-    sky:CreateLabel({Text="A running day cycle takes priority over sky time sync."})
-    local exposure=section("Adaptive Exposure","Right",250)
-    toggle(exposure,"extraAutoExposure","Adaptive Exposure")
-    slider(exposure,"extraIndoorExposure","Indoor Exposure",-2,2,0.35,2)
-    slider(exposure,"extraOutdoorExposure","Outdoor Exposure",-2,2,-0.05,2)
-    slider(exposure,"extraExposureSpeed","Adaptation Speed",0.2,10,2,1)
-    local water=section("Water Appearance","Right",310)
-    toggle(water,"extraWater","Custom Terrain Water")
-    color(water,"extraWaterColor","Water Color")
-    slider(water,"extraWaterTransparency","Water Transparency",0,1,0.3,2)
-    slider(water,"extraWaterReflectance","Water Reflectance",0,1,0.65,2)
-    slider(water,"extraWaterWaveSize","Wave Height",0,1,0.18,2)
-    slider(water,"extraWaterWaveSpeed","Wave Speed",0,100,12,0)
-    water:CreateLabel({Text="Applies to native Terrain water when the map has it."})
-    runtime.BindName="DevKage_Extra_World_"..context.HttpService:GenerateGUID(false)
-    RunService:BindToRenderStep(runtime.BindName,Enum.RenderPriority.Last.Value+750010,function(dt)
-        local ok,err=pcall(runtime.Step,runtime,dt)
-        if not ok and runtime.LastError~=tostring(err) then runtime.LastError=tostring(err);warn("[DevKage World] "..tostring(err)) end
-    end)
-    table.insert(library.CleanupCallbacks,function() runtime:Destroy() end)
-    return runtime
-end
-
-]======], "@DevKage/AdditionalWorldVisuals"))()({
-Settings=AdvancedLighting, Lighting=LightingService, Workspace=workspace, RunService=RunService,
-Library=library, LocalPlayer=LocalPlayer, Page=visualsPage, Controls=LightingControls,
-HttpService=game:GetService("HttpService"), Sky=nil,
-})
 VisualCategoryController.Sections={
 Enemy={playeresp,enemyModels,espOptions,espAppearance,espExtra,radarSection,threatCompassSection,espProfileSection},
 Models={enemyModels,espAppearance,viewmodelSection},
 World={worldSection,worldIntelSection,waypointSection,lightingSection,snowSection,weatherSection,devkagePresetSection},
 Client={clientEffects,viewmodelSection,creatorSection,animationSection}
 }
-for _,section in ipairs(AdvancedLighting.ExtraVisuals.Sections) do
-compactVisualSection(section,80)
-makeVisualSectionFolder(section)
-table.insert(VisualCategoryController.Sections.World,section)
-end
 VisualCategoryController:Set("Enemy");
 
 assert(function()
@@ -30966,7 +30780,7 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
 ]============]
 
 local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
-__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.61-visual-world-keybind-safe-20260912"
+__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.58-knife-movement-20260912"
 __devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
 
 -- CURRENT LATE-BOOT AUTOEXEC OWNERSHIP (v5.2.55)
