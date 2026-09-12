@@ -1555,19 +1555,28 @@ function library:CreateWindow(Properties)
                     MenuContextActionService:UnbindAction(MenuToggleActionName)
                 end)
             end
-        else
-
-
-            utility:CreateConnection(uis.InputBegan, function(Input)
-                if not Input.KeyCode or Input.KeyCode ~= Window.Key then return end
-                local env = (type(getgenv) == "function" and getgenv()) or _G
-                if env.__DevKageWindow ~= Window then return end
-                local now = os.clock()
-                if now - MenuLastToggleAt < 0.12 then return end
-                MenuLastToggleAt = now
-                Window:Toggle()
-            end)
         end
+
+        -- Always keep a direct input fallback. Some executor/game combinations
+        -- accept the ContextAction binding but never dispatch it. The shared
+        -- debounce means CAS + InputBegan cannot toggle twice from one press.
+        utility:CreateConnection(uis.InputBegan, function(Input)
+            if uis:GetFocusedTextBox() then return end
+            if not Input.KeyCode or Input.KeyCode ~= Window.Key then return end
+
+            local env = (type(getgenv) == "function" and getgenv()) or _G
+            if env.__DevKageWindow ~= Window then return end
+
+            local manager = library and library.KeybindManager
+            if manager and manager.CaptureControl and manager.Menu and manager.Menu.Visible == true then
+                return
+            end
+
+            local now = os.clock()
+            if now - MenuLastToggleAt < 0.12 then return end
+            MenuLastToggleAt = now
+            Window:Toggle()
+        end)
     end
     return setmetatable(Window, library)
 end
@@ -14226,12 +14235,12 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_64.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_65.lua"
 local SCRIPT_STABLE_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_current.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOLOAD_ENABLED_FILE = CONFIG_FOLDER .. "/_devkage_autoload_enabled.flag"
 local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_AutoLoad_LAST.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.64-keybind-ui-customization-20260912"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.65-autoload-currentbuild-ui-toggle-20260912"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -14954,6 +14963,8 @@ task.spawn(function()
         env.__DEVKAGE_AUTO_STARTED = true
         env.__DEVKAGE_EMBEDDED_SOURCE = embeddedSource
         env.__DEVKAGE_PACKAGE_BUILD = BUILD_LABEL
+        env.__DEVKAGE_PACKAGE_SOURCE_BUILD = BUILD_LABEL
+        env.__DEVKAGE_PACKAGE_SOURCE_CURRENT = embeddedSource
         env.__DEVKAGE_MULTI_INJECT_BOOT = true
 
         local compiler = loadstring or load
@@ -15070,9 +15081,10 @@ end
 end
 
 for _, folder in ipairs(existing_autoexec_folders()) do
+    -- Rewrite every executor-exposed folder that already exists. The guarded
+    -- loader is identical in each location and the same-build mutex prevents
+    -- duplicate runtime construction. This also replaces stale DevKage loaders.
     tryWrite(folder)
-    -- One real executor Auto Execute folder is enough and avoids duplicate runs.
-    if #installed > 0 then break end
 end
 
 return #installed > 0, installed
@@ -15124,20 +15136,40 @@ local function rollback_manual_enable()
 end
 
 local function current_payload_is_installed()
+    if type(readfile) ~= "function" then return false end
+
     if type(isfile) == "function" then
         local payloadChecked, payloadExists = pcall(isfile, SCRIPT_PAYLOAD_FILE)
         if payloadChecked and payloadExists ~= true then return false end
+
         local buildChecked, buildExists = pcall(isfile, SCRIPT_BUILD_FILE)
         if buildChecked and buildExists ~= true then return false end
     end
-    if type(readfile) ~= "function" then return false end
+
     local okBuild, installedBuild = pcall(readfile, SCRIPT_BUILD_FILE)
-    return okBuild and tostring(installedBuild or "") == SCRIPT_AUTOLOAD_BUILD
+    if not okBuild or tostring(installedBuild or "") ~= SCRIPT_AUTOLOAD_BUILD then
+        return false
+    end
+
+    local okPayload, installedPayload = pcall(readfile, SCRIPT_PAYLOAD_FILE)
+    if not okPayload or script_autoload_payload_build(installedPayload) ~= SCRIPT_AUTOLOAD_BUILD then
+        return false
+    end
+
+    return true
 end
 
 local function remove_stale_devkage_payloads()
     if type(delfile) ~= "function" then return end
     for _, legacyName in ipairs({
+        "_devkage_autoload_payload_v5_2_64.lua",
+        "_devkage_autoload_payload_v5_2_63.lua",
+        "_devkage_autoload_payload_v5_2_62.lua",
+        "_devkage_autoload_payload_v5_2_61.lua",
+        "_devkage_autoload_payload_v5_2_60.lua",
+        "_devkage_autoload_payload_v5_2_59.lua",
+        "_devkage_autoload_payload_v5_2_58.lua",
+        "_devkage_autoload_payload_v5_2_57.lua",
         "_devkage_autoload_payload_v5_2_56.lua",
         "_devkage_autoload_payload_v5_2_55.lua",
         "_devkage_autoload_payload_v5_2_54.lua",
@@ -15177,6 +15209,14 @@ if not enabled then
         for _, path in ipairs({
             SCRIPT_PAYLOAD_FILE,
             SCRIPT_STABLE_PAYLOAD_FILE,
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_64.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_63.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_62.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_61.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_60.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_59.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_58.lua",
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_57.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_56.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_55.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_54.lua",
@@ -15220,11 +15260,15 @@ if not enabled then
 end
 
 local env = (type(getgenv) == "function" and getgenv()) or _G
-local source = normalize_script_autoload_source(env.__DEVKAGE_EMBEDDED_SOURCE)
+local source = nil
 
+if tostring(rawget(env, "__DEVKAGE_PACKAGE_SOURCE_BUILD") or "") == SCRIPT_AUTOLOAD_BUILD then
+    source = normalize_script_autoload_source(rawget(env, "__DEVKAGE_PACKAGE_SOURCE_CURRENT"))
+end
 
-
-
+if not source and tostring(rawget(env, "__DEVKAGE_PACKAGE_BUILD") or "") == SCRIPT_AUTOLOAD_BUILD then
+    source = normalize_script_autoload_source(rawget(env, "__DEVKAGE_EMBEDDED_SOURCE"))
+end
 
 if not source and type(readfile) == "function" then
     if type(isfile) ~= "function" then
@@ -17349,6 +17393,7 @@ getgenv().__DevKageWindow = library.Window
 do
 local environment=(type(getgenv)=="function" and getgenv()) or _G
 environment.__DEVKAGE_RUNTIME_WINDOW=library.Window
+library.Window.DevKageBuild=tostring(environment.__DEVKAGE_PACKAGE_BUILD or "")
 environment.__DEVKAGE_RUNTIME_BOOT_JOB=tostring(game.PlaceId)..":"..tostring(game.JobId)
 environment.__DEVKAGE_RUNTIME_BOOT_BUILD=tostring(environment.__DEVKAGE_PACKAGE_BUILD or "")
 environment.__DEVKAGE_RUNTIME_BOOT_STATE="active"
@@ -31901,8 +31946,10 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
 })
 
 local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
-__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.64-keybind-ui-customization-20260912"
+__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.65-autoload-currentbuild-ui-toggle-20260912"
 __devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
+__devkageEnv.__DEVKAGE_PACKAGE_SOURCE_BUILD = "DevKage-v5.2.65-autoload-currentbuild-ui-toggle-20260912"
+__devkageEnv.__DEVKAGE_PACKAGE_SOURCE_CURRENT = __DEVKAGE_EMBEDDED_SOURCE
 
 -- CURRENT LATE-BOOT AUTOEXEC OWNERSHIP (v5.2.55)
 -- Do not disable/delete the current loader here. The embedded runtime owns
