@@ -1,20 +1,3 @@
--- DEVKAGE v5.2.60: scoped startup, Opiumware diagnostics, and preserved features
--- Toggle rows: click the mode box for Toggle / Hold / Always; click the key
--- box to bind. Escape cancels capture; Delete clears it. The HUD lists active
--- features with their mode and assigned key.
--- Gun controls are on the Knife page. Close the menu to aim. Right mouse is
--- required by default; this can be changed in Target Locks. Fire Input can be
--- Automatic, Tool, or Mouse depending on the weapon's supported input.
--- No Spread / No Added Shot Delay adjust exposed numeric Tool attributes only;
--- weapon code and server-enforced spread, damage, or cooldowns may still apply.
--- World ESP includes lighting, weather, global haze, two skies, and object filters.
--- Cloud Ocean embeds the supplied panorama as six PNG faces and requires
--- writefile / makefolder plus getcustomasset or getsynasset. Unsupported loading
--- uses a fallback and reports it in Sky & Moon. Cloudy Moon uses the existing
--- cloudy cubemap with Roblox's built-in moon texture.
--- Validation: package/modules, keybinds and subsystem behavior checked locally
--- with mocked Roblox APIs. This file has not been tested in a live Roblox game.
-
 local __DEVKAGE_EMBEDDED_SOURCE = [============[
 
 
