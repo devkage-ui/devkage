@@ -2409,7 +2409,7 @@ function BindManager:EnsureUI(window)
         button.TextSize = 9
         button.TextColor3 = Color3.fromRGB(195, 195, 195)
         button.TextXAlignment = Enum.TextXAlignment.Left
-        button.Text = "   " .. string.lower(mode)
+        button.Text = "   " .. (mode == "Always" and "always on" or string.lower(mode))
         button.ZIndex = 50002
         button.Parent = menu
         self.MenuButtons[mode] = button
@@ -2489,6 +2489,7 @@ function BindManager:EnsureUI(window)
                     local control = self.CaptureControl
                     self.CaptureControl = nil
                     control.BindKey = binding
+                    control.BindConfigured = true
                     self:RefreshControl(control)
                     self:RefreshMenu()
                     self:RefreshActive()
@@ -2506,7 +2507,7 @@ function BindManager:EnsureUI(window)
 
             if uis:GetFocusedTextBox() then return end
             for _, control in ipairs(self.Order) do
-                if self:Matches(control.BindKey, input) then
+                if control.BindConfigured == true and self:Matches(control.BindKey, input) then
                     if control.BindMode == "Hold" then
                         control:Set(true)
                     elseif control.BindMode == "Toggle" then
@@ -2520,7 +2521,7 @@ function BindManager:EnsureUI(window)
 
         utility:CreateConnection(uis.InputEnded, function(input)
             for _, control in ipairs(self.Order) do
-                if control.BindMode == "Hold" and self:Matches(control.BindKey, input) then
+                if control.BindConfigured == true and control.BindMode == "Hold" and self:Matches(control.BindKey, input) then
                     control:Set(false)
                 end
             end
@@ -2528,7 +2529,7 @@ function BindManager:EnsureUI(window)
 
         utility:CreateConnection(uis.WindowFocusReleased, function()
             for _, control in ipairs(self.Order) do
-                if control.BindMode == "Hold" and control:Get() then
+                if control.BindConfigured == true and control.BindMode == "Hold" and control:Get() then
                     control:Set(false)
                 end
             end
@@ -2604,8 +2605,11 @@ end
 
 function BindManager:RefreshControl(control)
     if control and control.BindValueLabel then
-        local key = self:KeyText(control.BindKey)
-        control.BindValueLabel.Text = key ~= "-" and ("[" .. key .. "]") or ""
+        local configured = control.BindConfigured == true
+        local key = configured and self:KeyText(control.BindKey) or "-"
+        local hasKey = configured and key ~= "-"
+        control.BindValueLabel.Text = hasKey and ("[" .. key .. "]") or ""
+        control.BindValueLabel.Visible = hasKey
         control.BindValueLabel.TextColor3 = control.BindMode == "Always"
             and control.Window.Accent or Color3.fromRGB(125, 125, 125)
     end
@@ -2624,8 +2628,9 @@ function BindManager:RefreshActive()
 
     local count = 0
     for index, control in ipairs(self.Order) do
-        local hasBind = type(control.BindKey) == "table" and control.BindKey[2] ~= nil
-        local active = control:Get() == true and (hasBind or control.BindMode == "Always")
+        local configured = control.BindConfigured == true
+        local hasBind = configured and type(control.BindKey) == "table" and control.BindKey[2] ~= nil
+        local active = control:Get() == true and configured
         if active then
             count = count + 1
             local row = Instance.new("Frame")
@@ -2639,7 +2644,7 @@ function BindManager:RefreshActive()
             local name = Instance.new("TextLabel")
             name.BackgroundTransparency = 1
             name.Position = UDim2.new(0, 2, 0, 0)
-            name.Size = UDim2.new(0.70, -2, 1, 0)
+            name.Size = UDim2.new(0.54, -2, 1, 0)
             name.Font = Enum.Font.Code
             name.TextSize = 9
             name.TextColor3 = Color3.fromRGB(195, 195, 195)
@@ -2651,13 +2656,17 @@ function BindManager:RefreshActive()
 
             local state = Instance.new("TextLabel")
             state.BackgroundTransparency = 1
-            state.Position = UDim2.new(0.70, 0, 0, 0)
-            state.Size = UDim2.new(0.30, -2, 1, 0)
+            state.Position = UDim2.new(0.54, 0, 0, 0)
+            state.Size = UDim2.new(0.46, -2, 1, 0)
             state.Font = Enum.Font.Code
             state.TextSize = 9
             state.TextColor3 = control.Window and control.Window.Accent or Color3.fromRGB(175, 205, 75)
             state.TextXAlignment = Enum.TextXAlignment.Right
-            state.Text = "[" .. string.lower(tostring(control.BindMode or "toggle")) .. "]"
+            local modeText = control.BindMode == "Always"
+                and "always on"
+                or string.lower(tostring(control.BindMode or "toggle"))
+            local keyText = hasBind and self:KeyText(control.BindKey) or "-"
+            state.Text = "[" .. modeText .. "]" .. (keyText ~= "-" and (" [" .. keyText .. "]") or "")
             state.ZIndex = 40003
             state.Parent = row
         end
@@ -2670,7 +2679,7 @@ function BindManager:RefreshMenu()
     if not control or not self.Menu then return end
     self.MenuTitle.Text = "bind  •  " .. string.lower(tostring(control.Name))
     for mode, button in pairs(self.MenuButtons) do
-        local selected = control.BindMode == mode
+        local selected = control.BindConfigured == true and control.BindMode == mode
         button.BackgroundColor3 = selected and Color3.fromRGB(31, 34, 27) or Color3.fromRGB(24, 24, 24)
         button.TextColor3 = selected and control.Window.Accent or Color3.fromRGB(195, 195, 195)
     end
@@ -2678,7 +2687,8 @@ function BindManager:RefreshMenu()
         self.MenuKeyButton.Text = "press a key..."
         self.MenuKeyButton.TextColor3 = control.Window.Accent
     else
-        self.MenuKeyButton.Text = "key  [ " .. self:KeyText(control.BindKey) .. " ]"
+        local keyText = self:KeyText(control.BindKey)
+        self.MenuKeyButton.Text = keyText ~= "-" and ("key  [ " .. keyText .. " ]") or "set key"
         self.MenuKeyButton.TextColor3 = Color3.fromRGB(205, 205, 205)
     end
 end
@@ -2686,6 +2696,7 @@ end
 function BindManager:SetMode(control, mode)
     if mode ~= "Hold" and mode ~= "Toggle" and mode ~= "Always" then return end
     control.BindMode = mode
+    control.BindConfigured = true
     if mode == "Always" then
         control:Set(true)
     elseif mode == "Hold" and control.BindKey then
@@ -2727,6 +2738,7 @@ function BindManager:Register(control, properties)
     control.BindId = id
     control.BindMode = control.BindMode or "Toggle"
     control.BindKey = control.BindKey or nil
+    control.BindConfigured = control.BindConfigured == true
     self.Controls[id] = control
     table.insert(self.Order, control)
 
@@ -2739,7 +2751,19 @@ function BindManager:Register(control, properties)
         if type(data.keyType) == "string" and type(data.keyName) == "string" then
             control.BindKey = {data.keyType, data.keyName}
         end
-        if control.BindMode == "Always" then control:Set(true) end
+
+        -- New configs carry an explicit configured bit. For older configs,
+        -- infer "configured" only from a real key or Always On so the old
+        -- default Toggle value does not make every toggle appear in the HUD.
+        if data.configured ~= nil then
+            control.BindConfigured = data.configured == true
+        else
+            control.BindConfigured =
+                (type(data.keyType) == "string" and type(data.keyName) == "string")
+                or data.mode == "Always"
+        end
+
+        if control.BindConfigured and control.BindMode == "Always" then control:Set(true) end
     end
     self:RefreshControl(control)
     self:RefreshActive()
@@ -2749,9 +2773,10 @@ function BindManager:Serialize()
     local output = {}
     for id, control in pairs(self.Controls) do
         output[id] = {
+            configured = control.BindConfigured == true,
             mode = control.BindMode or "Toggle",
-            keyType = control.BindKey and control.BindKey[1] or nil,
-            keyName = control.BindKey and control.BindKey[2] or nil,
+            keyType = (control.BindConfigured == true and control.BindKey) and control.BindKey[1] or nil,
+            keyName = (control.BindConfigured == true and control.BindKey) and control.BindKey[2] or nil,
         }
     end
     return output
@@ -2771,7 +2796,16 @@ function BindManager:Apply(data)
             else
                 control.BindKey = nil
             end
-            if control.BindMode == "Always" then control:Set(true) end
+
+            if bind.configured ~= nil then
+                control.BindConfigured = bind.configured == true
+            else
+                control.BindConfigured =
+                    (type(bind.keyType) == "string" and type(bind.keyName) == "string")
+                    or bind.mode == "Always"
+            end
+
+            if control.BindConfigured and control.BindMode == "Always" then control:Set(true) end
             self:RefreshControl(control)
         end
     end
@@ -13850,12 +13884,12 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_57.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_59.lua"
 local SCRIPT_STABLE_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_current.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOLOAD_ENABLED_FILE = CONFIG_FOLDER .. "/_devkage_autoload_enabled.flag"
 local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_AutoLoad_LAST.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.57-global-atmosphere-20260908"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.59-global-keybind-ui-20260911"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -14794,6 +14828,7 @@ end
 local function remove_stale_devkage_payloads()
     if type(delfile) ~= "function" then return end
     for _, legacyName in ipairs({
+        "_devkage_autoload_payload_v5_2_57.lua",
         "_devkage_autoload_payload_v5_2_56.lua",
         "_devkage_autoload_payload_v5_2_55.lua",
         "_devkage_autoload_payload_v5_2_54.lua",
@@ -14833,6 +14868,7 @@ if not enabled then
         for _, path in ipairs({
             SCRIPT_PAYLOAD_FILE,
             SCRIPT_STABLE_PAYLOAD_FILE,
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_57.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_56.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_55.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_54.lua",
@@ -22628,6 +22664,44 @@ do
         section:CreateLabel({Text="Uses the active fighter and preserves movement."})
     end
     do
+        local section = antiAimPage:CreateSection({Name="Movement", Side="Right", Size=142})
+
+        -- Reuse the existing DevKage movement features exactly; this block only
+        -- relocates their UI and integrates them with the existing bind manager.
+        AntiAimControls.flight_enabled = section:CreateToggle({
+            Name="Flight",
+            State=AntiAimState.flight_enabled,
+            Flag="antiAimV3.flight_enabled",
+            Callback=function(value) AntiAimState.SetValue("flight_enabled", value) end
+        })
+        AntiAimControls.flight_speed = section:CreateSlider({
+            Name="Flight Speed",
+            State=AntiAimState.flight_speed,
+            Min=10,
+            Max=500,
+            Decimals=0,
+            Suffix=" studs/s",
+            Flag="antiAimV3.flight_speed",
+            Callback=function(value) AntiAimState.SetValue("flight_speed", value) end
+        })
+        AntiAimControls.noclip_enabled = section:CreateToggle({
+            Name="No Clip",
+            State=AntiAimState.noclip_enabled,
+            Flag="antiAimV3.noclip_enabled",
+            Callback=function(value) AntiAimState.SetValue("noclip_enabled", value) end
+        })
+
+        -- Every toggle in DevKage uses the same bind manager. The right-side
+        -- key text stays hidden until the user actually assigns a key.
+        if library.KeybindManager then
+            library.KeybindManager:RefreshControl(AntiAimControls.flight_enabled)
+            library.KeybindManager:RefreshControl(AntiAimControls.noclip_enabled)
+            library.KeybindManager:RefreshActive()
+        end
+
+        section:CreateLabel({Text="Click the key box on the right to rebind."})
+    end
+    do
         local section = antiAimPage:CreateSection({Name="Yaw Jitter", Side="Left", Size=370})
         AntiAimControls.jitter_range = section:CreateSlider({Name="Jitter Range", State=AntiAimState.jitter_range, Min=0, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.jitter_range", Callback=function(value) AntiAimState.SetValue("jitter_range", value) end})
         AntiAimControls.jitter_speed = section:CreateSlider({Name="Jitter Speed", State=AntiAimState.jitter_speed, Min=0.1, Max=120, Decimals=1, Suffix=" flips/s", Flag="antiAimV3.jitter_speed", Callback=function(value) AntiAimState.SetValue("jitter_speed", value) end})
@@ -22708,12 +22782,6 @@ do
         AntiAimControls.freestand_auto_flip = section:CreateToggle({Name="Flip Side on Damage", State=AntiAimState.freestand_auto_flip, Flag="antiAimV3.freestand_auto_flip", Callback=function(value) AntiAimState.SetValue("freestand_auto_flip", value) end})
         AntiAimControls.freestand_hit_cooldown = section:CreateSlider({Name="Damage Flip Cooldown", State=AntiAimState.freestand_hit_cooldown, Min=0, Max=2, Decimals=2, Suffix=" s", Flag="antiAimV3.freestand_hit_cooldown", Callback=function(value) AntiAimState.SetValue("freestand_hit_cooldown", value) end})
         section:CreateButton({Name="Flip Freestanding Side", Callback=function() AntiAimState.core.Actions.FlipSide() end})
-    end
-    do
-        local section = antiAimPage:CreateSection({Name="Movement Tools", Side="Left", Size=110})
-        AntiAimControls.noclip_enabled = section:CreateToggle({Name="Noclip", State=AntiAimState.noclip_enabled, Flag="antiAimV3.noclip_enabled", Callback=function(value) AntiAimState.SetValue("noclip_enabled", value) end})
-        AntiAimControls.flight_enabled = section:CreateToggle({Name="Flight", State=AntiAimState.flight_enabled, Flag="antiAimV3.flight_enabled", Callback=function(value) AntiAimState.SetValue("flight_enabled", value) end})
-        AntiAimControls.flight_speed = section:CreateSlider({Name="Flight Speed", State=AntiAimState.flight_speed, Min=10, Max=500, Decimals=0, Suffix=" studs/s", Flag="antiAimV3.flight_speed", Callback=function(value) AntiAimState.SetValue("flight_speed", value) end})
     end
     core.Syncing = false
     AntiAimState.Normalize()
@@ -30032,7 +30100,7 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
 ]============]
 
 local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
-__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.57-global-atmosphere-20260908"
+__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.59-global-keybind-ui-20260911"
 __devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
 
 -- CURRENT LATE-BOOT AUTOEXEC OWNERSHIP (v5.2.55)
