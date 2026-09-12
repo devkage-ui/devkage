@@ -1,4 +1,4 @@
--- DEVKAGE v5.2.57: global 360-degree atmosphere coverage + working offset
+-- DEVKAGE v5.2.58: Knife movement controls; original atmosphere retained
 local __DEVKAGE_EMBEDDED_SOURCE = [============[
 
 
@@ -531,7 +531,7 @@ local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
 
 
 
-__devkageEnv.__DEVKAGE_RUNTIME_VERSION = "dual-script-autoload-v6-bhop-only"
+__devkageEnv.__DEVKAGE_RUNTIME_VERSION = "dual-script-autoload-v7-knife-movement"
 local __devkageMultiInjectAutoBoot = __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT == true
 
 -- Autoexec coexistence boot mutex.
@@ -2409,7 +2409,7 @@ function BindManager:EnsureUI(window)
         button.TextSize = 9
         button.TextColor3 = Color3.fromRGB(195, 195, 195)
         button.TextXAlignment = Enum.TextXAlignment.Left
-        button.Text = "   " .. (mode == "Always" and "always on" or string.lower(mode))
+        button.Text = "   " .. string.lower(mode)
         button.ZIndex = 50002
         button.Parent = menu
         self.MenuButtons[mode] = button
@@ -2436,6 +2436,7 @@ function BindManager:EnsureUI(window)
     keyButton.MouseButton1Click:Connect(function()
         if not self.MenuControl then return end
         self.CaptureControl = self.MenuControl
+        self:RefreshControl(self.MenuControl)
         keyButton.Text = "press a key..."
         keyButton.TextColor3 = self.MenuControl.Window.Accent
     end)
@@ -2457,6 +2458,9 @@ function BindManager:EnsureUI(window)
     clearButton.MouseButton1Click:Connect(function()
         if self.MenuControl then
             self.MenuControl.BindKey = nil
+            if self.MenuControl.InlineBind and self.MenuControl.BindMode == "Hold" then
+                self.MenuControl:Set(false)
+            end
             self.CaptureControl = nil
             self:RefreshControl(self.MenuControl)
             self:RefreshMenu()
@@ -2482,14 +2486,31 @@ function BindManager:EnsureUI(window)
 
     if not self.InputReady then
         self.InputReady = true
-        utility:CreateConnection(uis.InputBegan, function(input)
+        utility:CreateConnection(uis.InputBegan, function(input, gameProcessed)
             if self.CaptureControl then
+                local captured = self.CaptureControl
+                if captured.InlineBind then
+                    if uis:GetFocusedTextBox() then return end
+                    local cancel = input.KeyCode == Enum.KeyCode.Escape
+                    local clear = input.KeyCode == Enum.KeyCode.Backspace or input.KeyCode == Enum.KeyCode.Delete
+                    if cancel or clear then
+                        self.CaptureControl = nil
+                        if clear then
+                            captured.BindKey = nil
+                            if captured.BindMode == "Hold" then captured:Set(false) end
+                        end
+                        self:RefreshControl(captured)
+                        self:RefreshMenu()
+                        self:RefreshActive()
+                        return
+                    end
+                end
                 local binding = self:InputBinding(input)
                 if binding then
                     local control = self.CaptureControl
                     self.CaptureControl = nil
                     control.BindKey = binding
-                    control.BindConfigured = true
+                    if control.InlineBind and control.BindMode == "Hold" then control:Set(false) end
                     self:RefreshControl(control)
                     self:RefreshMenu()
                     self:RefreshActive()
@@ -2507,7 +2528,8 @@ function BindManager:EnsureUI(window)
 
             if uis:GetFocusedTextBox() then return end
             for _, control in ipairs(self.Order) do
-                if control.BindConfigured == true and self:Matches(control.BindKey, input) then
+                if self:Matches(control.BindKey, input)
+                    and not (control.InlineBind and gameProcessed) then
                     if control.BindMode == "Hold" then
                         control:Set(true)
                     elseif control.BindMode == "Toggle" then
@@ -2521,7 +2543,7 @@ function BindManager:EnsureUI(window)
 
         utility:CreateConnection(uis.InputEnded, function(input)
             for _, control in ipairs(self.Order) do
-                if control.BindConfigured == true and control.BindMode == "Hold" and self:Matches(control.BindKey, input) then
+                if control.BindMode == "Hold" and self:Matches(control.BindKey, input) then
                     control:Set(false)
                 end
             end
@@ -2529,7 +2551,7 @@ function BindManager:EnsureUI(window)
 
         utility:CreateConnection(uis.WindowFocusReleased, function()
             for _, control in ipairs(self.Order) do
-                if control.BindConfigured == true and control.BindMode == "Hold" and control:Get() then
+                if control.BindMode == "Hold" and control:Get() then
                     control:Set(false)
                 end
             end
@@ -2605,11 +2627,13 @@ end
 
 function BindManager:RefreshControl(control)
     if control and control.BindValueLabel then
-        local configured = control.BindConfigured == true
-        local key = configured and self:KeyText(control.BindKey) or "-"
-        local hasKey = configured and key ~= "-"
-        control.BindValueLabel.Text = hasKey and ("[" .. key .. "]") or ""
-        control.BindValueLabel.Visible = hasKey
+        local key = self:KeyText(control.BindKey)
+        if control.InlineBind then
+            control.BindValueLabel.Text = self.CaptureControl == control and "..." or key
+            if control.BindModeButton then control.BindModeButton.Text = control.BindMode or "Toggle" end
+        else
+            control.BindValueLabel.Text = key ~= "-" and ("[" .. key .. "]") or ""
+        end
         control.BindValueLabel.TextColor3 = control.BindMode == "Always"
             and control.Window.Accent or Color3.fromRGB(125, 125, 125)
     end
@@ -2628,9 +2652,8 @@ function BindManager:RefreshActive()
 
     local count = 0
     for index, control in ipairs(self.Order) do
-        local configured = control.BindConfigured == true
-        local hasBind = configured and type(control.BindKey) == "table" and control.BindKey[2] ~= nil
-        local active = control:Get() == true and configured
+        local hasBind = type(control.BindKey) == "table" and control.BindKey[2] ~= nil
+        local active = control:Get() == true and (hasBind or control.BindMode == "Always")
         if active then
             count = count + 1
             local row = Instance.new("Frame")
@@ -2644,7 +2667,7 @@ function BindManager:RefreshActive()
             local name = Instance.new("TextLabel")
             name.BackgroundTransparency = 1
             name.Position = UDim2.new(0, 2, 0, 0)
-            name.Size = UDim2.new(0.54, -2, 1, 0)
+            name.Size = UDim2.new(0.70, -2, 1, 0)
             name.Font = Enum.Font.Code
             name.TextSize = 9
             name.TextColor3 = Color3.fromRGB(195, 195, 195)
@@ -2656,17 +2679,13 @@ function BindManager:RefreshActive()
 
             local state = Instance.new("TextLabel")
             state.BackgroundTransparency = 1
-            state.Position = UDim2.new(0.54, 0, 0, 0)
-            state.Size = UDim2.new(0.46, -2, 1, 0)
+            state.Position = UDim2.new(0.70, 0, 0, 0)
+            state.Size = UDim2.new(0.30, -2, 1, 0)
             state.Font = Enum.Font.Code
             state.TextSize = 9
             state.TextColor3 = control.Window and control.Window.Accent or Color3.fromRGB(175, 205, 75)
             state.TextXAlignment = Enum.TextXAlignment.Right
-            local modeText = control.BindMode == "Always"
-                and "always on"
-                or string.lower(tostring(control.BindMode or "toggle"))
-            local keyText = hasBind and self:KeyText(control.BindKey) or "-"
-            state.Text = "[" .. modeText .. "]" .. (keyText ~= "-" and (" [" .. keyText .. "]") or "")
+            state.Text = "[" .. string.lower(tostring(control.BindMode or "toggle")) .. "]"
             state.ZIndex = 40003
             state.Parent = row
         end
@@ -2679,7 +2698,7 @@ function BindManager:RefreshMenu()
     if not control or not self.Menu then return end
     self.MenuTitle.Text = "bind  •  " .. string.lower(tostring(control.Name))
     for mode, button in pairs(self.MenuButtons) do
-        local selected = control.BindConfigured == true and control.BindMode == mode
+        local selected = control.BindMode == mode
         button.BackgroundColor3 = selected and Color3.fromRGB(31, 34, 27) or Color3.fromRGB(24, 24, 24)
         button.TextColor3 = selected and control.Window.Accent or Color3.fromRGB(195, 195, 195)
     end
@@ -2687,19 +2706,18 @@ function BindManager:RefreshMenu()
         self.MenuKeyButton.Text = "press a key..."
         self.MenuKeyButton.TextColor3 = control.Window.Accent
     else
-        local keyText = self:KeyText(control.BindKey)
-        self.MenuKeyButton.Text = keyText ~= "-" and ("key  [ " .. keyText .. " ]") or "set key"
+        self.MenuKeyButton.Text = "key  [ " .. self:KeyText(control.BindKey) .. " ]"
         self.MenuKeyButton.TextColor3 = Color3.fromRGB(205, 205, 205)
     end
 end
 
 function BindManager:SetMode(control, mode)
     if mode ~= "Hold" and mode ~= "Toggle" and mode ~= "Always" then return end
+    if control.InlineBind and self.CaptureControl == control then self.CaptureControl = nil end
     control.BindMode = mode
-    control.BindConfigured = true
     if mode == "Always" then
         control:Set(true)
-    elseif mode == "Hold" and control.BindKey then
+    elseif mode == "Hold" and (control.BindKey or control.InlineBind) then
         control:Set(false)
     end
     self:RefreshControl(control)
@@ -2710,8 +2728,10 @@ end
 function BindManager:ShowMenu(control)
     if not control or not control.Window then return end
     self:EnsureUI(control.Window)
+    local previousCapture = self.CaptureControl
     self.MenuControl = control
     self.CaptureControl = nil
+    if previousCapture then self:RefreshControl(previousCapture) end
     self:RefreshMenu()
     local mouse = uis:GetMouseLocation()
     local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
@@ -2722,8 +2742,10 @@ function BindManager:ShowMenu(control)
 end
 
 function BindManager:HideMenu()
+    local previousCapture = self.CaptureControl
     self.CaptureControl = nil
     self.MenuControl = nil
+    if previousCapture then self:RefreshControl(previousCapture) end
     if self.Menu then self.Menu.Visible = false end
 end
 
@@ -2738,7 +2760,6 @@ function BindManager:Register(control, properties)
     control.BindId = id
     control.BindMode = control.BindMode or "Toggle"
     control.BindKey = control.BindKey or nil
-    control.BindConfigured = control.BindConfigured == true
     self.Controls[id] = control
     table.insert(self.Order, control)
 
@@ -2750,20 +2771,11 @@ function BindManager:Register(control, properties)
         end
         if type(data.keyType) == "string" and type(data.keyName) == "string" then
             control.BindKey = {data.keyType, data.keyName}
+        elseif control.InlineBind then
+            control.BindKey = nil
         end
-
-        -- New configs carry an explicit configured bit. For older configs,
-        -- infer "configured" only from a real key or Always On so the old
-        -- default Toggle value does not make every toggle appear in the HUD.
-        if data.configured ~= nil then
-            control.BindConfigured = data.configured == true
-        else
-            control.BindConfigured =
-                (type(data.keyType) == "string" and type(data.keyName) == "string")
-                or data.mode == "Always"
-        end
-
-        if control.BindConfigured and control.BindMode == "Always" then control:Set(true) end
+        if control.InlineBind and control.BindMode == "Hold" then control:Set(false) end
+        if control.BindMode == "Always" then control:Set(true) end
     end
     self:RefreshControl(control)
     self:RefreshActive()
@@ -2773,10 +2785,9 @@ function BindManager:Serialize()
     local output = {}
     for id, control in pairs(self.Controls) do
         output[id] = {
-            configured = control.BindConfigured == true,
             mode = control.BindMode or "Toggle",
-            keyType = (control.BindConfigured == true and control.BindKey) and control.BindKey[1] or nil,
-            keyName = (control.BindConfigured == true and control.BindKey) and control.BindKey[2] or nil,
+            keyType = control.BindKey and control.BindKey[1] or nil,
+            keyName = control.BindKey and control.BindKey[2] or nil,
         }
     end
     return output
@@ -2796,16 +2807,8 @@ function BindManager:Apply(data)
             else
                 control.BindKey = nil
             end
-
-            if bind.configured ~= nil then
-                control.BindConfigured = bind.configured == true
-            else
-                control.BindConfigured =
-                    (type(bind.keyType) == "string" and type(bind.keyName) == "string")
-                    or bind.mode == "Always"
-            end
-
-            if control.BindConfigured and control.BindMode == "Always" then control:Set(true) end
+            if control.InlineBind and control.BindMode == "Hold" then control:Set(false) end
+            if control.BindMode == "Always" then control:Set(true) end
             self:RefreshControl(control)
         end
     end
@@ -2818,6 +2821,8 @@ function sections:CreateToggle(Properties)
         Name     = (Properties.name or Properties.Name or Properties.title or Properties.Title or "New Toggle"),
         State    = utility:GetProperty(Properties, {"state", "State", "def", "Def", "default", "Default"}, false) == true,
         Callback = (Properties.callback or Properties.Callback or Properties.callBack or Properties.CallBack or function() end),
+        InlineBind = Properties.InlineBind == true,
+        BindKey = Properties.InlineBind == true and Properties.BindKey or nil,
         Window   = self.Window,
         Page     = self.Page,
         Section  = self
@@ -2850,7 +2855,7 @@ function sections:CreateToggle(Properties)
             BorderSizePixel     = 0,
             Parent              = Content_Holder,
             Position            = UDim2.new(0, 41, 0, 0),
-            Size                = UDim2.new(1, -112, 1, 0),
+            Size                = UDim2.new(1, Content.InlineBind and -150 or -112, 1, 0),
             ZIndex              = 3,
             Font                = "Code",
             RichText            = true,
@@ -2868,7 +2873,7 @@ function sections:CreateToggle(Properties)
             BorderSizePixel     = 0,
             Parent              = Content_Holder,
             Position            = UDim2.new(0, 41, 0, 0),
-            Size                = UDim2.new(1, -112, 1, 0),
+            Size                = UDim2.new(1, Content.InlineBind and -150 or -112, 1, 0),
             ZIndex              = 3,
             Font                = "Code",
             RichText            = true,
@@ -2879,20 +2884,48 @@ function sections:CreateToggle(Properties)
             TextTransparency    = 1,
             TextXAlignment      = "Left"
         })
-        local Content_BindValue = utility:RenderObject("TextLabel", {
-            BackgroundTransparency = 1,
-            BorderSizePixel = 0,
+        local Content_BindValue = utility:RenderObject(Content.InlineBind and "TextButton" or "TextLabel", {
+            BackgroundColor3 = Color3.fromRGB(14, 14, 14),
+            BackgroundTransparency = Content.InlineBind and 0 or 1,
+            BorderColor3 = Color3.fromRGB(43, 43, 43),
+            BorderSizePixel = Content.InlineBind and 1 or 0,
             Parent = Content_Holder,
-            Position = UDim2.new(1, -64, 0, 0),
-            Size = UDim2.new(0, 54, 1, 0),
-            ZIndex = 19,
+            Position = Content.InlineBind and UDim2.new(1, -44, 0, 1) or UDim2.new(1, -64, 0, 0),
+            Size = Content.InlineBind and UDim2.new(0, 34, 0, 16) or UDim2.new(0, 54, 1, 0),
+            ZIndex = Content.InlineBind and 21 or 19,
             Font = "Code",
             Text = "",
             TextColor3 = Color3.fromRGB(125, 125, 125),
             TextSize = 8,
-            TextXAlignment = "Right"
+            TextXAlignment = Content.InlineBind and "Center" or "Right"
         })
         Content.BindValueLabel = Content_BindValue
+        if Content.InlineBind then
+            Content_BindValue.AutoButtonColor = false
+            Content.BindModeButton = utility:RenderObject("TextButton", {
+                BackgroundColor3 = Color3.fromRGB(14, 14, 14),
+                BorderColor3 = Color3.fromRGB(43, 43, 43),
+                BorderSizePixel = 1,
+                Parent = Content_Holder,
+                Position = UDim2.new(1, -104, 0, 1),
+                Size = UDim2.new(0, 56, 0, 16),
+                ZIndex = 21,
+                Font = "Code", Text = "Toggle", TextSize = 8,
+                TextColor3 = Color3.fromRGB(205, 205, 205),
+                AutoButtonColor = false,
+            })
+            utility:CreateConnection(Content.BindModeButton.MouseButton1Click, function()
+                if library and library.KeybindManager then library.KeybindManager:ShowMenu(Content) end
+            end)
+            utility:CreateConnection(Content_BindValue.MouseButton1Click, function()
+                local manager = library and library.KeybindManager
+                if not manager then return end
+                manager:ShowMenu(Content)
+                manager.CaptureControl = Content
+                manager:RefreshControl(Content)
+                manager:RefreshMenu()
+            end)
+        end
 
         local Content_Holder_Button = utility:RenderObject("TextButton", {
             BackgroundColor3    = Color3.fromRGB(0, 0, 0),
@@ -2900,7 +2933,7 @@ function sections:CreateToggle(Properties)
             BorderColor3        = Color3.fromRGB(0, 0, 0),
             BorderSizePixel     = 0,
             Parent              = Content_Holder,
-            Size                = UDim2.new(1, 0, 1, 0),
+            Size                = UDim2.new(1, Content.InlineBind and -109 or 0, 1, 0),
             Text                = "",
             TextTransparency    = 1,
             AutoButtonColor     = false,
@@ -2939,6 +2972,10 @@ function sections:CreateToggle(Properties)
         local lastLeftClick = 0
         local leftClickToken = 0
         utility:CreateConnection(Content_Holder_Button.MouseButton1Click, function()
+            if Content.InlineBind then
+                Content:Set(not Content:Get())
+                return
+            end
             -- Single-click the right side / bind label to open the keybind menu.
             -- The rest of the row keeps the normal single-click toggle behavior.
             local mouse = uis:GetMouseLocation()
@@ -5739,6 +5776,15 @@ rapidFireRates = {},
 bunnyHopEnabled = false,
 bunnyHopBoost = 0.4,
 bunnyHopMaxSpeed = 28,
+knifeFlightEnabled = false,
+knifeFlightSpeed = 11,
+knifeSpeedEnabled = false,
+knifeSpeedValue = 5,
+knifeSpeedStyle = "Normal",
+knifeAirStopEnabled = false,
+knifeNoClipEnabled = false,
+knifeSpinbotEnabled = false,
+knifeSpinbotSpeed = 100,
 luaCode = "",
 luaAutoExecute = false
 }
@@ -5788,6 +5834,11 @@ config.unlockWeapons = false
 config.luaAutoExecute = false
 config.aimVisibleCheck = false
 config.bunnyHopEnabled = false
+config.knifeFlightEnabled = false
+config.knifeSpeedEnabled = false
+config.knifeAirStopEnabled = false
+config.knifeNoClipEnabled = false
+config.knifeSpinbotEnabled = false
 config.avatarModsEnabled = false
 config.rainbowAuraEnabled = false
 config.chinaHatEnabled = false
@@ -13884,12 +13935,12 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_59.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_57.lua"
 local SCRIPT_STABLE_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_current.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOLOAD_ENABLED_FILE = CONFIG_FOLDER .. "/_devkage_autoload_enabled.flag"
 local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_AutoLoad_LAST.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.59-global-keybind-ui-20260911"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.58-knife-movement-20260912"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -14828,7 +14879,6 @@ end
 local function remove_stale_devkage_payloads()
     if type(delfile) ~= "function" then return end
     for _, legacyName in ipairs({
-        "_devkage_autoload_payload_v5_2_57.lua",
         "_devkage_autoload_payload_v5_2_56.lua",
         "_devkage_autoload_payload_v5_2_55.lua",
         "_devkage_autoload_payload_v5_2_54.lua",
@@ -14868,7 +14918,6 @@ if not enabled then
         for _, path in ipairs({
             SCRIPT_PAYLOAD_FILE,
             SCRIPT_STABLE_PAYLOAD_FILE,
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_57.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_56.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_55.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_54.lua",
@@ -22664,44 +22713,6 @@ do
         section:CreateLabel({Text="Uses the active fighter and preserves movement."})
     end
     do
-        local section = antiAimPage:CreateSection({Name="Movement", Side="Right", Size=142})
-
-        -- Reuse the existing DevKage movement features exactly; this block only
-        -- relocates their UI and integrates them with the existing bind manager.
-        AntiAimControls.flight_enabled = section:CreateToggle({
-            Name="Flight",
-            State=AntiAimState.flight_enabled,
-            Flag="antiAimV3.flight_enabled",
-            Callback=function(value) AntiAimState.SetValue("flight_enabled", value) end
-        })
-        AntiAimControls.flight_speed = section:CreateSlider({
-            Name="Flight Speed",
-            State=AntiAimState.flight_speed,
-            Min=10,
-            Max=500,
-            Decimals=0,
-            Suffix=" studs/s",
-            Flag="antiAimV3.flight_speed",
-            Callback=function(value) AntiAimState.SetValue("flight_speed", value) end
-        })
-        AntiAimControls.noclip_enabled = section:CreateToggle({
-            Name="No Clip",
-            State=AntiAimState.noclip_enabled,
-            Flag="antiAimV3.noclip_enabled",
-            Callback=function(value) AntiAimState.SetValue("noclip_enabled", value) end
-        })
-
-        -- Every toggle in DevKage uses the same bind manager. The right-side
-        -- key text stays hidden until the user actually assigns a key.
-        if library.KeybindManager then
-            library.KeybindManager:RefreshControl(AntiAimControls.flight_enabled)
-            library.KeybindManager:RefreshControl(AntiAimControls.noclip_enabled)
-            library.KeybindManager:RefreshActive()
-        end
-
-        section:CreateLabel({Text="Click the key box on the right to rebind."})
-    end
-    do
         local section = antiAimPage:CreateSection({Name="Yaw Jitter", Side="Left", Size=370})
         AntiAimControls.jitter_range = section:CreateSlider({Name="Jitter Range", State=AntiAimState.jitter_range, Min=0, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.jitter_range", Callback=function(value) AntiAimState.SetValue("jitter_range", value) end})
         AntiAimControls.jitter_speed = section:CreateSlider({Name="Jitter Speed", State=AntiAimState.jitter_speed, Min=0.1, Max=120, Decimals=1, Suffix=" flips/s", Flag="antiAimV3.jitter_speed", Callback=function(value) AntiAimState.SetValue("jitter_speed", value) end})
@@ -22782,6 +22793,12 @@ do
         AntiAimControls.freestand_auto_flip = section:CreateToggle({Name="Flip Side on Damage", State=AntiAimState.freestand_auto_flip, Flag="antiAimV3.freestand_auto_flip", Callback=function(value) AntiAimState.SetValue("freestand_auto_flip", value) end})
         AntiAimControls.freestand_hit_cooldown = section:CreateSlider({Name="Damage Flip Cooldown", State=AntiAimState.freestand_hit_cooldown, Min=0, Max=2, Decimals=2, Suffix=" s", Flag="antiAimV3.freestand_hit_cooldown", Callback=function(value) AntiAimState.SetValue("freestand_hit_cooldown", value) end})
         section:CreateButton({Name="Flip Freestanding Side", Callback=function() AntiAimState.core.Actions.FlipSide() end})
+    end
+    do
+        local section = antiAimPage:CreateSection({Name="Movement Tools", Side="Left", Size=110})
+        AntiAimControls.noclip_enabled = section:CreateToggle({Name="Noclip", State=AntiAimState.noclip_enabled, Flag="antiAimV3.noclip_enabled", Callback=function(value) AntiAimState.SetValue("noclip_enabled", value) end})
+        AntiAimControls.flight_enabled = section:CreateToggle({Name="Flight", State=AntiAimState.flight_enabled, Flag="antiAimV3.flight_enabled", Callback=function(value) AntiAimState.SetValue("flight_enabled", value) end})
+        AntiAimControls.flight_speed = section:CreateSlider({Name="Flight Speed", State=AntiAimState.flight_speed, Min=10, Max=500, Decimals=0, Suffix=" studs/s", Flag="antiAimV3.flight_speed", Callback=function(value) AntiAimState.SetValue("flight_speed", value) end})
     end
     core.Syncing = false
     AntiAimState.Normalize()
@@ -24439,7 +24456,7 @@ local UI = context.UI
 local MaskShard = context.MaskShard
 local Environment = (type(getgenv) == "function" and getgenv()) or _G
 
--- Bunny Hop is the only lightweight movement helper retained here.
+-- Bunny Hop cooperates with the shared Knife movement controller below.
 local config = Environment.__DevKageConfig
 if type(config) == "table" then
                 end
@@ -24486,6 +24503,8 @@ local function stepBunnyHop(dt)
     if not KnifeCombatRuntime.Alive then return end
     local liveConfig = Environment.__DevKageConfig
     if type(liveConfig) ~= "table" or liveConfig.bunnyHopEnabled ~= true then return end
+    local movement = KnifeCombatRuntime.Movement
+    if movement and (movement:IsFlightActive() or movement:InputBlocked()) then return end
 
     local focused
     pcall(function() focused = UserInputService:GetFocusedTextBox() end)
@@ -24496,8 +24515,11 @@ local function stepBunnyHop(dt)
     if not character then return end
 
     local humanoid = character:FindFirstChildOfClass("Humanoid")
-    local root = character:FindFirstChild("HumanoidRootPart")
+    local root = humanoid and humanoid.RootPart
+        or character:FindFirstChild("HumanoidRootPart") or character.PrimaryPart
+        or character:FindFirstChild("Torso")
     if not humanoid or humanoid.Health <= 0 or not root or not root:IsA("BasePart") then return end
+    if root.Anchored or humanoid.SeatPart or humanoid.Sit or humanoid.PlatformStand then return end
 
     local state = humanoid:GetState()
     local onGround = humanoid.FloorMaterial ~= Enum.Material.Air
@@ -24511,6 +24533,7 @@ local function stepBunnyHop(dt)
         return
     end
 
+    if movement and movement:OwnsHorizontal() then return end
     local velocity = root.AssemblyLinearVelocity
     local horizontal = Vector3.new(velocity.X, 0, velocity.Z)
     local speed = horizontal.Magnitude
@@ -24542,7 +24565,6 @@ local function stepBunnyHop(dt)
     )
 
     pcall(function() root.AssemblyLinearVelocity = newVelocity end)
-    pcall(function() root.Velocity = newVelocity end)
 end
 
 rapidFireSection:CreateLabel({
@@ -24593,6 +24615,662 @@ KnifeCombatRuntime.Controls.BunnyHopMaxSpeed = rapidFireSection:CreateSlider({
     end
 })
 
+-- BEGIN DEVKAGE KNIFE MOVEMENT v5.2.58
+-- Shared character movement for the Knife controls and existing flight/noclip.
+-- Uses standard client APIs. Server validation and custom character controllers
+-- determine which effects an experience permits; this is not a native external.
+do
+    local previous = Environment.__DevKageMovementRuntime
+    if type(previous) == "table" and type(previous.Destroy) == "function" then
+        pcall(previous.Destroy, previous)
+    end
+
+    local antiAim = context.AntiAimState or {}
+    local legacy = context.AntiAimMovement
+    local Workspace = game:GetService("Workspace")
+    local ZERO = Vector3.new(0, 0, 0)
+    local UP = Vector3.new(0, 1, 0)
+    local stateTypes = Enum.HumanoidStateType
+    local Movement = {
+        Alive = true,
+        Connections = {},
+        CharacterConnections = {},
+        Controls = {},
+        Parts = {},
+        Properties = {},
+        Objects = {},
+        Character = nil,
+        Humanoid = nil,
+        Root = nil,
+        FlightActive = false,
+        SpinActive = false,
+        NoClipActive = false,
+        HorizontalActive = false,
+        WindowFocused = true,
+        Stick = Vector3.new(0, 0, 0),
+        SpinYaw = nil,
+        LastStatus = nil,
+        RetryAt = 0,
+        LastError = nil,
+        Wrappers = {},
+    }
+
+    Environment.__DevKageMovementRuntime = Movement
+    UI.KnifeMovement = Movement
+    KnifeCombatRuntime.Movement = Movement
+
+    local function finite(value, fallback, minimum, maximum)
+        local number = tonumber(value)
+        if not number or number ~= number or number == math.huge or number == -math.huge then
+            number = fallback
+        end
+        return math.clamp(number, minimum, maximum)
+    end
+
+    local function flat(vector)
+        return Vector3.new(vector.X, 0, vector.Z)
+    end
+
+    local function normal(vector)
+        if vector.Magnitude > 0.001 then return vector.Unit end
+        return ZERO
+    end
+
+    local function disconnectAll(connections)
+        for _, connection in ipairs(connections) do
+            pcall(function() connection:Disconnect() end)
+        end
+        table.clear(connections)
+    end
+
+    function Movement:Config()
+        local live = Environment.__DevKageConfig
+        return type(live) == "table" and live or {}
+    end
+
+    function Movement:Requests()
+        local cfg = self:Config()
+        return {
+            Flight = cfg.knifeFlightEnabled == true or antiAim.flight_enabled == true,
+            Speed = cfg.knifeSpeedEnabled == true,
+            AirStop = cfg.knifeAirStopEnabled == true,
+            NoClip = cfg.knifeNoClipEnabled == true or antiAim.noclip_enabled == true,
+            Spin = cfg.knifeSpinbotEnabled == true,
+        }
+    end
+
+    function Movement:IsFlightActive()
+        return self.Alive and self.FlightActive
+    end
+
+    function Movement:OwnsOrientation()
+        return self.Alive and (self.FlightActive or self.SpinActive)
+    end
+
+    function Movement:OwnsHorizontal()
+        return self.Alive and (self.FlightActive or self.HorizontalActive)
+    end
+
+    function Movement:SetStatus(message)
+        if self.LastStatus == message then return end
+        self.LastStatus = message
+        if self.Status then self.Status:SetText(message) end
+    end
+
+    -- Remember the most recent value supplied by the game, including sprint
+    -- changes made while a modifier is on. Do not restore over a newer writer.
+    function Movement:WriteProperty(object, property, value)
+        local current = object[property]
+        local saved = self.Properties[object]
+        if not saved then
+            saved = {}
+            self.Properties[object] = saved
+        end
+        local entry = saved[property]
+        if not entry then
+            entry = {Original = current, Applied = current}
+            if property == "AutoRotate" and antiAim.enabled and antiAim.core
+                and antiAim.core.Runtime and antiAim.core.Runtime.savedHumanoids then
+                local original = antiAim.core.Runtime.savedHumanoids[object]
+                if original ~= nil then entry.Original = original end
+            end
+            saved[property] = entry
+        elseif current ~= entry.Applied then
+            entry.Original = current
+        end
+        if current ~= value then object[property] = value end
+        entry.Applied = value
+    end
+
+    function Movement:RestoreProperty(object, property)
+        local saved = self.Properties[object]
+        local entry = saved and saved[property]
+        if not entry then return end
+        pcall(function()
+            local original = entry.Original
+            if property == "AutoRotate" and antiAim.enabled then
+                if antiAim.core and antiAim.core.Runtime and antiAim.core.Runtime.savedHumanoids then
+                    antiAim.core.Runtime.savedHumanoids[object] = original
+                end
+                original = false
+            end
+            if object[property] == entry.Applied then object[property] = original end
+        end)
+        saved[property] = nil
+        if next(saved) == nil then self.Properties[object] = nil end
+    end
+
+    function Movement:RestoreObject(object)
+        local saved = self.Properties[object]
+        if not saved then return end
+        local names = {}
+        for property in pairs(saved) do names[#names + 1] = property end
+        for _, property in ipairs(names) do self:RestoreProperty(object, property) end
+    end
+
+    function Movement:RestoreAllProperties()
+        local objects = {}
+        for object in pairs(self.Properties) do objects[#objects + 1] = object end
+        for _, object in ipairs(objects) do self:RestoreObject(object) end
+    end
+
+    function Movement:DestroyObject(key)
+        local object = self.Objects[key]
+        self.Objects[key] = nil
+        if object then pcall(function() object:Destroy() end) end
+    end
+
+    function Movement:CreateObject(key, className)
+        -- Track immediately, so a failed property assignment still cleans up.
+        local object = Instance.new(className)
+        self.Objects[key] = object
+        object.Name = "DevKageKnife_" .. key
+        return object
+    end
+
+    function Movement:EnsureAttachment()
+        local attachment = self.Objects.Attachment
+        if attachment and attachment.Parent == self.Root then return attachment end
+        self:DestroyObject("Velocity")
+        self:DestroyObject("Orientation")
+        self:DestroyObject("Attachment")
+        attachment = self:CreateObject("Attachment", "Attachment")
+        attachment.Parent = self.Root
+        return attachment
+    end
+
+    function Movement:EnsureVelocity()
+        local attachment = self:EnsureAttachment()
+        local velocity = self.Objects.Velocity
+        if velocity and velocity.Parent == self.Root then return velocity end
+        self:DestroyObject("Velocity")
+        velocity = self:CreateObject("Velocity", "LinearVelocity")
+        velocity.Attachment0 = attachment
+        velocity.RelativeTo = Enum.ActuatorRelativeTo.World
+        velocity.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
+        velocity.ForceLimitsEnabled = false
+        velocity.VectorVelocity = ZERO
+        velocity.Parent = self.Root
+        return velocity
+    end
+
+    function Movement:EnsureOrientation()
+        local attachment = self:EnsureAttachment()
+        local orientation = self.Objects.Orientation
+        if orientation and orientation.Parent == self.Root then return orientation end
+        self:DestroyObject("Orientation")
+        orientation = self:CreateObject("Orientation", "AlignOrientation")
+        orientation.Mode = Enum.OrientationAlignmentMode.OneAttachment
+        orientation.Attachment0 = attachment
+        orientation.RigidityEnabled = false
+        orientation.MaxTorque = 1000000000
+        orientation.MaxAngularVelocity = math.rad(720)
+        orientation.Responsiveness = 60
+        orientation.CFrame = self.Root.CFrame.Rotation
+        orientation.Parent = self.Root
+        return orientation
+    end
+
+    function Movement:ReleaseFlight()
+        local wasActive = self.FlightActive
+        self.FlightActive = false
+        self:DestroyObject("Velocity")
+        if self.Humanoid then self:RestoreProperty(self.Humanoid, "PlatformStand") end
+        if wasActive and self.Humanoid and self.Root then
+            pcall(function()
+                local humanoid, root = self.Humanoid, self.Root
+                if humanoid.Health <= 0 or root.Anchored or humanoid.SeatPart then return end
+                -- Drop into normal gravity without retaining a flight launch.
+                local velocity = root.AssemblyLinearVelocity
+                local horizontal = flat(velocity)
+                local limit = finite(humanoid.WalkSpeed, 16, 0, 200)
+                if horizontal.Magnitude > limit then horizontal = normal(horizontal) * limit end
+                root.AssemblyLinearVelocity = horizontal + Vector3.new(0, math.min(velocity.Y, 0), 0)
+                local state = humanoid:GetState()
+                if not humanoid.PlatformStand
+                    and (state == stateTypes.PlatformStanding or state == stateTypes.Physics) then
+                    humanoid:ChangeState(humanoid.FloorMaterial == Enum.Material.Air
+                        and stateTypes.Freefall or stateTypes.GettingUp)
+                end
+            end)
+        end
+    end
+
+    function Movement:ReleaseOrientation()
+        local wasActive = self.SpinActive or self.Objects.Orientation ~= nil
+        self.SpinActive = false
+        self.SpinYaw = nil
+        self:DestroyObject("Orientation")
+        if self.Humanoid then self:RestoreProperty(self.Humanoid, "AutoRotate") end
+        if wasActive and self.Root then
+            pcall(function()
+                if not self.Root.Anchored then self.Root.AssemblyAngularVelocity = ZERO end
+            end)
+        end
+        if not self.Objects.Velocity then self:DestroyObject("Attachment") end
+    end
+
+    function Movement:RestoreCollisions()
+        for part in pairs(self.Parts) do self:RestoreProperty(part, "CanCollide") end
+        self.NoClipActive = false
+    end
+
+    function Movement:Suspend()
+        self:ReleaseFlight()
+        self:ReleaseOrientation()
+        self:RestoreAllProperties()
+        self.NoClipActive = false
+        self.HorizontalActive = false
+    end
+
+    function Movement:ReleaseCharacter()
+        self:Suspend()
+        disconnectAll(self.CharacterConnections)
+        table.clear(self.Parts)
+        self.Character, self.Humanoid, self.Root = nil, nil, nil
+    end
+
+    function Movement:FindRig(character)
+        if not character or not character.Parent then return nil end
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+            or character:FindFirstChildWhichIsA("Humanoid", true)
+        if not humanoid then return nil end
+        local root = humanoid.RootPart
+        if not root or not root:IsA("BasePart") or not root:IsDescendantOf(character) then
+            root = character:FindFirstChild("HumanoidRootPart")
+                or character.PrimaryPart
+                or character:FindFirstChild("UpperTorso")
+                or character:FindFirstChild("Torso")
+        end
+        if not root or not root:IsA("BasePart") or not root:IsDescendantOf(character) then return nil end
+        return humanoid, root
+    end
+
+    function Movement:AttachCharacter(character, humanoid, root)
+        if self.Character == character and self.Humanoid == humanoid and self.Root == root then return end
+        self:ReleaseCharacter()
+        self.Character, self.Humanoid, self.Root = character, humanoid, root
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then self.Parts[part] = true end
+        end
+        self.CharacterConnections[#self.CharacterConnections + 1] = character.DescendantAdded:Connect(function(part)
+            if part:IsA("BasePart") then self.Parts[part] = true end
+        end)
+        self.CharacterConnections[#self.CharacterConnections + 1] = character.DescendantRemoving:Connect(function(part)
+            if self.Parts[part] then
+                self:RestoreObject(part)
+                self.Parts[part] = nil
+            end
+        end)
+        self.CharacterConnections[#self.CharacterConnections + 1] = humanoid.Died:Connect(function()
+            self:Suspend()
+            self:SetStatus("Movement: waiting for respawn")
+        end)
+    end
+
+    function Movement:InputBlocked()
+        return not self.WindowFocused
+            or UserInputService:GetFocusedTextBox() ~= nil
+            or (library.Window and library.Window.Enabled == true)
+            or (library.KeybindManager and library.KeybindManager.CaptureControl ~= nil)
+    end
+
+    function Movement:KeyDown(key)
+        return UserInputService:IsKeyDown(key)
+    end
+
+    function Movement:MoveVector(camera, flying)
+        if self:InputBlocked() then return ZERO end
+        local rawX, rawZ = 0, 0
+        if self:KeyDown(Enum.KeyCode.D) or self:KeyDown(Enum.KeyCode.Right) then rawX = rawX + 1 end
+        if self:KeyDown(Enum.KeyCode.A) or self:KeyDown(Enum.KeyCode.Left) then rawX = rawX - 1 end
+        if self:KeyDown(Enum.KeyCode.W) or self:KeyDown(Enum.KeyCode.Up) then rawZ = rawZ + 1 end
+        if self:KeyDown(Enum.KeyCode.S) or self:KeyDown(Enum.KeyCode.Down) then rawZ = rawZ - 1 end
+        if rawX == 0 and rawZ == 0 and self.Stick.Magnitude > 0.15 then
+            rawX, rawZ = self.Stick.X, self.Stick.Y
+        end
+        local direction = ZERO
+        if camera and (rawX ~= 0 or rawZ ~= 0) then
+            local forward = camera.CFrame.LookVector
+            local right = normal(flat(camera.CFrame.RightVector))
+            if not flying then
+                forward = normal(flat(forward))
+                if forward.Magnitude < 0.001 then
+                    forward = normal(flat(self.Root.CFrame.LookVector))
+                end
+            end
+            direction = right * rawX + forward * rawZ
+        elseif self.Humanoid then
+            -- Also accepts the standard touch and controller MoveDirection.
+            direction = flat(self.Humanoid.MoveDirection)
+        end
+        if flying then
+            local vertical = 0
+            if self:KeyDown(Enum.KeyCode.Space) then vertical = vertical + 1 end
+            if self:KeyDown(Enum.KeyCode.LeftControl) or self:KeyDown(Enum.KeyCode.RightControl) then
+                vertical = vertical - 1
+            end
+            direction = direction + UP * vertical
+        end
+        if direction.Magnitude > 1 then direction = direction.Unit end
+        return direction
+    end
+
+    function Movement:ApplyNoClip(enabled)
+        if not enabled then
+            if self.NoClipActive then self:RestoreCollisions() end
+            return
+        end
+        self.NoClipActive = true
+        -- Parts are cached and updated by character events, not rescanned each frame.
+        for part in pairs(self.Parts) do
+            if part:IsDescendantOf(self.Character) then
+                self:WriteProperty(part, "CanCollide", false)
+            else
+                self:RestoreObject(part)
+                self.Parts[part] = nil
+            end
+        end
+    end
+
+    function Movement:ApplyFlight(camera, cfg)
+        self.FlightActive = true
+        self:WriteProperty(self.Humanoid, "PlatformStand", true)
+        self:WriteProperty(self.Humanoid, "AutoRotate", false)
+        local speed = cfg.knifeFlightEnabled == true
+            and finite(cfg.knifeFlightSpeed, 11, 1, 300)
+            or finite(antiAim.flight_speed, 120, 10, 500)
+        local direction = self:MoveVector(camera, true)
+        self:EnsureVelocity().VectorVelocity = direction * speed
+    end
+
+    function Movement:ApplyOrientation(camera, spin, cfg, dt)
+        local orientation = self:EnsureOrientation()
+        self:WriteProperty(self.Humanoid, "AutoRotate", false)
+        local look = flat(self.Root.CFrame.LookVector)
+        if spin then
+            if not self.SpinActive or self.SpinYaw == nil then
+                self.SpinYaw = math.atan2(-look.X, -look.Z)
+            end
+            self.SpinActive = true
+            self.SpinYaw = (self.SpinYaw + math.rad(finite(cfg.knifeSpinbotSpeed, 100, 0, 100)) * dt)
+                % (math.pi * 2)
+            orientation.CFrame = CFrame.Angles(0, self.SpinYaw, 0)
+        else
+            self.SpinActive = false
+            self.SpinYaw = nil
+            if camera then look = flat(camera.CFrame.LookVector) end
+            if look.Magnitude > 0.001 then
+                orientation.CFrame = CFrame.lookAt(ZERO, look.Unit, UP)
+            end
+        end
+    end
+
+    function Movement:ApplySpeedAndAirStop(request, camera, cfg)
+        self.HorizontalActive = false
+        if not request.Speed or self.FlightActive or cfg.knifeSpeedStyle == "Velocity" then
+            self:RestoreProperty(self.Humanoid, "WalkSpeed")
+        end
+        if self.FlightActive then return end
+        local direction = self:MoveVector(camera, false)
+        if request.Speed then
+            local speed = finite(cfg.knifeSpeedValue, 5, 1, 200)
+            if cfg.knifeSpeedStyle == "Velocity" then
+                if direction.Magnitude > 0.001 then
+                    local velocity = self.Root.AssemblyLinearVelocity
+                    self.Root.AssemblyLinearVelocity = direction * speed + Vector3.new(0, velocity.Y, 0)
+                    self.HorizontalActive = true
+                end
+            else
+                self:WriteProperty(self.Humanoid, "WalkSpeed", speed)
+            end
+        end
+        local state = self.Humanoid:GetState()
+        local airborne = self.Humanoid.FloorMaterial == Enum.Material.Air
+            and (state == stateTypes.Freefall or state == stateTypes.Jumping)
+        if request.AirStop and airborne and direction.Magnitude <= 0.001 then
+            local velocity = self.Root.AssemblyLinearVelocity
+            self.Root.AssemblyLinearVelocity = Vector3.new(0, velocity.Y, 0)
+            self.HorizontalActive = true
+        end
+    end
+
+    function Movement:Step(dt)
+        if not self.Alive then return end
+        local request = self:Requests()
+        if not (request.Flight or request.Speed or request.AirStop or request.NoClip or request.Spin) then
+            if self.Character or next(self.Objects) or next(self.Properties) then self:ReleaseCharacter() end
+            self:SetStatus("Movement: ready")
+            return
+        end
+        local character = LocalPlayer.Character
+        local humanoid, root = self:FindRig(character)
+        if not humanoid or not root then
+            self:ReleaseCharacter()
+            self:SetStatus(character and "Movement: compatible character unavailable" or "Movement: waiting for character")
+            return
+        end
+        self:AttachCharacter(character, humanoid, root)
+        local assemblyRoot = root.AssemblyRootPart
+        local state = humanoid:GetState()
+        if humanoid.Health <= 0 or state == stateTypes.Dead then
+            self:Suspend()
+            self:SetStatus("Movement: waiting for respawn")
+            return
+        end
+        if root.Anchored or (assemblyRoot and assemblyRoot.Anchored)
+            or humanoid.SeatPart or humanoid.Sit or state == stateTypes.Seated
+            or state == stateTypes.Ragdoll or state == stateTypes.FallingDown
+            or (humanoid.PlatformStand and not self.FlightActive) then
+            self:Suspend()
+            self:SetStatus("Movement: paused by character state")
+            return
+        end
+        dt = finite(dt, 1 / 60, 0, 0.1)
+        local cfg = self:Config()
+        local camera = Workspace.CurrentCamera
+        self:ApplyNoClip(request.NoClip)
+        if request.Flight and camera then
+            self:ApplyFlight(camera, cfg)
+        else
+            self:ReleaseFlight()
+        end
+        if self.FlightActive or request.Spin then
+            self:ApplyOrientation(camera, request.Spin, cfg, dt)
+        else
+            self:ReleaseOrientation()
+        end
+        self:ApplySpeedAndAirStop(request, camera, cfg)
+        if request.Flight and not camera then
+            self:SetStatus("Movement: waiting for camera")
+        elseif self:InputBlocked() then
+            self:SetStatus("Movement: input paused while menu or chat is open")
+        else
+            self:SetStatus("Movement: active")
+        end
+    end
+
+    function Movement:StepSafely(dt)
+        if not self.Alive or os.clock() < self.RetryAt then return end
+        local ok, err = pcall(self.Step, self, dt)
+        if ok then
+            self.LastError = nil
+            return
+        end
+        -- Release partial constraints and property writes before a bounded retry.
+        pcall(self.Suspend, self)
+        self.RetryAt = os.clock() + 1
+        local message = tostring(err)
+        if self.LastError ~= message then warn("[DevKage Movement] " .. message) end
+        self.LastError = message
+        self:SetStatus("Movement: character API unavailable; retrying")
+    end
+
+    function Movement:Wrap(target, key, replacement)
+        if type(target) ~= "table" or type(target[key]) ~= "function" then return end
+        self.Wrappers[#self.Wrappers + 1] = {
+            Target = target, Key = key, Original = target[key], Replacement = replacement,
+        }
+        target[key] = replacement
+    end
+
+    function Movement:Destroy()
+        if not self.Alive then return end
+        self.Alive = false
+        disconnectAll(self.Connections)
+        self:ReleaseCharacter()
+        for index = #self.Wrappers, 1, -1 do
+            local entry = self.Wrappers[index]
+            if entry.Target[entry.Key] == entry.Replacement then
+                entry.Target[entry.Key] = entry.Original
+            end
+        end
+        table.clear(self.Wrappers)
+        if Environment.__DevKageMovementRuntime == self then Environment.__DevKageMovementRuntime = nil end
+        if UI.KnifeMovement == self then UI.KnifeMovement = nil end
+        if KnifeCombatRuntime.Movement == self then KnifeCombatRuntime.Movement = nil end
+    end
+
+    -- Existing Anti-Aim flight/noclip use this same owner. Either tab can keep
+    -- an effect enabled; one tab cannot restore collisions under the other.
+    if type(legacy) == "table" then
+        if legacy.flightConnection then legacy.flightConnection:Disconnect(); legacy.flightConnection = nil end
+        if legacy.noclipConnection then legacy.noclipConnection:Disconnect(); legacy.noclipConnection = nil end
+        if type(legacy.ClearFlightRig) == "function" then legacy:ClearFlightRig(false) end
+        if type(legacy.RestoreCollisions) == "function" then legacy:RestoreCollisions() end
+        Movement:Wrap(legacy, "SetFlight", function(_, enabled)
+            antiAim.flight_enabled = enabled == true
+            Movement.RetryAt = 0
+            Movement:StepSafely(0)
+        end)
+        Movement:Wrap(legacy, "SetNoClip", function(_, enabled)
+            antiAim.noclip_enabled = enabled == true
+            Movement.RetryAt = 0
+            Movement:StepSafely(0)
+        end)
+    end
+
+    -- Pause Anti-Aim's orientation writer while flight or spin owns the rig.
+    -- Values and toggles are retained, so its pose resumes when ownership ends.
+    for _, key in ipairs({"Step", "WritePose"}) do
+        local original = antiAim[key]
+        if type(original) == "function" then
+            Movement:Wrap(antiAim, key, function(...)
+                if Movement:OwnsOrientation() then return end
+                return original(...)
+            end)
+        end
+    end
+
+    local function toggle(name, field, key)
+        local control = rapidFireSection:CreateToggle({
+            Name = name,
+            State = Movement:Config()[field] == true,
+            Flag = "knife." .. field,
+            InlineBind = true,
+            BindKey = key and {"KeyCode", key} or nil,
+            Callback = function(value)
+                if not Movement.Alive then return end
+                Movement:Config()[field] = value == true
+                Movement.RetryAt = 0
+                Movement:StepSafely(0)
+            end,
+        })
+        Movement.Controls[field] = control
+        return control
+    end
+
+    local function slider(name, field, default, minimum, maximum, suffix)
+        local control = rapidFireSection:CreateSlider({
+            Name = name,
+            State = finite(Movement:Config()[field], default, minimum, maximum),
+            Min = minimum, Max = maximum, Decimals = 0, Suffix = suffix or "",
+            Flag = "knife." .. field,
+            Callback = function(value)
+                if not Movement.Alive then return end
+                Movement:Config()[field] = finite(value, default, minimum, maximum)
+            end,
+        })
+        Movement.Controls[field] = control
+        return control
+    end
+
+    toggle("Flight", "knifeFlightEnabled", "F")
+    slider("Flight Speed", "knifeFlightSpeed", 11, 1, 300, " studs/s")
+    toggle("Speed", "knifeSpeedEnabled", "V")
+    slider("Speed Value", "knifeSpeedValue", 5, 1, 200, " studs/s")
+    Movement.Controls.knifeSpeedStyle = rapidFireSection:CreateDropdown({
+        Name = "Speed Style",
+        Options = {"Normal", "Velocity"},
+        State = Movement:Config().knifeSpeedStyle == "Velocity" and 2 or 1,
+        Flag = "knife.knifeSpeedStyle",
+        Callback = function(index)
+            if not Movement.Alive then return end
+            Movement:Config().knifeSpeedStyle = index == 2 and "Velocity" or "Normal"
+            Movement:StepSafely(0)
+        end,
+    })
+    toggle("Slippery Stop In Air", "knifeAirStopEnabled", "C")
+    toggle("No Clip", "knifeNoClipEnabled", "N")
+    toggle("Spinbot", "knifeSpinbotEnabled", nil)
+    slider("Spinbot Speed", "knifeSpinbotSpeed", 100, 0, 100, " deg/s")
+    Movement.Status = rapidFireSection:CreateLabel({Text = "Movement: ready"})
+    rapidFireSection:CreateLabel({Text = "Flight: WASD / Space up / Ctrl down"})
+    rapidFireSection:CreateLabel({Text = "Air Stop: release movement to brake in air"})
+
+    Movement.Connections[#Movement.Connections + 1] = UserInputService.WindowFocusReleased:Connect(function()
+        Movement.WindowFocused = false
+        Movement.Stick = ZERO
+        if Movement.Objects.Velocity then Movement.Objects.Velocity.VectorVelocity = ZERO end
+    end)
+    Movement.Connections[#Movement.Connections + 1] = UserInputService.WindowFocused:Connect(function()
+        Movement.WindowFocused = true
+    end)
+    Movement.Connections[#Movement.Connections + 1] = UserInputService.InputChanged:Connect(function(input)
+        if input.KeyCode == Enum.KeyCode.Thumbstick1 then Movement.Stick = input.Position end
+    end)
+    Movement.Connections[#Movement.Connections + 1] = UserInputService.InputEnded:Connect(function(input)
+        if input.KeyCode == Enum.KeyCode.Thumbstick1 then Movement.Stick = ZERO end
+    end)
+    Movement.Connections[#Movement.Connections + 1] = UserInputService.GamepadDisconnected:Connect(function()
+        Movement.Stick = ZERO
+    end)
+    Movement.Connections[#Movement.Connections + 1] = LocalPlayer.CharacterRemoving:Connect(function(character)
+        if Movement.Character == character then Movement:ReleaseCharacter() end
+    end)
+    Movement.Connections[#Movement.Connections + 1] = LocalPlayer.CharacterAdded:Connect(function()
+        Movement.RetryAt = 0
+        Movement:StepSafely(0)
+    end)
+    local simulation = RunService.PreSimulation
+    Movement.Connections[#Movement.Connections + 1] = simulation:Connect(function(dt)
+        Movement:StepSafely(dt)
+    end)
+    table.insert(library.CleanupCallbacks, function() Movement:Destroy() end)
+    Movement:StepSafely(0)
+end
+-- END DEVKAGE KNIFE MOVEMENT v5.2.58
+
 track(RunService.Heartbeat:Connect(stepBunnyHop))
 
 if type(MaskShard) == "table" and type(MaskShard.Runtime) == "table" then
@@ -24629,6 +25307,8 @@ end
     Window = library.Window,
     Library = library,
     UI = UI,
+    AntiAimState = AntiAimState,
+    AntiAimMovement = AntiAimMovement,
     MaskShard = MaskShard,
 })
 
@@ -30100,7 +30780,7 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
 ]============]
 
 local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
-__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.59-global-keybind-ui-20260911"
+__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.58-knife-movement-20260912"
 __devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
 
 -- CURRENT LATE-BOOT AUTOEXEC OWNERSHIP (v5.2.55)
