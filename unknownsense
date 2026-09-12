@@ -1,4 +1,5 @@
-local _a=table.concat({[==================[
+local __DEVKAGE_EMBEDDED_SOURCE = table.concat({
+    [==================[
 
 
 
@@ -749,7 +750,8 @@ function utility:RegisterThemeObject(Render, RenderProperties)
         local transparent = tonumber(RenderProperties.BackgroundTransparency) or 0
         if typeof(color) == "Color3" and transparent < 1 then
             local maxv = math.max(color.R, color.G, color.B)
-            local minv = math.min(color.R, color.G, color.]==================],[==================[B)
+            local minv = math.min(color.R, color.G, color.]==================],
+    [==================[B)
             if (maxv - minv) <= 0.012 and maxv <= 0.42 then
                 local gray = (color.R + color.G + color.B) / 3
                 library.ThemeUIObjects[#library.ThemeUIObjects + 1] = {
@@ -1369,7 +1371,8 @@ function library:CreateWindow(Properties)
                                 tws:Create(obj, ti, {TextTransparency = state and tt or 1}):Play()
                             end
                         elseif cls == "ScrollingFrame" then
-                            local bt = props["BackgroundTra]==================],[==================[nsparency"] or 0
+                            local bt = props["BackgroundTra]==================],
+    [==================[nsparency"] or 0
                             if bt ~= 1 then
                                 tws:Create(obj, ti, {BackgroundTransparency = state and bt or 1}):Play()
                             end
@@ -1956,7 +1959,8 @@ function pages:CreateSection(Properties)
             Position            = UDim2.new(0, 1, 0, 1),
             Rotation            = 180,
             Size                = UDim2.new(1, -2, 0, 20),
-    ]==================],[==================[        Visible             = false,
+    ]==================],
+    [==================[        Visible             = false,
             ZIndex              = 4,
             Image               = "rbxassetid://7783533907",
             ImageColor3         = Color3.fromRGB(23, 23, 23)
@@ -2528,7 +2532,8 @@ function BindManager:EnsureUI(window)
     clearButton.Size = UDim2.new(0.5, -10, 0, 28)
     clearButton.Font = Enum.Font.Code
     clearButton.TextSize = 9
-    clearButton.TextColor3 = Color3]==================],[==================[.fromRGB(175, 175, 175)
+    clearButton.TextColor3 = Color3]==================],
+    [==================[.fromRGB(175, 175, 175)
     clearButton.Text = "clear"
     clearButton.ZIndex = 50002
     clearButton.Parent = menu
@@ -3159,7 +3164,8 @@ function sections:CreateToggle(Properties)
                 if manager then manager:ShowMenu(Content) end
             end)
             utility:CreateConnection(Content_BindValue.MouseButton1Click, function()
-             ]==================],[==================[   local manager = library and library.KeybindManager
+             ]==================],
+    [==================[   local manager = library and library.KeybindManager
                 if manager then manager:BeginInlineCapture(Content) end
             end)
             utility:CreateConnection(Content_BindValue.MouseButton2Click, function()
@@ -3681,7 +3687,8 @@ function sections:CreateDropdown(Properties)
             TextTransparency = 1,
             AutoButtonColor = false,
             Active = true,
-   ]==================],[==================[         ZIndex = 30
+   ]==================],
+    [==================[         ZIndex = 30
         })
 
         local popup = nil
@@ -4219,7 +4226,8 @@ function sections:CreateColorpicker(Properties)
         local hueStops = {
             Color3.fromRGB(255,0,0),
             Color3.fromRGB(255,255,0),
-]==================],[==================[            Color3.fromRGB(0,255,0),
+]==================],
+    [==================[            Color3.fromRGB(0,255,0),
             Color3.fromRGB(0,255,255),
             Color3.fromRGB(0,0,255),
             Color3.fromRGB(255,0,255),
@@ -4782,7 +4790,8 @@ local function ua_startExternalDetector()
             pcall(function()
                 if UA.CosmeticLibrary then
                     changed = changed
-                        or (UA.ownsCosmeticWrapper and UA.CosmeticLibrary.OwnsCosmetic ~= UA.ownsCosmeticWrapp]==================],[==================[er)
+                        or (UA.ownsCosmeticWrapper and UA.CosmeticLibrary.OwnsCosmetic ~= UA.ownsCosmeticWrapp]==================],
+    [==================[er)
                         or (UA.ownsNormallyWrapper and UA.CosmeticLibrary.OwnsCosmeticNormally ~= UA.ownsNormallyWrapper)
                         or (UA.ownsUniversalWrapper and UA.CosmeticLibrary.OwnsCosmeticUniversally ~= UA.ownsUniversalWrapper)
                         or (UA.ownsForWeaponWrapper and UA.CosmeticLibrary.OwnsCosmeticForWeapon ~= UA.ownsForWeaponWrapper)
@@ -5375,7 +5384,8 @@ local function ua_installEmoteController()
     -- Black-box coexistence mode never replaces EmoteController.GetEmotes.
     -- It only augments the live table returned by whatever implementation is
     -- current after the protected script loads.
-    if not UA.EmoteController then ret]==================],[==================[urn end
+    if not UA.EmoteController then ret]==================],
+    [==================[urn end
     UA.emoteControllerInstalled = true
     ua_rebuildEmoteCatalog()
     ua_startEmoteSnapshotLoop()
@@ -5974,7 +5984,8 @@ streamerHudShowFPS = true,
 streamerHudShowPing = true,
 streamerHudShowClock = true,
 streamerHudAccent = {175, 205, 75},
-streamerHudSecondary = {110, 165, 255]==================],[==================[},
+streamerHudSecondary = {110, 165, 255]==================],
+    [==================[},
 streamerHudTextColor = {205, 205, 205},
 streamerHudBackgroundAlpha = 0.03,
 streamerHudScale = 1,
@@ -6552,7 +6563,8 @@ for attribute,value in pairs({
 IsInfluencer=config.influencer==true,Influencer=config.influencer==true,
 IsRobloxEmployee=config.admin==true,IsAdmin=config.admin==true,Admin=config.admin==true
 }) do
-pcall(function() player:SetAttribute(attribute,val]==================],[==================[ue) end)
+pcall(function() player:SetAttribute(attribute,val]==================],
+    [==================[ue) end)
 end
 end
 
@@ -7110,7 +7122,8 @@ end
 do
     local environment=(type(getgenv)=="function" and getgenv()) or _G
     local previous=environment.__DevKageELOAutoLoadWatcher
-   ]==================],[==================[ if type(previous)=="table" and previous.Connection then
+   ]==================],
+    [==================[ if type(previous)=="table" and previous.Connection then
         pcall(function() previous.Connection:Disconnect() end)
     end
 
@@ -7637,7 +7650,8 @@ function SpooferState.AvatarAssets.RepairAppearance(character, humanoid, templat
         if not object.Parent then object.Parent = character end
         object:SetAttribute("DevKageAvatarAsset", true)
     end
-    if replaceClo]==================],[==================[thing then
+    if replaceClo]==================],
+    [==================[thing then
         for _, object in ipairs(originals) do if not kept[object] then object:Destroy() end end
     end
     local manifest = assets.Manifest(template)
@@ -8165,7 +8179,8 @@ local function installRecordingPrivacySpoof(player, data, config)
             end
         elseif object:IsA("ViewportFrame") then
             task.defer(function()
-                if not privacy.Active or not object.Parent t]==================],[==================[hen return end
+                if not privacy.Active or not object.Parent t]==================],
+    [==================[hen return end
                 for _, child in ipairs(object:GetDescendants()) do
                     if child:IsA("Model") and isOriginalViewportModel(child) then
                         buildViewportProxy(child)
@@ -8657,7 +8672,8 @@ function SpooferState.ApplyAvatarIdOnly(userId)
 
     local function applyAvatarTick()
         if avatarToken ~= SpooferState.avatarOnlyToken then return end
-        local cha]==================],[==================[racter = LocalPlayer and LocalPlayer.Character
+        local cha]==================],
+    [==================[racter = LocalPlayer and LocalPlayer.Character
         local humanoid = character and character:FindFirstChildOfClass("Humanoid")
         if not character or not humanoid or humanoid.Health <= 0 or SpooferState.avatarApplyBusy then return end
         if tonumber(SpooferState.avatarOnlyUserId) ~= avatarUserId then return end
@@ -9317,7 +9333,8 @@ avatar_accessory_scale        = 1,
 mod_detector_enabled          = false,
 hacker_detector_enabled       = false,
 hacker_speed_threshold        = 180,
-hacker_spe]==================],[==================[ed_duration         = 0.75,
+hacker_spe]==================],
+    [==================[ed_duration         = 0.75,
 devkage_cursor_enabled             = true,
 devkage_cursor_profile             = "Custom",
 devkage_cursor_position_mode       = "Mouse",
@@ -9931,7 +9948,8 @@ function library.ExtraVisualRuntime:IsArmPart(part, model)
     if not part or not part:IsA("BasePart") then return false end
 
     local n = tostring(part.Name or ""):lower():gsub("[%s_%-]", "")
-    for _, blocked in ipairs({"handguard"]==================],[==================[,"handle","foregrip","charm","armor","hitbox","collision","trigger","proxy"}) do
+    for _, blocked in ipairs({"handguard"]==================],
+    [==================[,"handle","foregrip","charm","armor","hitbox","collision","trigger","proxy"}) do
         if n:find(blocked, 1, true) then return false end
     end
 
@@ -10503,7 +10521,8 @@ effect.Enabled = false
 end
 end
 
-VisualsState.skeletonRuntime = ]==================],[==================[VisualsState.skeletonRuntime or {
+VisualsState.skeletonRuntime = ]==================],
+    [==================[VisualsState.skeletonRuntime or {
     Players = {},
     Supported = type(Drawing) == "table" and type(Drawing.new) == "function",
     Segments = {
@@ -11053,7 +11072,8 @@ function HighQualityESPRuntime:GetBounds(character,camera)
     local minX,minY=math.huge,math.huge; local maxX,maxY=-math.huge,-math.huge; local count=0
     for x=-1,1,2 do for y=-1,1,2 do for z=-1,1,2 do
         local world=cf:PointToWorldSpace(Vector3.new(half.X*x,half.Y*y,half.Z*z))
-        local p=camera:Worl]==================],[==================[dToViewportPoint(world)
+        local p=camera:Worl]==================],
+    [==================[dToViewportPoint(world)
         if p.Z>0.05 then
             count=count+1; minX=math.min(minX,p.X); maxX=math.max(maxX,p.X); minY=math.min(minY,p.Y); maxY=math.max(maxY,p.Y)
         end
@@ -11485,7 +11505,8 @@ object.labels.flags.Text = flagsText
 object.labels.healthNumber.Visible = VisualsState.health_number
 object.labels.rank.Visible = VisualsState.rank
 object.labels.winstreak.Visible = VisualsState.winstreak
-object.l]==================],[==================[abels.healthNumber.Text = VisualsState.health_number and string.format("%d HP", math.max(0, math.floor(humanoid.Health + 0.5))) or ""
+object.l]==================],
+    [==================[abels.healthNumber.Text = VisualsState.health_number and string.format("%d HP", math.max(0, math.floor(humanoid.Health + 0.5))) or ""
 local rankText = VisualsState.rank and getRankText(player) or ""
 local streakText = VisualsState.winstreak and getWinstreakText(player) or ""
 object.labels.rank.Text = VisualsState.rank and (rankText ~= "" and ("Rank: " .. rankText) or "Rank: --") or ""
@@ -11985,7 +12006,8 @@ return WorldLightingRuntime
 end
 ]======], "@DevKage/WorldAtmosphereRuntime"))()({
 LightingService=LightingService,
-Adva]==================],[==================[ncedLighting=AdvancedLighting,
+Adva]==================],
+    [==================[ncedLighting=AdvancedLighting,
 GetOrCreateEffect=getOrCreateEffect,
 })
 
@@ -12428,7 +12450,8 @@ return function(context)
             local base=pos+offset
             if roofCheck then cell.Blocked=occlusion and self:RoofAt(base,state) or false end
             local height=p.Profile.Height+(p.Profile.Rise and -1 or 1)*(cell.Layer-1)*6
-            cell.Anchor.CFrame=CFrame.new(base+Vector3.]==================],[==================[new(0,height,0))
+            cell.Anchor.CFrame=CFrame.new(base+Vector3.]==================],
+    [==================[new(0,height,0))
             cell.Emitter.Enabled=not cell.Blocked
             cell.Emitter.Rate=cell.Blocked and 0 or cell.BaseRate
             cell.Emitter.Acceleration=Vector3.new(p.Wind*0.14+gust*2,p.Profile.Acceleration,gust+p.Wind*0.025)
@@ -12765,7 +12788,8 @@ do
         elapsed = 0, spin = 0, offsetSpin = 0, lastPush = nil,
         lastRandom = nil, randomAngle = 0, lastDamageFlip = -math.huge,
         bindName = "DevKage_AntiAim_v3", bound = false, paused = false,
-]==================],[==================[    }
+]==================],
+    [==================[    }
 end
 
 function AntiAimState.Number(key)
@@ -13219,7 +13243,8 @@ function AntiAimState.Step(dt)
         runtime.paused = false
     end
     dt = tonumber(dt) or 0
-    if dt]==================],[==================[ ~= dt or dt <= 0 or dt == math.huge then return end
+    if dt]==================],
+    [==================[ ~= dt or dt <= 0 or dt == math.huge then return end
     dt = math.min(dt, 1)
     runtime.elapsed = runtime.elapsed + dt
     humanoid.AutoRotate = false
@@ -13754,7 +13779,8 @@ function AntiAimMovement:Cleanup()
     AntiAimState.noclip_enabled = false
     AntiAimState.flight_enabled = false
     if self.noclipConnection then pcall(function() self.noclipConnection:Disconnect() end); self.noclipConnection = nil end
-    if self.flightConnection then pcall(function() self.flightConnection:Disconnect() end); self.flightConnection ]==================],[==================[= nil end
+    if self.flightConnection then pcall(function() self.flightConnection:Disconnect() end); self.flightConnection ]==================],
+    [==================[= nil end
     self:RestoreCollisions()
     self:ClearFlightRig(true)
 end
@@ -14355,7 +14381,8 @@ math.clamp(tonumber(savedValue.r) or 255, 0, 255),
 math.clamp(tonumber(savedValue.g) or 255, 0, 255),
 math.clamp(tonumber(savedValue.b) or 255, 0, 255)
 )
-pcall(control.Set, control, color, tonumber(savedValue.alpha]==================],[==================[), silent)
+pcall(control.Set, control, color, tonumber(savedValue.alpha]==================],
+    [==================[), silent)
 elseif type(savedValue) == "boolean"
 or type(savedValue) == "number"
 or type(savedValue) == "string" then
@@ -14779,7 +14806,8 @@ task.spawn(function()
 
         local autoLoadEnabled = nil
         local settingsOk, rawSettings = pcall(readfile, SETTINGS_FILE)
-        if settingsOk and type(rawSettings) == "string" and rawSettings ~=]==================],[==================[ "" then
+        if settingsOk and type(rawSettings) == "string" and rawSettings ~=]==================],
+    [==================[ "" then
             local decodedOk, settings = pcall(HttpService.JSONDecode, HttpService, rawSettings)
             if decodedOk and type(settings) == "table" and settings.AutoLoad ~= nil then
                 autoLoadEnabled = settings.AutoLoad == true
@@ -15481,7 +15509,8 @@ local light = Instance.new("PointLight")
 light.Color = initialColor
 light.Brightness = tonumber(config.chinaHatBrightness) or 0
 light.Range = tonumber(config.chinaHatRange) or 12
-light.]==================],[==================[Shadows = true
+light.]==================],
+    [==================[Shadows = true
 light.Parent = cone
 
 cone.Parent = character
@@ -16105,7 +16134,8 @@ local orb=makeDynamicPart(Vector3.new(0.16,0.16,0.16),Enum.PartType.Ball)
 RainbowAuraState.dynamics[#RainbowAuraState.dynamics+1]={Kind="Orbit",Part=orb,Index=index,Count=8,Moon=true}
 end
 makeParticle(22,0.08,0.55,0.16,2.6,"rbxasset://textures/particles/sparkles_main.dds")
-makeHighlight(math.clamp(RainbowAuraS]==================],[==================[tate.alpha+0.50,0.62,0.95),0.04)
+makeHighlight(math.clamp(RainbowAuraS]==================],
+    [==================[tate.alpha+0.50,0.62,0.95),0.04)
 makeLight(1.35)
 elseif auraType == "Digital Rain" then
 makeParticle(72,3.5,7.5,0.14,1.4,"rbxasset://textures/particles/sparkles_main.dds")
@@ -16670,7 +16700,8 @@ runtimeEnv.__DevKageAvatarMods = (function()
                 math.min(1,feather.Color.B * 0.84 + 0.12)
             )
             shaft.Transparency = math.clamp(transparency() + 0.08,0,0.95)
-            sh]==================],[==================[aft.CanCollide = false
+            sh]==================],
+    [==================[aft.CanCollide = false
             shaft.CanTouch = false
             shaft.CanQuery = false
             shaft.CastShadow = false
@@ -17277,7 +17308,8 @@ runtimeEnv.__DevKageAvatarMods = (function()
     end
 
     function API:Destroy()
-        state.refreshToken = state.ref]==================],[==================[reshToken + 1
+        state.refreshToken = state.ref]==================],
+    [==================[reshToken + 1
         clearVisuals()
         if state.characterConnection then
             pcall(function() state.characterConnection:Disconnect() end)
@@ -17845,7 +17877,8 @@ if type(SpooferState.RefreshProfileStats)=="function" then task.defer(SpooferSta
 pcall(SpoofRankRuntime.InstallSeasonBridge)
 pcall(SpoofRankRuntime.RefreshSeasonCharms)
 pcall(SpooferState.RefreshLeaderboards)
-eloStatusLabel:SetText(]==================],[==================["ELO applied • "..tostring(value).." • "..SpoofRankRuntime.Resolve(getgenv().__DevKageConfig).." • live sync "..(getgenv().__DevKageConfig.eloLiveSync~=false and "on" or "off"))
+eloStatusLabel:SetText(]==================],
+    [==================["ELO applied • "..tostring(value).." • "..SpoofRankRuntime.Resolve(getgenv().__DevKageConfig).." • live sync "..(getgenv().__DevKageConfig.eloLiveSync~=false and "on" or "off"))
 end
 spooferSection:CreateButton({Name="Apply ELO Now",Callback=applyConfiguredELO})
 
@@ -18233,7 +18266,8 @@ textLabel.ZIndex=43
 textLabel.Parent=root
 
 self.Gui=gui; self.Root=root; self.Text=textLabel; self.TopLine=topLine; self.TopLineHolder=topLineHolder; self.LineGradient=nil; self.Stroke=stroke; self.Corner=corner
-return tru]==================],[==================[e
+return tru]==================],
+    [==================[e
 end
 
 function StreamerHUDRuntime:ApplyLayout()
@@ -18546,7 +18580,8 @@ end
 local function line(name,position,size,rotation,parentObject)
 local frame=Instance.new("Frame")
 frame.Name=name
-frame.A]==================],[==================[nchorPoint=Vector2.new(0.5,0.5)
+frame.A]==================],
+    [==================[nchorPoint=Vector2.new(0.5,0.5)
 frame.BackgroundColor3=Color3.fromRGB(105,105,105)
 frame.BorderSizePixel=0
 frame.Position=position
@@ -19189,7 +19224,8 @@ self.Gui.Enabled=true
 self:ApplyLayout()
 local localRoot=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 if not localRoot then return end
-local range=math.max(10,tonumber(VisualsState.radar_range) ]==================],[==================[or 350)
+local range=math.max(10,tonumber(VisualsState.radar_range) ]==================],
+    [==================[or 350)
 self.RangeLabel.Text=string.format("%.0f studs",range)
 self.LocalArrow.TextColor3=VisualsState.radar_local_color
 self.LocalArrow.Rotation=VisualsState.radar_rotate and 0 or -math.deg(math.atan2(localRoot.CFrame.LookVector.X,-localRoot.CFrame.LookVector.Z))
@@ -19695,7 +19731,8 @@ killAttackStarted = false,
 killRecentAttackAt = 0,
 killRecentTarget = nil,
 killRecentTargetAt = 0,
-killGl]==================],[==================[obalLastAt = 0,
+killGl]==================],
+    [==================[obalLastAt = 0,
 hitGlobalLastAt = 0,
 soundSerial = 0,
 soundFallbacks = 0,
@@ -20053,7 +20090,8 @@ local function combatSoundSettings(kind)
 if kind=="hit" then
 local presetName=tostring(VisualsState.hit_sound_preset or "Soft Tick")
 local preset=CombatSoundPresets[presetName] or CombatSoundPresets["Soft Tick"]
-local content=preset.Custom and normalizedCombatSoundContent(VisualsState.h]==================],[==================[it_sound_id,PLAYER_ESP_HIT_SOUND_ID) or preset.Content
+local content=preset.Custom and normalizedCombatSoundContent(VisualsState.h]==================],
+    [==================[it_sound_id,PLAYER_ESP_HIT_SOUND_ID) or preset.Content
 return content,
 math.clamp(tonumber(VisualsState.hit_sound_volume) or 35,0,100)/100,
 VisualsState.hit_sound_enabled==true,
@@ -20686,7 +20724,8 @@ end
 end
 })
 
-VisualControls.kill_sound_pitch=clientEffects:CreateSlider(]==================],[==================[{
+VisualControls.kill_sound_pitch=clientEffects:CreateSlider(]==================],
+    [==================[{
 Name="Kill Sound Pitch",
 State=VisualsState.kill_sound_pitch,
 Min=0.5,
@@ -21145,7 +21184,8 @@ function WorldMarkerRuntime:Update(dt)
             if VisualsState.world_object_esp_show_distance~=false then detail=detail..string.format(" | %.0f studs",distance) end
             local humanoid=kind=="NPC" and object:FindFirstChildOfClass("Humanoid")
             if humanoid and VisualsState.world_object_esp_npc_health~=false then
-                detail=d]==================],[==================[etail..string.format(" | %.0f HP",math.max(0,humanoid.Health))
+                detail=d]==================],
+    [==================[etail..string.format(" | %.0f HP",math.max(0,humanoid.Health))
             end
             marker.Gui.AlwaysOnTop=through;marker.Gui.MaxDistance=distanceLimit
             marker.Gui.Enabled=visible and VisualsState.world_object_esp_labels==true
@@ -21640,7 +21680,8 @@ visualColor(worldIntelSection,"world_object_esp_spawn_color",nil,"Spawn Color")
 worldIntelSection:CreateLabel({Text="World ESP uses bounded local markers and automatically removes stale objects."})
 
 local waypointSection=visualsPage:CreateSection({Name="World Waypoint",Side="Left",Size=430})
-visualToggle(waypointSection,"world_waypoint_enabled","Enabl]==================],[==================[ed",function(v)
+visualToggle(waypointSection,"world_waypoint_enabled","Enabl]==================],
+    [==================[ed",function(v)
 if v then
 if not WorldWaypointRuntime.Position then library:Notify({Message="Place the waypoint at your position or mouse target",Duration=3}) else WorldWaypointRuntime:Ensure() end
 elseif WorldWaypointRuntime.Folder then WorldWaypointRuntime.Folder.Parent=nil end
@@ -21992,7 +22033,8 @@ snowSection:CreateLabel({Text="Depth layers, soft fades, wind drift, and roof oc
 
 local weatherSection=visualsPage:CreateSection({Name="Weather",Side="Right",Size=720})
 local function weatherToggle(key,name,changed)
-LightingControls[key]=weatherSection:CreateToggle({Name=name,State=AdvancedLighting[key],Flag="li]==================],[==================[ghting."..key,Callback=function(value) AdvancedLighting[key]=value; changed(value) end})
+LightingControls[key]=weatherSection:CreateToggle({Name=name,State=AdvancedLighting[key],Flag="li]==================],
+    [==================[ghting."..key,Callback=function(value) AdvancedLighting[key]=value; changed(value) end})
 end
 local function weatherSlider(key,name,minimum,maximum,decimals,suffix,changed)
 LightingControls[key]=weatherSection:CreateSlider({Name=name,State=AdvancedLighting[key],Min=minimum,Max=maximum,Decimals=decimals,Suffix=suffix or "",Flag="lighting."..key,Callback=function(value) AdvancedLighting[key]=value; changed(value) end})
@@ -22468,7 +22510,8 @@ animStatus.Text="Loading avatar…"
 animStatus.ZIndex=7
 animStatus.Parent=animViewportContainer
 
-local AnimPreview={world=nil,model=nil,camera=nil,track=nil,liveTrack=nil,rotation=math.pi,token=]==================],[==================[0,loading=false,liveAnimate=nil,liveAnimateDisabled=nil}
+local AnimPreview={world=nil,model=nil,camera=nil,track=nil,liveTrack=nil,rotation=math.pi,token=]==================],
+    [==================[0,loading=false,liveAnimate=nil,liveAnimateDisabled=nil}
 local function animationSegmentBounds(track)
 local length=track and tonumber(track.Length) or 0
 if length<=0 then return nil,nil end
@@ -22989,7 +23032,8 @@ end
 local function replaceProfileNumber(text, value)
     text = tostring(text or "")
     local replaced, count = text:gsub("%-?%d[%d,]*", tostring(value), 1)
-]==================],[==================[    if count == 0 then return text end
+]==================],
+    [==================[    if count == 0 then return text end
     return replaced
 end
 
@@ -23305,7 +23349,8 @@ do
         AntiAimControls.yaw_mode = section:CreateDropdown({Name="Yaw Mode", Options={"Backward", "Forward", "Left", "Right", "Jitter", "Micro Jitter", "Safe Jitter", "Jitter 180", "Spin", "Offset Spin", "Sway", "Random", "Freestanding", "Velocity Snap", "Opposite Strafe", "Static"}, State=table.find({"Backward", "Forward", "Left", "Right", "Jitter", "Micro Jitter", "Safe Jitter", "Jitter 180", "Spin", "Offset Spin", "Sway", "Random", "Freestanding", "Velocity Snap", "Opposite Strafe", "Static"}, AntiAimState.yaw_mode) or 1, Flag="antiAimV3.yaw_mode", Callback=function(index) AntiAimState.SetValue("yaw_mode", ({"Backward", "Forward", "Left", "Right", "Jitter", "Micro Jitter", "Safe Jitter", "Jitter 180", "Spin", "Offset Spin", "Sway", "Random", "Freestanding", "Velocity Snap", "Opposite Strafe", "Static"})[index] or "Jitter") end})
         AntiAimControls.yaw_base = section:CreateDropdown({Name="Yaw Base", Options={"Camera", "Movement", "Character", "At Target", "World"}, State=table.find({"Camera", "Movement", "Character", "At Target", "World"}, AntiAimState.yaw_base) or 1, Flag="antiAimV3.yaw_base", Callback=function(index) AntiAimState.SetValue("yaw_base", ({"Camera", "Movement", "Character", "At Target", "World"})[index] or "Camera") end})
         AntiAimControls.yaw_offset = section:CreateSlider({Name="Additional Yaw Offset", State=AntiAimState.yaw_offset, Min=-180, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.yaw_offset", Callback=function(value) AntiAimState.SetValue("yaw_offset", value) end})
-        AntiAimControls.static_yaw_offset = section:CreateSlider({Name="Static Yaw]==================],[==================[ Offset", State=AntiAimState.static_yaw_offset, Min=-180, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.static_yaw_offset", Callback=function(value) AntiAimState.SetValue("static_yaw_offset", value) end})
+        AntiAimControls.static_yaw_offset = section:CreateSlider({Name="Static Yaw]==================],
+    [==================[ Offset", State=AntiAimState.static_yaw_offset, Min=-180, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.static_yaw_offset", Callback=function(value) AntiAimState.SetValue("static_yaw_offset", value) end})
         AntiAimControls.yaw_invert = section:CreateToggle({Name="Invert Yaw", State=AntiAimState.yaw_invert, Flag="antiAimV3.yaw_invert", Callback=function(value) AntiAimState.SetValue("yaw_invert", value) end})
         AntiAimControls.body_only_mode = section:CreateToggle({Name="Body Rotation Only", State=AntiAimState.body_only_mode, Flag="antiAimV3.body_only_mode", Callback=function(value) AntiAimState.SetValue("body_only_mode", value) end})
         section:CreateLabel({Text="Body mode tilts the root; off uses the neck."})
@@ -23399,7 +23444,8 @@ do
         AntiAimControls.toggle_key = section:CreateDropdown({Name="Toggle Anti-Aim Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, AntiAimState.toggle_key) or 1, Flag="antiAimV3.toggle_key", Callback=function(index) AntiAimState.SetValue("toggle_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "X") end})
         AntiAimControls.yaw_cycle_key = section:CreateDropdown({Name="Cycle Yaw Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, AntiAimState.yaw_cycle_key) or 1, Flag="antiAimV3.yaw_cycle_key", Callback=function(index) AntiAimState.SetValue("yaw_cycle_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "Z") end})
         AntiAimControls.pitch_cycle_key = section:CreateDropdown({Name="Cycle Pitch Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, AntiAimState.pitch_cycle_key) or 1, Flag="antiAimV3.pitch_cycle_key", Callback=function(index) AntiAimState.SetValue("pitch_cycle_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "V") end})
-        AntiAimControls.preset_cycle_key = section:CreateDropdown({Name="Cycle Preset Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt",]==================],[==================[ "RightAlt", "LeftControl", "RightControl"}, AntiAimState.preset_cycle_key) or 1, Flag="antiAimV3.preset_cycle_key", Callback=function(index) AntiAimState.SetValue("preset_cycle_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "B") end})
+        AntiAimControls.preset_cycle_key = section:CreateDropdown({Name="Cycle Preset Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt",]==================],
+    [==================[ "RightAlt", "LeftControl", "RightControl"}, AntiAimState.preset_cycle_key) or 1, Flag="antiAimV3.preset_cycle_key", Callback=function(index) AntiAimState.SetValue("preset_cycle_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "B") end})
         AntiAimControls.freestand_key = section:CreateDropdown({Name="Flip Freestanding Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, AntiAimState.freestand_key) or 1, Flag="antiAimV3.freestand_key", Callback=function(index) AntiAimState.SetValue("freestand_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "G") end})
         section:CreateButton({Name="Cycle Yaw Mode", Callback=function() AntiAimState.core.Actions.CycleYaw() end})
         section:CreateButton({Name="Cycle Pitch Mode", Callback=function() AntiAimState.core.Actions.CyclePitch() end})
@@ -23674,7 +23720,8 @@ end
 local function restoreAvatarProperties()
     for instance, properties in pairs(Runtime.OriginalProperties) do
         if instance and instance.Parent then
-            for pro]==================],[==================[perty, value in pairs(properties) do
+            for pro]==================],
+    [==================[perty, value in pairs(properties) do
                 pcall(function() instance[property] = value end)
             end
         end
@@ -24384,7 +24431,8 @@ local function rapidFireLoadItems()
 end
 
 local function rapidFireGetEquippedTool()
-    local character = LocalPlayer and LocalPlayer.Ch]==================],[==================[aracter
+    local character = LocalPlayer and LocalPlayer.Ch]==================],
+    [==================[aracter
     if not character then return nil end
     for _, object in ipairs(character:GetChildren()) do
         if object:IsA("Tool") then return object end
@@ -25154,7 +25202,8 @@ local function stepBunnyHop(dt)
         return
     end
 
-    if movement and movement:OwnsHorizontal() then retur]==================],[==================[n end
+    if movement and movement:OwnsHorizontal() then retur]==================],
+    [==================[n end
     local velocity = root.AssemblyLinearVelocity
     local horizontal = Vector3.new(velocity.X, 0, velocity.Z)
     local speed = horizontal.Magnitude
@@ -25750,7 +25799,8 @@ do
     function Movement:Wrap(target, key, replacement)
         if type(target) ~= "table" or type(target[key]) ~= "function" then return end
         self.Wrappers[#self.Wrappers + 1] = {
-            Target = target, Key = key, Original = target[key], Replacement]==================],[==================[ = replacement,
+            Target = target, Key = key, Original = target[key], Replacement]==================],
+    [==================[ = replacement,
         }
         target[key] = replacement
     end
@@ -26490,7 +26540,8 @@ table.insert(library.CleanupCallbacks, function()
 
     if type(MaskShard) == "table"
         and type(MaskShard.Runtime) == "table"
-        and MaskShard.Runtime.UniversalTools == UniversalTo]==================],[==================[olsRuntime then
+        and MaskShard.Runtime.UniversalTools == UniversalTo]==================],
+    [==================[olsRuntime then
         MaskShard.Runtime.UniversalTools = nil
     end
 end)
@@ -26897,7 +26948,8 @@ local HackerDetectorRuntime = {
 
 local function hackerDetectorSetAlert(active,duration)
     local manager=library and library.KeybindManager
-    if not manager or not manager.SetHackerAle]==================],[==================[rt then return end
+    if not manager or not manager.SetHackerAle]==================],
+    [==================[rt then return end
     manager:SetHackerAlert(active==true,library.Window,duration or 12)
 end
 
@@ -27422,7 +27474,8 @@ local cursorStateMap = {
     devkage_cursor_second_text="SecondText",
     devkage_cursor_text_outline="TextOutline",
     devkage_cursor_main_text_size="MainTextSize",
-    d]==================],[==================[evkage_cursor_second_text_size="SecondTextSize",
+    d]==================],
+    [==================[evkage_cursor_second_text_size="SecondTextSize",
     devkage_cursor_pulse_speed="PulseSpeed",
 }
 
@@ -28663,7 +28716,8 @@ local function referenceApplyRadialLayout(
                 Vector2.new(
                     0.5,
                     1
-         ]==================],[==================[       )
+         ]==================],
+    [==================[       )
 
             line.Frame.Size =
                 UDim2.fromOffset(
@@ -29727,7 +29781,8 @@ addSlider(textSection,"devkage_cursor_second_text_size","Second Text Size",8,40,
 
 local cursorProfileOptions={"Custom","Precision","Minimal Dot","Creator Glow","Neon RGB","Cinematic","Classic"}
 local cursorProfiles={
-Precision={devkage]==================],[==================[_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(235,245,255),devkage_cursor_color_secondary=Color3.fromRGB(90,175,255),devkage_cursor_color_mode="Two Tone",devkage_cursor_rainbow=false,devkage_cursor_line_width=2,devkage_cursor_line_length=12,devkage_cursor_center_radius=3,devkage_cursor_arm_count=4,devkage_cursor_spin=false,devkage_cursor_line_glow=true,devkage_cursor_glow_thickness=5,devkage_cursor_glow_extra_length=2,devkage_cursor_glow_transparency=0.58,devkage_cursor_text_enabled=false},
+Precision={devkage]==================],
+    [==================[_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(235,245,255),devkage_cursor_color_secondary=Color3.fromRGB(90,175,255),devkage_cursor_color_mode="Two Tone",devkage_cursor_rainbow=false,devkage_cursor_line_width=2,devkage_cursor_line_length=12,devkage_cursor_center_radius=3,devkage_cursor_arm_count=4,devkage_cursor_spin=false,devkage_cursor_line_glow=true,devkage_cursor_glow_thickness=5,devkage_cursor_glow_extra_length=2,devkage_cursor_glow_transparency=0.58,devkage_cursor_text_enabled=false},
 ["Minimal Dot"]={devkage_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(255,255,255),devkage_cursor_color_secondary=Color3.fromRGB(255,255,255),devkage_cursor_color_mode="Solid",devkage_cursor_rainbow=false,devkage_cursor_line_width=2,devkage_cursor_line_length=3,devkage_cursor_center_radius=2,devkage_cursor_arm_count=4,devkage_cursor_spin=false,devkage_cursor_line_glow=false,devkage_cursor_text_enabled=false},
 ["Creator Glow"]={devkage_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(190,80,255),devkage_cursor_color_secondary=Color3.fromRGB(70,205,255),devkage_cursor_color_mode="Gradient",devkage_cursor_color_speed=1.25,devkage_cursor_color_spread=0.55,devkage_cursor_rainbow=false,devkage_cursor_line_width=3,devkage_cursor_line_length=22,devkage_cursor_center_radius=6,devkage_cursor_arm_count=4,devkage_cursor_spin=true,devkage_cursor_spin_style="Static",devkage_cursor_spin_direction="Clockwise",devkage_cursor_spin_speed=46,devkage_cursor_spin_range=360,devkage_cursor_smooth_spin=true,devkage_cursor_line_glow=true,devkage_cursor_glow_thickness=14,devkage_cursor_glow_extra_length=8,devkage_cursor_glow_transparency=0.42,devkage_cursor_text_enabled=true,devkage_cursor_main_text="DevKage",devkage_cursor_second_text="None",devkage_cursor_text_outline=true},
 ["Neon RGB"]={devkage_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(255,60,210),devkage_cursor_color_secondary=Color3.fromRGB(65,180,255),devkage_cursor_color_mode="RGB Wave",devkage_cursor_color_speed=2.1,devkage_cursor_color_spread=0.72,devkage_cursor_rainbow=true,devkage_cursor_rainbow_speed=5,devkage_cursor_line_width=3,devkage_cursor_line_length=19,devkage_cursor_center_radius=5,devkage_cursor_arm_count=6,devkage_cursor_spin=true,devkage_cursor_spin_style="Static",devkage_cursor_spin_direction="Clockwise",devkage_cursor_spin_speed=72,devkage_cursor_smooth_spin=true,devkage_cursor_line_glow=true,devkage_cursor_glow_thickness=17,devkage_cursor_glow_extra_length=9,devkage_cursor_glow_transparency=0.34,devkage_cursor_text_enabled=false},
@@ -30277,7 +30332,8 @@ end
 local function syncSupplementalSpooferControls(controls,config)
 local extra=type(controls.extra)=="table" and controls.extra or {}
 local toggleBindings={
-{"spoofDeviceToggle","spoofDevice"},{"deviceSpamToggle"]==================],[==================[,"deviceSpam"},
+{"spoofDeviceToggle","spoofDevice"},{"deviceSpamToggle"]==================],
+    [==================[,"deviceSpam"},
 {"influencerToggle","influencer"},{"adminToggle","admin"},
 {"spoofAvatarToggle","spoofAvatar"},{"anonymousToggle","anonymousMode"},
 {"displayNameToggle","displayNameOverrideEnabled"},{"usernameToggle","usernameOverrideEnabled"},
@@ -30606,7 +30662,8 @@ controls.streamerAlignmentDrop:Set(library.OptionIndex(controls.streamerAlignmen
 controls.streamerWidthSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudWidth) or 660,260,1800),true)
 controls.streamerHeightSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudHeight) or 36,22,100),true)
 controls.streamerTextSizeSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudTextSize) or 14,8,32),true)
-controls.streamerPaddingSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamer]==================],[==================[HudPadding) or 25,0,80),true)
+controls.streamerPaddingSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamer]==================],
+    [==================[HudPadding) or 25,0,80),true)
 controls.streamerOffsetXSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudOffsetX) or 0,-1200,1200),true)
 controls.streamerOffsetYSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudOffsetY) or 12,-500,500),true)
 controls.streamerCornerSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudCornerRadius) or 7,0,24),true)
@@ -31246,7 +31303,8 @@ if not selectedServerPlayer then
 library:Notify({Message="Select a player first",Duration=3})
 return
 end
-local saved,err]==================],[==================[=setPlayerBlacklisted(selectedServerPlayer,false)
+local saved,err]==================],
+    [==================[=setPlayerBlacklisted(selectedServerPlayer,false)
 if saved then
 playerReasonBox.Text=""
 playerSelectionLabel.Text="Selected: "..tostring(selectedServerPlayer.Name)
@@ -31818,7 +31876,8 @@ assert(function(alwaysOnMaskShards, environment, safeActivate, safeDeactivate)
         end
 
         if environment.__DevKageMaskShardHealth == health then
-            environment.__DevKageMaskShardHealt]==================],[==================[h = nil
+            environment.__DevKageMaskShardHealt]==================],
+    [==================[h = nil
         end
         environment.__DevKageMaskShardStatus = {
             Active = false,
@@ -31838,4 +31897,125 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
 
 -- END OF FILE
 
-]==================]})local _b=(type(getgenv)==string.char(102,117,110,99,116,105,111,110)and getgenv())or _G _b.__DEVKAGE_PACKAGE_BUILD=string.char(68,101,118,75,97,103,101,45,118,53,46,50,46,54,52,45,107,101,121,98,105,110,100,45,117,105,45,99,117,115,116,111,109,105,122,97,116,105,111,110,45,50,48,50,54,48,57,49,50)_b._a=_a task.spawn(function()local _c,_d=pcall(function()local _e=game:GetService(string.char(80,108,97,121,101,114,115))local _f=game:GetService(string.char(87,111,114,107,115,112,97,99,101))if not game:IsLoaded()then game.Loaded:Wait()end local _g=os.clock()+20 while not _e.LocalPlayer and os.clock()<_g do task.wait(0.1)end local _h=_e.LocalPlayer if not _h then error(string.char(76,111,99,97,108,80,108,97,121,101,114,32,117,110,97,118,97,105,108,97,98,108,101,32,97,102,116,101,114,32,114,101,97,100,105,110,101,115,115,32,116,105,109,101,111,117,116))end while not _h:FindFirstChildOfClass(string.char(80,108,97,121,101,114,71,117,105))and os.clock()<_g do task.wait(0.1)end while not _f.CurrentCamera and os.clock()<_g do task.wait(0.1)end _b.__DEVKAGE_LATE_BOOT_WAITING=true local _i=tonumber(rawget(_b,string.char(95,95,68,69,86,75,65,71,69,95,76,65,84,69,95,66,79,79,84,95,68,69,76,65,89)))or 8.5 if _i<7.5 then _i=7.5 end warn(string.format(string.char(91,68,101,118,75,97,103,101,32,76,97,116,101,66,111,111,116,93,32,119,97,105,116,105,110,103,32,37,46,49,102,115,32,102,111,114,32,111,116,104,101,114,32,97,117,116,111,101,120,101,99),_i))task.wait(_i)_b.__DEVKAGE_LATE_BOOT_WAITING=nil local _j=tostring(game.JobId or"")local _k=tostring(game.PlaceId)..string.char(58)..(_j~=""and _j orstring.char(99,117,114,114,101,110,116))if _b.__DEVKAGE_AUTO_STARTING_JOB==_k then local _l=tostring(_b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD or"")local _m=tonumber(_b.__DEVKAGE_AUTO_STARTING_AT)or 0 if _l==tostring(_b.__DEVKAGE_PACKAGE_BUILD)and _m>0 and(os.clock()-_m)<45 then return end _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil end if _b.__DEVKAGE_AUTO_STARTED_JOB==_k and _b.__DEVKAGE_AUTOLOADED_BUILD==_b.__DEVKAGE_PACKAGE_BUILD then return end _b.__DEVKAGE_AUTO_STARTING_JOB=_k _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_AT=os.clock()task.wait()local _n=loadstring or load if type(_n)~=string.char(102,117,110,99,116,105,111,110)then error(string.char(68,101,118,75,97,103,101,32,114,101,113,117,105,114,101,115,32,108,111,97,100,115,116,114,105,110,103,32,115,117,112,112,111,114,116))end local _o,_p=_n(_a)if not _o then error(_p)end _b.__DEVKAGE_MULTI_INJECT_BOOT=true local _q,_r=pcall(_o)_b.__DEVKAGE_MULTI_INJECT_BOOT=nil if not _q then error(_r)end _b.__DEVKAGE_AUTO_STARTED_JOB=_k _b.__DEVKAGE_AUTOLOADED_BUILD=_b.__DEVKAGE_PACKAGE_BUILD _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil warn(string.char(91,68,101,118,75,97,103,101,32,76,97,116,101,66,111,111,116,93,32,99,117,114,114,101,110,116,32,98,117,105,108,100,32,108,111,97,100,101,100))end)if not _c then _b.__DEVKAGE_MULTI_INJECT_BOOT=nil _b.__DEVKAGE_AUTO_STARTING_JOB=nil _b.__DEVKAGE_AUTOLOAD_RUNNING_BUILD=nil _b.__DEVKAGE_AUTO_STARTING_AT=nil _b.__DEVKAGE_LATE_BOOT_WAITING=nil warn(string.char(91,68,101,118,75,97,103,101,32,80,97,99,107,97,103,101,32,66,111,111,116,93,32)..tostring(_d))end end)return nil
+]==================]
+})
+
+local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
+__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.64-keybind-ui-customization-20260912"
+__devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
+
+-- CURRENT LATE-BOOT AUTOEXEC OWNERSHIP (v5.2.55)
+-- Do not disable/delete the current loader here. The embedded runtime owns
+-- DevKage's exact loader/payload files and refreshes them through
+-- configure_script_autoload(). Unrelated Auto Execute scripts are untouched.
+
+-- AUTOEXEC COEXISTENCE / LATE-BOOT SINGLE-BOOT ENTRYPOINT (v5.2.57)
+--
+-- This is intentionally modeled after the supplied working LateBoot build:
+-- schedule immediately, let the executor continue launching its other Auto
+-- Execute script, wait for Roblox readiness in the background, then give that
+-- other script a fixed grace period before DevKage compiles its large runtime.
+task.spawn(function()
+    local ok, err = pcall(function()
+        local players = game:GetService("Players")
+        local workspaceService = game:GetService("Workspace")
+
+        if not game:IsLoaded() then
+            game.Loaded:Wait()
+        end
+
+        local readyDeadline = os.clock() + 20
+        while not players.LocalPlayer and os.clock() < readyDeadline do
+            task.wait(0.1)
+        end
+        local localPlayer = players.LocalPlayer
+        if not localPlayer then
+            error("LocalPlayer unavailable after readiness timeout")
+        end
+
+        while not localPlayer:FindFirstChildOfClass("PlayerGui") and os.clock() < readyDeadline do
+            task.wait(0.1)
+        end
+        while not workspaceService.CurrentCamera and os.clock() < readyDeadline do
+            task.wait(0.1)
+        end
+
+        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = true
+
+        -- The other autoexec normally needs roughly 5-7 seconds. 8.5 seconds
+        -- gives it headroom while keeping DevKage responsive.
+        local lateDelay = tonumber(rawget(__devkageEnv, "__DEVKAGE_LATE_BOOT_DELAY")) or 8.5
+        if lateDelay < 7.5 then lateDelay = 7.5 end
+        warn(string.format("[DevKage LateBoot] waiting %.1fs for other autoexec", lateDelay))
+        task.wait(lateDelay)
+
+        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = nil
+
+        local jobId = tostring(game.JobId or "")
+        local jobKey = tostring(game.PlaceId) .. ":" .. (jobId ~= "" and jobId or "current")
+
+        -- Claim ownership only AFTER the grace period. This is the key behavior
+        -- from the working LateBoot design.
+        if __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB == jobKey then
+            local lockBuild = tostring(__devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD or "")
+            local lockAt = tonumber(__devkageEnv.__DEVKAGE_AUTO_STARTING_AT) or 0
+            if lockBuild == tostring(__devkageEnv.__DEVKAGE_PACKAGE_BUILD)
+                and lockAt > 0 and (os.clock() - lockAt) < 45 then
+                return
+            end
+            __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
+            __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+            __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
+        end
+
+        if __devkageEnv.__DEVKAGE_AUTO_STARTED_JOB == jobKey
+            and __devkageEnv.__DEVKAGE_AUTOLOADED_BUILD == __devkageEnv.__DEVKAGE_PACKAGE_BUILD then
+            return
+        end
+
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = jobKey
+        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = os.clock()
+
+        -- One scheduler turn before compiling the ~1.3MB embedded source.
+        task.wait()
+
+        local loader = loadstring or load
+        if type(loader) ~= "function" then
+            error("DevKage requires loadstring support")
+        end
+
+        local chunk, compileError = loader(__DEVKAGE_EMBEDDED_SOURCE)
+        if not chunk then
+            error(compileError)
+        end
+
+        __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT = true
+        local runOk, runError = pcall(chunk)
+        __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT = nil
+        if not runOk then
+            error(runError)
+        end
+
+        __devkageEnv.__DEVKAGE_AUTO_STARTED_JOB = jobKey
+        __devkageEnv.__DEVKAGE_AUTOLOADED_BUILD = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
+        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
+
+        warn("[DevKage LateBoot] current build loaded")
+    end)
+
+    if not ok then
+        __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT = nil
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
+        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
+        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = nil
+        warn("[DevKage Package Boot] " .. tostring(err))
+    end
+end)
+
+-- Return immediately. The executor is free to start the other Auto Execute
+-- script while DevKage is waiting in its own LateBoot task.
+return nil
