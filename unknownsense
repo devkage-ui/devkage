@@ -1,4 +1,4 @@
--- DEVKAGE v5.2.59: shared controls, world visuals, weather, and gun targeting
+-- DEVKAGE v5.2.60: scoped startup, Opiumware diagnostics, and preserved features
 -- Toggle rows: click the mode box for Toggle / Hold / Always; click the key
 -- box to bind. Escape cancels capture; Delete clears it. The HUD lists active
 -- features with their mode and assigned key.
@@ -547,7 +547,7 @@ local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
 
 
 
-__devkageEnv.__DEVKAGE_RUNTIME_VERSION = "dual-script-autoload-v7-knife-movement"
+__devkageEnv.__DEVKAGE_RUNTIME_VERSION = "dual-script-autoload-v8-scoped-startup"
 local __devkageMultiInjectAutoBoot = __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT == true
 
 -- Autoexec coexistence boot mutex.
@@ -4465,8 +4465,7 @@ library.UserInputService = uis
 end) -- end pcall
 
 if not Passed then
-warn("UI Library failed to load:", Statement)
-return
+error("[DevKage/UI library] " .. tostring(Statement), 0)
 end
 
 
@@ -4480,7 +4479,9 @@ local utility           = library.Utility
 local uis               = library.UserInputService or game:GetService("UserInputService")
 local LocalPlayer       = Players.LocalPlayer
 local Lighting          = game:GetService("Lighting")
+do
 local StarterGui        = game:GetService("StarterGui")
+end
 local Camera            = workspace.CurrentCamera
 
 
@@ -6708,6 +6709,7 @@ function SpooferState.AutoLoadSignature(config)
     return ok and encoded or nil
 end
 
+do
 local ELO_AUTOLOAD_FILE = "devkage/live_elo_autoload.json"
 
 function SpooferState.SaveELOAutoLoad(enabled, elo)
@@ -6930,6 +6932,8 @@ MOBILE  = "rbxassetid://17136633510",
 CONSOLE = "rbxassetid://17136633629",
 VR      = "rbxassetid://17136765745"
 }
+
+end
 
 local function fetchUserData(userId)
 local uid = tonumber(userId)
@@ -10719,6 +10723,7 @@ local HighQualityESPRuntime = {
     EnabledAt = 0,
 }
 
+do
 local HQSkeletonPairsR15 = {
     {"Head","UpperTorso"},{"UpperTorso","LowerTorso"},{"LowerTorso","Root"},
     {"UpperTorso","LeftShoulder"},{"LeftShoulder","LeftElbow"},{"LeftElbow","LeftHand"},
@@ -10978,6 +10983,8 @@ end
 do
     local environment = (type(getgenv)=="function" and getgenv()) or _G
     environment.__DevKageHighQualityESPRuntime = HighQualityESPRuntime
+end
+
 end
 
 local function createSkeletonForPlayer(player, character, object)
@@ -11415,6 +11422,7 @@ end
 end)
 end
 
+do
 local espFrameAccumulator, espSlowAccumulator = 0, 0
 utility:CreateConnection(RunService.Heartbeat, function(deltaTime)
 espFrameAccumulator = espFrameAccumulator + deltaTime
@@ -11442,12 +11450,16 @@ if VisualsState.ambient_override then apply_ambient(true, VisualsState.ambient_c
 end
 end)
 
+end
+
 local LightingService=game:GetService("Lighting")
+local AdvancedLighting
+do
 local function getLightingProperty(name, fallback)
 local ok, value = pcall(function() return LightingService[name] end)
 return ok and value or fallback
 end
-local AdvancedLighting={
+AdvancedLighting={
 colorCorrection=nil, bloom=nil, sunRays=nil, depthOfField=nil, atmosphere=nil,
 atmosphereUniform=true,
 weatherRoofOcclusion=true, weatherCoverage=120, weatherTurbulence=0.35,
@@ -11503,18 +11515,22 @@ ShadowSoftness=getLightingProperty("ShadowSoftness",0.2),
 ShadowColor=getLightingProperty("ShadowColor",VisualsState.shadow_color)
 }
 }
+end
+
 local function getOrCreateEffect(className,name)
 local e=LightingService:FindFirstChild(name)
 if e and e:IsA(className) then return e end
 if e then pcall(function() e:Destroy() end) end
 e=Instance.new(className); e.Name=name; e.Parent=LightingService; return e
 end
+local setColorCorrection
+do
 local SaturationStack = {}
 local function clearSaturationStack()
 for _, effect in ipairs(SaturationStack) do pcall(function() effect:Destroy() end) end
 table.clear(SaturationStack)
 end
-local function setColorCorrection(enabled,color,brightness,contrast,saturation)
+function setColorCorrection(enabled,color,brightness,contrast,saturation)
 clearSaturationStack()
 if enabled then
 local e=AdvancedLighting.colorCorrection
@@ -11544,6 +11560,8 @@ elseif AdvancedLighting.colorCorrection then
 AdvancedLighting.colorCorrection.Enabled=false
 end
 end
+end
+
 local function setBloom(enabled,intensity,size,threshold)
 if enabled then
 local e=AdvancedLighting.bloom
@@ -12240,10 +12258,16 @@ end
 Settings=AdvancedLighting, RunService=RunService, LocalPlayer=LocalPlayer,
 Workspace=workspace, UserInputService=game:GetService("UserInputService"),
 })
+do
 local SnowRuntime=AdvancedLighting.WeatherRenderer.Snow
 local PremiumWeatherRuntime=AdvancedLighting.WeatherRenderer.Weather
+end
+
 local function stopSnow() AdvancedLighting.WeatherRenderer:Stop("Snow") end
+do
 local function buildSnow() AdvancedLighting.WeatherRenderer:Rebuild("Snow") end
+end
+
 local function refreshSnow() AdvancedLighting.WeatherRenderer:Refresh("Snow") end
 local function stopPremiumWeather() AdvancedLighting.WeatherRenderer:Stop("Weather") end
 local function buildPremiumWeather() AdvancedLighting.WeatherRenderer:Rebuild("Weather") end
@@ -13953,7 +13977,7 @@ local SCRIPT_STABLE_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_current.
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOLOAD_ENABLED_FILE = CONFIG_FOLDER .. "/_devkage_autoload_enabled.flag"
 local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_AutoLoad_LAST.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.59-world-gun-controls-20260912"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.60-opium-startup-20260912"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -14469,6 +14493,7 @@ end
 return folders
 end
 
+do
 local function ensure_autoexec_folder(folder)
 if type(isfolder) == "function" then
 local ok, exists = pcall(isfolder, folder)
@@ -14502,6 +14527,8 @@ end
 
 
 
+
+end
 
 local SCRIPT_AUTOLOAD_MARKER_PREFIX = "-- DEVKAGE_AUTOLOAD_BUILD:"
 
@@ -15098,6 +15125,7 @@ local DEFAULT_VISUAL_STATE = serialiseRuntimeState(VisualsState)
 local DEFAULT_ANTI_AIM_STATE = serialiseRuntimeState(AntiAimState)
 local DEFAULT_LIGHTING_STATE = serialiseRuntimeState(AdvancedLighting)
 
+do
 local _autoload_target = get_autoload()
 if _autoload_target and _autoload_target ~= "" then
 local loadedOk, loadedResult = pcall(load_config_file, _autoload_target)
@@ -15126,6 +15154,8 @@ task.defer(function() ELOAutoLoadRuntime:SetEnabled(true) end)
 end
 end
 end
+end
+
 end
 
 local ChinaHatState = {
@@ -15174,8 +15204,11 @@ end
 return Vector3.new(1.7, 1.1, 1.7)
 end
 
+do
 local function chinaHatScaleToConfig(value)
 return {value.X, value.Y, value.Z}
+end
+
 end
 
 local function RemoveChinaHat()
@@ -17112,8 +17145,8 @@ if getgenv().__DEVKAGE_AUTO_STARTED == true then
 getgenv().__DEVKAGE_AUTO_STARTED = false
 end
 local UI = {}
--- Do not allocate another top-level local here: this chunk sits exactly at
--- Luau's 200-local register ceiling. Read the bridge directly instead.
+-- Keep this renderer bridge on UI so startup retains compiler headroom.
+-- Read the environment bridge directly instead of adding a persistent local.
 UI.HighQualityESPRuntime = ((type(getgenv)=="function" and getgenv()) or _G).__DevKageHighQualityESPRuntime
 
 assert(function()
@@ -26616,7 +26649,7 @@ end
 
 ]======], "@DevKage/GunTargeting"))()({
 Players=Players, LocalPlayer=LocalPlayer, Workspace=workspace, RunService=RunService,
-Input=game:GetService("UserInputService"), Library=library, Page=ragePage, GuiParent=cre,
+Input=game:GetService("UserInputService"), Library=library, Page=ragePage, GuiParent=(library.Window.Root and library.Window.Root.Parent) or game:GetService("CoreGui"),
 HttpService=game:GetService("HttpService"),
 })
 UI.AimControls=UI.AimControls or {}
@@ -31526,7 +31559,7 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
 ]============]
 
 local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
-__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.59-world-gun-controls-20260912"
+__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.60-opium-startup-20260912"
 __devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
 
 -- CURRENT LATE-BOOT AUTOEXEC OWNERSHIP (v5.2.55)
@@ -31540,8 +31573,44 @@ __devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
 -- schedule immediately, let the executor continue launching its other Auto
 -- Execute script, wait for Roblox readiness in the background, then give that
 -- other script a fixed grace period before DevKage compiles its large runtime.
+-- Capture traceback before any runtime changes to globals.
+local __DevKageBoot = {
+    Stage = "package",
+    Traceback = type(debug) == "table" and debug.traceback or nil,
+    PreviousWindow = nil,
+}
+function __DevKageBoot:Format(failure)
+    local message = tostring(failure)
+    if message:sub(1,19) == "[DevKage startup / " then return message end
+    if type(self.Traceback) == "function" then
+        local ok, trace = pcall(self.Traceback, message, 2)
+        if ok and type(trace) == "string" and trace ~= "" then message = trace end
+    end
+    return "[DevKage startup / " .. tostring(self.Stage) .. "] " .. message
+end
+function __DevKageBoot:Report(message)
+    local record = {
+        Build = tostring(__devkageEnv.__DEVKAGE_PACKAGE_BUILD),
+        Stage = tostring(self.Stage),
+        Message = tostring(message),
+        Time = os.clock(),
+    }
+    __devkageEnv.__DEVKAGE_LAST_BOOT_ERROR = record
+    local report = "DevKage startup error\nBuild: " .. record.Build
+        .. "\nStage: " .. record.Stage .. "\n\n" .. record.Message .. "\n"
+    local path = "DevKage_Startup_Error.txt"
+    if type(writefile) == "function" then
+        local wrote = pcall(writefile, path, report)
+        if wrote then record.File = path end
+    end
+    local emit = rconsoleerr or rconsoleerror or consoleerror
+    if type(emit) == "function" then pcall(emit, report .. "\n") end
+    warn(record.Message .. (record.File and ("\nDetails saved to " .. record.File) or ""))
+end
+
 task.spawn(function()
-    local ok, err = pcall(function()
+    local ok, err = xpcall(function()
+        __DevKageBoot.Stage = "Roblox readiness"
         local players = game:GetService("Players")
         local workspaceService = game:GetService("Workspace")
 
@@ -31565,6 +31634,7 @@ task.spawn(function()
             task.wait(0.1)
         end
 
+        __DevKageBoot.Stage = "autoexec grace period"
         __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = true
 
         -- The other autoexec normally needs roughly 5-7 seconds. 8.5 seconds
@@ -31602,7 +31672,8 @@ task.spawn(function()
         __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
         __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = os.clock()
 
-        -- One scheduler turn before compiling the ~1.3MB embedded source.
+        -- Yield once before compiling the complete embedded runtime.
+        __DevKageBoot.Stage = "compile main runtime"
         task.wait()
 
         local loader = loadstring or load
@@ -31610,16 +31681,18 @@ task.spawn(function()
             error("DevKage requires loadstring support")
         end
 
-        local chunk, compileError = loader(__DEVKAGE_EMBEDDED_SOURCE)
-        if not chunk then
-            error(compileError)
+        local chunk, compileError = loader(__DEVKAGE_EMBEDDED_SOURCE, "@DevKage/v5.2.60/Main")
+        if type(chunk) ~= "function" then
+            error(tostring(compileError or "Compiler did not return an executable function"), 0)
         end
 
+        __DevKageBoot.Stage = "initialize UI and features"
+        __DevKageBoot.PreviousWindow = __devkageEnv.__DevKageWindow
         __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT = true
-        local runOk, runError = pcall(chunk)
+        local runOk, runError = xpcall(chunk, function(failure) return __DevKageBoot:Format(failure) end)
         __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT = nil
         if not runOk then
-            error(runError)
+            error(runError, 0)
         end
 
         __devkageEnv.__DEVKAGE_AUTO_STARTED_JOB = jobKey
@@ -31628,8 +31701,10 @@ task.spawn(function()
         __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
         __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
 
+        __devkageEnv.__DEVKAGE_LAST_BOOT_ERROR = nil
+        __DevKageBoot.Stage = "ready"
         warn("[DevKage LateBoot] current build loaded")
-    end)
+    end, function(failure) return __DevKageBoot:Format(failure) end)
 
     if not ok then
         __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT = nil
@@ -31637,7 +31712,18 @@ task.spawn(function()
         __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
         __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
         __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = nil
-        warn("[DevKage Package Boot] " .. tostring(err))
+        if __DevKageBoot.Stage == "initialize UI and features" then
+            local failedWindow = __devkageEnv.__DevKageWindow
+            if failedWindow and failedWindow ~= __DevKageBoot.PreviousWindow
+                and type(failedWindow.Unload) == "function" then
+                pcall(function() failedWindow:Unload() end)
+                if __devkageEnv.__DevKageWindow == failedWindow then __devkageEnv.__DevKageWindow = nil end
+            end
+        end
+        if tostring(__devkageEnv.__DEVKAGE_RUNTIME_BOOT_BUILD or "") == tostring(__devkageEnv.__DEVKAGE_PACKAGE_BUILD) then
+            __devkageEnv.__DEVKAGE_RUNTIME_BOOT_STATE = "failed"
+        end
+        __DevKageBoot:Report(err)
     end
 end)
 
