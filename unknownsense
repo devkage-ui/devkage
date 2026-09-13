@@ -832,7 +832,9 @@ function library:ApplyTheme()
         else
             pcall(function()
                 frame.BackgroundColor3 = self.Theme.Toggle
-                if frame.Parent then frame.Parent.Visible = control.State == true end
+                local active = control.State == true
+                frame.Visible = active
+                if frame.Parent then frame.Parent.Visible = active end
             end)
         end
     end
@@ -3237,6 +3239,7 @@ function sections:CreateToggle(Properties)
         })
         Content.ThemeToggleFrame = Holder_Outline_Frame
         Content_Holder_Outline.Visible = Content.State
+        Holder_Outline_Frame.Visible = Content.State
         library.ThemeToggleControls[#library.ThemeToggleControls + 1] = Content
         local Outline_Frame_Gradient = utility:RenderObject("UIGradient", {
             Color   = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(140, 140, 140)),
@@ -3249,6 +3252,7 @@ function sections:CreateToggle(Properties)
             if Content.BindMode == "Always" and state == false then state = true end
             Content.State = state == true
             Content_Holder_Outline.Visible = Content.State
+            Holder_Outline_Frame.Visible = Content.State
             Holder_Outline_Frame.BackgroundColor3 = library.Theme.Toggle
             if not silent then utility:SafeCallback(Content.Callback, Content:Get()) end
             if library.KeybindManager then library.KeybindManager:RefreshActive() end
@@ -28654,10 +28658,19 @@ local function referenceApplyFourArmLayout(
         frame.Size = UDim2.fromOffset(lineThickness, length)
         frame.Position = UDim2.new(0.5, positions[index].X, 0.5, positions[index].Y)
         frame.Rotation = rotations[index]
+        frame.BackgroundTransparency = 0
+
+        -- Keep every cursor arm on the exact same visual treatment.
+        -- The animated color is still supplied later by referenceApplyGlow.
         line.Stroke.Enabled = true
         line.Stroke.Thickness = 1
-        line.Stroke.Color = Color3.fromRGB(20, 18, 30)
-        line.Stroke.Transparency = 0.18
+        line.Stroke.Color = Color3.fromRGB(15, 13, 23)
+        line.Stroke.Transparency = 0.08
+        if line.HighlightStroke then
+            line.HighlightStroke.Enabled = true
+            line.HighlightStroke.Thickness = 0.55
+            line.HighlightStroke.Transparency = 0.28
+        end
     end
 end
 
@@ -28856,19 +28869,19 @@ local function referenceApplyGlow(
 
     if inner then
         inner.BackgroundColor3 = whiteHot
-        inner.BackgroundTransparency = math.clamp(baseTransparency - 0.22, 0.34, 0.80)
+        inner.BackgroundTransparency = math.clamp(baseTransparency - 0.28, 0.28, 0.76)
     end
     if mid then
         mid.BackgroundColor3 = innerColor
-        mid.BackgroundTransparency = math.clamp(baseTransparency - 0.01, 0.54, 0.89)
+        mid.BackgroundTransparency = math.clamp(baseTransparency - 0.06, 0.48, 0.86)
     end
     if outer then
         outer.BackgroundColor3 = soft
-        outer.BackgroundTransparency = math.clamp(baseTransparency + 0.12, 0.72, 0.955)
+        outer.BackgroundTransparency = math.clamp(baseTransparency + 0.06, 0.68, 0.94)
     end
     if far then
         far.BackgroundColor3 = color
-        far.BackgroundTransparency = math.clamp(baseTransparency + 0.22, 0.82, 0.985)
+        far.BackgroundTransparency = math.clamp(baseTransparency + 0.16, 0.78, 0.98)
     end
 
     if line.HighlightStroke then
@@ -29093,12 +29106,12 @@ local function referenceApplyText(
                 label.Position.X.Scale, label.Position.X.Offset - outerX * 0.5,
                 label.Position.Y.Scale, label.Position.Y.Offset - outerY * 0.5
             )
-            outerGlow.TextTransparency = 1 - (0.16 * glowStrength)
+            outerGlow.TextTransparency = 1 - (0.22 * glowStrength)
             local s = outerGlow:FindFirstChild("NeonStroke")
             if s then
                 s.Color = glowColor
-                s.Thickness = math.clamp(glowSize * 0.50, 0.5, 15)
-                s.Transparency = 1 - (0.30 * glowStrength)
+                s.Thickness = math.clamp(glowSize * 0.62, 0.5, 15)
+                s.Transparency = 1 - (0.42 * glowStrength)
             end
         end
 
@@ -29112,12 +29125,12 @@ local function referenceApplyText(
                 label.Position.X.Scale, label.Position.X.Offset - innerSize * 0.5,
                 label.Position.Y.Scale, label.Position.Y.Offset - innerSize * 0.5
             )
-            innerGlow.TextTransparency = 1 - (0.46 * glowStrength)
+            innerGlow.TextTransparency = 1 - (0.62 * glowStrength)
             local s = innerGlow:FindFirstChild("NeonStroke")
             if s then
-                s.Color = glowColor:Lerp(Color3.new(1,1,1), 0.45)
-                s.Thickness = math.clamp(glowSize * 0.25, 0.5, 8)
-                s.Transparency = 1 - (0.66 * glowStrength)
+                s.Color = glowColor:Lerp(Color3.new(1,1,1), 0.52)
+                s.Thickness = math.clamp(glowSize * 0.32, 0.5, 8)
+                s.Transparency = 1 - (0.78 * glowStrength)
             end
         end
     end
