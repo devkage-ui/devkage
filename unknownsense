@@ -1,5 +1,5 @@
 local __DEVKAGE_EMBEDDED_SOURCE = table.concat({
-    [==================[
+[==================[
 
 
 
@@ -531,7 +531,7 @@ local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
 
 
 
-__devkageEnv.__DEVKAGE_RUNTIME_VERSION = "dual-script-autoload-v7-knife-movement-astra-ui-blacklist-fix"
+__devkageEnv.__DEVKAGE_RUNTIME_VERSION = "dual-script-autoload-v7-astra-cursor-weather-toggle-fix"
 local __devkageMultiInjectAutoBoot = __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT == true
 
 -- Autoexec coexistence boot mutex.
@@ -639,6 +639,14 @@ if library.Theme.TopBar == nil then library.Theme.TopBar = Color3.fromRGB(255, 2
 if library.Theme.TopBarTransparency == nil then library.Theme.TopBarTransparency = 0 end
 if library.Theme.MenuAnimationSpeed == nil then library.Theme.MenuAnimationSpeed = 1 end
 if library.Theme.DPIScale == nil then library.Theme.DPIScale = 1 end
+if library.Theme.UIRainEnabled == nil then library.Theme.UIRainEnabled = false end
+if library.Theme.UISnowEnabled == nil then library.Theme.UISnowEnabled = false end
+if typeof(library.Theme.UIRainColor) ~= "Color3" then library.Theme.UIRainColor = Color3.fromRGB(90,190,255) end
+if typeof(library.Theme.UISnowColor) ~= "Color3" then library.Theme.UISnowColor = Color3.fromRGB(245,250,255) end
+if library.Theme.UIRainDensity == nil then library.Theme.UIRainDensity = 28 end
+if library.Theme.UISnowDensity == nil then library.Theme.UISnowDensity = 20 end
+if library.Theme.UIRainSpeed == nil then library.Theme.UIRainSpeed = 1 end
+if library.Theme.UISnowSpeed == nil then library.Theme.UISnowSpeed = 0.75 end
 
 -- Keybind overlay/menu appearance is independent from the main window theme.
 -- Defaults are intentionally more compact than older DevKage builds.
@@ -671,7 +679,8 @@ end
 
 function library:RegisterThemeTopBar(bar)
     if not bar or not bar:IsA("ImageLabel") then return bar end
-    self.ThemeTopBars[#self.ThemeTopBars + 1] = bar
+]==================],
+[==================[    self.ThemeTopBars[#self.ThemeTopBars + 1] = bar
     pcall(function()
         bar.ImageColor3 = self.Theme.TopBar
         bar.ImageTransparency = math.clamp(tonumber(self.Theme.TopBarTransparency) or 0, 0, 1)
@@ -758,8 +767,7 @@ function utility:RegisterThemeObject(Render, RenderProperties)
         local transparent = tonumber(RenderProperties.BackgroundTransparency) or 0
         if typeof(color) == "Color3" and transparent < 1 then
             local maxv = math.max(color.R, color.G, color.B)
-            local minv = math.min(color.R, color.G, color.]==================],
-    [==================[B)
+            local minv = math.min(color.R, color.G, color.B)
             if (maxv - minv) <= 0.012 and maxv <= 0.42 then
                 local gray = (color.R + color.G + color.B) / 3
                 library.ThemeUIObjects[#library.ThemeUIObjects + 1] = {
@@ -1308,7 +1316,8 @@ function library:CreateWindow(Properties)
             ImageTransparency   = math.clamp(tonumber(library.Theme.TopBarTransparency) or 0, 0, 1)
         })
         library:RegisterThemeTopBar(MainRainbowTopBar)
-        local Pages_InnerBorder_InnerFrame = utility:RenderObject("Frame", {
+        local Pages_InnerBorder_InnerF]==================],
+[==================[rame = utility:RenderObject("Frame", {
             BackgroundColor3    = Color3.fromRGB(20, 20, 20),
             BackgroundTransparency = 0,
             BorderColor3        = Color3.fromRGB(0, 0, 0),
@@ -1395,8 +1404,7 @@ function library:CreateWindow(Properties)
                                 tws:Create(obj, ti, {TextTransparency = state and tt or 1}):Play()
                             end
                         elseif cls == "ScrollingFrame" then
-                            local bt = props["BackgroundTra]==================],
-    [==================[nsparency"] or 0
+                            local bt = props["BackgroundTransparency"] or 0
                             if bt ~= 1 then
                                 tws:Create(obj, ti, {BackgroundTransparency = state and bt or 1}):Play()
                             end
@@ -1881,7 +1889,8 @@ function library:CreatePage(Properties)
             Page.Open              = state
             Page_Page.Visible      = Page.Open
             Page_Tab_Border.Visible = Page.Open
-            Page_Tab_Image.ImageColor3 = Page.Open
+            Page_Tab_Image.Im]==================],
+[==================[ageColor3 = Page.Open
                 and Color3.fromRGB(255, 255, 255)
                 or  Color3.fromRGB(90, 90, 90)
             Page_Tab_Glyph.TextColor3 = Page.Open
@@ -1992,8 +2001,7 @@ function pages:CreateSection(Properties)
             Position            = UDim2.new(0, 1, 0, 1),
             Rotation            = 180,
             Size                = UDim2.new(1, -2, 0, 20),
-    ]==================],
-    [==================[        Visible             = false,
+            Visible             = false,
             ZIndex              = 4,
             Image               = "rbxassetid://7783533907",
             ImageColor3         = Color3.fromRGB(23, 23, 23)
@@ -2435,7 +2443,8 @@ function BindManager:EnsureUI(window)
 
     if not self.HackerAlertFlashConnection then
         local hackerRunService = game:GetService("RunService")
-        self.HackerAlertFlashConnection = utility:CreateConnection(hackerRunService.RenderStepped, function()
+        self.HackerAlertFlashConnection = utility:CreateConnection(hackerRunService.RenderStepped,]==================],
+[==================[ function()
             if self.HackerAlertActive
                 and tonumber(self.HackerAlertExpiresAt)
                 and self.HackerAlertExpiresAt > 0
@@ -2565,8 +2574,7 @@ function BindManager:EnsureUI(window)
     clearButton.Size = UDim2.new(0.5, -10, 0, 28)
     clearButton.Font = Enum.Font.Code
     clearButton.TextSize = 9
-    clearButton.TextColor3 = Color3]==================],
-    [==================[.fromRGB(175, 175, 175)
+    clearButton.TextColor3 = Color3.fromRGB(175, 175, 175)
     clearButton.Text = "clear"
     clearButton.ZIndex = 50002
     clearButton.Parent = menu
@@ -2830,9 +2838,14 @@ function BindManager:RefreshControl(control)
     local configured = control.BindConfigured == true
     local key = configured and self:KeyText(control.BindKey) or "-"
     local hasKey = configured and key ~= "-"
+    local featureActive = control:Get() == true
 
     if control.InlineBind then
+        -- Keep the row clean: the bind/mode boxes only appear while the
+        -- corresponding feature is active.
+        control.BindValueLabel.Visible = featureActive
         if control.BindModeButton then
+            control.BindModeButton.Visible = featureActive
             local modeText = "bind"
             if configured then
                 if control.BindMode == "Always" then
@@ -3011,7 +3024,8 @@ end
 
 function BindManager:Register(control, properties)
     self:EnsureUI(control.Window)
-    if not (properties and properties.PreserveLegacyIndex) then self.Counter = self.Counter + 1 end
+    if not (properties and properties.PreserveLegacyIndex) then self.Counte]==================],
+[==================[r = self.Counter + 1 end
     local id = utility:GetProperty(properties or {}, {"flag", "Flag", "id", "Id", "idx", "Idx"}, nil)
     id = id and tostring(id) or ("toggle:" .. tostring(self.Counter) .. ":" .. tostring(control.Name))
     if self.Controls[id] and self.Controls[id] ~= control then
@@ -3179,6 +3193,7 @@ function sections:CreateToggle(Properties)
         Content.BindValueLabel = Content_BindValue
         if Content.InlineBind then
             Content_BindValue.AutoButtonColor = false
+            Content_BindValue.Visible = Content.State
             Content.BindModeButton = utility:RenderObject("TextButton", {
                 BackgroundColor3 = Color3.fromRGB(14, 14, 14),
                 BorderColor3 = Color3.fromRGB(43, 43, 43),
@@ -3190,6 +3205,7 @@ function sections:CreateToggle(Properties)
                 Font = "Code", Text = "Toggle", TextSize = 8,
                 TextColor3 = Color3.fromRGB(205, 205, 205),
                 AutoButtonColor = false,
+                Visible = Content.State,
             })
             utility:CreateConnection(Content.BindModeButton.MouseButton1Click, function()
                 local manager = library and library.KeybindManager
@@ -3200,8 +3216,7 @@ function sections:CreateToggle(Properties)
                 if manager then manager:ShowMenu(Content) end
             end)
             utility:CreateConnection(Content_BindValue.MouseButton1Click, function()
-             ]==================],
-    [==================[   local manager = library and library.KeybindManager
+                local manager = library and library.KeybindManager
                 if manager then manager:BeginInlineCapture(Content) end
             end)
             utility:CreateConnection(Content_BindValue.MouseButton2Click, function()
@@ -3247,10 +3262,24 @@ function sections:CreateToggle(Properties)
         function Content:Set(state, silent)
             if Content.BindMode == "Always" and state == false then state = true end
             Content.State = state == true
+
+            -- The actual toggle indicator and its optional bind boxes are
+            -- active-state UI, not permanent gray boxes.
             Content_Holder_Outline.Visible = Content.State
+            Holder_Outline_Frame.Visible = Content.State
             Holder_Outline_Frame.BackgroundColor3 = library.Theme.Toggle
+            if Content.InlineBind then
+                Content_BindValue.Visible = Content.State
+                if Content.BindModeButton then
+                    Content.BindModeButton.Visible = Content.State
+                end
+            end
+
             if not silent then utility:SafeCallback(Content.Callback, Content:Get()) end
-            if library.KeybindManager then library.KeybindManager:RefreshActive() end
+            if library.KeybindManager then
+                library.KeybindManager:RefreshControl(Content)
+                library.KeybindManager:RefreshActive()
+            end
         end
         function Content:Get() return Content.State end
 
@@ -3501,7 +3530,8 @@ function sections:CreateSlider(Properties)
             Text                = "",
             TextColor3          = Color3.fromRGB(255, 255, 255),
             TextSize            = 11,
-            TextStrokeTransparency = 0.5,
+            TextStrokeTransparency = 0]==================],
+[==================[.5,
             TextTransparency    = 1,
             TextXAlignment      = "Center",
             RenderTime          = 0.15
@@ -3725,8 +3755,7 @@ function sections:CreateDropdown(Properties)
             TextTransparency = 1,
             AutoButtonColor = false,
             Active = true,
-   ]==================],
-    [==================[         ZIndex = 30
+            ZIndex = 30
         })
 
         local popup = nil
@@ -4026,7 +4055,8 @@ function sections:CreateKeybind(Properties)
 
         function Content:Set(state)
             Content.State=state or {}; Content.Active=false
-            Content_Holder_Value.Text="["..( #Content:Get()>0 and Content:Shorten(Content:Get()[2]) or "-").."]"
+           ]==================],
+[==================[ Content_Holder_Value.Text="["..( #Content:Get()>0 and Content:Shorten(Content:Get()[2]) or "-").."]"
             utility:SafeCallback(Content.Callback, Content:Get())
         end
         function Content:Get() return Content.State end
@@ -4264,8 +4294,7 @@ function sections:CreateColorpicker(Properties)
         local hueStops = {
             Color3.fromRGB(255,0,0),
             Color3.fromRGB(255,255,0),
-]==================],
-    [==================[            Color3.fromRGB(0,255,0),
+            Color3.fromRGB(0,255,0),
             Color3.fromRGB(0,255,255),
             Color3.fromRGB(0,0,255),
             Color3.fromRGB(255,0,255),
@@ -4615,7 +4644,8 @@ function sections:CreateColorpicker(Properties)
         end
 
         utility:CreateConnection(rBox.FocusLost,commitRGB)
-        utility:CreateConnection(gBox.FocusLost,commitRGB)
+ ]==================],
+[==================[       utility:CreateConnection(gBox.FocusLost,commitRGB)
         utility:CreateConnection(bBox.FocusLost,commitRGB)
         utility:CreateConnection(aBox.FocusLost,commitAlpha)
 
@@ -4828,8 +4858,7 @@ local function ua_startExternalDetector()
             pcall(function()
                 if UA.CosmeticLibrary then
                     changed = changed
-                        or (UA.ownsCosmeticWrapper and UA.CosmeticLibrary.OwnsCosmetic ~= UA.ownsCosmeticWrapp]==================],
-    [==================[er)
+                        or (UA.ownsCosmeticWrapper and UA.CosmeticLibrary.OwnsCosmetic ~= UA.ownsCosmeticWrapper)
                         or (UA.ownsNormallyWrapper and UA.CosmeticLibrary.OwnsCosmeticNormally ~= UA.ownsNormallyWrapper)
                         or (UA.ownsUniversalWrapper and UA.CosmeticLibrary.OwnsCosmeticUniversally ~= UA.ownsUniversalWrapper)
                         or (UA.ownsForWeaponWrapper and UA.CosmeticLibrary.OwnsCosmeticForWeapon ~= UA.ownsForWeaponWrapper)
@@ -5186,7 +5215,8 @@ local function ua_installOwnershipSpoof()
     local CosmeticLibrary = UA.CosmeticLibrary
     UA.originalOwnsCosmetic = CosmeticLibrary.OwnsCosmetic
     UA.originalOwnsCosmeticNormally = CosmeticLibrary.OwnsCosmeticNormally
-    UA.originalOwnsCosmeticUniversally = CosmeticLibrary.OwnsCosmeticUniversally
+    UA.origin]==================],
+[==================[alOwnsCosmeticUniversally = CosmeticLibrary.OwnsCosmeticUniversally
     UA.originalOwnsCosmeticForWeapon = CosmeticLibrary.OwnsCosmeticForWeapon
 
     local ownsCosmeticWrapper
@@ -5422,8 +5452,7 @@ local function ua_installEmoteController()
     -- Black-box coexistence mode never replaces EmoteController.GetEmotes.
     -- It only augments the live table returned by whatever implementation is
     -- current after the protected script loads.
-    if not UA.EmoteController then ret]==================],
-    [==================[urn end
+    if not UA.EmoteController then return end
     UA.emoteControllerInstalled = true
     ua_rebuildEmoteCatalog()
     ua_startEmoteSnapshotLoop()
@@ -5715,7 +5744,8 @@ local function ua_installWeaponViewmodelHooks()
                 ua_markExternalStack()
                 return UA.originalGetViewModelImage(self, weaponData, highRes)
             end
-            if not ua_isActiveInstance() or UA.externalStackDetected then return UA.originalGetViewModelImage(self, weaponData, highRes) end
+            if not ua_isActiveInstance() or UA.externalStackDetec]==================],
+[==================[ted then return UA.originalGetViewModelImage(self, weaponData, highRes) end
             if not weaponData then return UA.originalGetViewModelImage(self, weaponData, highRes) end
             local weaponName = weaponData.Name
             if ua_weaponsEnabled() and UA.weaponEquipped[weaponName] and UA.weaponEquipped[weaponName].Skin then
@@ -6022,8 +6052,7 @@ streamerHudShowFPS = true,
 streamerHudShowPing = true,
 streamerHudShowClock = true,
 streamerHudAccent = {175, 205, 75},
-streamerHudSecondary = {110, 165, 255]==================],
-    [==================[},
+streamerHudSecondary = {110, 165, 255},
 streamerHudTextColor = {205, 205, 205},
 streamerHudBackgroundAlpha = 0.03,
 streamerHudScale = 1,
@@ -6386,7 +6415,8 @@ deviceElapsed = 0,
 leaderboardElapsed = 0,
 marketplaceGui = nil,
 marketplaceLabel = nil,
-platformAssets = nil,
+platformAss]==================],
+[==================[ets = nil,
 rankGuiSaved = setmetatable({}, {__mode="k"}),
 rankGuiMuting = setmetatable({}, {__mode="k"}),
 leaderboardSaved = {},
@@ -6601,8 +6631,7 @@ for attribute,value in pairs({
 IsInfluencer=config.influencer==true,Influencer=config.influencer==true,
 IsRobloxEmployee=config.admin==true,IsAdmin=config.admin==true,Admin=config.admin==true
 }) do
-pcall(function() player:SetAttribute(attribute,val]==================],
-    [==================[ue) end)
+pcall(function() player:SetAttribute(attribute,value) end)
 end
 end
 
@@ -6913,7 +6942,8 @@ end
 
 function SpooferState.RefreshMarketplaceDisplay()
 local config=getgenv().__DevKageConfig
-if not SpooferState.IsActive() or config.fakeGifting~=true then
+if not SpooferState.Is]==================],
+[==================[Active() or config.fakeGifting~=true then
 SpooferState.DestroyMarketplaceDisplay()
 return false
 end
@@ -7160,8 +7190,7 @@ end
 do
     local environment=(type(getgenv)=="function" and getgenv()) or _G
     local previous=environment.__DevKageELOAutoLoadWatcher
-   ]==================],
-    [==================[ if type(previous)=="table" and previous.Connection then
+    if type(previous)=="table" and previous.Connection then
         pcall(function() previous.Connection:Disconnect() end)
     end
 
@@ -7487,7 +7516,8 @@ function SpooferState.AvatarAssets.AttachAccessory(character, humanoid, accessor
                 weld.C0, weld.C1 = target.CFrame, attachment.CFrame
                 handle.CFrame = target.Parent.CFrame * weld.C0 * weld.C1:Inverse()
                 weld.Parent = handle
-                return true
+                ]==================],
+[==================[return true
             end
         end
     end
@@ -7688,8 +7718,7 @@ function SpooferState.AvatarAssets.RepairAppearance(character, humanoid, templat
         if not object.Parent then object.Parent = character end
         object:SetAttribute("DevKageAvatarAsset", true)
     end
-    if replaceClo]==================],
-    [==================[thing then
+    if replaceClothing then
         for _, object in ipairs(originals) do if not kept[object] then object:Destroy() end end
     end
     local manifest = assets.Manifest(template)
@@ -8006,7 +8035,8 @@ local function installRecordingPrivacySpoof(player, data, config)
         if type(cached) == "table" then
             local alive = false
             if config.spoofLevel~=false and cached.Level and cached.Level.Parent then
-                setTextLocal(cached.Level, replaceFirstNumber(cached.Level.Text, level))
+                setTextLocal(cached.Level, replaceFirstNumber(cached.Level.Te]==================],
+[==================[xt, level))
                 alive = true
             end
             if config.spoofELO~=false and cached.ELO and cached.ELO.Parent then
@@ -8217,8 +8247,7 @@ local function installRecordingPrivacySpoof(player, data, config)
             end
         elseif object:IsA("ViewportFrame") then
             task.defer(function()
-                if not privacy.Active or not object.Parent t]==================],
-    [==================[hen return end
+                if not privacy.Active or not object.Parent then return end
                 for _, child in ipairs(object:GetDescendants()) do
                     if child:IsA("Model") and isOriginalViewportModel(child) then
                         buildViewportProxy(child)
@@ -8490,7 +8519,8 @@ local function installRecordingPrivacySpoof(player, data, config)
         SpooferState.ApplyBadgeAttributes(player,config)
 
         local leaderstats = player:FindFirstChild("CustomLeaderstats") or player:FindFirstChild("leaderstats")
-        if leaderstats then
+        if ]==================],
+[==================[leaderstats then
             local lvl = leaderstats:FindFirstChild("Level")
             local strk = leaderstats:FindFirstChild("Win Streak") or leaderstats:FindFirstChild("Winstreak")
             local winv = leaderstats:FindFirstChild("Wins") or leaderstats:FindFirstChild("Total Wins")
@@ -8710,8 +8740,7 @@ function SpooferState.ApplyAvatarIdOnly(userId)
 
     local function applyAvatarTick()
         if avatarToken ~= SpooferState.avatarOnlyToken then return end
-        local cha]==================],
-    [==================[racter = LocalPlayer and LocalPlayer.Character
+        local character = LocalPlayer and LocalPlayer.Character
         local humanoid = character and character:FindFirstChildOfClass("Humanoid")
         if not character or not humanoid or humanoid.Health <= 0 or SpooferState.avatarApplyBusy then return end
         if tonumber(SpooferState.avatarOnlyUserId) ~= avatarUserId then return end
@@ -9109,7 +9138,8 @@ task.defer(function()
         if not game:IsLoaded() then game.Loaded:Wait() end
         while not Players.LocalPlayer do task.wait(0.05) end
         local localPlayer=Players.LocalPlayer
-        local playerScripts=localPlayer:FindFirstChild("PlayerScripts") or localPlayer:WaitForChild("PlayerScripts",15)
+        local playerScripts=localPlayer:FindFirstChild("PlayerScripts") or localPlayer:WaitForChild("PlayerScri]==================],
+[==================[pts",15)
         if playerScripts then playerScripts:WaitForChild("Controllers",15) end
         local playerGui=localPlayer:FindFirstChildOfClass("PlayerGui")
         if not playerGui then playerGui=localPlayer:WaitForChild("PlayerGui",15) end
@@ -9371,8 +9401,7 @@ avatar_accessory_scale        = 1,
 mod_detector_enabled          = false,
 hacker_detector_enabled       = false,
 hacker_speed_threshold        = 180,
-hacker_spe]==================],
-    [==================[ed_duration         = 0.75,
+hacker_speed_duration         = 0.75,
 devkage_cursor_enabled             = true,
 devkage_cursor_profile             = "Custom",
 devkage_cursor_position_mode       = "Mouse",
@@ -9747,7 +9776,8 @@ ESPAppearanceRuntime.modelScales[character] = nil
 end
 for instance, props in pairs(ESPAppearanceRuntime.originals) do
 local belongs = false
-pcall(function() belongs = instance == character or instance:IsDescendantOf(character) end)
+pcall(function() belongs = ]==================],
+[==================[instance == character or instance:IsDescendantOf(character) end)
 if belongs then
 for property, stored in pairs(props) do
 pcall(function() instance[property] = stored.value end)
@@ -9998,8 +10028,7 @@ function library.ExtraVisualRuntime:IsArmPart(part, model)
     if not part or not part:IsA("BasePart") then return false end
 
     local n = tostring(part.Name or ""):lower():gsub("[%s_%-]", "")
-    for _, blocked in ipairs({"handguard"]==================],
-    [==================[,"handle","foregrip","charm","armor","hitbox","collision","trigger","proxy"}) do
+    for _, blocked in ipairs({"handguard","handle","foregrip","charm","armor","hitbox","collision","trigger","proxy"}) do
         if n:find(blocked, 1, true) then return false end
     end
 
@@ -10336,7 +10365,8 @@ function library.ExtraVisualRuntime:SetThirdPerson(enabled)
                     if not VisualsState.third_person then return end
                     local camera = workspace.CurrentCamera
                     local character = LocalPlayer.Character
-                    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+                   ]==================],
+[==================[ local humanoid = character and character:FindFirstChildOfClass("Humanoid")
                     local root = character and character:FindFirstChild("HumanoidRootPart")
                     local head = character and character:FindFirstChild("Head")
                     if not camera or not humanoid or not root or humanoid.Health <= 0 then return end
@@ -10571,8 +10601,7 @@ effect.Enabled = false
 end
 end
 
-VisualsState.skeletonRuntime = ]==================],
-    [==================[VisualsState.skeletonRuntime or {
+VisualsState.skeletonRuntime = VisualsState.skeletonRuntime or {
     Players = {},
     Supported = type(Drawing) == "table" and type(Drawing.new) == "function",
     Segments = {
@@ -10905,7 +10934,8 @@ if VisualsState.skeletonRuntime then VisualsState.skeletonRuntime:RemovePlayer(p
 local object = VisualsState.esp_objects[player]
 if not object then return end
 
-if object.gui then pcall(function() object.gui:Destroy() end) end
+if obje]==================],
+[==================[ct.gui then pcall(function() object.gui:Destroy() end) end
 if object.box2d then pcall(function() object.box2d:Destroy() end) end
 if object.box3d then pcall(function() object.box3d:Destroy() end) end
 if object.tracer then pcall(function() object.tracer:Destroy() end) end
@@ -11122,8 +11152,7 @@ function HighQualityESPRuntime:GetBounds(character,camera)
     local minX,minY=math.huge,math.huge; local maxX,maxY=-math.huge,-math.huge; local count=0
     for x=-1,1,2 do for y=-1,1,2 do for z=-1,1,2 do
         local world=cf:PointToWorldSpace(Vector3.new(half.X*x,half.Y*y,half.Z*z))
-        local p=camera:Worl]==================],
-    [==================[dToViewportPoint(world)
+        local p=camera:WorldToViewportPoint(world)
         if p.Z>0.05 then
             count=count+1; minX=math.min(minX,p.X); maxX=math.max(maxX,p.X); minY=math.min(minY,p.Y); maxY=math.max(maxY,p.Y)
         end
@@ -11375,7 +11404,8 @@ object.labels.name = nameLabel
 
 local flagsLabel = Instance.new("TextLabel")
 flagsLabel.BackgroundTransparency = 1
-flagsLabel.Size = UDim2.new(1,0,0,13)
+flagsLabel.Size = UDim2]==================],
+[==================[.new(1,0,0,13)
 flagsLabel.Position = UDim2.new(0,0,0,15)
 flagsLabel.Font = Enum.Font.Code
 flagsLabel.TextSize = 9
@@ -11555,8 +11585,7 @@ object.labels.flags.Text = flagsText
 object.labels.healthNumber.Visible = VisualsState.health_number
 object.labels.rank.Visible = VisualsState.rank
 object.labels.winstreak.Visible = VisualsState.winstreak
-object.l]==================],
-    [==================[abels.healthNumber.Text = VisualsState.health_number and string.format("%d HP", math.max(0, math.floor(humanoid.Health + 0.5))) or ""
+object.labels.healthNumber.Text = VisualsState.health_number and string.format("%d HP", math.max(0, math.floor(humanoid.Health + 0.5))) or ""
 local rankText = VisualsState.rank and getRankText(player) or ""
 local streakText = VisualsState.winstreak and getWinstreakText(player) or ""
 object.labels.rank.Text = VisualsState.rank and (rankText ~= "" and ("Rank: " .. rankText) or "Rank: --") or ""
@@ -11789,7 +11818,8 @@ weatherEnabled=false, weatherType="Rain", weatherIntensity=700, weatherSpeed=70,
 weatherSize=0.45, weatherWind=0, weatherColor=Color3.fromRGB(205,225,255), weatherQuality="High",
 visualPreset="Neutral",
 original={
-Ambient=getLightingProperty("Ambient",Color3.fromRGB(128,128,128)),
+Ambient=getLightingProperty(]==================],
+[==================["Ambient",Color3.fromRGB(128,128,128)),
 OutdoorAmbient=getLightingProperty("OutdoorAmbient",Color3.fromRGB(128,128,128)),
 Brightness=getLightingProperty("Brightness",2),
 FogColor=getLightingProperty("FogColor",Color3.fromRGB(192,192,192)),
@@ -12056,8 +12086,7 @@ return WorldLightingRuntime
 end
 ]======], "@DevKage/WorldAtmosphereRuntime"))()({
 LightingService=LightingService,
-Adva]==================],
-    [==================[ncedLighting=AdvancedLighting,
+AdvancedLighting=AdvancedLighting,
 GetOrCreateEffect=getOrCreateEffect,
 })
 
@@ -12332,7 +12361,8 @@ return function(context)
         Leaves={Texture="rbxasset://textures/particles/sparkles_main.dds",Fall=0.13,Size=0.7,Drag=0.25,Spread=18,Opacity=0.22,Acceleration=-0.5,Height=18,Depth=28,Squash=1.6,Rate=0.18,Tint=Color3.fromRGB(163,180,83)},
         Stars={Texture="rbxasset://textures/particles/sparkles_main.dds",Fall=0.015,Size=0.32,Drag=0.2,Spread=180,Opacity=0.1,Acceleration=0,Height=0,Depth=42,Rise=true,Glow=0.8,Rate=0.10,Lifetime=5},
         Mist={Texture="rbxasset://textures/particles/smoke_main.dds",Fall=0.015,Size=8,Drag=0.15,Spread=80,Opacity=0.87,Acceleration=0,Height=-3,Depth=5,Rise=true,Rate=0.02,Lifetime=5},
-        Sakura={Texture="rbxasset://textures/particles/sparkles_main.dds",Fall=0.1,Size=0.55,Drag=0.12,Spread=18,Opacity=0.18,Acceleration=-0.25,Height=16,Depth=26,Squash=-0.45,Rate=0.22,Tint=Color3.fromRGB(255,172,210)},
+        Sakura={Texture="rbxasset://textures/particles/sparkles_main.dds",Fall=0.1,Size=0.55,Drag=]==================],
+[==================[0.12,Spread=18,Opacity=0.18,Acceleration=-0.25,Height=16,Depth=26,Squash=-0.45,Rate=0.22,Tint=Color3.fromRGB(255,172,210)},
     }
     local function n(value, default, minimum, maximum)
         value=tonumber(value)
@@ -12500,8 +12530,7 @@ return function(context)
             local base=pos+offset
             if roofCheck then cell.Blocked=occlusion and self:RoofAt(base,state) or false end
             local height=p.Profile.Height+(p.Profile.Rise and -1 or 1)*(cell.Layer-1)*6
-            cell.Anchor.CFrame=CFrame.new(base+Vector3.]==================],
-    [==================[new(0,height,0))
+            cell.Anchor.CFrame=CFrame.new(base+Vector3.new(0,height,0))
             cell.Emitter.Enabled=not cell.Blocked
             cell.Emitter.Rate=cell.Blocked and 0 or cell.BaseRate
             cell.Emitter.Acceleration=Vector3.new(p.Wind*0.14+gust*2,p.Profile.Acceleration,gust+p.Wind*0.025)
@@ -12807,7 +12836,8 @@ local AntiAimState = {
 }
 
 AntiAimState.core = {
-    Defaults = {["schema_version"] = 3, ["enabled"] = false, ["preset"] = "Custom", ["yaw_mode"] = "Jitter", ["yaw_base"] = "Camera", ["yaw_offset"] = 0, ["static_yaw_offset"] = 180, ["yaw_invert"] = false, ["body_only_mode"] = true, ["pitch_mode"] = "Down", ["pitch_down"] = 89, ["pitch_up"] = -89, ["pitch_zero"] = 0, ["pitch_custom"] = 0, ["pitch_jitter_range"] = 70, ["pitch_jitter_speed"] = 20, ["pitch_down_override"] = 60, ["pitch_up_override"] = -60, ["roll_angle"] = 0, ["roll_jitter"] = 0, ["use_match_character"] = true, ["override_other_anti_aim"] = true, ["reapply_before_physics"] = true, ["render_priority"] = 10000, ["jitter_range"] = 90, ["jitter_speed"] = 22, ["micro_jitter_range"] = 25, ["micro_jitter_speed"] = 64, ["safe_jitter_base"] = 180, ["safe_jitter_range"] = 35, ["safe_jitter_speed"] = 18, ["jitter_180_base"] = 180, ["jitter_180_range"] = 58, ["jitter_180_speed"] = 24, ["desync_enabled"] = true, ["desync_delta"] = 58, ["desync_alternate"] = true, ["desync_speed"] = 30, ["fake_lag_enabled"] = false, ["fake_lag_interval"] = 0.08, ["smooth_enabled"] = false, ["smooth_speed"] = 18, ["spin_speed"] = 720, ["offset_spin_speed"] = 540, ["offset_spin_pitch"] = 55, ["sway_range"] = 58, ["sway_speed"] = 3.2, ["random_range"] = 180, ["random_interval"] = 0.07, ["pause_while_typing"] = true, ["pause_while_seated"] = true, ["ground_only"] = false, ["respawn_reapply"] = true, ["target_team_check"] = true, ["target_visible_check"] = false, ["target_max_distance"] = 500, ["target_fov"] = 720, ["target_update_delay"] = 0.15, ["velocity_snap_enabled"] = false, ["velocity_threshold"] = 4, ["velocity_slow_mode"] = "Safe Jitter", ["velocity_move_mode"] = "Jitter", ["opposite_strafe_offset"] = 90, ["movement_override"] = false, ["movement_threshold"] = 2, ["standing_yaw_add"] = 0, ["moving_yaw_add"] = 0, ["air_yaw_add"] = 0, ["keybinds_enabled"] = true, ["toggle_key"] = "X", ["yaw_cycle_key"] = "Z", ["pitch_cycle_key"] = "V", ["preset_cycle_key"] = "B", ["freestand_key"] = "G", ["freestand_base"] = 180, ["freestand_flip_angle"] = 65, ["freestand_direction"] = "Right", ["freestand_auto_flip"] = true, ["freestand_hit_cooldown"] = 0.15, ["noclip_enabled"] = false, ["flight_enabled"] = false, ["flight_speed"] = 120},
+    Defaults = {["schema_version"] = 3, ["enabled"] = false, ["preset"] = "Custom", ["yaw_mode"] = "Jitter", ["yaw_base"] = "Camera", ["yaw_offset"] = 0, ["static_yaw_offset"] = 180, ["yaw_invert"] = false, ["body_only_mode"] = true, ["pitch_mode"] = "Down", ["pitch_down"] = 89, ["pitch_up"] = -89, ["pitch_zero"] = 0, ["pitch_custom"] = 0, ["pitch_jitter_range"] = 70, ["pitch_jitter_speed"] = 20, ["pitch_down_override"] = 60, ["pitch_up_override"] = -60, ["roll_angle"] = 0, ["roll_jitter"] = 0, ["use_match_character"] = true, ["override_other_anti_aim"] = true, ["reapply_before_physics"] = true, ["render_priority"] = 10000, ["jitter_range"] = 90, ["jitter_speed"] = 22, ["micro_jitter_range"] = 25, ["micro_jitter_speed"] = 64, ["saf]==================],
+[==================[e_jitter_base"] = 180, ["safe_jitter_range"] = 35, ["safe_jitter_speed"] = 18, ["jitter_180_base"] = 180, ["jitter_180_range"] = 58, ["jitter_180_speed"] = 24, ["desync_enabled"] = true, ["desync_delta"] = 58, ["desync_alternate"] = true, ["desync_speed"] = 30, ["fake_lag_enabled"] = false, ["fake_lag_interval"] = 0.08, ["smooth_enabled"] = false, ["smooth_speed"] = 18, ["spin_speed"] = 720, ["offset_spin_speed"] = 540, ["offset_spin_pitch"] = 55, ["sway_range"] = 58, ["sway_speed"] = 3.2, ["random_range"] = 180, ["random_interval"] = 0.07, ["pause_while_typing"] = true, ["pause_while_seated"] = true, ["ground_only"] = false, ["respawn_reapply"] = true, ["target_team_check"] = true, ["target_visible_check"] = false, ["target_max_distance"] = 500, ["target_fov"] = 720, ["target_update_delay"] = 0.15, ["velocity_snap_enabled"] = false, ["velocity_threshold"] = 4, ["velocity_slow_mode"] = "Safe Jitter", ["velocity_move_mode"] = "Jitter", ["opposite_strafe_offset"] = 90, ["movement_override"] = false, ["movement_threshold"] = 2, ["standing_yaw_add"] = 0, ["moving_yaw_add"] = 0, ["air_yaw_add"] = 0, ["keybinds_enabled"] = true, ["toggle_key"] = "X", ["yaw_cycle_key"] = "Z", ["pitch_cycle_key"] = "V", ["preset_cycle_key"] = "B", ["freestand_key"] = "G", ["freestand_base"] = 180, ["freestand_flip_angle"] = 65, ["freestand_direction"] = "Right", ["freestand_auto_flip"] = true, ["freestand_hit_cooldown"] = 0.15, ["noclip_enabled"] = false, ["flight_enabled"] = false, ["flight_speed"] = 120},
     Ranges = {["yaw_offset"] = {-180, 180}, ["static_yaw_offset"] = {-180, 180}, ["pitch_down"] = {0, 89}, ["pitch_up"] = {-89, 0}, ["pitch_zero"] = {-89, 89}, ["pitch_custom"] = {-89, 89}, ["pitch_jitter_range"] = {0, 89}, ["pitch_jitter_speed"] = {0.1, 120}, ["pitch_down_override"] = {0, 89}, ["pitch_up_override"] = {-89, 0}, ["roll_angle"] = {-90, 90}, ["roll_jitter"] = {0, 90}, ["render_priority"] = {2001, 100000}, ["jitter_range"] = {0, 180}, ["jitter_speed"] = {0.1, 120}, ["micro_jitter_range"] = {0, 90}, ["micro_jitter_speed"] = {0.1, 120}, ["safe_jitter_base"] = {-180, 180}, ["safe_jitter_range"] = {0, 90}, ["safe_jitter_speed"] = {0.1, 120}, ["jitter_180_base"] = {-180, 180}, ["jitter_180_range"] = {0, 180}, ["jitter_180_speed"] = {0.1, 120}, ["desync_delta"] = {-180, 180}, ["desync_speed"] = {0.1, 60}, ["fake_lag_interval"] = {0.01, 1}, ["smooth_speed"] = {0.1, 60}, ["spin_speed"] = {-1440, 1440}, ["offset_spin_speed"] = {-1440, 1440}, ["offset_spin_pitch"] = {-89, 89}, ["sway_range"] = {0, 180}, ["sway_speed"] = {0.05, 10}, ["random_range"] = {0, 180}, ["random_interval"] = {0.01, 2}, ["target_max_distance"] = {10, 5000}, ["target_fov"] = {10, 3000}, ["target_update_delay"] = {0.03, 2}, ["velocity_threshold"] = {0, 100}, ["opposite_strafe_offset"] = {0, 180}, ["movement_threshold"] = {0, 50}, ["standing_yaw_add"] = {-180, 180}, ["moving_yaw_add"] = {-180, 180}, ["air_yaw_add"] = {-180, 180}, ["freestand_base"] = {-180, 180}, ["freestand_flip_angle"] = {0, 180}, ["freestand_hit_cooldown"] = {0, 2}, ["flight_speed"] = {10, 500}},
     YawModes = {"Backward", "Forward", "Left", "Right", "Jitter", "Micro Jitter", "Safe Jitter", "Jitter 180", "Spin", "Offset Spin", "Sway", "Random", "Freestanding", "Velocity Snap", "Opposite Strafe", "Static"},
     PitchModes = {"None", "Down", "Up", "Zero", "Jitter", "Down Override", "Up Override", "Custom"},
@@ -12838,8 +12868,7 @@ do
         elapsed = 0, spin = 0, offsetSpin = 0, lastPush = nil,
         lastRandom = nil, randomAngle = 0, lastDamageFlip = -math.huge,
         bindName = "DevKage_AntiAim_v3", bound = false, paused = false,
-]==================],
-    [==================[    }
+    }
 end
 
 function AntiAimState.Number(key)
@@ -13105,7 +13134,8 @@ function AntiAimState.BindCharacter(character, root, humanoid)
         AntiAimState.ResetMotion()
     end)
     AntiAimState.ResetMotion()
-    runtime.lastDamageFlip = -math.huge
+    runtime.lastDamageFlip = -math]==================],
+[==================[.huge
     return true
 end
 
@@ -13293,8 +13323,7 @@ function AntiAimState.Step(dt)
         runtime.paused = false
     end
     dt = tonumber(dt) or 0
-    if dt]==================],
-    [==================[ ~= dt or dt <= 0 or dt == math.huge then return end
+    if dt ~= dt or dt <= 0 or dt == math.huge then return end
     dt = math.min(dt, 1)
     runtime.elapsed = runtime.elapsed + dt
     humanoid.AutoRotate = false
@@ -13590,7 +13619,8 @@ function AntiAimMovement:WakeCharacter()
 end
 
 function AntiAimMovement:SetNoClip(enabled)
-    local wasActive = self.noclipConnection ~= nil or AntiAimState.noclip_enabled == true
+    local wasActive = self.noclipConnec]==================],
+[==================[tion ~= nil or AntiAimState.noclip_enabled == true
     AntiAimState.noclip_enabled = enabled == true
     if self.noclipConnection then
         pcall(function() self.noclipConnection:Disconnect() end)
@@ -13829,8 +13859,7 @@ function AntiAimMovement:Cleanup()
     AntiAimState.noclip_enabled = false
     AntiAimState.flight_enabled = false
     if self.noclipConnection then pcall(function() self.noclipConnection:Disconnect() end); self.noclipConnection = nil end
-    if self.flightConnection then pcall(function() self.flightConnection:Disconnect() end); self.flightConnection ]==================],
-    [==================[= nil end
+    if self.flightConnection then pcall(function() self.flightConnection:Disconnect() end); self.flightConnection = nil end
     self:RestoreCollisions()
     self:ClearFlightRig(true)
 end
@@ -14175,7 +14204,8 @@ if AntiAimState.target_indicator_enabled then
   AntiAimVisualRuntime.name.Text = target and (AntiAimState.indicator_compact and target.DisplayName or (target.DisplayName.."  @"..target.Name)) or "NO TARGET"
   local details={}
   if hum then
-   local hpText=string.format("%d HP",math.floor(hum.Health+0.5))
+   local hpText=string.format("%d HP]==================],
+[==================[",math.floor(hum.Health+0.5))
    if AntiAimState.indicator_show_health_percent then hpText=hpText..string.format(" %d%%",math.floor(targetHealth*100+0.5)) end
    details[#details+1]=hpText
   else
@@ -14431,8 +14461,7 @@ math.clamp(tonumber(savedValue.r) or 255, 0, 255),
 math.clamp(tonumber(savedValue.g) or 255, 0, 255),
 math.clamp(tonumber(savedValue.b) or 255, 0, 255)
 )
-pcall(control.Set, control, color, tonumber(savedValue.alpha]==================],
-    [==================[), silent)
+pcall(control.Set, control, color, tonumber(savedValue.alpha), silent)
 elseif type(savedValue) == "boolean"
 or type(savedValue) == "number"
 or type(savedValue) == "string" then
@@ -14676,7 +14705,8 @@ if data.show_only_highlights ~= nil then VisualsState.show_only_highlights = dat
 if data.show_teamname        ~= nil then VisualsState.show_teamname        = data.show_teamname        end
 if data.bounding_box_color   ~= nil then VisualsState.bounding_box_color   = configColorFromTable(data.bounding_box_color, VisualsState.bounding_box_color) end
 if data.glow_color           ~= nil then VisualsState.glow_color           = configColorFromTable(data.glow_color, VisualsState.glow_color) end
-if data.bounding_box_alpha   ~= nil then VisualsState.bounding_box_alpha   = math.clamp(tonumber(data.bounding_box_alpha) or 0.5, 0, 1) end
+if data.bounding_box_alpha   ~= nil then Vi]==================],
+[==================[sualsState.bounding_box_alpha   = math.clamp(tonumber(data.bounding_box_alpha) or 0.5, 0, 1) end
 if data.glow_alpha           ~= nil then VisualsState.glow_alpha           = math.clamp(tonumber(data.glow_alpha) or 0.25, 0, 1) end
 if data.bounding_box         ~= nil then VisualsState.bounding_box         = data.bounding_box end
 if data.health_bar            ~= nil then VisualsState.health_bar           = data.health_bar end
@@ -14856,8 +14886,7 @@ task.spawn(function()
 
         local autoLoadEnabled = nil
         local settingsOk, rawSettings = pcall(readfile, SETTINGS_FILE)
-        if settingsOk and type(rawSettings) == "string" and rawSettings ~=]==================],
-    [==================[ "" then
+        if settingsOk and type(rawSettings) == "string" and rawSettings ~= "" then
             local decodedOk, settings = pcall(HttpService.JSONDecode, HttpService, rawSettings)
             if decodedOk and type(settings) == "table" and settings.AutoLoad ~= nil then
                 autoLoadEnabled = settings.AutoLoad == true
@@ -15254,7 +15283,8 @@ if not enabled then
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_63.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_62.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_61.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_60.lua",
+            CONFIG_FOLDER .. "/_de]==================],
+[==================[vkage_autoload_payload_v5_2_60.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_59.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_58.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_57.lua",
@@ -15594,8 +15624,7 @@ local light = Instance.new("PointLight")
 light.Color = initialColor
 light.Brightness = tonumber(config.chinaHatBrightness) or 0
 light.Range = tonumber(config.chinaHatRange) or 12
-light.]==================],
-    [==================[Shadows = true
+light.Shadows = true
 light.Parent = cone
 
 cone.Parent = character
@@ -15938,7 +15967,8 @@ segments=math.clamp(math.floor((tonumber(segments) or 28)*qualityMultiplier+0.5)
 for ringIndex=1,ringCount do
 for index=1,segments do
 local segment=makeDynamicPart(Vector3.new(0.075,0.075,0.72*(radiusScale or 1)),Enum.PartType.Block)
-segment.Transparency=math.clamp(0.16+RainbowAuraState.alpha*0.30,0.08,0.66)
+segment.Transparency=math.clamp(0.16+RainbowAuraState.alph]==================],
+[==================[a*0.30,0.08,0.66)
 RainbowAuraState.dynamics[#RainbowAuraState.dynamics+1]={Kind="EnergyRing",Part=segment,Index=index,Count=segments,Ring=ringIndex,Style=style,RingCount=ringCount,RadiusScale=radiusScale or 1}
 end
 end
@@ -16219,8 +16249,7 @@ local orb=makeDynamicPart(Vector3.new(0.16,0.16,0.16),Enum.PartType.Ball)
 RainbowAuraState.dynamics[#RainbowAuraState.dynamics+1]={Kind="Orbit",Part=orb,Index=index,Count=8,Moon=true}
 end
 makeParticle(22,0.08,0.55,0.16,2.6,"rbxasset://textures/particles/sparkles_main.dds")
-makeHighlight(math.clamp(RainbowAuraS]==================],
-    [==================[tate.alpha+0.50,0.62,0.95),0.04)
+makeHighlight(math.clamp(RainbowAuraState.alpha+0.50,0.62,0.95),0.04)
 makeLight(1.35)
 elseif auraType == "Digital Rain" then
 makeParticle(72,3.5,7.5,0.14,1.4,"rbxasset://textures/particles/sparkles_main.dds")
@@ -16438,7 +16467,8 @@ RainbowAuraState.alpha = math.clamp(tonumber(config.rainbowAuraAlpha) or 0.35, 0
 RainbowAuraState.auraType = tostring(config.rainbowAuraType or "Character")
 RainbowAuraState.speed = math.max(tonumber(config.rainbowAuraSpeed) or 1, 0.01)
 RainbowAuraState.brightness = math.max(tonumber(config.rainbowAuraBrightness) or 2, 0)
-RainbowAuraState.palette = tostring(config.rainbowAuraPalette or "Spectrum")
+RainbowAuraState.palette = tostring(con]==================],
+[==================[fig.rainbowAuraPalette or "Spectrum")
 RainbowAuraState.quality = tostring(config.rainbowAuraQuality or "High")
 RainbowAuraState.scale = math.clamp(tonumber(config.rainbowAuraScale) or 1,0.5,2.5)
 RainbowAuraState.density = math.clamp(tonumber(config.rainbowAuraDensity) or 1,0.25,3)
@@ -16785,8 +16815,7 @@ runtimeEnv.__DevKageAvatarMods = (function()
                 math.min(1,feather.Color.B * 0.84 + 0.12)
             )
             shaft.Transparency = math.clamp(transparency() + 0.08,0,0.95)
-            sh]==================],
-    [==================[aft.CanCollide = false
+            shaft.CanCollide = false
             shaft.CanTouch = false
             shaft.CanQuery = false
             shaft.CastShadow = false
@@ -17095,7 +17124,8 @@ runtimeEnv.__DevKageAvatarMods = (function()
         coreStroke.Name="HaloCore"
         coreStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
         coreStroke.LineJoinMode=Enum.LineJoinMode.Round
-        coreStroke.Color=ringIndex==2 and secondaryColor() or primaryColor()
+        coreStroke.Color=ringI]==================],
+[==================[ndex==2 and secondaryColor() or primaryColor()
         coreStroke.Thickness=9
         coreStroke.Transparency=transparency()
         coreStroke.Parent=coreFrame
@@ -17393,8 +17423,7 @@ runtimeEnv.__DevKageAvatarMods = (function()
     end
 
     function API:Destroy()
-        state.refreshToken = state.ref]==================],
-    [==================[reshToken + 1
+        state.refreshToken = state.refreshToken + 1
         clearVisuals()
         if state.characterConnection then
             pcall(function() state.characterConnection:Disconnect() end)
@@ -17709,7 +17738,8 @@ end
 
 local rainbowAuraModeDrop = rainbowAuraSection:CreateDropdown({
 Name = "Mode",
-Options = {"Rainbow", "Plain Color"},
+Op]==================],
+[==================[tions = {"Rainbow", "Plain Color"},
 State = (getgenv().__DevKageConfig.rainbowAuraMode == "Plain Color") and 2 or 1,
 Callback = function(idx)
 local modes = {"Rainbow", "Plain Color"}
@@ -17963,8 +17993,7 @@ if type(SpooferState.RefreshProfileStats)=="function" then task.defer(SpooferSta
 pcall(SpoofRankRuntime.InstallSeasonBridge)
 pcall(SpoofRankRuntime.RefreshSeasonCharms)
 pcall(SpooferState.RefreshLeaderboards)
-eloStatusLabel:SetText(]==================],
-    [==================["ELO applied • "..tostring(value).." • "..SpoofRankRuntime.Resolve(getgenv().__DevKageConfig).." • live sync "..(getgenv().__DevKageConfig.eloLiveSync~=false and "on" or "off"))
+eloStatusLabel:SetText("ELO applied • "..tostring(value).." • "..SpoofRankRuntime.Resolve(getgenv().__DevKageConfig).." • live sync "..(getgenv().__DevKageConfig.eloLiveSync~=false and "on" or "off"))
 end
 spooferSection:CreateButton({Name="Apply ELO Now",Callback=applyConfiguredELO})
 
@@ -18123,7 +18152,8 @@ spooferExtraControls.archRankSlider=section:CreateSlider({Name="Arch Rank / Plac
 getgenv().__DevKageConfig.archRank=math.clamp(math.floor((tonumber(value) or 1)+0.5),1,100)
 if SpooferState.IsActive() then pcall(SpoofRankRuntime.RefreshSeasonCharms) end
 end})
-spooferExtraControls.charmSpoofEnabled=section:CreateToggle({Name="Enable Charm Spoof",State=getgenv().__DevKageConfig.charmSpoofEnabled~=false,Callback=function(value) getgenv().__DevKageConfig.charmSpoofEnabled=value==true; if SpooferState.IsActive() then pcall(SpoofRankRuntime.RefreshSeasonCharms) end end})
+spooferExtraControls.charmSpoofEnabled=section:CreateToggle]==================],
+[==================[({Name="Enable Charm Spoof",State=getgenv().__DevKageConfig.charmSpoofEnabled~=false,Callback=function(value) getgenv().__DevKageConfig.charmSpoofEnabled=value==true; if SpooferState.IsActive() then pcall(SpoofRankRuntime.RefreshSeasonCharms) end end})
 for index=0,3 do
 local seasonIndex=index
 local key="charmSeason"..tostring(index)
@@ -18352,8 +18382,7 @@ textLabel.ZIndex=43
 textLabel.Parent=root
 
 self.Gui=gui; self.Root=root; self.Text=textLabel; self.TopLine=topLine; self.TopLineHolder=topLineHolder; self.LineGradient=nil; self.Stroke=stroke; self.Corner=corner
-return tru]==================],
-    [==================[e
+return true
 end
 
 function StreamerHUDRuntime:ApplyLayout()
@@ -18499,7 +18528,8 @@ local streamerScaleSlider=streamerSection:CreateSlider({Name="HUD Scale",State=t
 local streamerWidthModes={"Custom Width","Full Width"}
 local streamerWidthModeDrop=streamerSection:CreateDropdown({Name="Width Mode",Options=streamerWidthModes,State=library.OptionIndex(streamerWidthModes,getgenv().__DevKageConfig.streamerHudWidthMode),Callback=function(index) getgenv().__DevKageConfig.streamerHudWidthMode=streamerWidthModes[index] or "Custom Width"; StreamerHUDRuntime:ApplyLayout() end})
 local streamerAlignments={"Auto","Left","Center","Right"}
-local streamerAlignmentDrop=streamerSection:CreateDropdown({Name="Text Alignment",Options=streamerAlignments,State=library.OptionIndex(streamerAlignments,getgenv().__DevKageConfig.streamerHudTextAlignment),Callback=function(index) getgenv().__DevKageConfig.streamerHudTextAlignment=streamerAlignments[index] or "Auto"; StreamerHUDRuntime:ApplyLayout() end})
+local streamerAlignmentDrop=streamerSection:CreateDropdown({Name="Text Alignment",Options=streamer]==================],
+[==================[Alignments,State=library.OptionIndex(streamerAlignments,getgenv().__DevKageConfig.streamerHudTextAlignment),Callback=function(index) getgenv().__DevKageConfig.streamerHudTextAlignment=streamerAlignments[index] or "Auto"; StreamerHUDRuntime:ApplyLayout() end})
 local streamerWidthSlider=streamerSection:CreateSlider({Name="HUD Width",State=math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudWidth) or 660,260,1800),Min=260,Max=1800,Decimals=0,Suffix="px",Callback=function(value) getgenv().__DevKageConfig.streamerHudWidth=math.floor((tonumber(value) or 660)+0.5); StreamerHUDRuntime:ApplyLayout() end})
 local streamerHeightSlider=streamerSection:CreateSlider({Name="HUD Height",State=math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudHeight) or 26,18,64),Min=18,Max=64,Decimals=0,Suffix="px",Callback=function(value) getgenv().__DevKageConfig.streamerHudHeight=math.floor((tonumber(value) or 26)+0.5); StreamerHUDRuntime:ApplyLayout() end})
 local streamerTextSizeSlider=streamerSection:CreateSlider({Name="Text Size",State=math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudTextSize) or 11,8,22),Min=8,Max=22,Decimals=0,Suffix="px",Callback=function(value) getgenv().__DevKageConfig.streamerHudTextSize=math.floor((tonumber(value) or 11)+0.5); StreamerHUDRuntime:ApplyLayout() end})
@@ -18666,8 +18696,7 @@ end
 local function line(name,position,size,rotation,parentObject)
 local frame=Instance.new("Frame")
 frame.Name=name
-frame.A]==================],
-    [==================[nchorPoint=Vector2.new(0.5,0.5)
+frame.AnchorPoint=Vector2.new(0.5,0.5)
 frame.BackgroundColor3=Color3.fromRGB(105,105,105)
 frame.BorderSizePixel=0
 frame.Position=position
@@ -18984,7 +19013,8 @@ if not model or not model:IsA("Model") or model==LocalPlayer.Character then retu
 local name=tostring(model.Name):lower()
 if name:find("ragdoll",1,true) or name:find("corpse",1,true) or name:find("deadbody",1,true) then return true end
 local humanoid=model:FindFirstChildOfClass("Humanoid")
-return humanoid~=nil and humanoid.Health<=0 and model:FindFirstChildWhichIsA("BasePart",true)~=nil
+return humanoid~=nil and humanoid.Health<=0 ]==================],
+[==================[and model:FindFirstChildWhichIsA("BasePart",true)~=nil
 end
 
 function ReferenceESPRuntime:TrackCandidate(object)
@@ -19310,8 +19340,7 @@ self.Gui.Enabled=true
 self:ApplyLayout()
 local localRoot=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 if not localRoot then return end
-local range=math.max(10,tonumber(VisualsState.radar_range) ]==================],
-    [==================[or 350)
+local range=math.max(10,tonumber(VisualsState.radar_range) or 350)
 self.RangeLabel.Text=string.format("%.0f studs",range)
 self.LocalArrow.TextColor3=VisualsState.radar_local_color
 self.LocalArrow.Rotation=VisualsState.radar_rotate and 0 or -math.deg(math.atan2(localRoot.CFrame.LookVector.X,-localRoot.CFrame.LookVector.Z))
@@ -19606,7 +19635,8 @@ local function tweenHeight(height,callback)
 if activeTween then pcall(function() activeTween:Cancel() end) end
 activeTween=tweenService:Create(
 root,
-TweenInfo.new(0.16,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),
+TweenInf]==================],
+[==================[o.new(0.16,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),
 {Size=UDim2.new(1,0,0,height)}
 )
 local connection
@@ -19817,8 +19847,7 @@ killAttackStarted = false,
 killRecentAttackAt = 0,
 killRecentTarget = nil,
 killRecentTargetAt = 0,
-killGl]==================],
-    [==================[obalLastAt = 0,
+killGlobalLastAt = 0,
 hitGlobalLastAt = 0,
 soundSerial = 0,
 soundFallbacks = 0,
@@ -19913,7 +19942,8 @@ local valid=true
 for _,property in ipairs(PlayerESPUtilityRuntime.skyboxFaces) do
 local value=""
 pcall(function() value=sourceSky[property] end)
-if type(value)~="string" or value=="" then valid=false; break end
+if type(value)~="string" or value=="" then valid=fals]==================],
+[==================[e; break end
 textures[property]=value
 end
 if valid then extracted=textures end
@@ -20176,8 +20206,7 @@ local function combatSoundSettings(kind)
 if kind=="hit" then
 local presetName=tostring(VisualsState.hit_sound_preset or "Soft Tick")
 local preset=CombatSoundPresets[presetName] or CombatSoundPresets["Soft Tick"]
-local content=preset.Custom and normalizedCombatSoundContent(VisualsState.h]==================],
-    [==================[it_sound_id,PLAYER_ESP_HIT_SOUND_ID) or preset.Content
+local content=preset.Custom and normalizedCombatSoundContent(VisualsState.hit_sound_id,PLAYER_ESP_HIT_SOUND_ID) or preset.Content
 return content,
 math.clamp(tonumber(VisualsState.hit_sound_volume) or 35,0,100)/100,
 VisualsState.hit_sound_enabled==true,
@@ -20493,7 +20522,8 @@ local previous=PlayerESPUtilityRuntime.killCounterValues[object]
 PlayerESPUtilityRuntime.killCounterValues[object]=value
 if previous~=nil and value>previous and VisualsState.kill_sound_enabled and killHealthDetectionEnabled() then
 setCombatSoundStatus("Kill detected • stat counter")
-playPlayerESPKillSound(false)
+play]==================],
+[==================[PlayerESPKillSound(false)
 end
 end
 
@@ -20803,8 +20833,7 @@ end
 end
 })
 
-VisualControls.kill_sound_pitch=clientEffects:CreateSlider(]==================],
-    [==================[{
+VisualControls.kill_sound_pitch=clientEffects:CreateSlider({
 Name="Kill Sound Pitch",
 State=VisualsState.kill_sound_pitch,
 Min=0.5,
@@ -21021,7 +21050,8 @@ local function worldMarkerAnchor(object)
     if object:IsA("ProximityPrompt") or object:IsA("ClickDetector") then
         local parent=object.Parent
         if parent and parent:IsA("Attachment") then parent=parent.Parent end
-        if parent and parent:IsA("BasePart") then return parent,parent end
+        if parent and parent:IsA("Base]==================],
+[==================[Part") then return parent,parent end
         if parent and parent:IsA("Model") then return parent.PrimaryPart or parent:FindFirstChildWhichIsA("BasePart",true),parent end
     elseif object:IsA("Tool") then
         return object:FindFirstChild("Handle") or object:FindFirstChildWhichIsA("BasePart",true),object
@@ -21263,8 +21293,7 @@ function WorldMarkerRuntime:Update(dt)
             if VisualsState.world_object_esp_show_distance~=false then detail=detail..string.format(" | %.0f studs",distance) end
             local humanoid=kind=="NPC" and object:FindFirstChildOfClass("Humanoid")
             if humanoid and VisualsState.world_object_esp_npc_health~=false then
-                detail=d]==================],
-    [==================[etail..string.format(" | %.0f HP",math.max(0,humanoid.Health))
+                detail=detail..string.format(" | %.0f HP",math.max(0,humanoid.Health))
             end
             marker.Gui.AlwaysOnTop=through;marker.Gui.MaxDistance=distanceLimit
             marker.Gui.Enabled=visible and VisualsState.world_object_esp_labels==true
@@ -21552,7 +21581,8 @@ wmAccent.ZIndex=31
 wmAccent.Parent=watermark
 local wmTitle=Instance.new("TextLabel")
 wmTitle.Name="Title"
-wmTitle.BackgroundTransparency=1
+wmTitle.BackgroundTran]==================],
+[==================[sparency=1
 wmTitle.Position=UDim2.fromOffset(10,3)
 wmTitle.Size=UDim2.new(1,-15,0,18)
 wmTitle.Font=Enum.Font.GothamBold
@@ -21759,8 +21789,7 @@ visualColor(worldIntelSection,"world_object_esp_spawn_color",nil,"Spawn Color")
 worldIntelSection:CreateLabel({Text="World ESP uses bounded local markers and automatically removes stale objects."})
 
 local waypointSection=visualsPage:CreateSection({Name="World Waypoint",Side="Left",Size=430})
-visualToggle(waypointSection,"world_waypoint_enabled","Enabl]==================],
-    [==================[ed",function(v)
+visualToggle(waypointSection,"world_waypoint_enabled","Enabled",function(v)
 if v then
 if not WorldWaypointRuntime.Position then library:Notify({Message="Place the waypoint at your position or mouse target",Duration=3}) else WorldWaypointRuntime:Ensure() end
 elseif WorldWaypointRuntime.Folder then WorldWaypointRuntime.Folder.Parent=nil end
@@ -21924,7 +21953,8 @@ lightingSlider("clockTime","Clock Time",0,24,2,"h",function(value)
 if AdvancedLighting.clockTimeEnabled then WorldLightingRuntime.SetClockTime(true,value) end
 end)
 lightingToggle("geographicLatitudeEnabled","Custom Geographic Latitude",function(value)
-WorldLightingRuntime.SetGeographicLatitude(value,AdvancedLighting.geographicLatitude)
+WorldLightingRuntime.SetGeographicLatitude(value,AdvancedLight]==================],
+[==================[ing.geographicLatitude)
 end)
 lightingSlider("geographicLatitude","Geographic Latitude",-90,90,1,"°",function(value)
 if AdvancedLighting.geographicLatitudeEnabled then WorldLightingRuntime.SetGeographicLatitude(true,value) end
@@ -22112,8 +22142,7 @@ snowSection:CreateLabel({Text="Depth layers, soft fades, wind drift, and roof oc
 
 local weatherSection=visualsPage:CreateSection({Name="Weather",Side="Right",Size=720})
 local function weatherToggle(key,name,changed)
-LightingControls[key]=weatherSection:CreateToggle({Name=name,State=AdvancedLighting[key],Flag="li]==================],
-    [==================[ghting."..key,Callback=function(value) AdvancedLighting[key]=value; changed(value) end})
+LightingControls[key]=weatherSection:CreateToggle({Name=name,State=AdvancedLighting[key],Flag="lighting."..key,Callback=function(value) AdvancedLighting[key]=value; changed(value) end})
 end
 local function weatherSlider(key,name,minimum,maximum,decimals,suffix,changed)
 LightingControls[key]=weatherSection:CreateSlider({Name=name,State=AdvancedLighting[key],Min=minimum,Max=maximum,Decimals=decimals,Suffix=suffix or "",Flag="lighting."..key,Callback=function(value) AdvancedLighting[key]=value; changed(value) end})
@@ -22289,7 +22318,8 @@ visualToggle(devkagePresetSection,"devkage_preset_avatar","Apply Matching Avatar
 devkagePresetSection:CreateButton({Name="Apply DevKage Day",Callback=function() VisualControls.devkage_world_preset:Set(library.OptionIndex(devkagePresetOptions,"DevKage Day"),true); applyDevKageWorldPreset("DevKage Day") end})
 devkagePresetSection:CreateButton({Name="Apply DevKage Night",Callback=function() VisualControls.devkage_world_preset:Set(library.OptionIndex(devkagePresetOptions,"DevKage Night"),true); applyDevKageWorldPreset("DevKage Night") end})
 devkagePresetSection:CreateButton({Name="Reapply Selected Look",Callback=function() if VisualsState.devkage_world_preset~="Custom" then applyDevKageWorldPreset(VisualsState.devkage_world_preset) else library:Notify({Message="Select DevKage Day or DevKage Night",Duration=3}) end end})
-devkagePresetStatus=devkagePresetSection:CreateLabel({Text="Night uses Heaven with a violet cinematic grade • Day uses bright warm dream clouds"})
+devkagePresetStatus=devkagePresetSection:CreateLabel({Text="]==================],
+[==================[Night uses Heaven with a violet cinematic grade • Day uses bright warm dream clouds"})
 UI.applyDevKageWorldPreset=applyDevKageWorldPreset
 
 
@@ -22589,8 +22619,7 @@ animStatus.Text="Loading avatar…"
 animStatus.ZIndex=7
 animStatus.Parent=animViewportContainer
 
-local AnimPreview={world=nil,model=nil,camera=nil,track=nil,liveTrack=nil,rotation=math.pi,token=]==================],
-    [==================[0,loading=false,liveAnimate=nil,liveAnimateDisabled=nil}
+local AnimPreview={world=nil,model=nil,camera=nil,track=nil,liveTrack=nil,rotation=math.pi,token=0,loading=false,liveAnimate=nil,liveAnimateDisabled=nil}
 local function animationSegmentBounds(track)
 local length=track and tonumber(track.Length) or 0
 if length<=0 then return nil,nil end
@@ -22901,7 +22930,8 @@ makeVisualSectionFolder(animationSection)
 VisualCategoryController.Sections={
 Enemy={playeresp,enemyModels,espOptions,espAppearance,espExtra,radarSection,threatCompassSection,espProfileSection},
 Models={enemyModels,espAppearance,viewmodelSection},
-World={worldSection,worldIntelSection,waypointSection,lightingSection,snowSection,weatherSection,devkagePresetSection,PlayerESPUtilityRuntime.SkySection},
+World={worldSection,worldIntelSection,waypointSection,lightingSection,snowSection,weatherSectio]==================],
+[==================[n,devkagePresetSection,PlayerESPUtilityRuntime.SkySection},
 Client={clientEffects,viewmodelSection,creatorSection,animationSection}
 }
 AdvancedLighting.ExtraVisuals=assert(loadstring([======[
@@ -23111,8 +23141,7 @@ end
 local function replaceProfileNumber(text, value)
     text = tostring(text or "")
     local replaced, count = text:gsub("%-?%d[%d,]*", tostring(value), 1)
-]==================],
-    [==================[    if count == 0 then return text end
+    if count == 0 then return text end
     return replaced
 end
 
@@ -23250,7 +23279,8 @@ UI.rebuildESPObjects = rebuildESPObjects
 end)()
 
 assert(function()
-library.AntiAimIconBase64 = library.AntiAimIconBase64 or [=[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]=]
+library.AntiAimIconBase64 = library.AntiAimIconBase64 or [=[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]==================],
+[==================[yYWUzv4T4sjBqa9PtzBZo8NFrmZ9R7ivXolMSYrtpCF8C/UHdDHKKue2vRjx5imqKuNQtF/d7ymoW9xptEj+kDKuh7sxQNvDYQ7aphLVA94hJ1mfF/UffR9GwtbdrjQz86a4LVWc8DC09PyYATo5UGyr7fVEjTRwA14TmvrJL0d8teR2iuteMWmz2r4BB4/WPC8TYwP29ME3S8JQj4B7YYKP4QA5bGxTkd8jkX8Mqc5buGb3aTzPVzHxX90BtK/g+GyM5J8J9Jiws0+DDPiSUkykqPAox+iXsez/GVHf7QiXMD2X4jA94D+Oe2J003NA1yippcqM3Uqh5VeB670Q95+AQX1RPmpM9/diH+pgxQSq0d3j5Ir4OPxXCV2m6+UuILihCEMjIY/BesPjPmIAyIDabQJMLvyAhNnlWP6T6VtOd4qLn42DJlBR+/kB477z/blAGeoP1Jf6Cied/Mkar/m0QzX8IhQFI7brQVVl0fl2TI+NAMUCQU9vucoy5qDw0uUDUp/8LNTt9ANkEfE9QDaK/2BSq33aQnNNChYTUbCTMq7Qaey5iAXcyOSp+arL4wa6Dq3WhffGyXXZJeQVMnnbdfd7HaA6nm1/wLMDd6uoVQ4MiSUmH7iyaDjV23qaqWKtCsZyo6RF0k8TZw9e8/R9+gCmDHoh1FfPJr6udZNM31fY7MNOHIHHHfcgi3qS3UddLqCZnho5JFfDUGqKQoAZvbq/H29aiqGqOBJtyq6zixqKG0xed2Y0Ddipihmfb4+46+RTQdS6raWJ2hLbPq4NrB4I//BxC+RNr7qPJLAAAAAElFTkSuQmCC]=]
 
 function utility:DecodeBase64(data)
     local alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
@@ -23428,8 +23458,7 @@ do
         AntiAimControls.yaw_mode = section:CreateDropdown({Name="Yaw Mode", Options={"Backward", "Forward", "Left", "Right", "Jitter", "Micro Jitter", "Safe Jitter", "Jitter 180", "Spin", "Offset Spin", "Sway", "Random", "Freestanding", "Velocity Snap", "Opposite Strafe", "Static"}, State=table.find({"Backward", "Forward", "Left", "Right", "Jitter", "Micro Jitter", "Safe Jitter", "Jitter 180", "Spin", "Offset Spin", "Sway", "Random", "Freestanding", "Velocity Snap", "Opposite Strafe", "Static"}, AntiAimState.yaw_mode) or 1, Flag="antiAimV3.yaw_mode", Callback=function(index) AntiAimState.SetValue("yaw_mode", ({"Backward", "Forward", "Left", "Right", "Jitter", "Micro Jitter", "Safe Jitter", "Jitter 180", "Spin", "Offset Spin", "Sway", "Random", "Freestanding", "Velocity Snap", "Opposite Strafe", "Static"})[index] or "Jitter") end})
         AntiAimControls.yaw_base = section:CreateDropdown({Name="Yaw Base", Options={"Camera", "Movement", "Character", "At Target", "World"}, State=table.find({"Camera", "Movement", "Character", "At Target", "World"}, AntiAimState.yaw_base) or 1, Flag="antiAimV3.yaw_base", Callback=function(index) AntiAimState.SetValue("yaw_base", ({"Camera", "Movement", "Character", "At Target", "World"})[index] or "Camera") end})
         AntiAimControls.yaw_offset = section:CreateSlider({Name="Additional Yaw Offset", State=AntiAimState.yaw_offset, Min=-180, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.yaw_offset", Callback=function(value) AntiAimState.SetValue("yaw_offset", value) end})
-        AntiAimControls.static_yaw_offset = section:CreateSlider({Name="Static Yaw]==================],
-    [==================[ Offset", State=AntiAimState.static_yaw_offset, Min=-180, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.static_yaw_offset", Callback=function(value) AntiAimState.SetValue("static_yaw_offset", value) end})
+        AntiAimControls.static_yaw_offset = section:CreateSlider({Name="Static Yaw Offset", State=AntiAimState.static_yaw_offset, Min=-180, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.static_yaw_offset", Callback=function(value) AntiAimState.SetValue("static_yaw_offset", value) end})
         AntiAimControls.yaw_invert = section:CreateToggle({Name="Invert Yaw", State=AntiAimState.yaw_invert, Flag="antiAimV3.yaw_invert", Callback=function(value) AntiAimState.SetValue("yaw_invert", value) end})
         AntiAimControls.body_only_mode = section:CreateToggle({Name="Body Rotation Only", State=AntiAimState.body_only_mode, Flag="antiAimV3.body_only_mode", Callback=function(value) AntiAimState.SetValue("body_only_mode", value) end})
         section:CreateLabel({Text="Body mode tilts the root; off uses the neck."})
@@ -23490,7 +23519,8 @@ do
         AntiAimControls.sway_range = section:CreateSlider({Name="Sway Amplitude", State=AntiAimState.sway_range, Min=0, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.sway_range", Callback=function(value) AntiAimState.SetValue("sway_range", value) end})
         AntiAimControls.sway_speed = section:CreateSlider({Name="Sway Frequency", State=AntiAimState.sway_speed, Min=0.05, Max=10, Decimals=2, Suffix=" Hz", Flag="antiAimV3.sway_speed", Callback=function(value) AntiAimState.SetValue("sway_speed", value) end})
         AntiAimControls.random_range = section:CreateSlider({Name="Random Yaw Range", State=AntiAimState.random_range, Min=0, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.random_range", Callback=function(value) AntiAimState.SetValue("random_range", value) end})
-        AntiAimControls.random_interval = section:CreateSlider({Name="Random Update Interval", State=AntiAimState.random_interval, Min=0.01, Max=2, Decimals=2, Suffix=" s", Flag="antiAimV3.random_interval", Callback=function(value) AntiAimState.SetValue("random_interval", value) end})
+        AntiAimControls.random_interval = section:CreateSlider({Name="Random Update Interv]==================],
+[==================[al", State=AntiAimState.random_interval, Min=0.01, Max=2, Decimals=2, Suffix=" s", Flag="antiAimV3.random_interval", Callback=function(value) AntiAimState.SetValue("random_interval", value) end})
     end
     do
         local section = antiAimPage:CreateSection({Name="Conditions & Targeting", Side="Right", Size=270})
@@ -23523,8 +23553,7 @@ do
         AntiAimControls.toggle_key = section:CreateDropdown({Name="Toggle Anti-Aim Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, AntiAimState.toggle_key) or 1, Flag="antiAimV3.toggle_key", Callback=function(index) AntiAimState.SetValue("toggle_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "X") end})
         AntiAimControls.yaw_cycle_key = section:CreateDropdown({Name="Cycle Yaw Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, AntiAimState.yaw_cycle_key) or 1, Flag="antiAimV3.yaw_cycle_key", Callback=function(index) AntiAimState.SetValue("yaw_cycle_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "Z") end})
         AntiAimControls.pitch_cycle_key = section:CreateDropdown({Name="Cycle Pitch Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, AntiAimState.pitch_cycle_key) or 1, Flag="antiAimV3.pitch_cycle_key", Callback=function(index) AntiAimState.SetValue("pitch_cycle_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "V") end})
-        AntiAimControls.preset_cycle_key = section:CreateDropdown({Name="Cycle Preset Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt",]==================],
-    [==================[ "RightAlt", "LeftControl", "RightControl"}, AntiAimState.preset_cycle_key) or 1, Flag="antiAimV3.preset_cycle_key", Callback=function(index) AntiAimState.SetValue("preset_cycle_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "B") end})
+        AntiAimControls.preset_cycle_key = section:CreateDropdown({Name="Cycle Preset Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, AntiAimState.preset_cycle_key) or 1, Flag="antiAimV3.preset_cycle_key", Callback=function(index) AntiAimState.SetValue("preset_cycle_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "B") end})
         AntiAimControls.freestand_key = section:CreateDropdown({Name="Flip Freestanding Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, AntiAimState.freestand_key) or 1, Flag="antiAimV3.freestand_key", Callback=function(index) AntiAimState.SetValue("freestand_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "G") end})
         section:CreateButton({Name="Cycle Yaw Mode", Callback=function() AntiAimState.core.Actions.CycleYaw() end})
         section:CreateButton({Name="Cycle Pitch Mode", Callback=function() AntiAimState.core.Actions.CyclePitch() end})
@@ -23584,7 +23613,8 @@ local indicatorSection = antiAimPage:CreateSection({ Name = "Indicator Visuals",
 AntiAimControls.indicator_accent_color=indicatorSection:CreateColorpicker({Name="Accent Color",State=AntiAimState.indicator_accent_color,Flag="antiAim.indicator_accent_color",Callback=function(v) AntiAimState.indicator_accent_color=v end})
 AntiAimControls.indicator_rainbow=indicatorSection:CreateToggle({Name="Rainbow",State=AntiAimState.indicator_rainbow,Flag="antiAim.indicator_rainbow",Callback=function(v) AntiAimState.indicator_rainbow=v end})
 AntiAimControls.indicator_glow=indicatorSection:CreateToggle({Name="Glow",State=AntiAimState.indicator_glow,Flag="antiAim.indicator_glow",Callback=function(v) AntiAimState.indicator_glow=v end})
-AntiAimControls.indicator_rainbow_speed=indicatorSection:CreateSlider({Name="Rainbow Speed",State=AntiAimState.indicator_rainbow_speed,Min=0.01,Max=5,Decimals=2,Suffix="x",Flag="antiAim.indicator_rainbow_speed",Callback=function(v) AntiAimState.indicator_rainbow_speed=v end})
+AntiAimControls.indicator_rainbow_speed=]==================],
+[==================[indicatorSection:CreateSlider({Name="Rainbow Speed",State=AntiAimState.indicator_rainbow_speed,Min=0.01,Max=5,Decimals=2,Suffix="x",Flag="antiAim.indicator_rainbow_speed",Callback=function(v) AntiAimState.indicator_rainbow_speed=v end})
 AntiAimControls.indicator_glow_saturation=indicatorSection:CreateSlider({Name="Glow Saturation",State=AntiAimState.indicator_glow_saturation,Min=0,Max=1,Decimals=2,Flag="antiAim.indicator_glow_saturation",Callback=function(v) AntiAimState.indicator_glow_saturation=v end})
 AntiAimControls.indicator_glow_brightness=indicatorSection:CreateSlider({Name="Glow Brightness",State=AntiAimState.indicator_glow_brightness,Min=0,Max=5,Decimals=2,Flag="antiAim.indicator_glow_brightness",Callback=function(v) AntiAimState.indicator_glow_brightness=v end})
 AntiAimControls.indicator_glow_transparency=indicatorSection:CreateSlider({Name="Glow Transparency",State=AntiAimState.indicator_glow_transparency,Min=0,Max=1,Decimals=2,Flag="antiAim.indicator_glow_transparency",Callback=function(v) AntiAimState.indicator_glow_transparency=v end})
@@ -23799,8 +23829,7 @@ end
 local function restoreAvatarProperties()
     for instance, properties in pairs(Runtime.OriginalProperties) do
         if instance and instance.Parent then
-            for pro]==================],
-    [==================[perty, value in pairs(properties) do
+            for property, value in pairs(properties) do
                 pcall(function() instance[property] = value end)
             end
         end
@@ -24164,7 +24193,8 @@ local function attachAccessoryToHead(character,assetId,kind,name,color,scale,off
 
     local handle=accessory:FindFirstChild("Handle")
     if not handle or not handle:IsA("BasePart") then
-        pcall(function() accessory:Destroy() end)
+        pcall(function() accessory:]==================],
+[==================[Destroy() end)
         return false
     end
 
@@ -24510,8 +24540,7 @@ local function rapidFireLoadItems()
 end
 
 local function rapidFireGetEquippedTool()
-    local character = LocalPlayer and LocalPlayer.Ch]==================],
-    [==================[aracter
+    local character = LocalPlayer and LocalPlayer.Character
     if not character then return nil end
     for _, object in ipairs(character:GetChildren()) do
         if object:IsA("Tool") then return object end
@@ -24887,7 +24916,8 @@ local function rapidFireApplyWeapon(weaponName, percent)
 
     for _, field in ipairs(fields) do
         local originalValue = snapshot[field]
-        if type(originalValue) == "number" and originalValue > 0 then
+        if type(originalValue) == "number" and original]==================],
+[==================[Value > 0 then
             local scaledValue = rapidFireScaledCooldown(originalValue, percent)
             data[field] = scaledValue
             applied[field] = scaledValue
@@ -25281,8 +25311,7 @@ local function stepBunnyHop(dt)
         return
     end
 
-    if movement and movement:OwnsHorizontal() then retur]==================],
-    [==================[n end
+    if movement and movement:OwnsHorizontal() then return end
     local velocity = root.AssemblyLinearVelocity
     local horizontal = Vector3.new(velocity.X, 0, velocity.Z)
     local speed = horizontal.Magnitude
@@ -25613,7 +25642,8 @@ do
         if self.Humanoid then self:RestoreProperty(self.Humanoid, "AutoRotate") end
         if wasActive and self.Root then
             pcall(function()
-                if not self.Root.Anchored then self.Root.AssemblyAngularVelocity = ZERO end
+                if not self.Root.Anchored the]==================],
+[==================[n self.Root.AssemblyAngularVelocity = ZERO end
             end)
         end
         if not self.Objects.Velocity then self:DestroyObject("Attachment") end
@@ -25878,8 +25908,7 @@ do
     function Movement:Wrap(target, key, replacement)
         if type(target) ~= "table" or type(target[key]) ~= "function" then return end
         self.Wrappers[#self.Wrappers + 1] = {
-            Target = target, Key = key, Original = target[key], Replacement]==================],
-    [==================[ = replacement,
+            Target = target, Key = key, Original = target[key], Replacement = replacement,
         }
         target[key] = replacement
     end
@@ -26241,7 +26270,8 @@ local function universalHttpGet(url)
         return body
     end
 
-    local env = (type(getgenv) == "function" and getgenv()) or _G
+    local env = (type(getgenv) == "function" and ge]==================],
+[==================[tgenv()) or _G
     local requestFn = rawget(env, "request")
         or rawget(env, "http_request")
         or (type(syn) == "table" and syn.request)
@@ -26678,8 +26708,7 @@ table.insert(library.CleanupCallbacks, function()
 
     if type(MaskShard) == "table"
         and type(MaskShard.Runtime) == "table"
-        and MaskShard.Runtime.UniversalTools == UniversalTo]==================],
-    [==================[olsRuntime then
+        and MaskShard.Runtime.UniversalTools == UniversalToolsRuntime then
         MaskShard.Runtime.UniversalTools = nil
     end
 end)
@@ -26868,7 +26897,8 @@ return function(context)
         local tool=self:EquippedTool()
         local mode=cfg.gunFireInput or "Automatic"
         if tool and mode~="Mouse" then
-            if tool.Enabled==false then self:Status(self.ShootStatus,"Auto Shoot: weapon is cooling down");return end
+  ]==================],
+[==================[          if tool.Enabled==false then self:Status(self.ShootStatus,"Auto Shoot: weapon is cooling down");return end
             tool:Activate();self.HeldTool=tool;self.ReleaseAt=now+1/240
             self:Status(self.ShootStatus,"Auto Shoot: standard Tool activation")
         elseif mode~="Tool" and type(mouse1press)=="function" and type(mouse1release)=="function" then
@@ -27086,8 +27116,7 @@ local HackerDetectorRuntime = {
 
 local function hackerDetectorSetAlert(active,duration)
     local manager=library and library.KeybindManager
-    if not manager or not manager.SetHackerAle]==================],
-    [==================[rt then return end
+    if not manager or not manager.SetHackerAlert then return end
     manager:SetHackerAlert(active==true,library.Window,duration or 12)
 end
 
@@ -27331,7 +27360,8 @@ local function modDetectorScan(token)
     if token ~= ModDetectorRuntime.Token or not ModDetectorRuntime.Enabled then return end
 
     for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer and modDetectorPlayerHasStaffFriend(plr, token) then
+        if plr ~= LocalPlayer and m]==================],
+[==================[odDetectorPlayerHasStaffFriend(plr, token) then
             modDetectorSetAlert(true)
             return
         end
@@ -27612,8 +27642,7 @@ local cursorStateMap = {
     devkage_cursor_second_text="SecondText",
     devkage_cursor_text_outline="TextOutline",
     devkage_cursor_main_text_size="MainTextSize",
-    d]==================],
-    [==================[evkage_cursor_second_text_size="SecondTextSize",
+    devkage_cursor_second_text_size="SecondTextSize",
     devkage_cursor_pulse_speed="PulseSpeed",
 }
 
@@ -28071,7 +28100,8 @@ local function referenceResolveColor(settings, now, index, count)
 
     local armPhase =
         (
-            (index - 1)
+            (inde]==================],
+[==================[x - 1)
             / math.max(count, 1)
         ) * spread
 
@@ -28271,106 +28301,87 @@ local function referenceDestroyCursorGui()
 end
 
 local function referenceCreateLine(parent, name)
+    -- Old Yokai-style four-bar cursor, rebuilt entirely from GUI objects.
+    -- No image asset is used: the LED body, rim and bloom are all code-drawn.
     local frame = Instance.new("Frame")
-
     frame.Name = name
-
-
-    frame.Size =
-        UDim2.new(
-            0,
-            3,
-            0,
-            25
-        )
-
-    frame.Position =
-        UDim2.new(
-            0.5,
-            -1.5,
-            0,
-            0
-        )
-
-    frame.BackgroundColor3 =
-        Color3.new(
-            1,
-            1,
-            1
-        )
-
+    frame.AnchorPoint = Vector2.new(0.5, 0.5)
+    frame.Size = UDim2.fromOffset(18, 3)
+    frame.Position = UDim2.fromScale(0.5, 0.5)
+    frame.BackgroundColor3 = Color3.new(1, 1, 1)
     frame.BorderSizePixel = 0
     frame.Active = false
     frame.Selectable = false
     frame.ZIndex = 100000
     frame.Parent = parent
 
-    local stroke =
-        Instance.new("UIStroke")
-
-    stroke.Name = "Outline"
-    stroke.ApplyStrokeMode =
-        Enum.ApplyStrokeMode.Border
-
-    stroke.Color = Color3.fromRGB(255, 230, 255)
-    stroke.Thickness = 1.8
-    stroke.Transparency = 0.15
-    stroke.Parent = frame
-
     local frameCorner = Instance.new("UICorner")
     frameCorner.CornerRadius = UDim.new(1, 0)
     frameCorner.Parent = frame
 
-    local glow =
-        Instance.new("Frame")
+    local stroke = Instance.new("UIStroke")
+    stroke.Name = "Outline"
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    stroke.Color = Color3.fromRGB(28, 24, 42)
+    stroke.Thickness = 1
+    stroke.Transparency = 0.08
+    stroke.LineJoinMode = Enum.LineJoinMode.Round
+    stroke.Parent = frame
 
-    glow.Name =
-        name
-        .. "_Glow"
+    -- Bright LED center with darker metallic-looking edges like the photo.
+    local gradient = Instance.new("UIGradient")
+    gradient.Name = "LEDGradient"
+    gradient.Rotation = 90
+    gradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0.00, Color3.fromRGB(54, 45, 76)),
+        ColorSequenceKeypoint.new(0.22, Color3.fromRGB(184, 166, 230)),
+        ColorSequenceKeypoint.new(0.50, Color3.fromRGB(255, 250, 255)),
+        ColorSequenceKeypoint.new(0.78, Color3.fromRGB(184, 166, 230)),
+        ColorSequenceKeypoint.new(1.00, Color3.fromRGB(54, 45, 76)),
+    })
+    gradient.Parent = frame
 
-    glow.BackgroundColor3 =
-        Color3.new(
-            1,
-            1,
-            1
-        )
+    local function makeGlow(layerName, zIndex)
+        local glow = Instance.new("Frame")
+        glow.Name = name .. "_" .. layerName
+        glow.AnchorPoint = Vector2.new(0.5, 0.5)
+        glow.Position = UDim2.fromScale(0.5, 0.5)
+        glow.BackgroundColor3 = Color3.fromRGB(194, 176, 255)
+        glow.BackgroundTransparency = 1
+        glow.BorderSizePixel = 0
+        glow.Active = false
+        glow.Selectable = false
+        glow.ZIndex = zIndex
+        glow.Visible = false
+        glow.Parent = parent
 
-    glow.BackgroundTransparency = 1
-    glow.BorderSizePixel = 0
-    glow.Active = false
-    glow.Selectable = false
-    glow.ZIndex = 99999
-    glow.Visible = false
-    glow.Parent = parent
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(1, 0)
+        corner.Parent = glow
 
-    local glowCorner =
-        Instance.new("UICorner")
+        local fade = Instance.new("UIGradient")
+        fade.Name = "SoftFade"
+        fade.Rotation = 90
+        fade.Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0.00, 1.00),
+            NumberSequenceKeypoint.new(0.18, 0.45),
+            NumberSequenceKeypoint.new(0.50, 0.00),
+            NumberSequenceKeypoint.new(0.82, 0.45),
+            NumberSequenceKeypoint.new(1.00, 1.00),
+        })
+        fade.Parent = glow
+        return glow
+    end
 
-    glowCorner.CornerRadius =
-        UDim.new(
-            1,
-            0
-        )
-
-    glowCorner.Parent = glow
-
-    local outerGlow = Instance.new("Frame")
-    outerGlow.Name = name .. "_OuterGlow"
-    outerGlow.BackgroundColor3 = Color3.new(1, 1, 1)
-    outerGlow.BackgroundTransparency = 1
-    outerGlow.BorderSizePixel = 0
-    outerGlow.Active = false
-    outerGlow.Selectable = false
-    outerGlow.ZIndex = 99998
-    outerGlow.Visible = false
-    outerGlow.Parent = parent
-    local outerCorner = Instance.new("UICorner")
-    outerCorner.CornerRadius = UDim.new(1, 0)
-    outerCorner.Parent = outerGlow
+    local innerGlow = makeGlow("InnerGlow", 99999)
+    local glow = makeGlow("Glow", 99998)
+    local outerGlow = makeGlow("OuterGlow", 99997)
 
     return {
         Frame = frame,
         Stroke = stroke,
+        Gradient = gradient,
+        InnerGlow = innerGlow,
         Glow = glow,
         OuterGlow = outerGlow,
     }
@@ -28620,117 +28631,38 @@ local function referenceApplyFourArmLayout(
     currentLength,
     lineThickness
 )
-    local runtime =
-        ReferenceCursorRuntime
-
-    local lines =
-        runtime.Lines
-
+    local runtime = ReferenceCursorRuntime
+    local lines = runtime.Lines
     if #lines < 4 then return end
 
-    local top =
-        lines[1].Frame
+    local length = math.max(1, math.abs(currentLength))
+    local thickness = math.max(1, lineThickness)
+    local radius = referenceCursorNumber(settings.CenterRadius, 12, 0, 60)
+    local squashX = referenceCursorNumber(settings.SquashX, 1, 0.25, 2)
+    local squashY = referenceCursorNumber(settings.SquashY, 1, 0.25, 2)
 
-    local bottom =
-        lines[2].Frame
-
-    local left =
-        lines[3].Frame
-
-    local right =
-        lines[4].Frame
+    -- Matches the photo:
+    -- TL "\"   TR "/" 
+    -- BL "/"    BR "\"
+    local layout = {
+        {-radius * squashX, -radius * squashY,  38},
+        { radius * squashX, -radius * squashY, -38},
+        {-radius * squashX,  radius * squashY, -38},
+        { radius * squashX,  radius * squashY,  38},
+    }
 
     for index = 1, 4 do
-        local line =
-            lines[index]
-
+        local line = lines[index]
+        local spec = layout[index]
         line.Frame.Visible = true
-
-        line.Frame.AnchorPoint =
-            Vector2.new(
-                0,
-                0
-            )
-
-        line.Frame.Rotation = 0
-
+        line.Frame.AnchorPoint = Vector2.new(0.5, 0.5)
+        line.Frame.Size = UDim2.fromOffset(length, thickness)
+        line.Frame.Position = UDim2.new(0.5, spec[1], 0.5, spec[2])
+        line.Frame.Rotation = spec[3]
         line.Stroke.Enabled = true
-        line.Stroke.Thickness = 1
-        line.Stroke.Color =
-            Color3.new(
-                0,
-                0,
-                0
-            )
+        line.Stroke.Thickness = math.max(0.8, math.min(1.25, thickness * 0.34))
     end
-
-
-    top.Size =
-        UDim2.new(
-            0,
-            lineThickness,
-            0,
-            currentLength
-        )
-
-    bottom.Size =
-        UDim2.new(
-            0,
-            lineThickness,
-            0,
-            currentLength
-        )
-
-    left.Size =
-        UDim2.new(
-            0,
-            currentLength,
-            0,
-            lineThickness
-        )
-
-    right.Size =
-        UDim2.new(
-            0,
-            currentLength,
-            0,
-            lineThickness
-        )
-
-    top.Position =
-        UDim2.new(
-            0.5,
-            -lineThickness / 2,
-            0,
-            0
-        )
-
-    bottom.Position =
-        UDim2.new(
-            0.5,
-            -lineThickness / 2,
-            1,
-            -currentLength
-        )
-
-    left.Position =
-        UDim2.new(
-            0,
-            0,
-            0.5,
-            -lineThickness / 2
-        )
-
-    right.Position =
-        UDim2.new(
-            1,
-            -currentLength,
-            0.5,
-            -lineThickness / 2
-        )
 end
-
-
 
 
 
@@ -28835,8 +28767,7 @@ local function referenceApplyRadialLayout(
                 Vector2.new(
                     0.5,
                     1
-         ]==================],
-    [==================[       )
+                )
 
             line.Frame.Size =
                 UDim2.fromOffset(
@@ -28882,103 +28813,60 @@ local function referenceApplyGlow(
     color,
     isHorizontalOrVerticalReference
 )
+    local innerGlow = line.InnerGlow
     local glow = line.Glow
     local outerGlow = line.OuterGlow
 
-    if settings.LineGlow ~= true
-        or not line.Frame.Visible then
-
-        glow.Visible = false
+    local enabled = settings.LineGlow == true and line.Frame.Visible
+    if not enabled then
+        if innerGlow then innerGlow.Visible = false end
+        if glow then glow.Visible = false end
         if outerGlow then outerGlow.Visible = false end
         return
     end
 
-    local glowThickness =
-        referenceCursorNumber(
-            settings.GlowThickness,
-            30,
-            0,
-            50
+    local requestedThickness = referenceCursorNumber(settings.GlowThickness, 18, 0, 50)
+    local requestedExtra = referenceCursorNumber(settings.GlowExtraLength, 10, 0, 50)
+    local requestedTransparency = referenceCursorNumber(settings.GlowTransparency, 0.72, 0, 1)
+
+    -- Convert the old large glow sliders into a compact photographic bloom.
+    -- This prevents the glow from swallowing the cursor while preserving
+    -- enough spread to look like a real lilac LED on a dark background.
+    local innerPadY = 2.5 + requestedThickness * 0.20
+    local middlePadY = 5 + requestedThickness * 0.38
+    local outerPadY = 8 + requestedThickness * 0.62
+
+    local innerPadX = 1.5 + requestedExtra * 0.16
+    local middlePadX = 3 + requestedExtra * 0.32
+    local outerPadX = 5 + requestedExtra * 0.52
+
+    local sourceSize = line.Frame.AbsoluteSize
+    local sourceWidth = math.max(1, sourceSize.X)
+    local sourceHeight = math.max(1, sourceSize.Y)
+
+    local function applyLayer(target, extraX, extraY, transparency, layerColor)
+        if not target then return end
+        referenceCopyFrameGeometry(line.Frame, target)
+        target.Size = UDim2.fromOffset(
+            math.max(1, sourceWidth + extraX * 2),
+            math.max(1, sourceHeight + extraY * 2)
         )
-
-    local glowExtraLength =
-        referenceCursorNumber(
-            settings.GlowExtraLength,
-            15,
-            0,
-            50
-        )
-
-    local glowTransparency =
-        referenceCursorNumber(
-            settings.GlowTransparency,
-            0.43,
-            0,
-            1
-        )
-
-    referenceCopyFrameGeometry(
-        line.Frame,
-        glow
-    )
-
-    local sourceSize =
-        line.Frame.AbsoluteSize
-
-    if sourceSize.X >= sourceSize.Y then
-        glow.Size =
-            UDim2.fromOffset(
-                math.max(
-                    1,
-                    sourceSize.X
-                    + glowExtraLength
-                ),
-                math.max(
-                    1,
-                    sourceSize.Y
-                    + glowThickness
-                )
-            )
-    else
-        glow.Size =
-            UDim2.fromOffset(
-                math.max(
-                    1,
-                    sourceSize.X
-                    + glowThickness
-                ),
-                math.max(
-                    1,
-                    sourceSize.Y
-                    + glowExtraLength
-                )
-            )
+        target.BackgroundColor3 = layerColor
+        target.BackgroundTransparency = math.clamp(transparency, 0, 0.985)
+        target.Visible = true
     end
 
-    glow.BackgroundColor3 = color:Lerp(Color3.new(1, 1, 1), 0.08)
-    glow.BackgroundTransparency = glowTransparency
-    glow.Visible = true
+    local lilacHot = color:Lerp(Color3.fromRGB(246, 238, 255), 0.52)
+    local lilacMid = color:Lerp(Color3.fromRGB(202, 184, 255), 0.34)
+    local lilacSoft = color:Lerp(Color3.fromRGB(154, 133, 220), 0.22)
 
-    if outerGlow then
-        referenceCopyFrameGeometry(line.Frame, outerGlow)
-        local sourceSize = line.Frame.AbsoluteSize
-        local outerThickness = glowThickness + 10
-        local outerExtraLength = glowExtraLength + 8
-        if sourceSize.X >= sourceSize.Y then
-            outerGlow.Size = UDim2.fromOffset(
-                math.max(1, sourceSize.X + outerExtraLength),
-                math.max(1, sourceSize.Y + outerThickness)
-            )
-        else
-            outerGlow.Size = UDim2.fromOffset(
-                math.max(1, sourceSize.X + outerThickness),
-                math.max(1, sourceSize.Y + outerExtraLength)
-            )
-        end
-        outerGlow.BackgroundColor3 = color
-        outerGlow.BackgroundTransparency = math.clamp(glowTransparency + 0.16, 0, 0.98)
-        outerGlow.Visible = true
-    end
+    local innerTransparency = math.clamp(requestedTransparency - 0.12, 0.52, 0.82)
+    local middleTransparency = math.clamp(requestedTransparency + 0.06, 0.68, 0.91)
+    local outerTransparency = math.clamp(requestedTransparency + 0.18, 0.82, 0.965)
+
+    applyLayer(innerGlow, innerPadX, innerPadY, innerTransparency, lilacHot)
+    applyLayer(glow, middlePadX, middlePadY, middleTransparency, lilacMid)
+    applyLayer(outerGlow, outerPadX, outerPadY, outerTransparency, lilacSoft)
 end
 
 
@@ -29299,7 +29187,8 @@ local function referenceUpdateRotation(settings, deltaTime)
     local style =
         tostring(
             settings.SpinStyle
-            or "Static"
+            or "Stat]==================],
+[==================[ic"
         )
 
     local targetRotation
@@ -29588,9 +29477,12 @@ local function referenceCursorRender(deltaTime)
 
 
 
-    local currentLength = lineLength
+    -- Keep the old compact shape. Pulse is intentionally subtle so the
+    -- four LED bars never balloon away from the cursor like the previous build.
+    local pulseScale = pulseSpeed > 0 and (0.96 + 0.08 * pulse) or 1
+    local currentLength = lineLength * pulseScale
     if runtime.AimScale then
-        runtime.AimScale.Scale = 0.52 + ((1.58 - 0.52) * pulse)
+        runtime.AimScale.Scale = 1
     end
 
     local armCount =
@@ -29598,12 +29490,20 @@ local function referenceCursorRender(deltaTime)
             settings.ArmCount
         )
 
-    referenceApplyRadialLayout(
-        settings,
-        currentLength,
-        lineThickness,
-        armCount
-    )
+    if armCount == 4 then
+        referenceApplyFourArmLayout(
+            settings,
+            currentLength,
+            lineThickness
+        )
+    else
+        referenceApplyRadialLayout(
+            settings,
+            currentLength,
+            lineThickness,
+            armCount
+        )
+    end
 
     local firstColor =
         referenceResolveColor(
@@ -29629,8 +29529,25 @@ local function referenceCursorRender(deltaTime)
                     armCount
                 )
 
-            line.Frame.BackgroundColor3 =
-                color
+            -- Code-drawn LED body: a white-hot center with colored/lilac
+            -- shoulders and a dark metallic rim, matching the reference lines.
+            line.Frame.BackgroundColor3 = Color3.new(1, 1, 1)
+            if line.Gradient then
+                local edge = color:Lerp(Color3.fromRGB(30, 25, 45), 0.62)
+                local shoulder = color:Lerp(Color3.fromRGB(244, 234, 255), 0.46)
+                local hot = color:Lerp(Color3.new(1, 1, 1), 0.90)
+                line.Gradient.Color = ColorSequence.new({
+                    ColorSequenceKeypoint.new(0.00, edge),
+                    ColorSequenceKeypoint.new(0.22, shoulder),
+                    ColorSequenceKeypoint.new(0.50, hot),
+                    ColorSequenceKeypoint.new(0.78, shoulder),
+                    ColorSequenceKeypoint.new(1.00, edge),
+                })
+            end
+            if line.Stroke then
+                line.Stroke.Color = color:Lerp(Color3.fromRGB(20, 17, 31), 0.72)
+                line.Stroke.Transparency = 0.08
+            end
 
             referenceApplyGlow(
                 settings,
@@ -29639,7 +29556,8 @@ local function referenceCursorRender(deltaTime)
                 armCount == 4
             )
         else
-            line.Glow.Visible = false
+            if line.InnerGlow then line.InnerGlow.Visible = false end
+            if line.Glow then line.Glow.Visible = false end
             if line.OuterGlow then line.OuterGlow.Visible = false end
         end
     end
@@ -29755,7 +29673,7 @@ if type(MaskShard) == "table" then
             true
 
         MaskShard.Runtime.CursorVisualModel =
-            "DevKageReferenceArcade"
+            "DevKageYokaiLEDCode"
     end
 end
 
@@ -29899,8 +29817,7 @@ addSlider(textSection,"devkage_cursor_second_text_size","Second Text Size",8,40,
 
 local cursorProfileOptions={"Custom","Precision","Minimal Dot","Creator Glow","Neon RGB","Cinematic","Classic"}
 local cursorProfiles={
-Precision={devkage]==================],
-    [==================[_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(235,245,255),devkage_cursor_color_secondary=Color3.fromRGB(90,175,255),devkage_cursor_color_mode="Two Tone",devkage_cursor_rainbow=false,devkage_cursor_line_width=2,devkage_cursor_line_length=12,devkage_cursor_center_radius=3,devkage_cursor_arm_count=4,devkage_cursor_spin=false,devkage_cursor_line_glow=true,devkage_cursor_glow_thickness=5,devkage_cursor_glow_extra_length=2,devkage_cursor_glow_transparency=0.58,devkage_cursor_text_enabled=false},
+Precision={devkage_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(235,245,255),devkage_cursor_color_secondary=Color3.fromRGB(90,175,255),devkage_cursor_color_mode="Two Tone",devkage_cursor_rainbow=false,devkage_cursor_line_width=2,devkage_cursor_line_length=12,devkage_cursor_center_radius=3,devkage_cursor_arm_count=4,devkage_cursor_spin=false,devkage_cursor_line_glow=true,devkage_cursor_glow_thickness=5,devkage_cursor_glow_extra_length=2,devkage_cursor_glow_transparency=0.58,devkage_cursor_text_enabled=false},
 ["Minimal Dot"]={devkage_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(255,255,255),devkage_cursor_color_secondary=Color3.fromRGB(255,255,255),devkage_cursor_color_mode="Solid",devkage_cursor_rainbow=false,devkage_cursor_line_width=2,devkage_cursor_line_length=3,devkage_cursor_center_radius=2,devkage_cursor_arm_count=4,devkage_cursor_spin=false,devkage_cursor_line_glow=false,devkage_cursor_text_enabled=false},
 ["Creator Glow"]={devkage_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(190,80,255),devkage_cursor_color_secondary=Color3.fromRGB(70,205,255),devkage_cursor_color_mode="Gradient",devkage_cursor_color_speed=1.25,devkage_cursor_color_spread=0.55,devkage_cursor_rainbow=false,devkage_cursor_line_width=3,devkage_cursor_line_length=22,devkage_cursor_center_radius=6,devkage_cursor_arm_count=4,devkage_cursor_spin=true,devkage_cursor_spin_style="Static",devkage_cursor_spin_direction="Clockwise",devkage_cursor_spin_speed=46,devkage_cursor_spin_range=360,devkage_cursor_smooth_spin=true,devkage_cursor_line_glow=true,devkage_cursor_glow_thickness=14,devkage_cursor_glow_extra_length=8,devkage_cursor_glow_transparency=0.42,devkage_cursor_text_enabled=true,devkage_cursor_main_text="DevKage",devkage_cursor_second_text="None",devkage_cursor_text_outline=true},
 ["Neon RGB"]={devkage_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(255,60,210),devkage_cursor_color_secondary=Color3.fromRGB(65,180,255),devkage_cursor_color_mode="RGB Wave",devkage_cursor_color_speed=2.1,devkage_cursor_color_spread=0.72,devkage_cursor_rainbow=true,devkage_cursor_rainbow_speed=5,devkage_cursor_line_width=3,devkage_cursor_line_length=19,devkage_cursor_center_radius=5,devkage_cursor_arm_count=6,devkage_cursor_spin=true,devkage_cursor_spin_style="Static",devkage_cursor_spin_direction="Clockwise",devkage_cursor_spin_speed=72,devkage_cursor_smooth_spin=true,devkage_cursor_line_glow=true,devkage_cursor_glow_thickness=17,devkage_cursor_glow_extra_length=9,devkage_cursor_glow_transparency=0.34,devkage_cursor_text_enabled=false},
@@ -29964,7 +29881,8 @@ UI.ThemeControls.Toggle = UI.ThemeSection:CreateColorpicker({
     Name = "Toggle Color",
     State = library.Theme.Toggle,
     Flag = "theme.toggle",
-    Callback = function(color) library:SetThemeColor("Toggle", color) end
+    Callback = function(color) library:SetThemeColor("Toggle", color) ]==================],
+[==================[end
 })
 UI.ThemeControls.Slider = UI.ThemeSection:CreateColorpicker({
     Name = "Slider Color",
@@ -30140,152 +30058,392 @@ UI.ThemeDPIScale = UI.ThemeSection:CreateDropdown({
 library:ApplyTheme()
 
 -- ============================================================
--- ASTRA UI WEATHER FX — visual-only overlay clipped to the menu.
+-- ASTRA UI WEATHER FX — code-only menu rain/snow.
+-- The overlay is a ScreenGui sibling that follows MainFrame.AbsolutePosition/
+-- AbsoluteSize. This avoids the old descendant clipping/ZIndex issue.
 -- ============================================================
 UI.UIWeatherSection = settingPage:CreateSection({Name="UI Weather FX",Side="Right",Size=390})
+
 local UIWeatherRuntime = {
-    Layer=nil, RainPool={}, SnowPool={}, RainClock=0, SnowClock=0, Random=Random.new(), Alive=true
+    Layer = nil,
+    RainPool = {},
+    SnowPool = {},
+    ActiveRain = {},
+    ActiveSnow = {},
+    RainClock = 0,
+    SnowClock = 0,
+    Random = Random.new(),
+    Alive = true,
 }
 
-local function ensureUIWeatherLayer()
-    if UIWeatherRuntime.Layer and UIWeatherRuntime.Layer.Parent then return UIWeatherRuntime.Layer end
-    local main = library.Window and library.Window.MainFrame
-    if not main then return nil end
+function UIWeatherRuntime:EnsureLayer()
+    if self.Layer and self.Layer.Parent then return self.Layer end
+    local screen = library.Window and (library.Window.ScreenGui or library.Window.Root)
+    if not screen then return nil end
+
     local layer = Instance.new("Frame")
     layer.Name = "DevKage_UIWeatherLayer"
     layer.BackgroundTransparency = 1
     layer.BorderSizePixel = 0
-    layer.Size = UDim2.fromScale(1,1)
     layer.ClipsDescendants = true
     layer.Active = false
     layer.Selectable = false
-    layer.ZIndex = 29000
-    layer.Parent = main
-    UIWeatherRuntime.Layer = layer
+    layer.ZIndex = 85000
+    layer.Visible = false
+    layer.Parent = screen
+    self.Layer = layer
     return layer
 end
 
-local function acquireRainDrop()
-    local layer=ensureUIWeatherLayer(); if not layer then return nil end
-    local drop=table.remove(UIWeatherRuntime.RainPool)
-    if not drop or not drop.Parent then
-        drop=Instance.new("Frame")
-        drop.Name="AstraRainDrop"
-        drop.AnchorPoint=Vector2.new(0.5,0)
-        drop.BorderSizePixel=0
-        drop.Active=false
-        drop.ZIndex=29002
-        drop.Parent=layer
-        local corner=Instance.new("UICorner"); corner.CornerRadius=UDim.new(1,0); corner.Parent=drop
-        local stroke=Instance.new("UIStroke"); stroke.Name="Glow"; stroke.Thickness=2; stroke.Transparency=0.56; stroke.Parent=drop
-        local grad=Instance.new("UIGradient")
-        grad.Rotation=90
-        grad.Transparency=NumberSequence.new({
-            NumberSequenceKeypoint.new(0,0.96), NumberSequenceKeypoint.new(0.28,0.20), NumberSequenceKeypoint.new(1,0.62)
-        })
-        grad.Parent=drop
+function UIWeatherRuntime:SyncBounds()
+    local layer = self:EnsureLayer()
+    local main = library.Window and library.Window.MainFrame
+    if not layer or not main or not main.Parent then return false end
+
+    local position = main.AbsolutePosition
+    local size = main.AbsoluteSize
+    layer.Position = UDim2.fromOffset(position.X, position.Y)
+    layer.Size = UDim2.fromOffset(math.max(1, size.X), math.max(1, size.Y))
+    layer.Visible = library.Window.Enabled == true and size.X > 2 and size.Y > 2
+    return layer.Visible
+end
+
+function UIWeatherRuntime:CreateRain()
+    local item = table.remove(self.RainPool)
+    if item and item.Holder and item.Holder.Parent then
+        item.Holder.Visible = true
+        return item
     end
-    drop.Visible=true
-    return drop
+
+    local layer = self:EnsureLayer()
+    if not layer then return nil end
+
+    local holder = Instance.new("Frame")
+    holder.Name = "AstraUIRain"
+    holder.BackgroundTransparency = 1
+    holder.BorderSizePixel = 0
+    holder.AnchorPoint = Vector2.new(0.5, 0)
+    holder.ZIndex = 85002
+    holder.Active = false
+    holder.Parent = layer
+
+    local outer = Instance.new("Frame")
+    outer.Name = "SoftGlow"
+    outer.AnchorPoint = Vector2.new(0.5, 0.5)
+    outer.Position = UDim2.fromScale(0.5, 0.5)
+    outer.BorderSizePixel = 0
+    outer.BackgroundTransparency = 0.89
+    outer.ZIndex = 85001
+    outer.Parent = holder
+    local outerCorner = Instance.new("UICorner")
+    outerCorner.CornerRadius = UDim.new(1, 0)
+    outerCorner.Parent = outer
+
+    local core = Instance.new("Frame")
+    core.Name = "Core"
+    core.AnchorPoint = Vector2.new(0.5, 0.5)
+    core.Position = UDim2.fromScale(0.5, 0.5)
+    core.BorderSizePixel = 0
+    core.ZIndex = 85003
+    core.Parent = holder
+    local coreCorner = Instance.new("UICorner")
+    coreCorner.CornerRadius = UDim.new(1, 0)
+    coreCorner.Parent = core
+
+    local gradient = Instance.new("UIGradient")
+    gradient.Rotation = 90
+    gradient.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0.00, 0.98),
+        NumberSequenceKeypoint.new(0.18, 0.45),
+        NumberSequenceKeypoint.new(0.66, 0.08),
+        NumberSequenceKeypoint.new(1.00, 0.55),
+    })
+    gradient.Parent = core
+
+    local tip = Instance.new("Frame")
+    tip.Name = "DropTip"
+    tip.AnchorPoint = Vector2.new(0.5, 0.5)
+    tip.BorderSizePixel = 0
+    tip.BackgroundTransparency = 0.24
+    tip.ZIndex = 85004
+    tip.Parent = holder
+    local tipCorner = Instance.new("UICorner")
+    tipCorner.CornerRadius = UDim.new(1, 0)
+    tipCorner.Parent = tip
+
+    item = {Holder=holder, Core=core, Outer=outer, Tip=tip}
+    return item
 end
 
-local function releaseRainDrop(drop)
-    if not drop or not drop.Parent then return end
-    drop.Visible=false; drop.Position=UDim2.fromOffset(-100,-100)
-    UIWeatherRuntime.RainPool[#UIWeatherRuntime.RainPool+1]=drop
+function UIWeatherRuntime:ReleaseRain(index)
+    local item = self.ActiveRain[index]
+    if not item then return end
+    table.remove(self.ActiveRain, index)
+    item.Holder.Visible = false
+    item.Holder.Position = UDim2.fromOffset(-200, -200)
+    self.RainPool[#self.RainPool + 1] = item
 end
 
-local function acquireSnowFlake()
-    local layer=ensureUIWeatherLayer(); if not layer then return nil end
-    local flake=table.remove(UIWeatherRuntime.SnowPool)
-    if not flake or not flake.Parent then
-        flake=Instance.new("TextLabel")
-        flake.Name="AstraSnowFlake"
-        flake.BackgroundTransparency=1
-        flake.BorderSizePixel=0
-        flake.Font=Enum.Font.GothamBold
-        flake.Text="✦"
-        flake.TextScaled=true
-        flake.TextStrokeTransparency=0.58
-        flake.Active=false
-        flake.ZIndex=29001
-        flake.Parent=layer
+function UIWeatherRuntime:SpawnRain(warm)
+    local layer = self:EnsureLayer()
+    if not layer then return end
+    local size = layer.AbsoluteSize
+    if size.X < 4 or size.Y < 4 then return end
+
+    local item = self:CreateRain()
+    if not item then return end
+
+    local rng = self.Random
+    local height = rng:NextInteger(22, 58)
+    local width = rng:NextInteger(1, 2)
+    item.X = rng:NextNumber(1, math.max(2, size.X - 1))
+    item.Y = warm and rng:NextNumber(-20, size.Y * 0.92) or rng:NextNumber(-height - 80, -height)
+    item.Speed = rng:NextNumber(390, 690) * math.clamp(tonumber(library.Theme.UIRainSpeed) or 1, 0.25, 2.5)
+    item.Drift = rng:NextNumber(-22, 12)
+    item.Height = height
+    item.Width = width
+
+    local color = library.Theme.UIRainColor or Color3.fromRGB(90, 190, 255)
+    item.Holder.Size = UDim2.fromOffset(10, height + 10)
+    item.Holder.Position = UDim2.fromOffset(item.X, item.Y)
+    item.Holder.Rotation = rng:NextNumber(-3.5, 2.5)
+    item.Holder.Visible = true
+
+    item.Outer.Size = UDim2.fromOffset(width + 5, height + 7)
+    item.Outer.BackgroundColor3 = color:Lerp(Color3.new(1,1,1), 0.26)
+    item.Core.Size = UDim2.fromOffset(width, height)
+    item.Core.BackgroundColor3 = color:Lerp(Color3.new(1,1,1), 0.18)
+    item.Tip.Size = UDim2.fromOffset(width + 3, width + 3)
+    item.Tip.Position = UDim2.new(0.5, 0, 1, -4)
+    item.Tip.BackgroundColor3 = color:Lerp(Color3.new(1,1,1), 0.38)
+
+    self.ActiveRain[#self.ActiveRain + 1] = item
+end
+
+function UIWeatherRuntime:CreateSnow()
+    local item = table.remove(self.SnowPool)
+    if item and item.Holder and item.Holder.Parent then
+        item.Holder.Visible = true
+        return item
     end
-    flake.Visible=true
-    return flake
+
+    local layer = self:EnsureLayer()
+    if not layer then return nil end
+
+    local holder = Instance.new("Frame")
+    holder.Name = "AstraUISnow"
+    holder.BackgroundTransparency = 1
+    holder.BorderSizePixel = 0
+    holder.AnchorPoint = Vector2.new(0.5, 0.5)
+    holder.ZIndex = 85003
+    holder.Active = false
+    holder.Parent = layer
+
+    local arms = {}
+    for index, rotation in ipairs({0, 60, -60}) do
+        local arm = Instance.new("Frame")
+        arm.Name = "Arm" .. index
+        arm.AnchorPoint = Vector2.new(0.5, 0.5)
+        arm.Position = UDim2.fromScale(0.5, 0.5)
+        arm.Size = UDim2.fromOffset(1.4, 10)
+        arm.Rotation = rotation
+        arm.BorderSizePixel = 0
+        arm.ZIndex = 85004
+        arm.Parent = holder
+
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(1, 0)
+        corner.Parent = arm
+
+        local glow = Instance.new("UIStroke")
+        glow.Name = "Glow"
+        glow.Thickness = 2
+        glow.Transparency = 0.70
+        glow.LineJoinMode = Enum.LineJoinMode.Round
+        glow.Parent = arm
+        arms[#arms + 1] = arm
+    end
+
+    item = {Holder=holder, Arms=arms}
+    return item
 end
 
-local function releaseSnowFlake(flake)
-    if not flake or not flake.Parent then return end
-    flake.Visible=false; flake.Position=UDim2.fromOffset(-100,-100)
-    UIWeatherRuntime.SnowPool[#UIWeatherRuntime.SnowPool+1]=flake
+function UIWeatherRuntime:ReleaseSnow(index)
+    local item = self.ActiveSnow[index]
+    if not item then return end
+    table.remove(self.ActiveSnow, index)
+    item.Holder.Visible = false
+    item.Holder.Position = UDim2.fromOffset(-200, -200)
+    self.SnowPool[#self.SnowPool + 1] = item
 end
 
-local function spawnUIRain()
-    local layer=ensureUIWeatherLayer(); if not layer then return end
-    local size=layer.AbsoluteSize; if size.X < 4 or size.Y < 4 then return end
-    local drop=acquireRainDrop(); if not drop then return end
-    local rng=UIWeatherRuntime.Random
-    local width=rng:NextInteger(1,3); local height=rng:NextInteger(24,70)
-    local x=rng:NextNumber(2,math.max(3,size.X-2)); local drift=rng:NextNumber(-34,20)
-    local color=library.Theme.UIRainColor or Color3.fromRGB(90,190,255)
-    drop.Size=UDim2.fromOffset(width,height)
-    drop.Position=UDim2.fromOffset(x,-height-rng:NextInteger(0,80))
-    drop.BackgroundColor3=color
-    drop.BackgroundTransparency=rng:NextNumber(0.20,0.48)
-    local glow=drop:FindFirstChild("Glow")
-    if glow then glow.Color=color:Lerp(Color3.new(1,1,1),0.32); glow.Transparency=0.56 end
-    local speed=math.clamp(tonumber(library.Theme.UIRainSpeed) or 1,0.25,2.5)
-    local tween=tws:Create(drop,TweenInfo.new(rng:NextNumber(0.70,1.30)/speed,Enum.EasingStyle.Linear),{
-        Position=UDim2.fromOffset(x+drift,size.Y+height+12), BackgroundTransparency=0.76
-    })
-    tween:Play(); tween.Completed:Connect(function() releaseRainDrop(drop) end)
+function UIWeatherRuntime:SpawnSnow(warm)
+    local layer = self:EnsureLayer()
+    if not layer then return end
+    local size = layer.AbsoluteSize
+    if size.X < 4 or size.Y < 4 then return end
+
+    local item = self:CreateSnow()
+    if not item then return end
+
+    local rng = self.Random
+    local scale = rng:NextNumber(0.55, 1.25)
+    item.X = rng:NextNumber(4, math.max(5, size.X - 4))
+    item.Y = warm and rng:NextNumber(-10, size.Y * 0.92) or rng:NextNumber(-40, -8)
+    item.Speed = rng:NextNumber(42, 92) * math.clamp(tonumber(library.Theme.UISnowSpeed) or 0.75, 0.25, 2)
+    item.Drift = rng:NextNumber(-18, 18)
+    item.Phase = rng:NextNumber(0, math.pi * 2)
+    item.Wobble = rng:NextNumber(1.2, 2.8)
+    item.Spin = rng:NextNumber(-55, 55)
+
+    local color = library.Theme.UISnowColor or Color3.fromRGB(245, 250, 255)
+    item.Holder.Size = UDim2.fromOffset(14 * scale, 14 * scale)
+    item.Holder.Position = UDim2.fromOffset(item.X, item.Y)
+    item.Holder.Rotation = rng:NextInteger(0, 359)
+    item.Holder.Visible = true
+
+    for _, arm in ipairs(item.Arms) do
+        arm.BackgroundColor3 = color
+        local glow = arm:FindFirstChild("Glow")
+        if glow then
+            glow.Color = color:Lerp(Color3.new(1,1,1), 0.45)
+        end
+    end
+
+    self.ActiveSnow[#self.ActiveSnow + 1] = item
 end
 
-local function spawnUISnow()
-    local layer=ensureUIWeatherLayer(); if not layer then return end
-    local size=layer.AbsoluteSize; if size.X < 4 or size.Y < 4 then return end
-    local flake=acquireSnowFlake(); if not flake then return end
-    local rng=UIWeatherRuntime.Random
-    local px=rng:NextInteger(7,17); local x=rng:NextNumber(2,math.max(3,size.X-2)); local drift=rng:NextNumber(-90,90)
-    local color=library.Theme.UISnowColor or Color3.fromRGB(245,250,255)
-    flake.Size=UDim2.fromOffset(px,px)
-    flake.Position=UDim2.fromOffset(x,-px-rng:NextInteger(0,55))
-    flake.TextColor3=color; flake.TextStrokeColor3=color:Lerp(Color3.new(1,1,1),0.40)
-    flake.TextTransparency=rng:NextNumber(0.05,0.30); flake.Rotation=rng:NextInteger(0,359)
-    local speed=math.clamp(tonumber(library.Theme.UISnowSpeed) or 0.75,0.25,2)
-    local tween=tws:Create(flake,TweenInfo.new(rng:NextNumber(3.0,6.2)/speed,Enum.EasingStyle.Sine,Enum.EasingDirection.InOut),{
-        Position=UDim2.fromOffset(x+drift,size.Y+px+12), Rotation=flake.Rotation+rng:NextInteger(160,420), TextTransparency=0.72
-    })
-    tween:Play(); tween.Completed:Connect(function() releaseSnowFlake(flake) end)
+function UIWeatherRuntime:Clear(kind)
+    if kind == "Rain" or kind == nil then
+        for index = #self.ActiveRain, 1, -1 do self:ReleaseRain(index) end
+        self.RainClock = 0
+    end
+    if kind == "Snow" or kind == nil then
+        for index = #self.ActiveSnow, 1, -1 do self:ReleaseSnow(index) end
+        self.SnowClock = 0
+    end
 end
 
-local uiWeatherConnection=utility:CreateConnection(game:GetService("RunService").RenderStepped,function(dt)
-    if not UIWeatherRuntime.Alive or not library or not library.Window or library.Window.Enabled ~= true then return end
+function UIWeatherRuntime:WarmStart(kind)
+    if not self:SyncBounds() then return end
+    if kind == "Rain" then
+        for _ = 1, 12 do self:SpawnRain(true) end
+    elseif kind == "Snow" then
+        for _ = 1, 14 do self:SpawnSnow(true) end
+    end
+end
+
+function UIWeatherRuntime:Step(dt)
+    if not self.Alive then return end
+    dt = math.clamp(tonumber(dt) or 0, 0, 0.05)
+
+    if not self:SyncBounds() then
+        return
+    end
+
+    local size = self.Layer.AbsoluteSize
+
     if library.Theme.UIRainEnabled == true then
-        UIWeatherRuntime.RainClock=UIWeatherRuntime.RainClock+(tonumber(dt) or 0)*math.clamp(tonumber(library.Theme.UIRainDensity) or 28,1,60)
-        while UIWeatherRuntime.RainClock>=1 do UIWeatherRuntime.RainClock=UIWeatherRuntime.RainClock-1; spawnUIRain() end
-    else UIWeatherRuntime.RainClock=0 end
+        self.RainClock = self.RainClock + dt * math.clamp(tonumber(library.Theme.UIRainDensity) or 28, 1, 60)
+        while self.RainClock >= 1 do
+            self.RainClock = self.RainClock - 1
+            self:SpawnRain(false)
+        end
+    elseif #self.ActiveRain > 0 then
+        self:Clear("Rain")
+    end
+
     if library.Theme.UISnowEnabled == true then
-        UIWeatherRuntime.SnowClock=UIWeatherRuntime.SnowClock+(tonumber(dt) or 0)*math.clamp(tonumber(library.Theme.UISnowDensity) or 20,1,50)*0.55
-        while UIWeatherRuntime.SnowClock>=1 do UIWeatherRuntime.SnowClock=UIWeatherRuntime.SnowClock-1; spawnUISnow() end
-    else UIWeatherRuntime.SnowClock=0 end
-end)
+        self.SnowClock = self.SnowClock + dt * math.clamp(tonumber(library.Theme.UISnowDensity) or 20, 1, 50) * 0.62
+        while self.SnowClock >= 1 do
+            self.SnowClock = self.SnowClock - 1
+            self:SpawnSnow(false)
+        end
+    elseif #self.ActiveSnow > 0 then
+        self:Clear("Snow")
+    end
 
-table.insert(library.CleanupCallbacks,function()
-    UIWeatherRuntime.Alive=false
+    for index = #self.ActiveRain, 1, -1 do
+        local item = self.ActiveRain[index]
+        item.Y = item.Y + item.Speed * dt
+        item.X = item.X + item.Drift * dt
+        item.Holder.Position = UDim2.fromOffset(item.X, item.Y)
+        if item.Y > size.Y + item.Height + 30 or item.X < -30 or item.X > size.X + 30 then
+            self:ReleaseRain(index)
+        end
+    end
+
+    local now = os.clock()
+    for index = #self.ActiveSnow, 1, -1 do
+        local item = self.ActiveSnow[index]
+        item.Y = item.Y + item.Speed * dt
+        item.X = item.X + item.Drift * dt + math.sin(now * item.Wobble + item.Phase) * 10 * dt
+        item.Holder.Position = UDim2.fromOffset(item.X, item.Y)
+        item.Holder.Rotation = item.Holder.Rotation + item.Spin * dt
+        if item.Y > size.Y + 30 or item.X < -40 or item.X > size.X + 40 then
+            self:ReleaseSnow(index)
+        end
+    end
+end
+
+local uiWeatherConnection = utility:CreateConnection(
+    game:GetService("RunService").RenderStepped,
+    function(dt) UIWeatherRuntime:Step(dt) end
+)
+
+table.insert(library.CleanupCallbacks, function()
+    UIWeatherRuntime.Alive = false
     pcall(function() uiWeatherConnection:Disconnect() end)
-    if UIWeatherRuntime.Layer then pcall(function() UIWeatherRuntime.Layer:Destroy() end) end
+    UIWeatherRuntime:Clear()
+    if UIWeatherRuntime.Layer then
+        pcall(function() UIWeatherRuntime.Layer:Destroy() end)
+        UIWeatherRuntime.Layer = nil
+    end
 end)
 
-UI.UIRainToggle=UI.UIWeatherSection:CreateToggle({Name="Rain Dripping on UI",State=library.Theme.UIRainEnabled==true,Flag="theme.ui_rain",Callback=function(v) library.Theme.UIRainEnabled=v==true end})
-UI.UIRainColor=UI.UIWeatherSection:CreateColorpicker({Name="Rain Color",State=library.Theme.UIRainColor,Flag="theme.ui_rain_color",Callback=function(v) library.Theme.UIRainColor=v end})
-UI.UIRainDensity=UI.UIWeatherSection:CreateSlider({Name="Rain Density",State=library.Theme.UIRainDensity,Min=1,Max=60,Decimals=0,Flag="theme.ui_rain_density",Callback=function(v) library.Theme.UIRainDensity=v end})
-UI.UIRainSpeed=UI.UIWeatherSection:CreateSlider({Name="Rain Speed",State=library.Theme.UIRainSpeed,Min=0.25,Max=2.5,Decimals=2,Suffix="x",Flag="theme.ui_rain_speed",Callback=function(v) library.Theme.UIRainSpeed=v end})
-UI.UISnowToggle=UI.UIWeatherSection:CreateToggle({Name="Snow on UI",State=library.Theme.UISnowEnabled==true,Flag="theme.ui_snow",Callback=function(v) library.Theme.UISnowEnabled=v==true end})
-UI.UISnowColor=UI.UIWeatherSection:CreateColorpicker({Name="Snow Color",State=library.Theme.UISnowColor,Flag="theme.ui_snow_color",Callback=function(v) library.Theme.UISnowColor=v end})
-UI.UISnowDensity=UI.UIWeatherSection:CreateSlider({Name="Snow Density",State=library.Theme.UISnowDensity,Min=1,Max=50,Decimals=0,Flag="theme.ui_snow_density",Callback=function(v) library.Theme.UISnowDensity=v end})
-UI.UISnowSpeed=UI.UIWeatherSection:CreateSlider({Name="Snow Speed",State=library.Theme.UISnowSpeed,Min=0.25,Max=2,Decimals=2,Suffix="x",Flag="theme.ui_snow_speed",Callback=function(v) library.Theme.UISnowSpeed=v end})
+UI.UIRainToggle = UI.UIWeatherSection:CreateToggle({
+    Name="Rain Dripping on UI",
+    State=library.Theme.UIRainEnabled==true,
+    Flag="theme.ui_rain",
+    Callback=function(v)
+        library.Theme.UIRainEnabled = v == true
+        if v then UIWeatherRuntime:WarmStart("Rain") else UIWeatherRuntime:Clear("Rain") end
+    end
+})
+UI.UIRainColor = UI.UIWeatherSection:CreateColorpicker({
+    Name="Rain Color", State=library.Theme.UIRainColor, Flag="theme.ui_rain_color",
+    Callback=function(v) library.Theme.UIRainColor=v end
+})
+UI.UIRainDensity = UI.UIWeatherSection:CreateSlider({
+    Name="Rain Density", State=library.Theme.UIRainDensity, Min=1, Max=60, Decimals=0,
+    Flag="theme.ui_rain_density", Callback=function(v) library.Theme.UIRainDensity=v end
+})
+UI.UIRainSpeed = UI.UIWeatherSection:CreateSlider({
+    Name="Rain Speed", State=library.Theme.UIRainSpeed, Min=0.25, Max=2.5, Decimals=2, Suffix="x",
+    Flag="theme.ui_rain_speed", Callback=function(v) library.Theme.UIRainSpeed=v end
+})
+
+UI.UISnowToggle = UI.UIWeatherSection:CreateToggle({
+    Name="Snow on UI",
+    State=library.Theme.UISnowEnabled==true,
+    Flag="theme.ui_snow",
+    Callback=function(v)
+        library.Theme.UISnowEnabled = v == true
+        if v then UIWeatherRuntime:WarmStart("Snow") else UIWeatherRuntime:Clear("Snow") end
+    end
+})
+UI.UISnowColor = UI.UIWeatherSection:CreateColorpicker({
+    Name="Snow Color", State=library.Theme.UISnowColor, Flag="theme.ui_snow_color",
+    Callback=function(v) library.Theme.UISnowColor=v end
+})
+UI.UISnowDensity = UI.UIWeatherSection:CreateSlider({
+    Name="Snow Density", State=library.Theme.UISnowDensity, Min=1, Max=50, Decimals=0,
+    Flag="theme.ui_snow_density", Callback=function(v) library.Theme.UISnowDensity=v end
+})
+UI.UISnowSpeed = UI.UIWeatherSection:CreateSlider({
+    Name="Snow Speed", State=library.Theme.UISnowSpeed, Min=0.25, Max=2, Decimals=2, Suffix="x",
+    Flag="theme.ui_snow_speed", Callback=function(v) library.Theme.UISnowSpeed=v end
+})
 
 local premiumThemeSection=settingPage:CreateSection({Name="Premium Themes",Side="Right",Size=290})
 local premiumThemeOptions={"Classic Olive","Midnight Purple","Cyan Circuit","Rose Gold","Crimson Noir","Arctic Blue","YouTube Red","Emerald Luxe"}
@@ -30343,7 +30501,8 @@ luaEditor.PlaceholderColor3 = Color3.fromRGB(120,120,120)
 luaEditor.PlaceholderText = "-- write Lua here"
 luaEditor.Text = tostring(getgenv().__DevKageConfig.luaCode or "")
 luaEditor.Size = UDim2.new(1,-10,1,-48)
-luaEditor.Position = UDim2.new(0,5,0,24)
+luaEditor.Positi]==================],
+[==================[on = UDim2.new(0,5,0,24)
 luaEditor.ZIndex = 11
 luaEditor.Parent = luaEditorFrame
 
@@ -30603,8 +30762,7 @@ end
 local function syncSupplementalSpooferControls(controls,config)
 local extra=type(controls.extra)=="table" and controls.extra or {}
 local toggleBindings={
-{"spoofDeviceToggle","spoofDevice"},{"deviceSpamToggle"]==================],
-    [==================[,"deviceSpam"},
+{"spoofDeviceToggle","spoofDevice"},{"deviceSpamToggle","deviceSpam"},
 {"influencerToggle","influencer"},{"adminToggle","admin"},
 {"spoofAvatarToggle","spoofAvatar"},{"anonymousToggle","anonymousMode"},
 {"displayNameToggle","displayNameOverrideEnabled"},{"usernameToggle","usernameOverrideEnabled"},
@@ -30822,7 +30980,8 @@ VisualsState.viewmodel_weapon_glow=math.clamp(tonumber(VisualsState.viewmodel_we
 VisualsState.animation_id=tostring(VisualsState.animation_id or ""):match("%d+") or ""
 VisualsState.animation_start_percent=math.clamp(tonumber(VisualsState.animation_start_percent) or 0,0,99)
 VisualsState.animation_end_percent=math.clamp(tonumber(VisualsState.animation_end_percent) or 100,1,100)
-if VisualsState.animation_end_percent<=VisualsState.animation_start_percent then VisualsState.animation_end_percent=math.min(100,VisualsState.animation_start_percent+1) end
+if VisualsState.animation_end_percent<=VisualsState.animation_start_percent then VisualsState.anima]==================],
+[==================[tion_end_percent=math.min(100,VisualsState.animation_start_percent+1) end
 applyRuntimeState(AdvancedLighting,data.lighting)
 if AdvancedLighting.fogEnabled and AdvancedLighting.atmosphereEnabled then AdvancedLighting.atmosphereEnabled=false end
 applyRuntimeState(library.Theme,data.theme)
@@ -30846,6 +31005,14 @@ for i,option in ipairs(UI.DPIOptions) do if option==target then index=i break en
 UI.ThemeDPIScale:Set(index,true)
 library:SetDPIScale(library.Theme.DPIScale)
 end
+if UI.UIRainToggle then UI.UIRainToggle:Set(library.Theme.UIRainEnabled==true,true) end
+if UI.UISnowToggle then UI.UISnowToggle:Set(library.Theme.UISnowEnabled==true,true) end
+if UI.UIRainDensity then UI.UIRainDensity:Set(tonumber(library.Theme.UIRainDensity) or 28,true) end
+if UI.UIRainSpeed then UI.UIRainSpeed:Set(tonumber(library.Theme.UIRainSpeed) or 1,true) end
+if UI.UISnowDensity then UI.UISnowDensity:Set(tonumber(library.Theme.UISnowDensity) or 20,true) end
+if UI.UISnowSpeed then UI.UISnowSpeed:Set(tonumber(library.Theme.UISnowSpeed) or 0.75,true) end
+if UI.UIRainColor then UI.UIRainColor:Set(library.Theme.UIRainColor or Color3.fromRGB(90,190,255),UI.UIRainColor:GetAlpha(),true) end
+if UI.UISnowColor then UI.UISnowColor:Set(library.Theme.UISnowColor or Color3.fromRGB(245,250,255),UI.UISnowColor:GetAlpha(),true) end
 AntiAimState.Import(data.antiAim, data)
 
 controls.victimInput:Set(tostring(getgenv().__DevKageConfig.victim or ""),true)
@@ -30933,8 +31100,7 @@ controls.streamerAlignmentDrop:Set(library.OptionIndex(controls.streamerAlignmen
 controls.streamerWidthSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudWidth) or 660,260,1800),true)
 controls.streamerHeightSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudHeight) or 36,22,100),true)
 controls.streamerTextSizeSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudTextSize) or 14,8,32),true)
-controls.streamerPaddingSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamer]==================],
-    [==================[HudPadding) or 25,0,80),true)
+controls.streamerPaddingSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudPadding) or 25,0,80),true)
 controls.streamerOffsetXSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudOffsetX) or 0,-1200,1200),true)
 controls.streamerOffsetYSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudOffsetY) or 12,-500,500),true)
 controls.streamerCornerSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudCornerRadius) or 7,0,24),true)
@@ -31232,7 +31398,8 @@ rebuildBlacklistList = function()
                     blacklistStatusLabel.TextColor3 = Color3.fromRGB(165,165,165)
                 end
             else
-                library:Notify({Message="Blacklist remove failed: "..tostring(err),Duration=4})
+                library:Notify({Message="Blacklist remove failed: "..tostri]==================],
+[==================[ng(err),Duration=4})
             end
         end)
     end
@@ -31722,8 +31889,7 @@ if not selectedServerPlayer then
 library:Notify({Message="Select a player first",Duration=3})
 return
 end
-local saved,err]==================],
-    [==================[=setPlayerBlacklisted(selectedServerPlayer,false)
+local saved,err=setPlayerBlacklisted(selectedServerPlayer,false)
 if saved then
 playerReasonBox.Text=""
 playerSelectionLabel.Text="Selected: "..tostring(selectedServerPlayer.Name)
@@ -31942,7 +32108,8 @@ if n=="" then library:Notify({Message="Click a config in the list first",Duratio
 if n:sub(1,1)=="_" then library:Notify({Message="Config names cannot start with an underscore",Duration=4}); return end
 local exists=false
 if type(isfile)=="function" then
-local checked,result=pcall(isfile,CONFIG_FOLDER.."/"..n..".json")
+local checked,result]==================],
+[==================[=pcall(isfile,CONFIG_FOLDER.."/"..n..".json")
 exists=checked and result==true
 end
 if not exists then for _,name in ipairs(configNames()) do if name==n then exists=true break end end end
@@ -32300,8 +32467,7 @@ assert(function(alwaysOnMaskShards, environment, safeActivate, safeDeactivate)
         end
 
         if environment.__DevKageMaskShardHealth == health then
-            environment.__DevKageMaskShardHealt]==================],
-    [==================[h = nil
+            environment.__DevKageMaskShardHealth = nil
         end
         environment.__DevKageMaskShardStatus = {
             Active = false,
@@ -32322,12 +32488,13 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
 -- END OF FILE
 
 ]==================]
+
 })
 
 local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
-__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.65-autoload-currentbuild-ui-toggle-20260912"
+__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.65-astra-cursor-weather-toggle-fix-20260913"
 __devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
-__devkageEnv.__DEVKAGE_PACKAGE_SOURCE_BUILD = "DevKage-v5.2.65-autoload-currentbuild-ui-toggle-20260912"
+__devkageEnv.__DEVKAGE_PACKAGE_SOURCE_BUILD = "DevKage-v5.2.65-astra-cursor-weather-toggle-fix-20260913"
 __devkageEnv.__DEVKAGE_PACKAGE_SOURCE_CURRENT = __DEVKAGE_EMBEDDED_SOURCE
 
 -- CURRENT LATE-BOOT AUTOEXEC OWNERSHIP (v5.2.55)
