@@ -831,14 +831,8 @@ function library:ApplyTheme()
             table.remove(self.ThemeToggleControls, index)
         else
             pcall(function()
-                if type(control.RefreshToggleVisual) == "function" then
-                    control:RefreshToggleVisual()
-                else
-                    frame.BackgroundColor3 = self.Theme.Toggle
-                    if frame.Parent then
-                        frame.Parent.Visible = control.State == true
-                    end
-                end
+                frame.BackgroundColor3 = self.Theme.Toggle
+                if frame.Parent then frame.Parent.Visible = control.State == true end
             end)
         end
     end
@@ -2838,10 +2832,6 @@ function BindManager:RefreshControl(control)
     local key = configured and self:KeyText(control.BindKey) or "-"
     local hasKey = configured and key ~= "-"
 
-    if type(control.RefreshToggleVisual) == "function" then
-        control:RefreshToggleVisual()
-    end
-
     if control.InlineBind then
         if control.BindModeButton then
             local modeText = "bind"
@@ -3131,7 +3121,6 @@ function sections:CreateToggle(Properties)
             Parent              = Content_Holder,
             Position            = UDim2.new(0, 20, 0, 10),
             Size                = UDim2.new(0, 8, 0, 8),
-            Visible             = Content.State == true,
             ZIndex              = 3
         })
         utility:RenderObject("TextLabel", {
@@ -3236,7 +3225,7 @@ function sections:CreateToggle(Properties)
             ZIndex              = 20
         })
         local Holder_Outline_Frame = utility:RenderObject("Frame", {
-            BackgroundColor3    = library.Theme.Toggle,
+            BackgroundColor3    = Color3.fromRGB(77, 77, 77),
             BackgroundTransparency = 0,
             BorderColor3        = Color3.fromRGB(0, 0, 0),
             BorderSizePixel     = 0,
@@ -3247,8 +3236,7 @@ function sections:CreateToggle(Properties)
             ThemeIgnore         = true
         })
         Content.ThemeToggleFrame = Holder_Outline_Frame
-        Content.ThemeToggleOutline = Content_Holder_Outline
-        Content_Holder_Outline.Visible = false
+        Content_Holder_Outline.Visible = Content.State
         library.ThemeToggleControls[#library.ThemeToggleControls + 1] = Content
         local Outline_Frame_Gradient = utility:RenderObject("UIGradient", {
             Color   = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(140, 140, 140)),
@@ -3257,25 +3245,11 @@ function sections:CreateToggle(Properties)
             Parent  = Holder_Outline_Frame
         })
 
-        function Content:HasAssignedKeybind()
-            if Content.BindConfigured ~= true then return false end
-            if Content.BindMode == "Always" then return true end
-            return type(Content.BindKey) == "table"
-                and type(Content.BindKey[1]) == "string"
-                and type(Content.BindKey[2]) == "string"
-        end
-
-        function Content:RefreshToggleVisual()
-            -- Active-only checkbox: OFF means the entire box/outline is invisible.
-            -- There is intentionally no inactive gray-square state.
-            Content_Holder_Outline.Visible = Content.State == true
-            Holder_Outline_Frame.BackgroundColor3 = library.Theme.Toggle
-        end
-
         function Content:Set(state, silent)
             if Content.BindMode == "Always" and state == false then state = true end
             Content.State = state == true
-            Content:RefreshToggleVisual()
+            Content_Holder_Outline.Visible = Content.State
+            Holder_Outline_Frame.BackgroundColor3 = library.Theme.Toggle
             if not silent then utility:SafeCallback(Content.Callback, Content:Get()) end
             if library.KeybindManager then library.KeybindManager:RefreshActive() end
         end
