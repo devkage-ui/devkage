@@ -28049,12 +28049,13 @@ local function referenceSmoothRotation(currentRotation, targetRotation, smoothin
 end
 
 local function referenceSmoothPulse(t, speed)
-    local rawPulse =
-        math.sin(t * speed) * 0.5 + 0.5
-
-    return
-        rawPulse
-        * rawPulse
+    -- Restored cursor bounce: a rhythmic up/down spring instead of a flat
+    -- breathing pulse.  The absolute sine gives each beat a clean return to
+    -- the resting size, while the easing keeps the motion soft rather than
+    -- snapping at the top or bottom.
+    local phase = math.abs(math.sin(t * speed))
+    local eased = 1 - ((1 - phase) * (1 - phase) * (1 - phase))
+    return math.clamp(eased, 0, 1)
 end
 
 
@@ -29496,14 +29497,15 @@ local function referenceCursorRender(deltaTime)
 
 
 
-    -- Classic pulse animation: keep the cursor compact while the whole
-    -- four-piece reticle softly breathes and spins.
-    local minLength = lineLength * 0.92
-    local maxLength = lineLength * 1.05
+    -- Classic bounce animation: the old four-piece reticle grows outward,
+    -- settles back to center, and repeats while keeping the neon geometry
+    -- compact.  This affects only cursor motion/scale.
+    local minLength = lineLength * 0.88
+    local maxLength = lineLength * 1.10
     local currentLength = minLength + (maxLength - minLength) * pulse
 
     if runtime.AimScale then
-        runtime.AimScale.Scale = 0.94 + (0.12 * pulse)
+        runtime.AimScale.Scale = 0.90 + (0.18 * pulse)
     end
 
     local armCount =
