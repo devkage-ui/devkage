@@ -28629,8 +28629,9 @@ local function referenceCreateCursorGui()
             0.5
         )
 
-    aimContainer.Active = false
-    aimContainer.Selectable = false
+    aimContainer.Active = true
+    aimContainer.Selectable = true
+
     aimContainer.ZIndex = 100000
     aimContainer.Parent = screenGui
 
