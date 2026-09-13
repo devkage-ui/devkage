@@ -625,30 +625,12 @@ library.Theme = library.Theme or {
     TopBar = Color3.fromRGB(255, 255, 255),
     TopBarTransparency = 0,
     MenuAnimationSpeed = 1,
-    DPIScale = 1,
-
-    -- High-quality weather drawn strictly inside the menu glass.
-    UIRainEnabled = false,
-    UISnowEnabled = false,
-    UIRainColor = Color3.fromRGB(118, 196, 255),
-    UISnowColor = Color3.fromRGB(245, 248, 255),
-    UIRainDensity = 32,
-    UISnowDensity = 18,
-    UIRainSpeed = 1,
-    UISnowSpeed = 0.85
+    DPIScale = 1
 }
 if library.Theme.TopBar == nil then library.Theme.TopBar = Color3.fromRGB(255, 255, 255) end
 if library.Theme.TopBarTransparency == nil then library.Theme.TopBarTransparency = 0 end
 if library.Theme.MenuAnimationSpeed == nil then library.Theme.MenuAnimationSpeed = 1 end
 if library.Theme.DPIScale == nil then library.Theme.DPIScale = 1 end
-if library.Theme.UIRainEnabled == nil then library.Theme.UIRainEnabled = false end
-if library.Theme.UISnowEnabled == nil then library.Theme.UISnowEnabled = false end
-if typeof(library.Theme.UIRainColor) ~= "Color3" then library.Theme.UIRainColor = Color3.fromRGB(118,196,255) end
-if typeof(library.Theme.UISnowColor) ~= "Color3" then library.Theme.UISnowColor = Color3.fromRGB(245,248,255) end
-if library.Theme.UIRainDensity == nil then library.Theme.UIRainDensity = 32 end
-if library.Theme.UISnowDensity == nil then library.Theme.UISnowDensity = 18 end
-if library.Theme.UIRainSpeed == nil then library.Theme.UIRainSpeed = 1 end
-if library.Theme.UISnowSpeed == nil then library.Theme.UISnowSpeed = 0.85 end
 
 -- Keybind overlay/menu appearance is independent from the main window theme.
 -- Defaults are intentionally more compact than older DevKage builds.
@@ -849,9 +831,13 @@ function library:ApplyTheme()
             table.remove(self.ThemeToggleControls, index)
         else
             pcall(function()
-                frame.BackgroundColor3 = self.Theme.Toggle
-                if frame.Parent then
-                    frame.Parent.Visible = control.State == true
+                if type(control.RefreshToggleVisual) == "function" then
+                    control:RefreshToggleVisual()
+                else
+                    frame.BackgroundColor3 = control.State == true
+                        and self.Theme.Toggle
+                        or Color3.fromRGB(77, 77, 77)
+                    if frame.Parent then frame.Parent.Visible = control.State == true end
                 end
             end)
         end
@@ -2852,6 +2838,10 @@ function BindManager:RefreshControl(control)
     local key = configured and self:KeyText(control.BindKey) or "-"
     local hasKey = configured and key ~= "-"
 
+    if type(control.RefreshToggleVisual) == "function" then
+        control:RefreshToggleVisual()
+    end
+
     if control.InlineBind then
         if control.BindModeButton then
             local modeText = "bind"
@@ -3179,7 +3169,7 @@ function sections:CreateToggle(Properties)
             TextColor3          = Color3.fromRGB(205, 205, 205),
             TextSize            = 9,
             TextStrokeTransparency = 1,
-            TextTransparency    = 1,
+            TextTransparency    = 0.5,
             TextXAlignment      = "Left"
         })
         local Content_BindValue = utility:RenderObject(Content.InlineBind and "TextButton" or "TextLabel", {
@@ -3256,7 +3246,8 @@ function sections:CreateToggle(Properties)
             ThemeIgnore         = true
         })
         Content.ThemeToggleFrame = Holder_Outline_Frame
-        Content_Holder_Outline.Visible = Content.State
+        Content.ThemeToggleOutline = Content_Holder_Outline
+        Content_Holder_Outline.Visible = false
         library.ThemeToggleControls[#library.ThemeToggleControls + 1] = Content
         local Outline_Frame_Gradient = utility:RenderObject("UIGradient", {
             Color   = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(140, 140, 140)),
@@ -3265,11 +3256,26 @@ function sections:CreateToggle(Properties)
             Parent  = Holder_Outline_Frame
         })
 
+        function Content:HasAssignedKeybind()
+            if Content.BindConfigured ~= true then return false end
+            if Content.BindMode == "Always" then return true end
+            return type(Content.BindKey) == "table"
+                and type(Content.BindKey[1]) == "string"
+                and type(Content.BindKey[2]) == "string"
+        end
+
+        function Content:RefreshToggleVisual()
+            local showToggle = Content.State == true or Content:HasAssignedKeybind()
+            Content_Holder_Outline.Visible = showToggle
+            Holder_Outline_Frame.BackgroundColor3 = Content.State == true
+                and library.Theme.Toggle
+                or Color3.fromRGB(77, 77, 77)
+        end
+
         function Content:Set(state, silent)
             if Content.BindMode == "Always" and state == false then state = true end
             Content.State = state == true
-            Content_Holder_Outline.Visible = Content.State
-            Holder_Outline_Frame.BackgroundColor3 = library.Theme.Toggle
+            Content:RefreshToggleVisual()
             if not silent then utility:SafeCallback(Content.Callback, Content:Get()) end
             if library.KeybindManager then library.KeybindManager:RefreshActive() end
         end
@@ -9426,6 +9432,11 @@ devkage_cursor_text_enabled        = true,
 devkage_cursor_main_text           = "devkage",
 devkage_cursor_second_text         = "None",
 devkage_cursor_text_outline        = true,
+devkage_cursor_text_glow           = true,
+devkage_cursor_text_glow_follow_color = true,
+devkage_cursor_text_glow_color     = Color3.fromRGB(205, 185, 255),
+devkage_cursor_text_glow_size      = 10,
+devkage_cursor_text_glow_strength  = 0.80,
 devkage_cursor_main_text_size      = 20,
 devkage_cursor_second_text_size    = 15,
 devkage_cursor_size           = 25,
@@ -27561,6 +27572,11 @@ local cursorStateMap = {
     devkage_cursor_main_text="MainText",
     devkage_cursor_second_text="SecondText",
     devkage_cursor_text_outline="TextOutline",
+    devkage_cursor_text_glow="TextGlow",
+    devkage_cursor_text_glow_follow_color="TextGlowFollowColor",
+    devkage_cursor_text_glow_color="TextGlowColor",
+    devkage_cursor_text_glow_size="TextGlowSize",
+    devkage_cursor_text_glow_strength="TextGlowStrength",
     devkage_cursor_main_text_size="MainTextSize",
     d]==================],
     [==================[evkage_cursor_second_text_size="SecondTextSize",
@@ -27922,6 +27938,34 @@ local function referenceCursorReadSettings()
 
     target.TextOutline =
         source.TextOutline ~= false
+
+    target.TextGlow =
+        source.TextGlow ~= false
+
+    target.TextGlowFollowColor =
+        source.TextGlowFollowColor ~= false
+
+    target.TextGlowColor =
+        referenceCursorColor(
+            source.TextGlowColor,
+            Color3.fromRGB(205, 185, 255)
+        )
+
+    target.TextGlowSize =
+        referenceCursorNumber(
+            source.TextGlowSize,
+            10,
+            0,
+            30
+        )
+
+    target.TextGlowStrength =
+        referenceCursorNumber(
+            source.TextGlowStrength,
+            0.80,
+            0,
+            1
+        )
 
     target.MainTextSize =
         math.floor(
@@ -28961,7 +29005,19 @@ local function referenceApplyText(
 
     local function syncTextGlow(label, outerGlow, innerGlow)
         if not label then return end
-        local visible = label.Visible == true
+
+        local glowEnabled = settings.TextGlow ~= false
+        local visible = label.Visible == true and glowEnabled
+        local glowSize = referenceCursorNumber(settings.TextGlowSize, 10, 0, 30)
+        local glowStrength = referenceCursorNumber(settings.TextGlowStrength, 0.80, 0, 1)
+        local glowColor = color
+
+        if settings.TextGlowFollowColor == false then
+            glowColor = referenceCursorColor(
+                settings.TextGlowColor,
+                Color3.fromRGB(205, 185, 255)
+            )
+        end
 
         for _, glow in ipairs({outerGlow, innerGlow}) do
             if glow then
@@ -28969,43 +29025,46 @@ local function referenceApplyText(
                 glow.Text = label.Text
                 glow.Font = label.Font
                 glow.TextScaled = true
-                glow.TextColor3 = color
+                glow.TextColor3 = glowColor
             end
         end
 
         if outerGlow then
+            local outerX = glowSize
+            local outerY = glowSize * 0.80
             outerGlow.Size = UDim2.new(
-                label.Size.X.Scale, label.Size.X.Offset + 10,
-                label.Size.Y.Scale, label.Size.Y.Offset + 8
+                label.Size.X.Scale, label.Size.X.Offset + outerX,
+                label.Size.Y.Scale, label.Size.Y.Offset + outerY
             )
             outerGlow.Position = UDim2.new(
-                label.Position.X.Scale, label.Position.X.Offset - 5,
-                label.Position.Y.Scale, label.Position.Y.Offset - 4
+                label.Position.X.Scale, label.Position.X.Offset - outerX * 0.5,
+                label.Position.Y.Scale, label.Position.Y.Offset - outerY * 0.5
             )
-            outerGlow.TextTransparency = 0.88
+            outerGlow.TextTransparency = 1 - (0.16 * glowStrength)
             local s = outerGlow:FindFirstChild("NeonStroke")
             if s then
-                s.Color = color
-                s.Thickness = 5
-                s.Transparency = 0.78
+                s.Color = glowColor
+                s.Thickness = math.clamp(glowSize * 0.50, 0.5, 15)
+                s.Transparency = 1 - (0.30 * glowStrength)
             end
         end
 
         if innerGlow then
+            local innerSize = glowSize * 0.40
             innerGlow.Size = UDim2.new(
-                label.Size.X.Scale, label.Size.X.Offset + 4,
-                label.Size.Y.Scale, label.Size.Y.Offset + 4
+                label.Size.X.Scale, label.Size.X.Offset + innerSize,
+                label.Size.Y.Scale, label.Size.Y.Offset + innerSize
             )
             innerGlow.Position = UDim2.new(
-                label.Position.X.Scale, label.Position.X.Offset - 2,
-                label.Position.Y.Scale, label.Position.Y.Offset - 2
+                label.Position.X.Scale, label.Position.X.Offset - innerSize * 0.5,
+                label.Position.Y.Scale, label.Position.Y.Offset - innerSize * 0.5
             )
-            innerGlow.TextTransparency = 0.62
+            innerGlow.TextTransparency = 1 - (0.46 * glowStrength)
             local s = innerGlow:FindFirstChild("NeonStroke")
             if s then
-                s.Color = color:Lerp(Color3.new(1,1,1), 0.45)
-                s.Thickness = 2.5
-                s.Transparency = 0.48
+                s.Color = glowColor:Lerp(Color3.new(1,1,1), 0.45)
+                s.Thickness = math.clamp(glowSize * 0.25, 0.5, 8)
+                s.Transparency = 1 - (0.66 * glowStrength)
             end
         end
     end
@@ -29757,6 +29816,11 @@ addToggle(textSection,"devkage_cursor_text_enabled","Text Enabled")
 addDropdown(textSection,"devkage_cursor_main_text","Main Text",{"devkage","Vortex.exe","DevKage","Crosshair"})
 addDropdown(textSection,"devkage_cursor_second_text","Second Text",{"None","devkage","DevKage","Vortex.exe","Crosshair"})
 addToggle(textSection,"devkage_cursor_text_outline","Text Outline")
+addToggle(textSection,"devkage_cursor_text_glow","Text Glow")
+addToggle(textSection,"devkage_cursor_text_glow_follow_color","Text Glow Follows Cursor Color")
+addColor(textSection,"devkage_cursor_text_glow_color","Text Glow Color")
+addSlider(textSection,"devkage_cursor_text_glow_size","Text Glow Size",0,30,1," px")
+addSlider(textSection,"devkage_cursor_text_glow_strength","Text Glow Strength",0,1,2,"")
 addSlider(textSection,"devkage_cursor_main_text_size","Main Text Size",8,40,0,"")
 addSlider(textSection,"devkage_cursor_second_text_size","Second Text Size",8,40,0,"")
 
@@ -30001,478 +30065,6 @@ UI.ThemeDPIScale = UI.ThemeSection:CreateDropdown({
     end
 })
 library:ApplyTheme()
-
--- ============================================================
--- ASTRA PREMIUM UI WEATHER
--- Rendered as an inset, clipped glass layer INSIDE MainFrame.
--- No particles can escape the menu rectangle.
--- ============================================================
-UI.UIWeatherSection = settingPage:CreateSection({Name="UI Weather FX",Side="Right",Size=430})
-
-local UIWeatherRuntime = {
-    Layer = nil,
-    RainActive = {},
-    RainPool = {},
-    SnowActive = {},
-    SnowPool = {},
-    RainClock = 0,
-    SnowClock = 0,
-    Random = Random.new(),
-    Time = 0,
-    Alive = true,
-}
-
-local function ensurePremiumUIWeatherLayer()
-    if UIWeatherRuntime.Layer and UIWeatherRuntime.Layer.Parent then
-        return UIWeatherRuntime.Layer
-    end
-
-    local main = library.Window and library.Window.MainFrame
-    if not main then return nil end
-
-    local layer = Instance.new("Frame")
-    layer.Name = "DevKage_PremiumUIWeather"
-    layer.BackgroundTransparency = 1
-    layer.BorderSizePixel = 0
-    layer.Position = UDim2.fromOffset(5, 5)
-    layer.Size = UDim2.new(1, -10, 1, -10)
-    layer.ClipsDescendants = true
-    layer.Active = false
-    layer.Selectable = false
-    layer.ZIndex = 28000
-    layer.Parent = main
-
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 2)
-    corner.Parent = layer
-
-    -- Nearly invisible glass sheen makes particles read as if they are
-    -- behind/inside the menu surface instead of floating outside it.
-    local sheen = Instance.new("Frame")
-    sheen.Name = "GlassSheen"
-    sheen.BackgroundColor3 = Color3.fromRGB(210, 225, 255)
-    sheen.BackgroundTransparency = 0.985
-    sheen.BorderSizePixel = 0
-    sheen.Size = UDim2.fromScale(1, 1)
-    sheen.Active = false
-    sheen.ZIndex = 28000
-    sheen.Parent = layer
-
-    local sheenGradient = Instance.new("UIGradient")
-    sheenGradient.Rotation = 25
-    sheenGradient.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 0.98),
-        NumberSequenceKeypoint.new(0.45, 0.90),
-        NumberSequenceKeypoint.new(1, 0.995),
-    })
-    sheenGradient.Parent = sheen
-
-    UIWeatherRuntime.Layer = layer
-    return layer
-end
-
-local function createRainVisual()
-    local layer = ensurePremiumUIWeatherLayer()
-    if not layer then return nil end
-
-    local holder = Instance.new("Frame")
-    holder.Name = "GlassRainDrop"
-    holder.BackgroundTransparency = 1
-    holder.BorderSizePixel = 0
-    holder.AnchorPoint = Vector2.new(0.5, 0.5)
-    holder.Size = UDim2.fromOffset(8, 40)
-    holder.Active = false
-    holder.Selectable = false
-    holder.ZIndex = 28003
-    holder.Parent = layer
-
-    local outer = Instance.new("Frame")
-    outer.Name = "OuterGlow"
-    outer.AnchorPoint = Vector2.new(0.5, 0.5)
-    outer.Position = UDim2.fromScale(0.5, 0.5)
-    outer.Size = UDim2.new(0, 6, 1, 5)
-    outer.BackgroundTransparency = 0.90
-    outer.BorderSizePixel = 0
-    outer.ZIndex = 28001
-    outer.Parent = holder
-    local oc = Instance.new("UICorner"); oc.CornerRadius = UDim.new(1,0); oc.Parent = outer
-
-    local glow = Instance.new("Frame")
-    glow.Name = "Glow"
-    glow.AnchorPoint = Vector2.new(0.5, 0.5)
-    glow.Position = UDim2.fromScale(0.5, 0.5)
-    glow.Size = UDim2.new(0, 4, 1, 2)
-    glow.BackgroundTransparency = 0.76
-    glow.BorderSizePixel = 0
-    glow.ZIndex = 28002
-    glow.Parent = holder
-    local gc = Instance.new("UICorner"); gc.CornerRadius = UDim.new(1,0); gc.Parent = glow
-
-    local core = Instance.new("Frame")
-    core.Name = "Core"
-    core.AnchorPoint = Vector2.new(0.5, 0.5)
-    core.Position = UDim2.fromScale(0.5, 0.5)
-    core.Size = UDim2.new(0, 2, 1, 0)
-    core.BackgroundTransparency = 0.18
-    core.BorderSizePixel = 0
-    core.ZIndex = 28004
-    core.Parent = holder
-    local cc = Instance.new("UICorner"); cc.CornerRadius = UDim.new(1,0); cc.Parent = core
-
-    local gradient = Instance.new("UIGradient")
-    gradient.Rotation = 90
-    gradient.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 0.96),
-        NumberSequenceKeypoint.new(0.15, 0.28),
-        NumberSequenceKeypoint.new(0.62, 0.04),
-        NumberSequenceKeypoint.new(1, 0.74),
-    })
-    gradient.Parent = core
-
-    local tip = Instance.new("Frame")
-    tip.Name = "Tip"
-    tip.AnchorPoint = Vector2.new(0.5, 0.5)
-    tip.Position = UDim2.new(0.5, 0, 1, -1)
-    tip.Size = UDim2.fromOffset(3, 3)
-    tip.BackgroundTransparency = 0.18
-    tip.BorderSizePixel = 0
-    tip.ZIndex = 28005
-    tip.Parent = holder
-    local tc = Instance.new("UICorner"); tc.CornerRadius = UDim.new(1,0); tc.Parent = tip
-
-    holder.Visible = false
-    return {Holder=holder, Core=core, Glow=glow, Outer=outer, Tip=tip}
-end
-
-local function acquireRainVisual()
-    local item = table.remove(UIWeatherRuntime.RainPool)
-    if not item or not item.Holder or not item.Holder.Parent then
-        item = createRainVisual()
-    end
-    if item then item.Holder.Visible = true end
-    return item
-end
-
-local function releaseRainVisual(index)
-    local item = UIWeatherRuntime.RainActive[index]
-    if not item then return end
-    item.Holder.Visible = false
-    item.Holder.Position = UDim2.fromOffset(-200, -200)
-    table.remove(UIWeatherRuntime.RainActive, index)
-    UIWeatherRuntime.RainPool[#UIWeatherRuntime.RainPool+1] = item
-end
-
-local function createSnowVisual()
-    local layer = ensurePremiumUIWeatherLayer()
-    if not layer then return nil end
-
-    local holder = Instance.new("Frame")
-    holder.Name = "GlassSnowFlake"
-    holder.BackgroundTransparency = 1
-    holder.BorderSizePixel = 0
-    holder.AnchorPoint = Vector2.new(0.5, 0.5)
-    holder.Size = UDim2.fromOffset(14, 14)
-    holder.Active = false
-    holder.Selectable = false
-    holder.ZIndex = 28003
-    holder.Parent = layer
-
-    local outer = Instance.new("TextLabel")
-    outer.Name = "OuterGlow"
-    outer.BackgroundTransparency = 1
-    outer.Size = UDim2.new(1, 8, 1, 8)
-    outer.Position = UDim2.fromOffset(-4, -4)
-    outer.Font = Enum.Font.GothamBold
-    outer.Text = "✦"
-    outer.TextScaled = true
-    outer.TextTransparency = 0.82
-    outer.TextStrokeTransparency = 0.70
-    outer.ZIndex = 28001
-    outer.Parent = holder
-
-    local inner = Instance.new("TextLabel")
-    inner.Name = "InnerGlow"
-    inner.BackgroundTransparency = 1
-    inner.Size = UDim2.new(1, 3, 1, 3)
-    inner.Position = UDim2.fromOffset(-1.5, -1.5)
-    inner.Font = Enum.Font.GothamBold
-    inner.Text = "✦"
-    inner.TextScaled = true
-    inner.TextTransparency = 0.48
-    inner.TextStrokeTransparency = 0.50
-    inner.ZIndex = 28002
-    inner.Parent = holder
-
-    local core = Instance.new("TextLabel")
-    core.Name = "Core"
-    core.BackgroundTransparency = 1
-    core.Size = UDim2.fromScale(1, 1)
-    core.Font = Enum.Font.GothamBold
-    core.Text = "✦"
-    core.TextScaled = true
-    core.TextTransparency = 0.04
-    core.TextStrokeTransparency = 0.36
-    core.ZIndex = 28004
-    core.Parent = holder
-
-    holder.Visible = false
-    return {Holder=holder, Core=core, Inner=inner, Outer=outer}
-end
-
-local function acquireSnowVisual()
-    local item = table.remove(UIWeatherRuntime.SnowPool)
-    if not item or not item.Holder or not item.Holder.Parent then
-        item = createSnowVisual()
-    end
-    if item then item.Holder.Visible = true end
-    return item
-end
-
-local function releaseSnowVisual(index)
-    local item = UIWeatherRuntime.SnowActive[index]
-    if not item then return end
-    item.Holder.Visible = false
-    item.Holder.Position = UDim2.fromOffset(-200, -200)
-    table.remove(UIWeatherRuntime.SnowActive, index)
-    UIWeatherRuntime.SnowPool[#UIWeatherRuntime.SnowPool+1] = item
-end
-
-local function clearUIWeather()
-    for i=#UIWeatherRuntime.RainActive,1,-1 do releaseRainVisual(i) end
-    for i=#UIWeatherRuntime.SnowActive,1,-1 do releaseSnowVisual(i) end
-    UIWeatherRuntime.RainClock = 0
-    UIWeatherRuntime.SnowClock = 0
-end
-
-local function spawnPremiumRain(size)
-    local rng = UIWeatherRuntime.Random
-    local item = acquireRainVisual()
-    if not item then return end
-
-    local depth = rng:NextNumber(0.65, 1.18)
-    local length = rng:NextNumber(20, 48) * depth
-    local width = rng:NextNumber(1.1, 2.1) * depth
-    local x = rng:NextNumber(1, math.max(2, size.X - 1))
-    local y = -length - rng:NextNumber(0, 75)
-    local color = library.Theme.UIRainColor or Color3.fromRGB(118,196,255)
-
-    item.X = x
-    item.Y = y
-    item.Speed = rng:NextNumber(250, 470) * math.clamp(tonumber(library.Theme.UIRainSpeed) or 1, 0.25, 2.5) * depth
-    item.Drift = rng:NextNumber(-16, 10)
-    item.Length = length
-    item.Width = width
-    item.Rotation = rng:NextNumber(-5, 4)
-    item.Holder.Size = UDim2.fromOffset(math.max(7, width + 6), length)
-    item.Holder.Position = UDim2.fromOffset(x, y)
-    item.Holder.Rotation = item.Rotation
-
-    item.Core.Size = UDim2.new(0, width, 1, 0)
-    item.Glow.Size = UDim2.new(0, width + 2.6, 1, 3)
-    item.Outer.Size = UDim2.new(0, width + 5.5, 1, 7)
-
-    item.Core.BackgroundColor3 = color:Lerp(Color3.new(1,1,1), 0.52)
-    item.Glow.BackgroundColor3 = color:Lerp(Color3.new(1,1,1), 0.18)
-    item.Outer.BackgroundColor3 = color
-    item.Tip.BackgroundColor3 = color:Lerp(Color3.new(1,1,1), 0.68)
-
-    UIWeatherRuntime.RainActive[#UIWeatherRuntime.RainActive+1] = item
-end
-
-local function spawnPremiumSnow(size)
-    local rng = UIWeatherRuntime.Random
-    local item = acquireSnowVisual()
-    if not item then return end
-
-    local depth = rng:NextNumber(0.58, 1.25)
-    local px = rng:NextNumber(7, 16) * depth
-    local x = rng:NextNumber(2, math.max(3, size.X - 2))
-    local y = -px - rng:NextNumber(0, 55)
-    local color = library.Theme.UISnowColor or Color3.fromRGB(245,248,255)
-
-    item.BaseX = x
-    item.X = x
-    item.Y = y
-    item.Speed = rng:NextNumber(20, 48) * math.clamp(tonumber(library.Theme.UISnowSpeed) or 0.85, 0.25, 2)
-    item.Sway = rng:NextNumber(6, 24) * depth
-    item.SwaySpeed = rng:NextNumber(0.8, 1.8)
-    item.Phase = rng:NextNumber(0, math.pi * 2)
-    item.Rotation = rng:NextNumber(0, 360)
-    item.RotationSpeed = rng:NextNumber(-38, 38)
-    item.Holder.Size = UDim2.fromOffset(px, px)
-    item.Holder.Position = UDim2.fromOffset(x, y)
-
-    local bright = color:Lerp(Color3.new(1,1,1), 0.45)
-    item.Core.TextColor3 = bright
-    item.Core.TextStrokeColor3 = color
-    item.Inner.TextColor3 = color
-    item.Inner.TextStrokeColor3 = bright
-    item.Outer.TextColor3 = color
-    item.Outer.TextStrokeColor3 = color
-
-    UIWeatherRuntime.SnowActive[#UIWeatherRuntime.SnowActive+1] = item
-end
-
-local uiWeatherConnection = utility:CreateConnection(
-    game:GetService("RunService").RenderStepped,
-    function(dt)
-        if not UIWeatherRuntime.Alive then return end
-
-        local layer = ensurePremiumUIWeatherLayer()
-        if not layer then return end
-
-        local screenGui = library.Window and library.Window.ScreenGui
-        local menuRendering = screenGui and screenGui.Enabled == true
-        local rainEnabled = library.Theme.UIRainEnabled == true
-        local snowEnabled = library.Theme.UISnowEnabled == true
-
-        layer.Visible = menuRendering and (rainEnabled or snowEnabled)
-
-        if not menuRendering then
-            if #UIWeatherRuntime.RainActive > 0 or #UIWeatherRuntime.SnowActive > 0 then
-                clearUIWeather()
-            end
-            return
-        end
-
-        local size = layer.AbsoluteSize
-        if size.X < 20 or size.Y < 20 then return end
-
-        dt = math.min(math.max(tonumber(dt) or 0, 0), 0.05)
-        UIWeatherRuntime.Time = UIWeatherRuntime.Time + dt
-
-        if rainEnabled then
-            UIWeatherRuntime.RainClock = UIWeatherRuntime.RainClock
-                + dt * math.clamp(tonumber(library.Theme.UIRainDensity) or 32, 1, 70)
-            while UIWeatherRuntime.RainClock >= 1 do
-                UIWeatherRuntime.RainClock = UIWeatherRuntime.RainClock - 1
-                spawnPremiumRain(size)
-            end
-        else
-            UIWeatherRuntime.RainClock = 0
-            for i=#UIWeatherRuntime.RainActive,1,-1 do releaseRainVisual(i) end
-        end
-
-        if snowEnabled then
-            UIWeatherRuntime.SnowClock = UIWeatherRuntime.SnowClock
-                + dt * math.clamp(tonumber(library.Theme.UISnowDensity) or 18, 1, 50) * 0.55
-            while UIWeatherRuntime.SnowClock >= 1 do
-                UIWeatherRuntime.SnowClock = UIWeatherRuntime.SnowClock - 1
-                spawnPremiumSnow(size)
-            end
-        else
-            UIWeatherRuntime.SnowClock = 0
-            for i=#UIWeatherRuntime.SnowActive,1,-1 do releaseSnowVisual(i) end
-        end
-
-        local rainColor = library.Theme.UIRainColor or Color3.fromRGB(118,196,255)
-        for i=#UIWeatherRuntime.RainActive,1,-1 do
-            local item = UIWeatherRuntime.RainActive[i]
-            item.Y = item.Y + item.Speed * dt
-            item.X = item.X + item.Drift * dt
-            item.Holder.Position = UDim2.fromOffset(item.X, item.Y)
-
-            item.Core.BackgroundColor3 = rainColor:Lerp(Color3.new(1,1,1), 0.52)
-            item.Glow.BackgroundColor3 = rainColor:Lerp(Color3.new(1,1,1), 0.18)
-            item.Outer.BackgroundColor3 = rainColor
-            item.Tip.BackgroundColor3 = rainColor:Lerp(Color3.new(1,1,1), 0.68)
-
-            if item.Y > size.Y + item.Length + 12
-                or item.X < -25
-                or item.X > size.X + 25 then
-                releaseRainVisual(i)
-            end
-        end
-
-        local snowColor = library.Theme.UISnowColor or Color3.fromRGB(245,248,255)
-        for i=#UIWeatherRuntime.SnowActive,1,-1 do
-            local item = UIWeatherRuntime.SnowActive[i]
-            item.Y = item.Y + item.Speed * dt
-            item.X = item.BaseX + math.sin(UIWeatherRuntime.Time * item.SwaySpeed + item.Phase) * item.Sway
-            item.Rotation = item.Rotation + item.RotationSpeed * dt
-            item.Holder.Position = UDim2.fromOffset(item.X, item.Y)
-            item.Holder.Rotation = item.Rotation
-
-            local bright = snowColor:Lerp(Color3.new(1,1,1), 0.45)
-            item.Core.TextColor3 = bright
-            item.Core.TextStrokeColor3 = snowColor
-            item.Inner.TextColor3 = snowColor
-            item.Inner.TextStrokeColor3 = bright
-            item.Outer.TextColor3 = snowColor
-            item.Outer.TextStrokeColor3 = snowColor
-
-            if item.Y > size.Y + 24 then
-                releaseSnowVisual(i)
-            end
-        end
-    end
-)
-
-table.insert(library.CleanupCallbacks, function()
-    UIWeatherRuntime.Alive = false
-    pcall(function() uiWeatherConnection:Disconnect() end)
-    clearUIWeather()
-    if UIWeatherRuntime.Layer then
-        pcall(function() UIWeatherRuntime.Layer:Destroy() end)
-        UIWeatherRuntime.Layer = nil
-    end
-end)
-
-UI.UIRainToggle = UI.UIWeatherSection:CreateToggle({
-    Name="Rain Behind UI Glass",
-    State=library.Theme.UIRainEnabled==true,
-    Flag="theme.ui_rain",
-    Callback=function(v)
-        library.Theme.UIRainEnabled = v == true
-        if v then
-            local layer=ensurePremiumUIWeatherLayer()
-            if layer and layer.AbsoluteSize.X > 20 then
-                for _=1,8 do spawnPremiumRain(layer.AbsoluteSize) end
-            end
-        end
-    end
-})
-UI.UIRainColor = UI.UIWeatherSection:CreateColorpicker({
-    Name="Rain LED Color", State=library.Theme.UIRainColor, Flag="theme.ui_rain_color",
-    Callback=function(v) library.Theme.UIRainColor=v end
-})
-UI.UIRainDensity = UI.UIWeatherSection:CreateSlider({
-    Name="Rain Density", State=library.Theme.UIRainDensity, Min=1, Max=70, Decimals=0, Suffix="",
-    Flag="theme.ui_rain_density", Callback=function(v) library.Theme.UIRainDensity=v end
-})
-UI.UIRainSpeed = UI.UIWeatherSection:CreateSlider({
-    Name="Rain Speed", State=library.Theme.UIRainSpeed, Min=0.25, Max=2.5, Decimals=2, Suffix="x",
-    Flag="theme.ui_rain_speed", Callback=function(v) library.Theme.UIRainSpeed=v end
-})
-UI.UISnowToggle = UI.UIWeatherSection:CreateToggle({
-    Name="Snow Behind UI Glass",
-    State=library.Theme.UISnowEnabled==true,
-    Flag="theme.ui_snow",
-    Callback=function(v)
-        library.Theme.UISnowEnabled = v == true
-        if v then
-            local layer=ensurePremiumUIWeatherLayer()
-            if layer and layer.AbsoluteSize.X > 20 then
-                for _=1,6 do spawnPremiumSnow(layer.AbsoluteSize) end
-            end
-        end
-    end
-})
-UI.UISnowColor = UI.UIWeatherSection:CreateColorpicker({
-    Name="Snow LED Color", State=library.Theme.UISnowColor, Flag="theme.ui_snow_color",
-    Callback=function(v) library.Theme.UISnowColor=v end
-})
-UI.UISnowDensity = UI.UIWeatherSection:CreateSlider({
-    Name="Snow Density", State=library.Theme.UISnowDensity, Min=1, Max=50, Decimals=0, Suffix="",
-    Flag="theme.ui_snow_density", Callback=function(v) library.Theme.UISnowDensity=v end
-})
-UI.UISnowSpeed = UI.UIWeatherSection:CreateSlider({
-    Name="Snow Speed", State=library.Theme.UISnowSpeed, Min=0.25, Max=2, Decimals=2, Suffix="x",
-    Flag="theme.ui_snow_speed", Callback=function(v) library.Theme.UISnowSpeed=v end
-})
-UI.UIWeatherSection:CreateLabel({
-    Text="Weather is clipped 5 px inside the menu and rendered behind the glass edge."
-})
 
 local premiumThemeSection=settingPage:CreateSection({Name="Premium Themes",Side="Right",Size=290})
 local premiumThemeOptions={"Classic Olive","Midnight Purple","Cyan Circuit","Rose Gold","Crimson Noir","Arctic Blue","YouTube Red","Emerald Luxe"}
