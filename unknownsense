@@ -3265,11 +3265,11 @@ function sections:CreateToggle(Properties)
         end
 
         function Content:RefreshToggleVisual()
-            local showToggle = Content.State == true or Content:HasAssignedKeybind()
+            -- Only render the checkbox/outline while the feature itself is active.
+            -- Keybind assignment no longer forces an inactive toggle square to appear.
+            local showToggle = Content.State == true
             Content_Holder_Outline.Visible = showToggle
-            Holder_Outline_Frame.BackgroundColor3 = Content.State == true
-                and library.Theme.Toggle
-                or Color3.fromRGB(77, 77, 77)
+            Holder_Outline_Frame.BackgroundColor3 = library.Theme.Toggle
         end
 
         function Content:Set(state, silent)
@@ -9425,9 +9425,9 @@ devkage_cursor_squash_x            = 1,
 devkage_cursor_squash_y            = 1,
 devkage_cursor_smooth_spin         = true,
 devkage_cursor_line_glow           = true,
-devkage_cursor_glow_thickness      = 14,
-devkage_cursor_glow_extra_length   = 6,
-devkage_cursor_glow_transparency   = 0.72,
+devkage_cursor_glow_thickness      = 12,
+devkage_cursor_glow_extra_length   = 5,
+devkage_cursor_glow_transparency   = 0.68,
 devkage_cursor_text_enabled        = true,
 devkage_cursor_main_text           = "devkage",
 devkage_cursor_second_text         = "None",
@@ -9443,6 +9443,10 @@ devkage_cursor_size           = 25,
 devkage_cursor_thickness      = 3,
 devkage_cursor_rotation_speed = 0.8,
 devkage_cursor_pulse_speed    = 2.9,
+devkage_cursor_bounce         = true,
+devkage_cursor_bounce_amount  = 0.18,
+devkage_cursor_bounce_stretch = 0.12,
+devkage_cursor_bounce_curve   = 0.72,
 devkage_cursor_text           = true,
 skybox_enabled           = false,
 skybox_preset            = "Cloudy Moon",
@@ -27581,6 +27585,10 @@ local cursorStateMap = {
     d]==================],
     [==================[evkage_cursor_second_text_size="SecondTextSize",
     devkage_cursor_pulse_speed="PulseSpeed",
+    devkage_cursor_bounce="Bounce",
+    devkage_cursor_bounce_amount="BounceAmount",
+    devkage_cursor_bounce_stretch="BounceStretch",
+    devkage_cursor_bounce_curve="BounceCurve",
 }
 
 local cursorBridgeEnv=(type(getgenv)=="function" and getgenv()) or _G
@@ -28315,7 +28323,10 @@ local function referenceDestroyCursorGui()
 end
 
 local function referenceCreateLine(parent, name)
-    local function makeGlowLayer(suffix, zIndex, transparency)
+    -- High-quality code-only LED line.  The glow is built from several
+    -- progressively softer layers so it stays crisp instead of looking
+    -- like one oversized translucent rectangle.
+    local function makeGlowLayer(suffix, zIndex, transparency, edgeFade)
         local glow = Instance.new("Frame")
         glow.Name = name .. suffix
         glow.BackgroundColor3 = Color3.new(1, 1, 1)
@@ -28330,12 +28341,26 @@ local function referenceCreateLine(parent, name)
         local glowCorner = Instance.new("UICorner")
         glowCorner.CornerRadius = UDim.new(1, 0)
         glowCorner.Parent = glow
+
+        local gradient = Instance.new("UIGradient")
+        gradient.Name = "SoftFade"
+        gradient.Rotation = 90
+        gradient.Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0.00, math.clamp(edgeFade or 0.35, 0, 1)),
+            NumberSequenceKeypoint.new(0.16, 0.08),
+            NumberSequenceKeypoint.new(0.50, 0.00),
+            NumberSequenceKeypoint.new(0.84, 0.08),
+            NumberSequenceKeypoint.new(1.00, math.clamp(edgeFade or 0.35, 0, 1)),
+        })
+        gradient.Parent = glow
+
         return glow
     end
 
-    local outerGlow = makeGlowLayer("_OuterGlow", 99996, 0.90)
-    local midGlow = makeGlowLayer("_Glow", 99997, 0.82)
-    local innerGlow = makeGlowLayer("_InnerGlow", 99998, 0.68)
+    local farGlow   = makeGlowLayer("_FarGlow",   99995, 0.955, 0.72)
+    local outerGlow = makeGlowLayer("_OuterGlow", 99996, 0.920, 0.56)
+    local midGlow   = makeGlowLayer("_Glow",      99997, 0.835, 0.36)
+    local innerGlow = makeGlowLayer("_InnerGlow", 99998, 0.660, 0.20)
 
     local frame = Instance.new("Frame")
     frame.Name = name
@@ -28353,20 +28378,45 @@ local function referenceCreateLine(parent, name)
     corner.CornerRadius = UDim.new(1, 0)
     corner.Parent = frame
 
-    local stroke = Instance.new("UIStroke")
-    stroke.Name = "Outline"
-    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    stroke.Color = Color3.fromRGB(20, 18, 30)
-    stroke.Thickness = 1
-    stroke.Transparency = 0.18
-    stroke.Parent = frame
+    local coreGradient = Instance.new("UIGradient")
+    coreGradient.Name = "LEDCoreGradient"
+    coreGradient.Rotation = 0
+    coreGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0.00, Color3.fromRGB(210, 205, 225)),
+        ColorSequenceKeypoint.new(0.18, Color3.fromRGB(255, 255, 255)),
+        ColorSequenceKeypoint.new(0.52, Color3.fromRGB(255, 255, 255)),
+        ColorSequenceKeypoint.new(0.84, Color3.fromRGB(238, 232, 255)),
+        ColorSequenceKeypoint.new(1.00, Color3.fromRGB(185, 175, 210)),
+    })
+    coreGradient.Parent = frame
+
+    local outline = Instance.new("UIStroke")
+    outline.Name = "Outline"
+    outline.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    outline.Color = Color3.fromRGB(16, 14, 24)
+    outline.Thickness = 1.15
+    outline.Transparency = 0.08
+    outline.LineJoinMode = Enum.LineJoinMode.Round
+    outline.Parent = frame
+
+    local highlight = Instance.new("UIStroke")
+    highlight.Name = "LEDHighlight"
+    highlight.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    highlight.Color = Color3.fromRGB(255, 250, 255)
+    highlight.Thickness = 0.55
+    highlight.Transparency = 0.28
+    highlight.LineJoinMode = Enum.LineJoinMode.Round
+    highlight.Parent = frame
 
     return {
         Frame = frame,
-        Stroke = stroke,
+        Stroke = outline,
+        HighlightStroke = highlight,
+        CoreGradient = coreGradient,
         Glow = midGlow,
         GlowInner = innerGlow,
         GlowOuter = outerGlow,
+        GlowFar = farGlow,
     }
 end
 
@@ -28784,11 +28834,13 @@ local function referenceApplyGlow(
     local mid = line.Glow
     local inner = line.GlowInner
     local outer = line.GlowOuter
+    local far = line.GlowFar
 
     local function setVisible(value)
         if mid then mid.Visible = value end
         if inner then inner.Visible = value end
         if outer then outer.Visible = value end
+        if far then far.Visible = value end
     end
 
     if settings.LineGlow ~= true or not line.Frame.Visible then
@@ -28819,24 +28871,50 @@ local function referenceApplyGlow(
         end
     end
 
-    fit(inner, math.max(2, glowThickness * 0.24), math.max(1, glowExtraLength * 0.35))
-    fit(mid,   math.max(4, glowThickness * 0.52), math.max(2, glowExtraLength * 0.70))
-    fit(outer, math.max(7, glowThickness),        math.max(3, glowExtraLength))
+    fit(inner, math.max(2, glowThickness * 0.20), math.max(1, glowExtraLength * 0.28))
+    fit(mid,   math.max(4, glowThickness * 0.44), math.max(2, glowExtraLength * 0.58))
+    fit(outer, math.max(7, glowThickness * 0.78), math.max(3, glowExtraLength * 0.84))
+    fit(far,   math.max(9, glowThickness * 1.14), math.max(4, glowExtraLength * 1.16))
 
-    local whiteHot = color:Lerp(Color3.new(1, 1, 1), 0.72)
-    local soft = color:Lerp(Color3.new(1, 1, 1), 0.28)
+    local whiteHot = color:Lerp(Color3.new(1, 1, 1), 0.80)
+    local innerColor = color:Lerp(Color3.new(1, 1, 1), 0.54)
+    local soft = color:Lerp(Color3.new(1, 1, 1), 0.22)
 
     if inner then
         inner.BackgroundColor3 = whiteHot
-        inner.BackgroundTransparency = math.clamp(baseTransparency - 0.18, 0.42, 0.82)
+        inner.BackgroundTransparency = math.clamp(baseTransparency - 0.22, 0.34, 0.80)
     end
     if mid then
-        mid.BackgroundColor3 = soft
-        mid.BackgroundTransparency = math.clamp(baseTransparency + 0.04, 0.58, 0.90)
+        mid.BackgroundColor3 = innerColor
+        mid.BackgroundTransparency = math.clamp(baseTransparency - 0.01, 0.54, 0.89)
     end
     if outer then
-        outer.BackgroundColor3 = color
-        outer.BackgroundTransparency = math.clamp(baseTransparency + 0.17, 0.76, 0.96)
+        outer.BackgroundColor3 = soft
+        outer.BackgroundTransparency = math.clamp(baseTransparency + 0.12, 0.72, 0.955)
+    end
+    if far then
+        far.BackgroundColor3 = color
+        far.BackgroundTransparency = math.clamp(baseTransparency + 0.22, 0.82, 0.985)
+    end
+
+    if line.HighlightStroke then
+        line.HighlightStroke.Color = whiteHot
+        line.HighlightStroke.Transparency = math.clamp(baseTransparency * 0.34, 0.14, 0.44)
+    end
+    if line.Stroke then
+        line.Stroke.Color = Color3.fromRGB(15, 13, 23)
+        line.Stroke.Transparency = 0.08
+    end
+
+    if line.CoreGradient then
+        local edge = color:Lerp(Color3.fromRGB(45, 38, 62), 0.48)
+        line.CoreGradient.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0.00, edge),
+            ColorSequenceKeypoint.new(0.15, color:Lerp(Color3.new(1,1,1), 0.48)),
+            ColorSequenceKeypoint.new(0.46, whiteHot),
+            ColorSequenceKeypoint.new(0.72, color:Lerp(Color3.new(1,1,1), 0.58)),
+            ColorSequenceKeypoint.new(1.00, edge),
+        })
     end
 
     setVisible(true)
@@ -29497,15 +29575,25 @@ local function referenceCursorRender(deltaTime)
 
 
 
-    -- Classic bounce animation: the old four-piece reticle grows outward,
-    -- settles back to center, and repeats while keeping the neon geometry
-    -- compact.  This affects only cursor motion/scale.
-    local minLength = lineLength * 0.88
-    local maxLength = lineLength * 1.10
-    local currentLength = minLength + (maxLength - minLength) * pulse
+    -- Adjustable bounce.  The curve keeps the reticle crisp at both ends
+    -- instead of continuously stretching it like a soft breathing animation.
+    local bounceEnabled = settings.Bounce ~= false and pulseSpeed > 0
+    local bounceAmount = referenceCursorNumber(settings.BounceAmount, 0.18, 0, 0.55)
+    local bounceStretch = referenceCursorNumber(settings.BounceStretch, 0.12, 0, 0.50)
+    local bounceCurve = referenceCursorNumber(settings.BounceCurve, 0.72, 0.10, 1)
+
+    local bounceWave = 0
+    if bounceEnabled then
+        local raw = math.clamp(pulse, 0, 1)
+        -- Ease toward the peak and settle naturally.
+        bounceWave = 1 - math.pow(1 - raw, 1 + (bounceCurve * 3.2))
+        bounceWave = math.sin(bounceWave * math.pi * 0.5)
+    end
+
+    local currentLength = lineLength * (1 + bounceStretch * bounceWave)
 
     if runtime.AimScale then
-        runtime.AimScale.Scale = 0.90 + (0.18 * pulse)
+        runtime.AimScale.Scale = 1 + (bounceAmount * bounceWave)
     end
 
     local armCount =
@@ -29565,6 +29653,7 @@ local function referenceCursorRender(deltaTime)
             if line.Glow then line.Glow.Visible = false end
             if line.GlowInner then line.GlowInner.Visible = false end
             if line.GlowOuter then line.GlowOuter.Visible = false end
+            if line.GlowFar then line.GlowFar.Visible = false end
         end
     end
 
@@ -29807,7 +29896,11 @@ addSlider(animationSection,"devkage_cursor_spin_range","Spin Range",1,360,0,"°"
 addSlider(animationSection,"devkage_cursor_squash_x","Squash X",0.25,2,2,"x")
 addSlider(animationSection,"devkage_cursor_squash_y","Squash Y",0.25,2,2,"x")
 addToggle(animationSection,"devkage_cursor_smooth_spin","Smooth Spin")
-addSlider(animationSection,"devkage_cursor_pulse_speed","Pulse Speed",0,8,2,"x")
+addToggle(animationSection,"devkage_cursor_bounce","Bounce")
+addSlider(animationSection,"devkage_cursor_pulse_speed","Bounce Speed",0,8,2,"x")
+addSlider(animationSection,"devkage_cursor_bounce_amount","Bounce Amount",0,0.55,2,"x")
+addSlider(animationSection,"devkage_cursor_bounce_stretch","Arm Bounce",0,0.50,2,"x")
+addSlider(animationSection,"devkage_cursor_bounce_curve","Bounce Sharpness",0.10,1,2,"")
 
 addToggle(advancedSection,"devkage_cursor_line_glow","Line Glow")
 addSlider(advancedSection,"devkage_cursor_glow_thickness","Glow Thickness",0,50,0,"")
