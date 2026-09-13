@@ -834,10 +834,10 @@ function library:ApplyTheme()
                 if type(control.RefreshToggleVisual) == "function" then
                     control:RefreshToggleVisual()
                 else
-                    frame.BackgroundColor3 = control.State == true
-                        and self.Theme.Toggle
-                        or Color3.fromRGB(77, 77, 77)
-                    if frame.Parent then frame.Parent.Visible = control.State == true end
+                    frame.BackgroundColor3 = self.Theme.Toggle
+                    if frame.Parent then
+                        frame.Parent.Visible = control.State == true
+                    end
                 end
             end)
         end
@@ -3131,6 +3131,7 @@ function sections:CreateToggle(Properties)
             Parent              = Content_Holder,
             Position            = UDim2.new(0, 20, 0, 10),
             Size                = UDim2.new(0, 8, 0, 8),
+            Visible             = Content.State == true,
             ZIndex              = 3
         })
         utility:RenderObject("TextLabel", {
@@ -3235,7 +3236,7 @@ function sections:CreateToggle(Properties)
             ZIndex              = 20
         })
         local Holder_Outline_Frame = utility:RenderObject("Frame", {
-            BackgroundColor3    = Color3.fromRGB(77, 77, 77),
+            BackgroundColor3    = library.Theme.Toggle,
             BackgroundTransparency = 0,
             BorderColor3        = Color3.fromRGB(0, 0, 0),
             BorderSizePixel     = 0,
@@ -3265,10 +3266,9 @@ function sections:CreateToggle(Properties)
         end
 
         function Content:RefreshToggleVisual()
-            -- Only render the checkbox/outline while the feature itself is active.
-            -- Keybind assignment no longer forces an inactive toggle square to appear.
-            local showToggle = Content.State == true
-            Content_Holder_Outline.Visible = showToggle
+            -- Active-only checkbox: OFF means the entire box/outline is invisible.
+            -- There is intentionally no inactive gray-square state.
+            Content_Holder_Outline.Visible = Content.State == true
             Holder_Outline_Frame.BackgroundColor3 = library.Theme.Toggle
         end
 
