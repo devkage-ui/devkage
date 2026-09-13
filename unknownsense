@@ -832,9 +832,7 @@ function library:ApplyTheme()
         else
             pcall(function()
                 frame.BackgroundColor3 = self.Theme.Toggle
-                local active = control.State == true
-                frame.Visible = active
-                if frame.Parent then frame.Parent.Visible = active end
+                if frame.Parent then frame.Parent.Visible = control.State == true end
             end)
         end
     end
@@ -2874,7 +2872,8 @@ function BindManager:RefreshActive()
         local hasKey = configured and keyText ~= "-"
         local hudEligible = hasKey
             or (configured and (control.BindMode == "Always" or control.BindMode == "Hold"))
-        local active = hudEligible and control:Get() == true
+        local featureOn = control:Get() == true
+        local active = hudEligible and featureOn
         local record = self.ActiveRows[control]
         if active then
             count = count + 1
@@ -3239,7 +3238,6 @@ function sections:CreateToggle(Properties)
         })
         Content.ThemeToggleFrame = Holder_Outline_Frame
         Content_Holder_Outline.Visible = Content.State
-        Holder_Outline_Frame.Visible = Content.State
         library.ThemeToggleControls[#library.ThemeToggleControls + 1] = Content
         local Outline_Frame_Gradient = utility:RenderObject("UIGradient", {
             Color   = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(140, 140, 140)),
@@ -3252,7 +3250,6 @@ function sections:CreateToggle(Properties)
             if Content.BindMode == "Always" and state == false then state = true end
             Content.State = state == true
             Content_Holder_Outline.Visible = Content.State
-            Holder_Outline_Frame.Visible = Content.State
             Holder_Outline_Frame.BackgroundColor3 = library.Theme.Toggle
             if not silent then utility:SafeCallback(Content.Callback, Content:Get()) end
             if library.KeybindManager then library.KeybindManager:RefreshActive() end
@@ -16819,16 +16816,18 @@ runtimeEnv.__DevKageAvatarMods = (function()
         trail.Attachment0 = a0
         trail.Attachment1 = a1
         trail.FaceCamera = true
-        trail.Lifetime = 0.20
-        trail.MinLength = 0.05
-        trail.LightEmission = 0.9
+        trail.Lifetime = 0.32
+        trail.MinLength = 0.03
+        trail.LightEmission = 1.0
         trail.LightInfluence = 0
         trail.Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0,0.45),
+            NumberSequenceKeypoint.new(0,0.28),
+            NumberSequenceKeypoint.new(0.55,0.68),
             NumberSequenceKeypoint.new(1,1),
         })
         trail.WidthScale = NumberSequence.new({
-            NumberSequenceKeypoint.new(0,0.12),
+            NumberSequenceKeypoint.new(0,0.22),
+            NumberSequenceKeypoint.new(0.6,0.08),
             NumberSequenceKeypoint.new(1,0),
         })
         trail.Color = ColorSequence.new(primaryColor(),secondaryColor())
@@ -16974,9 +16973,9 @@ runtimeEnv.__DevKageAvatarMods = (function()
             end
         end
 
-        featherLayer(profile.primary,1.5,4.2,1.15,-1.8,0.9,2.4,0.48,2.5,4.7,"Primary")
-        featherLayer(profile.secondary,0.9,3.15,1.25,-0.65,0.72,1.75,0.58,1.8,3.25,"Secondary")
-        featherLayer(profile.covert,0.45,2.2,1.05,0.15,0.58,1.2,0.66,1.1,2.0,"Covert")
+        featherLayer(profile.primary,1.8,5.8,1.35,-2.2,1.1,3.2,0.44,3.2,5.8,"Primary")
+        featherLayer(profile.secondary,1.1,4.0,1.40,-0.80,0.88,2.25,0.54,2.2,4.0,"Secondary")
+        featherLayer(profile.covert,0.55,2.75,1.20,0.25,0.70,1.55,0.62,1.4,2.55,"Covert")
 
         addLight(rootBone,primaryColor(),side<0 and 1 or 2,0.72)
         addEmitter(rootBone,side<0 and 1 or 2,0.65)
@@ -17018,14 +17017,15 @@ runtimeEnv.__DevKageAvatarMods = (function()
             highlight.Adornee=handle
             highlight.DepthMode=Enum.HighlightDepthMode.Occluded
             highlight.FillColor=primaryColor()
-            highlight.FillTransparency=0.84
-            highlight.OutlineTransparency=1
+            highlight.FillTransparency=0.58
+            highlight.OutlineColor=primaryColor()
+            highlight.OutlineTransparency=0.78
             highlight.Parent=state.model
             remember(highlight)
             state.wingHighlights[#state.wingHighlights+1]=highlight
 
-            addLight(handle,primaryColor(),1,0.82)
-            addEmitter(handle,1,0.72)
+            addLight(handle,primaryColor(),1.8,0.65)
+            addEmitter(handle,1,0.58)
             return
         end
 
@@ -17048,73 +17048,121 @@ runtimeEnv.__DevKageAvatarMods = (function()
         gui.AlwaysOnTop=true
         gui.LightInfluence=0
         gui.SizingMode=Enum.SurfaceGuiSizingMode.PixelsPerStud
-        gui.PixelsPerStud=180
+        gui.PixelsPerStud=240
         gui.ClipsDescendants=false
         gui.Parent=plate
         remember(gui)
 
+        -- Far atmospheric diffusion ring (widest, most transparent)
+        local farFrame=Instance.new("Frame")
+        farFrame.Name="FarGlowRing"
+        farFrame.AnchorPoint=Vector2.new(0.5,0.5)
+        farFrame.Position=UDim2.fromScale(0.5,0.5)
+        farFrame.Size=UDim2.fromScale(0.94,0.94)
+        farFrame.BackgroundTransparency=1
+        farFrame.ZIndex=1
+        farFrame.Parent=gui
+        remember(farFrame)
+        local farCorner=Instance.new("UICorner")
+        farCorner.CornerRadius=UDim.new(1,0)
+        farCorner.Parent=farFrame
+        remember(farCorner)
+        local farStroke=Instance.new("UIStroke")
+        farStroke.Name="HaloFarGlow"
+        farStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
+        farStroke.LineJoinMode=Enum.LineJoinMode.Round
+        farStroke.Color=ringIndex==2 and secondaryColor() or primaryColor()
+        farStroke.Thickness=52
+        farStroke.Transparency=0.86
+        farStroke.Parent=farFrame
+        remember(farStroke)
+
+        -- Mid bloom ring
         local glowFrame=Instance.new("Frame")
         glowFrame.Name="GlowRing"
         glowFrame.AnchorPoint=Vector2.new(0.5,0.5)
         glowFrame.Position=UDim2.fromScale(0.5,0.5)
-        glowFrame.Size=UDim2.fromScale(0.80,0.80)
+        glowFrame.Size=UDim2.fromScale(0.84,0.84)
         glowFrame.BackgroundTransparency=1
-        glowFrame.ZIndex=1
+        glowFrame.ZIndex=2
         glowFrame.Parent=gui
         remember(glowFrame)
-
         local glowCorner=Instance.new("UICorner")
         glowCorner.CornerRadius=UDim.new(1,0)
         glowCorner.Parent=glowFrame
         remember(glowCorner)
-
         local glowStroke=Instance.new("UIStroke")
         glowStroke.Name="HaloGlow"
         glowStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
         glowStroke.LineJoinMode=Enum.LineJoinMode.Round
         glowStroke.Color=ringIndex==2 and secondaryColor() or primaryColor()
-        glowStroke.Thickness=26
-        glowStroke.Transparency=0.68
+        glowStroke.Thickness=34
+        glowStroke.Transparency=0.62
         glowStroke.Parent=glowFrame
         remember(glowStroke)
 
+        -- Hot core ring (sharpest, most opaque, brightest)
         local coreFrame=Instance.new("Frame")
         coreFrame.Name="CoreRing"
         coreFrame.AnchorPoint=Vector2.new(0.5,0.5)
         coreFrame.Position=UDim2.fromScale(0.5,0.5)
-        coreFrame.Size=UDim2.fromScale(0.80,0.80)
+        coreFrame.Size=UDim2.fromScale(0.76,0.76)
         coreFrame.BackgroundTransparency=1
-        coreFrame.ZIndex=2
+        coreFrame.ZIndex=3
         coreFrame.Parent=gui
         remember(coreFrame)
-
         local coreCorner=Instance.new("UICorner")
         coreCorner.CornerRadius=UDim.new(1,0)
         coreCorner.Parent=coreFrame
         remember(coreCorner)
-
         local coreStroke=Instance.new("UIStroke")
         coreStroke.Name="HaloCore"
         coreStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
         coreStroke.LineJoinMode=Enum.LineJoinMode.Round
         coreStroke.Color=ringIndex==2 and secondaryColor() or primaryColor()
-        coreStroke.Thickness=9
+        coreStroke.Thickness=12
         coreStroke.Transparency=transparency()
         coreStroke.Parent=coreFrame
         remember(coreStroke)
+
+        -- Specular highlight ring — thin bright inner edge like a real glowing tube
+        local specFrame=Instance.new("Frame")
+        specFrame.Name="SpecularRing"
+        specFrame.AnchorPoint=Vector2.new(0.5,0.5)
+        specFrame.Position=UDim2.fromScale(0.5,0.5)
+        specFrame.Size=UDim2.fromScale(0.68,0.68)
+        specFrame.BackgroundTransparency=1
+        specFrame.ZIndex=4
+        specFrame.Parent=gui
+        remember(specFrame)
+        local specCorner=Instance.new("UICorner")
+        specCorner.CornerRadius=UDim.new(1,0)
+        specCorner.Parent=specFrame
+        remember(specCorner)
+        local specStroke=Instance.new("UIStroke")
+        specStroke.Name="HaloSpecular"
+        specStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
+        specStroke.LineJoinMode=Enum.LineJoinMode.Round
+        specStroke.Color=Color3.new(1,1,1)
+        specStroke.Thickness=3
+        specStroke.Transparency=0.42
+        specStroke.Parent=specFrame
+        remember(specStroke)
 
         state.haloSurfaces[#state.haloSurfaces+1]={
             Gui=gui,
             Core=coreStroke,
             Glow=glowStroke,
+            FarGlow=farStroke,
+            Specular=specStroke,
             Ring=ringIndex,
         }
     end
 
     local function createHaloRig(attachmentPart,kind,yOffset,ringIndex,sizeMultiplier)
         local scale=modSize()*(sizeMultiplier or 1)
-        local radius=(kind=="Head" and 1.48 or 1.82)*scale
-        local diameter=radius*2.45
+        local radius=(kind=="Head" and 1.62 or 2.0)*scale
+        local diameter=radius*3.0
 
         -- A transparent physical plate carries two high-DPI SurfaceGuis.
         -- UICorner + UIStroke produces a mathematically perfect full circle,
@@ -17317,26 +17365,43 @@ runtimeEnv.__DevKageAvatarMods = (function()
             for i,entry in ipairs(state.haloSurfaces) do
                 local base=entry.Ring==2 and secondaryColor() or primaryColor()
                 local color=rainbowColor(now,i+entry.Ring*19,base)
+                local hotColor=color:Lerp(Color3.new(1,1,1),0.45)
                 if entry.Core and entry.Core.Parent then
-                    entry.Core.Color=color
-                    entry.Core.Transparency=alpha
-                    entry.Core.Thickness=math.clamp(7+glowBrightness()*0.8,7,16)
+                    entry.Core.Color=hotColor
+                    entry.Core.Transparency=math.clamp(alpha-0.08,0,0.88)
+                    entry.Core.Thickness=math.clamp(10+glowBrightness()*1.2,10,22)
                 end
                 if entry.Glow and entry.Glow.Parent then
                     entry.Glow.Color=color
-                    entry.Glow.Thickness=math.clamp(18+glowSize()*0.65,18,50)
+                    entry.Glow.Thickness=math.clamp(26+glowSize()*0.80,26,62)
                     entry.Glow.Transparency=math.clamp(
-                        0.82-(glowBrightness()/18),
-                        0.28,
-                        0.82
+                        0.72-(glowBrightness()/16),
+                        0.18,
+                        0.72
                     )
+                end
+                if entry.FarGlow and entry.FarGlow.Parent then
+                    entry.FarGlow.Color=color
+                    entry.FarGlow.Thickness=math.clamp(44+glowSize()*1.10,44,90)
+                    entry.FarGlow.Transparency=math.clamp(
+                        0.88-(glowBrightness()/24),
+                        0.52,
+                        0.88
+                    )
+                end
+                if entry.Specular and entry.Specular.Parent then
+                    local specPulse=math.abs(math.sin(now*2.2+i*0.7))*0.18
+                    entry.Specular.Transparency=math.clamp(0.38+specPulse,0.32,0.62)
                 end
             end
 
             for i,highlight in ipairs(state.wingHighlights) do
                 if highlight and highlight.Parent then
-                    highlight.FillColor=rainbowColor(now,i+31,primaryColor())
-                    highlight.FillTransparency=math.clamp(0.90-glowBrightness()*0.018,0.68,0.90)
+                    local hColor=rainbowColor(now,i+31,primaryColor())
+                    highlight.FillColor=hColor
+                    highlight.FillTransparency=math.clamp(0.74-glowBrightness()*0.024,0.44,0.74)
+                    highlight.OutlineColor=hColor
+                    highlight.OutlineTransparency=math.clamp(0.82-glowBrightness()*0.018,0.58,0.82)
                 end
             end
 
@@ -28358,7 +28423,7 @@ local function referenceCreateLine(parent, name)
 
     local coreGradient = Instance.new("UIGradient")
     coreGradient.Name = "LEDCoreGradient"
-    coreGradient.Rotation = 0
+    coreGradient.Rotation = 90
     coreGradient.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0.00, Color3.fromRGB(210, 205, 225)),
         ColorSequenceKeypoint.new(0.18, Color3.fromRGB(255, 255, 255)),
@@ -28427,8 +28492,8 @@ local function referenceCreateTextLabel(parent, name)
         return glow
     end
 
-    local outerGlow = makeGlowLayer("_OuterGlow", 99998, 0.88, 5.0, 0.78)
-    local innerGlow = makeGlowLayer("_InnerGlow", 100000, 0.62, 2.5, 0.48)
+    local outerGlow = makeGlowLayer("_OuterGlow", 99998, 0.72, 7.5, 0.52)
+    local innerGlow = makeGlowLayer("_InnerGlow", 100000, 0.38, 3.8, 0.28)
 
     local label = Instance.new("TextLabel")
     label.Name = name
@@ -28658,19 +28723,10 @@ local function referenceApplyFourArmLayout(
         frame.Size = UDim2.fromOffset(lineThickness, length)
         frame.Position = UDim2.new(0.5, positions[index].X, 0.5, positions[index].Y)
         frame.Rotation = rotations[index]
-        frame.BackgroundTransparency = 0
-
-        -- Keep every cursor arm on the exact same visual treatment.
-        -- The animated color is still supplied later by referenceApplyGlow.
         line.Stroke.Enabled = true
         line.Stroke.Thickness = 1
-        line.Stroke.Color = Color3.fromRGB(15, 13, 23)
-        line.Stroke.Transparency = 0.08
-        if line.HighlightStroke then
-            line.HighlightStroke.Enabled = true
-            line.HighlightStroke.Thickness = 0.55
-            line.HighlightStroke.Transparency = 0.28
-        end
+        line.Stroke.Color = Color3.fromRGB(20, 18, 30)
+        line.Stroke.Transparency = 0.18
     end
 end
 
@@ -28858,48 +28914,51 @@ local function referenceApplyGlow(
         end
     end
 
-    fit(inner, math.max(2, glowThickness * 0.20), math.max(1, glowExtraLength * 0.28))
-    fit(mid,   math.max(4, glowThickness * 0.44), math.max(2, glowExtraLength * 0.58))
-    fit(outer, math.max(7, glowThickness * 0.78), math.max(3, glowExtraLength * 0.84))
-    fit(far,   math.max(9, glowThickness * 1.14), math.max(4, glowExtraLength * 1.16))
+    -- Tighter hot core, wider atmospheric bloom
+    fit(inner, math.max(3, glowThickness * 0.28), math.max(2, glowExtraLength * 0.22))
+    fit(mid,   math.max(6, glowThickness * 0.58), math.max(3, glowExtraLength * 0.50))
+    fit(outer, math.max(11, glowThickness * 0.96), math.max(5, glowExtraLength * 0.82))
+    fit(far,   math.max(16, glowThickness * 1.48), math.max(7, glowExtraLength * 1.30))
 
-    local whiteHot = color:Lerp(Color3.new(1, 1, 1), 0.80)
-    local innerColor = color:Lerp(Color3.new(1, 1, 1), 0.54)
-    local soft = color:Lerp(Color3.new(1, 1, 1), 0.22)
+    local whiteHot  = color:Lerp(Color3.new(1, 1, 1), 0.92)
+    local hotCore   = color:Lerp(Color3.new(1, 1, 1), 0.70)
+    local midBloom  = color:Lerp(Color3.new(1, 1, 1), 0.38)
+    local farBloom  = color:Lerp(Color3.new(1, 1, 1), 0.14)
 
     if inner then
         inner.BackgroundColor3 = whiteHot
-        inner.BackgroundTransparency = math.clamp(baseTransparency - 0.28, 0.28, 0.76)
+        inner.BackgroundTransparency = math.clamp(baseTransparency - 0.36, 0.12, 0.68)
     end
     if mid then
-        mid.BackgroundColor3 = innerColor
-        mid.BackgroundTransparency = math.clamp(baseTransparency - 0.06, 0.48, 0.86)
+        mid.BackgroundColor3 = hotCore
+        mid.BackgroundTransparency = math.clamp(baseTransparency - 0.12, 0.42, 0.84)
     end
     if outer then
-        outer.BackgroundColor3 = soft
-        outer.BackgroundTransparency = math.clamp(baseTransparency + 0.06, 0.68, 0.94)
+        outer.BackgroundColor3 = midBloom
+        outer.BackgroundTransparency = math.clamp(baseTransparency + 0.08, 0.66, 0.946)
     end
     if far then
-        far.BackgroundColor3 = color
-        far.BackgroundTransparency = math.clamp(baseTransparency + 0.16, 0.78, 0.98)
+        far.BackgroundColor3 = farBloom
+        far.BackgroundTransparency = math.clamp(baseTransparency + 0.18, 0.78, 0.978)
     end
 
     if line.HighlightStroke then
         line.HighlightStroke.Color = whiteHot
-        line.HighlightStroke.Transparency = math.clamp(baseTransparency * 0.34, 0.14, 0.44)
+        line.HighlightStroke.Transparency = math.clamp(baseTransparency * 0.28, 0.08, 0.38)
     end
     if line.Stroke then
-        line.Stroke.Color = Color3.fromRGB(15, 13, 23)
-        line.Stroke.Transparency = 0.08
+        line.Stroke.Color = Color3.fromRGB(10, 8, 18)
+        line.Stroke.Transparency = 0.04
     end
 
     if line.CoreGradient then
-        local edge = color:Lerp(Color3.fromRGB(45, 38, 62), 0.48)
+        local edge = color:Lerp(Color3.fromRGB(30, 22, 50), 0.62)
         line.CoreGradient.Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0.00, edge),
-            ColorSequenceKeypoint.new(0.15, color:Lerp(Color3.new(1,1,1), 0.48)),
-            ColorSequenceKeypoint.new(0.46, whiteHot),
-            ColorSequenceKeypoint.new(0.72, color:Lerp(Color3.new(1,1,1), 0.58)),
+            ColorSequenceKeypoint.new(0.10, color:Lerp(Color3.new(1,1,1), 0.55)),
+            ColorSequenceKeypoint.new(0.35, whiteHot),
+            ColorSequenceKeypoint.new(0.65, whiteHot),
+            ColorSequenceKeypoint.new(0.90, color:Lerp(Color3.new(1,1,1), 0.55)),
             ColorSequenceKeypoint.new(1.00, edge),
         })
     end
@@ -29096,8 +29155,8 @@ local function referenceApplyText(
         end
 
         if outerGlow then
-            local outerX = glowSize
-            local outerY = glowSize * 0.80
+            local outerX = glowSize * 1.35
+            local outerY = glowSize * 1.10
             outerGlow.Size = UDim2.new(
                 label.Size.X.Scale, label.Size.X.Offset + outerX,
                 label.Size.Y.Scale, label.Size.Y.Offset + outerY
@@ -29106,17 +29165,17 @@ local function referenceApplyText(
                 label.Position.X.Scale, label.Position.X.Offset - outerX * 0.5,
                 label.Position.Y.Scale, label.Position.Y.Offset - outerY * 0.5
             )
-            outerGlow.TextTransparency = 1 - (0.22 * glowStrength)
+            outerGlow.TextTransparency = 1 - (0.28 * glowStrength)
             local s = outerGlow:FindFirstChild("NeonStroke")
             if s then
                 s.Color = glowColor
-                s.Thickness = math.clamp(glowSize * 0.62, 0.5, 15)
-                s.Transparency = 1 - (0.42 * glowStrength)
+                s.Thickness = math.clamp(glowSize * 0.72, 1.0, 22)
+                s.Transparency = 1 - (0.48 * glowStrength)
             end
         end
 
         if innerGlow then
-            local innerSize = glowSize * 0.40
+            local innerSize = glowSize * 0.55
             innerGlow.Size = UDim2.new(
                 label.Size.X.Scale, label.Size.X.Offset + innerSize,
                 label.Size.Y.Scale, label.Size.Y.Offset + innerSize
@@ -29125,12 +29184,12 @@ local function referenceApplyText(
                 label.Position.X.Scale, label.Position.X.Offset - innerSize * 0.5,
                 label.Position.Y.Scale, label.Position.Y.Offset - innerSize * 0.5
             )
-            innerGlow.TextTransparency = 1 - (0.62 * glowStrength)
+            innerGlow.TextTransparency = 1 - (0.68 * glowStrength)
             local s = innerGlow:FindFirstChild("NeonStroke")
             if s then
-                s.Color = glowColor:Lerp(Color3.new(1,1,1), 0.52)
-                s.Thickness = math.clamp(glowSize * 0.32, 0.5, 8)
-                s.Transparency = 1 - (0.78 * glowStrength)
+                s.Color = glowColor:Lerp(Color3.new(1,1,1), 0.62)
+                s.Thickness = math.clamp(glowSize * 0.38, 0.8, 12)
+                s.Transparency = 1 - (0.84 * glowStrength)
             end
         end
     end
