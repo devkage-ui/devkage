@@ -3262,14 +3262,6 @@ function sections:CreateToggle(Properties)
             local show = Content.State == true or Content.BindConfigured == true
             Content_Holder_Outline.Visible = show
             Holder_Outline_Frame.Visible = show
-            -- Hide inline bind controls unless the feature is on or a keybind is configured
-            local showBind = Content.State == true or Content.BindConfigured == true
-            if Content.BindModeButton then
-                Content.BindModeButton.Visible = showBind
-            end
-            if Content.BindValueLabel and Content.InlineBind then
-                Content.BindValueLabel.Visible = showBind
-            end
             return show
         end
         function Content:Get() return Content.State end
@@ -17238,13 +17230,10 @@ runtimeEnv.__DevKageAvatarMods = (function()
         if not root then return end
 
         local baseOffset = footOffset(root,humanoid) - 0.045
-        -- 5 staggered waves for a rich, layered ground ripple effect
         local waveSpecs = {
-            {Diameter=3.8, Delay=0.00, Strength=0.88, Thickness=5.5, OuterThick=14},
-            {Diameter=3.8, Delay=0.20, Strength=0.74, Thickness=4.2, OuterThick=11},
-            {Diameter=3.8, Delay=0.40, Strength=0.60, Thickness=3.2, OuterThick=8.5},
-            {Diameter=3.8, Delay=0.60, Strength=0.46, Thickness=2.5, OuterThick=6.5},
-            {Diameter=3.8, Delay=0.80, Strength=0.32, Thickness=1.8, OuterThick=4.5},
+            {Diameter=4.0, Delay=0.00, Strength=0.82, Thickness=4.5},
+            {Diameter=4.0, Delay=0.32, Strength=0.62, Thickness=3.5},
+            {Diameter=4.0, Delay=0.64, Strength=0.44, Thickness=2.8},
         }
 
         for index,spec in ipairs(waveSpecs) do
@@ -17268,75 +17257,42 @@ runtimeEnv.__DevKageAvatarMods = (function()
                 CFrame.new(0,baseOffset,0) * CFrame.Angles(0,0,math.rad(90))
             )
 
-            -- Top surface gui (seen from above)
-            local function makeSurface(face)
-                local gui=Instance.new("SurfaceGui")
-                gui.Name="GroundHaloWaveSurface"
-                gui.Face=face
-                gui.AlwaysOnTop=true
-                gui.LightInfluence=0
-                gui.SizingMode=Enum.SurfaceGuiSizingMode.PixelsPerStud
-                gui.PixelsPerStud=220
-                gui.ClipsDescendants=false
-                gui.Parent=plate
-                remember(gui)
+            local gui=Instance.new("SurfaceGui")
+            gui.Name="GroundHaloWaveSurface"
+            gui.Face=Enum.NormalId.Top
+            gui.AlwaysOnTop=true
+            gui.LightInfluence=0
+            gui.SizingMode=Enum.SurfaceGuiSizingMode.PixelsPerStud
+            gui.PixelsPerStud=180
+            gui.ClipsDescendants=false
+            gui.Parent=plate
+            remember(gui)
 
-                -- Outer atmospheric bloom ring
-                local outerFrame=Instance.new("Frame")
-                outerFrame.AnchorPoint=Vector2.new(0.5,0.5)
-                outerFrame.Position=UDim2.fromScale(0.5,0.5)
-                outerFrame.Size=UDim2.fromScale(0.96,0.96)
-                outerFrame.BackgroundTransparency=1
-                outerFrame.ZIndex=1
-                outerFrame.Parent=gui
-                remember(outerFrame)
-                local outerCorner=Instance.new("UICorner")
-                outerCorner.CornerRadius=UDim.new(1,0)
-                outerCorner.Parent=outerFrame
-                remember(outerCorner)
-                local outerGlow=Instance.new("UIStroke")
-                outerGlow.Name="WaveOuterGlow"
-                outerGlow.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
-                outerGlow.LineJoinMode=Enum.LineJoinMode.Round
-                outerGlow.Thickness=spec.OuterThick
-                outerGlow.Transparency=1
-                outerGlow.Parent=outerFrame
-                remember(outerGlow)
-
-                -- Hot core ring
-                local frame=Instance.new("Frame")
-                frame.AnchorPoint=Vector2.new(0.5,0.5)
-                frame.Position=UDim2.fromScale(0.5,0.5)
-                frame.Size=UDim2.fromScale(0.88,0.88)
-                frame.BackgroundTransparency=1
-                frame.ZIndex=2
-                frame.Parent=gui
-                remember(frame)
-                local corner=Instance.new("UICorner")
-                corner.CornerRadius=UDim.new(1,0)
-                corner.Parent=frame
-                remember(corner)
-                local glow=Instance.new("UIStroke")
-                glow.Name="WaveGlow"
-                glow.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
-                glow.LineJoinMode=Enum.LineJoinMode.Round
-                glow.Thickness=spec.Thickness
-                glow.Transparency=1
-                glow.Parent=frame
-                remember(glow)
-                return frame, glow, outerFrame, outerGlow
-            end
-
-            local frame, glow, outerFrame, outerGlow = makeSurface(Enum.NormalId.Top)
-            local frame2, glow2, outerFrame2, outerGlow2 = makeSurface(Enum.NormalId.Bottom)
+            local frame=Instance.new("Frame")
+            frame.AnchorPoint=Vector2.new(0.5,0.5)
+            frame.Position=UDim2.fromScale(0.5,0.5)
+            frame.Size=UDim2.fromScale(0.88,0.88)
+            frame.BackgroundTransparency=1
+            frame.ZIndex=2
+            frame.Parent=gui
+            remember(frame)
+            local corner=Instance.new("UICorner")
+            corner.CornerRadius=UDim.new(1,0)
+            corner.Parent=frame
+            remember(corner)
+            local glow=Instance.new("UIStroke")
+            glow.Name="WaveGlow"
+            glow.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
+            glow.LineJoinMode=Enum.LineJoinMode.Round
+            glow.Thickness=spec.Thickness
+            glow.Transparency=1
+            glow.Parent=frame
+            remember(glow)
 
             state.haloWaves[#state.haloWaves+1]={
                 Plate=plate,Motor=motor,Frame=frame,Glow=glow,
-                OuterFrame=outerFrame,OuterGlow=outerGlow,
-                Frame2=frame2,Glow2=glow2,
-                OuterFrame2=outerFrame2,OuterGlow2=outerGlow2,
                 Index=index,BaseDiameter=spec.Diameter,Delay=spec.Delay,
-                Strength=spec.Strength,Thickness=spec.Thickness,OuterThick=spec.OuterThick
+                Strength=spec.Strength,Thickness=spec.Thickness
             }
         end
     end
@@ -17459,60 +17415,24 @@ runtimeEnv.__DevKageAvatarMods = (function()
 
             for _,rig in ipairs(state.haloRigs) do
                 if rig.Motor and rig.Motor.Parent then
-                    -- Gentle floating bob with a slight tilt for organic feel
-                    local bob = math.sin(now * 1.35 * speed + rig.Ring * 1.1) * 0.048 * amplitude
-                    local tilt = math.sin(now * 0.72 * speed + rig.Ring * 0.55) * math.rad(1.8) * amplitude
-                    -- Alternate spin direction per ring pair for a counter-rotating look
-                    local dir = (rig.Ring % 2 == 0) and -1 or 1
-                    local spinSpeed = 14 + (rig.Ring - 1) * 4
-                    local spin = math.rad((now * spinSpeed * speed * motionRate * dir) % 360)
-                    rig.Motor.Transform = CFrame.new(0,bob,0) * CFrame.Angles(tilt,spin,0)
+                    local bob = math.sin(now * 1.45 * speed + rig.Ring * 0.9) * 0.035 * amplitude
+                    local spin = math.rad((now * 16 * speed * motionRate) % 360)
+                    rig.Motor.Transform = CFrame.new(0,bob,0) * CFrame.Angles(0,spin,0)
                 end
             end
 
             for _,waveEntry in ipairs(state.haloWaves) do
                 if waveEntry.Plate and waveEntry.Plate.Parent and waveEntry.Motor and waveEntry.Motor.Parent then
-                    local cycle = (now * math.max(speed,0.35) * 0.68 - waveEntry.Delay) % 1
-                    local eased = 1 - math.pow(1 - cycle, 2.2)
-                    -- Waves start small, bloom outward, then fade as they reach max radius
-                    local diameterScale = 0.55 + eased * 1.68
-                    local diameter = waveEntry.BaseDiameter * diameterScale
-                    -- Fade: bright as it expands, fades toward edges
-                    local fadeIn = math.clamp(eased * 4.5, 0, 1)
-                    local fadeOut = 1 - math.clamp((eased - 0.55) * 2.3, 0, 1)
-                    local alpha = fadeIn * fadeOut
+                    local cycle = (now * math.max(speed,0.35) * 0.72 - waveEntry.Delay) % 1
+                    local eased = 1 - math.pow(1 - cycle, 2.4)
+                    local diameter = waveEntry.BaseDiameter * (0.74 + eased * 1.38)
+                    local alpha = math.clamp(0.06 + eased * 0.92, 0.06, 0.96)
                     waveEntry.Plate.Size = Vector3.new(0.028,diameter,diameter)
-                    -- Primary color is a warm/cool shift based on index for visual variety
-                    local waveColor = rainbowColor(now, waveEntry.Index * 11, primaryColor()):Lerp(Color3.new(1,1,1),0.28)
-                    local hotColor = waveColor:Lerp(Color3.new(1,1,1),0.55)
-                    -- Hot core ring
-                    local coreThick = math.max(1.2, waveEntry.Thickness * (1.12 - eased*0.22))
-                    local coreTrans = math.clamp(1 - alpha * waveEntry.Strength * 1.15, 0.08, 0.94)
-                    for _,g in ipairs({waveEntry.Glow, waveEntry.Glow2}) do
-                        if g and g.Parent then
-                            g.Color = hotColor
-                            g.Thickness = coreThick
-                            g.Transparency = coreTrans
-                        end
-                    end
-                    for _,f in ipairs({waveEntry.Frame, waveEntry.Frame2}) do
-                        if f and f.Parent then f.Size = UDim2.fromScale(0.88,0.88) end
-                    end
-                    -- Outer atmospheric bloom (larger, softer, more transparent)
-                    if waveEntry.OuterThick then
-                        local outerTrans = math.clamp(1 - alpha * waveEntry.Strength * 0.68, 0.30, 0.97)
-                        local outerThick = math.max(2, waveEntry.OuterThick * (1.08 - eased*0.14))
-                        for _,og in ipairs({waveEntry.OuterGlow, waveEntry.OuterGlow2}) do
-                            if og and og.Parent then
-                                og.Color = waveColor
-                                og.Thickness = outerThick
-                                og.Transparency = outerTrans
-                            end
-                        end
-                        for _,of in ipairs({waveEntry.OuterFrame, waveEntry.OuterFrame2}) do
-                            if of and of.Parent then of.Size = UDim2.fromScale(0.96,0.96) end
-                        end
-                    end
+                    local waveColor = rainbowColor(now, waveEntry.Index * 9, secondaryColor()):Lerp(Color3.new(1,1,1),0.34)
+                    waveEntry.Glow.Color = waveColor
+                    waveEntry.Glow.Thickness = math.max(1.5,waveEntry.Thickness * (1.05 - eased*0.18))
+                    waveEntry.Glow.Transparency = math.clamp(alpha - waveEntry.Strength*0.42,0.16,0.94)
+                    waveEntry.Frame.Size = UDim2.fromScale(0.88,0.88)
                     waveEntry.Plate.Transparency = 1
                 end
             end
@@ -17548,40 +17468,33 @@ runtimeEnv.__DevKageAvatarMods = (function()
             for i,entry in ipairs(state.haloSurfaces) do
                 local base=entry.Ring==2 and secondaryColor() or primaryColor()
                 local color=rainbowColor(now,i+entry.Ring*19,base)
-                -- Pulsing hot glow: the halo ring breathes with living energy
-                local haloPulse=(math.sin(now*2.8*speed+i*0.55+entry.Ring*1.2)+1)*0.5
-                local glowPulseBoost=1+haloPulse*pulse*0.55
-                local hotColor=color:Lerp(Color3.new(1,1,1),0.58+haloPulse*0.12)
-                local coreBrightness=glowBrightness()*glowPulseBoost
+                local hotColor=color:Lerp(Color3.new(1,1,1),0.45)
                 if entry.Core and entry.Core.Parent then
                     entry.Core.Color=hotColor
-                    -- Core ring is the sharpest, most opaque element — give it real presence
-                    entry.Core.Transparency=math.clamp(alpha*0.82-0.04,0,0.84)
-                    entry.Core.Thickness=math.clamp(11+coreBrightness*1.6+haloPulse*3.5,11,28)
+                    entry.Core.Transparency=math.clamp(alpha-0.08,0,0.88)
+                    entry.Core.Thickness=math.clamp(10+glowBrightness()*1.2,10,22)
                 end
                 if entry.Glow and entry.Glow.Parent then
                     entry.Glow.Color=color
-                    entry.Glow.Thickness=math.clamp(28+glowSize()*0.90+haloPulse*8,28,72)
+                    entry.Glow.Thickness=math.clamp(26+glowSize()*0.80,26,62)
                     entry.Glow.Transparency=math.clamp(
-                        0.68-(coreBrightness/14)-(haloPulse*0.08),
-                        0.12,
-                        0.68
+                        0.72-(glowBrightness()/16),
+                        0.18,
+                        0.72
                     )
                 end
                 if entry.FarGlow and entry.FarGlow.Parent then
-                    entry.FarGlow.Color=color:Lerp(secondaryColor(),0.22)
-                    entry.FarGlow.Thickness=math.clamp(48+glowSize()*1.25+haloPulse*12,48,104)
+                    entry.FarGlow.Color=color
+                    entry.FarGlow.Thickness=math.clamp(44+glowSize()*1.10,44,90)
                     entry.FarGlow.Transparency=math.clamp(
-                        0.84-(coreBrightness/22)-(haloPulse*0.06),
-                        0.48,
-                        0.84
+                        0.88-(glowBrightness()/24),
+                        0.52,
+                        0.88
                     )
                 end
                 if entry.Specular and entry.Specular.Parent then
-                    -- Specular highlight sweeps around the ring as the halo spins
-                    local specPulse=math.abs(math.sin(now*3.5*speed+i*0.8))*0.22+haloPulse*0.10
-                    entry.Specular.Transparency=math.clamp(0.28+specPulse,0.22,0.55)
-                    entry.Specular.Color=hotColor
+                    local specPulse=math.abs(math.sin(now*2.2+i*0.7))*0.18
+                    entry.Specular.Transparency=math.clamp(0.38+specPulse,0.32,0.62)
                 end
             end
 
@@ -29355,8 +29268,8 @@ local function referenceApplyText(
         end
 
         if outerGlow then
-            local outerX = glowSize * 1.10
-            local outerY = glowSize * 0.90
+            local outerX = glowSize * 0.92
+            local outerY = glowSize * 0.76
             outerGlow.Size = UDim2.new(
                 label.Size.X.Scale, label.Size.X.Offset + outerX,
                 label.Size.Y.Scale, label.Size.Y.Offset + outerY
@@ -29365,18 +29278,17 @@ local function referenceApplyText(
                 label.Position.X.Scale, label.Position.X.Offset - outerX * 0.5,
                 label.Position.Y.Scale, label.Position.Y.Offset - outerY * 0.5
             )
-            -- Boosted visibility: outer bloom is the atmospheric halo
-            outerGlow.TextTransparency = math.clamp(1 - (0.48 * glowStrength), 0.20, 0.88)
+            outerGlow.TextTransparency = 1 - (0.18 * glowStrength)
             local s = outerGlow:FindFirstChild("NeonStroke")
             if s then
                 s.Color = glowColor
-                s.Thickness = math.clamp(glowSize * 0.62, 1.5, 18)
-                s.Transparency = math.clamp(1 - (0.55 * glowStrength), 0.18, 0.72)
+                s.Thickness = math.clamp(glowSize * 0.46, 0.8, 14)
+                s.Transparency = 1 - (0.32 * glowStrength)
             end
         end
 
         if innerGlow then
-            local innerSize = glowSize * 0.42
+            local innerSize = glowSize * 0.30
             innerGlow.Size = UDim2.new(
                 label.Size.X.Scale, label.Size.X.Offset + innerSize,
                 label.Size.Y.Scale, label.Size.Y.Offset + innerSize
@@ -29385,13 +29297,12 @@ local function referenceApplyText(
                 label.Position.X.Scale, label.Position.X.Offset - innerSize * 0.5,
                 label.Position.Y.Scale, label.Position.Y.Offset - innerSize * 0.5
             )
-            -- Inner glow is the hot neon core — crisp and bright
-            innerGlow.TextTransparency = math.clamp(1 - (0.78 * glowStrength), 0.04, 0.55)
+            innerGlow.TextTransparency = 1 - (0.52 * glowStrength)
             local s = innerGlow:FindFirstChild("NeonStroke")
             if s then
-                s.Color = glowColor:Lerp(Color3.new(1,1,1), 0.72)
-                s.Thickness = math.clamp(glowSize * 0.32, 1.2, 10)
-                s.Transparency = math.clamp(1 - (0.88 * glowStrength), 0.06, 0.42)
+                s.Color = glowColor:Lerp(Color3.new(1,1,1), 0.62)
+                s.Thickness = math.clamp(glowSize * 0.24, 0.6, 8)
+                s.Transparency = 1 - (0.72 * glowStrength)
             end
         end
     end
@@ -29892,25 +29803,6 @@ local function referenceCursorRender(deltaTime)
 
             line.Frame.BackgroundColor3 =
                 color
-
-            -- Always sync the core gradient so all lines match at any glow setting
-            if line.CoreGradient then
-                local edge = color:Lerp(Color3.fromRGB(30, 22, 50), 0.52)
-                local hot = color:Lerp(Color3.new(1,1,1), 0.72)
-                line.CoreGradient.Color = ColorSequence.new({
-                    ColorSequenceKeypoint.new(0.00, edge),
-                    ColorSequenceKeypoint.new(0.18, hot),
-                    ColorSequenceKeypoint.new(0.52, Color3.new(1,1,1)),
-                    ColorSequenceKeypoint.new(0.84, hot),
-                    ColorSequenceKeypoint.new(1.00, edge),
-                })
-            end
-            if line.HighlightStroke then
-                line.HighlightStroke.Color = color:Lerp(Color3.new(1,1,1), 0.88)
-            end
-            if line.Stroke then
-                line.Stroke.Color = Color3.fromRGB(14, 12, 22)
-            end
 
             referenceApplyGlow(
                 settings,
