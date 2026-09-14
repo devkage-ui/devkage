@@ -14294,12 +14294,12 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_68.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_69.lua"
 local SCRIPT_STABLE_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_current.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOLOAD_ENABLED_FILE = CONFIG_FOLDER .. "/_devkage_autoload_enabled.flag"
 local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_AutoLoad_LAST.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.68-autoload-currentbuild-ui-halo-wave-fps-font-fpsboost-20260913"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.69-autoload-currentbuild-ui-blacklist-merge-20260913"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -15221,6 +15221,7 @@ end
 local function remove_stale_devkage_payloads()
     if type(delfile) ~= "function" then return end
     for _, legacyName in ipairs({
+        "_devkage_autoload_payload_v5_2_68.lua",
         "_devkage_autoload_payload_v5_2_64.lua",
         "_devkage_autoload_payload_v5_2_63.lua",
         "_devkage_autoload_payload_v5_2_62.lua",
@@ -15268,6 +15269,7 @@ if not enabled then
         for _, path in ipairs({
             SCRIPT_PAYLOAD_FILE,
             SCRIPT_STABLE_PAYLOAD_FILE,
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_68.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_64.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_63.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_62.lua",
@@ -26541,9 +26543,67 @@ local function universalHttpGet(url)
     return responseBody
 end
 
+local function universalResolveBlacklistedServerIds()
+    local env = (type(getgenv) == "function" and getgenv()) or _G
+    local blacklist = rawget(env, "__DevKagePlayerBlacklist")
+    local blockedServers = {}
+    if type(blacklist) ~= "table" or next(blacklist) == nil then
+        UniversalToolsRuntime.BlacklistedServers = blockedServers
+        return blockedServers
+    end
+
+    local userIds = {}
+    for key, entry in pairs(blacklist) do
+        local id = tonumber(type(entry) == "table" and entry.userId or key)
+        if id then userIds[#userIds + 1] = id end
+    end
+    if #userIds == 0 then return blockedServers end
+
+    local requestFn = rawget(env, "request")
+        or rawget(env, "http_request")
+        or (type(syn) == "table" and syn.request)
+    if type(requestFn) ~= "function" then return blockedServers end
+
+    for first = 1, #userIds, 100 do
+        local batch = {}
+        for i = first, math.min(first + 99, #userIds) do batch[#batch + 1] = userIds[i] end
+        local encodedOk, body = pcall(HttpService.JSONEncode, HttpService, {userIds = batch})
+        if encodedOk then
+            local requestOk, response = pcall(requestFn, {
+                Url = "https://presence.roblox.com/v1/presence/users",
+                Method = "POST",
+                Headers = {
+                    ["Accept"] = "application/json",
+                    ["Content-Type"] = "application/json",
+                },
+                Body = body,
+            })
+            if requestOk and type(response) == "table" then
+                local statusCode = tonumber(response.StatusCode or response.Status or response.status_code)
+                local responseBody = response.Body or response.body
+                if (not statusCode or (statusCode >= 200 and statusCode < 300)) and type(responseBody) == "string" then
+                    local decodedOk, data = pcall(HttpService.JSONDecode, HttpService, responseBody)
+                    if decodedOk and type(data) == "table" then
+                        for _, presence in ipairs(data.userPresences or {}) do
+                            if tonumber(presence.placeId) == tonumber(game.PlaceId) then
+                                local jobId = tostring(presence.gameId or "")
+                                if jobId ~= "" then blockedServers[jobId] = true end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    UniversalToolsRuntime.BlacklistedServers = blockedServers
+    return blockedServers
+end
+
 local function universalFetchServers(maxPages)
     maxPages = math.clamp(math.floor(tonumber(maxPages) or 4), 1, 8)
 
+    local blockedServerIds = universalResolveBlacklistedServerIds()
     local servers = {}
     local cursor = nil
     local placeId = tonumber(game.PlaceId)
@@ -26576,6 +26636,7 @@ local function universalFetchServers(maxPages)
             if id ~= ""
                 and id ~= tostring(game.JobId)
                 and not UniversalToolsRuntime.Visited[id]
+                and not blockedServerIds[id]
                 and capacity > 0
                 and playing < capacity then
 
@@ -30648,8 +30709,10 @@ local configNameBox
 local autoLoadBox
 local BLACKLIST_FILE = CONFIG_FOLDER .. "/_player_blacklist.json"
 local PlayerBlacklist = {}
+local blacklistEnvironment = (type(getgenv)=="function" and getgenv()) or _G
 local rebuildServerPlayerList
 local rebuildBlacklistList
+local blacklistStatusLabel
 
 local function loadPlayerBlacklist()
 PlayerBlacklist = {}
@@ -30668,6 +30731,7 @@ if tonumber(id) then
 PlayerBlacklist[id]=type(entry)=="table" and entry or {userId=tonumber(id),name=tostring(entry)}
 end
 end
+blacklistEnvironment.__DevKagePlayerBlacklist = PlayerBlacklist
 end
 
 local function savePlayerBlacklist()
@@ -30677,6 +30741,7 @@ if type(writefile)~="function" then return false,"This executor does not provide
 local encodedOk,encoded=pcall(function() return HttpService:JSONEncode(PlayerBlacklist) end)
 if not encodedOk then return false,tostring(encoded) end
 local wrote,err=pcall(writefile,BLACKLIST_FILE,encoded)
+if wrote then blacklistEnvironment.__DevKagePlayerBlacklist = PlayerBlacklist end
 return wrote,wrote and nil or tostring(err)
 end
 
@@ -30710,6 +30775,7 @@ return saved,err
 end
 
 loadPlayerBlacklist()
+blacklistEnvironment.__DevKagePlayerBlacklist = PlayerBlacklist
 
 local function configNames()
 local names,errorMessage = list_configs()
@@ -31162,6 +31228,7 @@ end
 
 local configMain = configPage:CreateSection({ Name = "Configs", Side = "Left", Size = 535 })
 local playerSection = configPage:CreateSection({ Name = "Players", Side = "Right", Size = 585 })
+local blacklistSection = configPage:CreateSection({ Name = "Blacklist", Side = "Right", Size = 360 })
 local configActions = configPage:CreateSection({ Name = "Config Auto-Load", Side = "Right", Size = 210 })
 local scriptSettingsSection = configPage:CreateSection({ Name = "Script Settings", Side = "Right", Size = 150 })
 local configPhotoRoot=Instance.new("Frame")
@@ -31297,6 +31364,151 @@ end
 box:GetPropertyChangedSignal("Text"):Connect(function() api.Value=tostring(box.Text or "") end)
 return api
 end
+
+local blacklistListFrame = Instance.new("ScrollingFrame")
+blacklistListFrame.Name = "PersistentBlacklist"
+blacklistListFrame.BackgroundColor3 = Color3.fromRGB(12,12,12)
+blacklistListFrame.BorderColor3 = Color3.fromRGB(0,0,0)
+blacklistListFrame.BorderSizePixel = 1
+blacklistListFrame.ScrollBarThickness = 4
+blacklistListFrame.ScrollBarImageColor3 = Color3.fromRGB(85,55,55)
+blacklistListFrame.CanvasSize = UDim2.new(0,0,0,0)
+blacklistListFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+blacklistListFrame.Size = UDim2.new(1,-40,0,270)
+blacklistListFrame.Position = UDim2.new(0,20,0,10)
+blacklistListFrame.ZIndex = 10
+blacklistListFrame.Parent = blacklistSection.Holder
+
+local blacklistListLayout = Instance.new("UIListLayout")
+blacklistListLayout.Padding = UDim.new(0,2)
+blacklistListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+blacklistListLayout.Parent = blacklistListFrame
+
+local blacklistInfo = Instance.new("TextLabel")
+blacklistInfo.BackgroundTransparency = 1
+blacklistInfo.Position = UDim2.new(0,20,0,287)
+blacklistInfo.Size = UDim2.new(1,-40,0,34)
+blacklistInfo.Font = Enum.Font.Code
+blacklistInfo.TextSize = 9
+blacklistInfo.TextWrapped = true
+blacklistInfo.TextXAlignment = Enum.TextXAlignment.Left
+blacklistInfo.TextYAlignment = Enum.TextYAlignment.Top
+blacklistInfo.TextColor3 = Color3.fromRGB(150,150,150)
+blacklistInfo.Text = "Saved automatically. Server hops exclude known servers containing blacklisted users; if one joins your current server, DevKage hops away."
+blacklistInfo.ZIndex = 10
+blacklistInfo.Parent = blacklistSection.Holder
+
+local function removeBlacklistedId(userId)
+    local key = tostring(userId or "")
+    if key == "" or not PlayerBlacklist[key] then return false, "Entry not found" end
+    local previous = PlayerBlacklist[key]
+    PlayerBlacklist[key] = nil
+    local saved, err = savePlayerBlacklist()
+    if not saved then PlayerBlacklist[key] = previous end
+    if rebuildBlacklistList then rebuildBlacklistList() end
+    if rebuildServerPlayerList then rebuildServerPlayerList() end
+    return saved, err
+end
+
+rebuildBlacklistList = function()
+    for _, child in ipairs(blacklistListFrame:GetChildren()) do
+        if child.Name == "BlacklistRow" or child.Name == "BlacklistEmpty" then child:Destroy() end
+    end
+
+    local entries = {}
+    for userId, entry in pairs(PlayerBlacklist) do
+        if type(entry) == "table" then
+            entries[#entries + 1] = {id=tostring(userId), data=entry}
+        end
+    end
+    table.sort(entries, function(a,b)
+        local an = tostring(a.data.displayName or a.data.name or a.id):lower()
+        local bn = tostring(b.data.displayName or b.data.name or b.id):lower()
+        return an < bn
+    end)
+
+    if #entries == 0 then
+        local empty = Instance.new("TextLabel")
+        empty.Name = "BlacklistEmpty"
+        empty.BackgroundTransparency = 1
+        empty.Size = UDim2.new(1,-8,0,32)
+        empty.Font = Enum.Font.Code
+        empty.TextSize = 10
+        empty.TextColor3 = Color3.fromRGB(130,130,130)
+        empty.Text = "Blacklist is empty"
+        empty.ZIndex = 11
+        empty.Parent = blacklistListFrame
+        return
+    end
+
+    for index, wrapper in ipairs(entries) do
+        local entry = wrapper.data
+        local row = Instance.new("Frame")
+        row.Name = "BlacklistRow"
+        row.BackgroundColor3 = Color3.fromRGB(29,18,18)
+        row.BorderColor3 = Color3.fromRGB(55,20,20)
+        row.BorderSizePixel = 1
+        row.Size = UDim2.new(1,-8,0,42)
+        row.LayoutOrder = index
+        row.ZIndex = 11
+        row.Parent = blacklistListFrame
+
+        local name = Instance.new("TextLabel")
+        name.BackgroundTransparency = 1
+        name.Position = UDim2.fromOffset(8,3)
+        name.Size = UDim2.new(1,-42,0,17)
+        name.Font = Enum.Font.Code
+        name.TextSize = 10
+        name.TextXAlignment = Enum.TextXAlignment.Left
+        name.TextColor3 = Color3.fromRGB(255,95,95)
+        local display = tostring(entry.displayName or entry.name or wrapper.id)
+        local username = tostring(entry.name or "")
+        name.Text = username ~= "" and (display .. "  @" .. username) or display
+        name.ZIndex = 12
+        name.Parent = row
+
+        local reason = Instance.new("TextLabel")
+        reason.BackgroundTransparency = 1
+        reason.Position = UDim2.fromOffset(8,20)
+        reason.Size = UDim2.new(1,-42,0,17)
+        reason.Font = Enum.Font.Code
+        reason.TextSize = 8
+        reason.TextXAlignment = Enum.TextXAlignment.Left
+        reason.TextTruncate = Enum.TextTruncate.AtEnd
+        reason.TextColor3 = Color3.fromRGB(155,120,120)
+        reason.Text = tostring(entry.reason or "No reason")
+        reason.ZIndex = 12
+        reason.Parent = row
+
+        local remove = Instance.new("TextButton")
+        remove.BackgroundColor3 = Color3.fromRGB(45,20,20)
+        remove.BorderColor3 = Color3.fromRGB(80,30,30)
+        remove.BorderSizePixel = 1
+        remove.AnchorPoint = Vector2.new(1,0.5)
+        remove.Position = UDim2.new(1,-6,0.5,0)
+        remove.Size = UDim2.fromOffset(24,24)
+        remove.Font = Enum.Font.Code
+        remove.Text = "×"
+        remove.TextSize = 13
+        remove.TextColor3 = Color3.fromRGB(255,105,105)
+        remove.AutoButtonColor = false
+        remove.ZIndex = 13
+        remove.Parent = row
+        remove.MouseButton1Click:Connect(function()
+            local ok, err = removeBlacklistedId(wrapper.id)
+            if ok then
+                if blacklistStatusLabel then
+                    blacklistStatusLabel.Text = "Removed from blacklist: " .. tostring(entry.name or wrapper.id)
+                    blacklistStatusLabel.TextColor3 = Color3.fromRGB(165,165,165)
+                end
+            else
+                library:Notify({Message="Blacklist remove failed: "..tostring(err),Duration=4})
+            end
+        end)
+    end
+end
+
+rebuildBlacklistList()
 
 configNameBox = createConfigNameField()
 
@@ -31625,6 +31837,66 @@ end
 local selectPlayerButton=makePlayerActionButton("Blacklist",463)
 local clearPlayerButton=makePlayerActionButton("Whitelist",507)
 
+blacklistStatusLabel=Instance.new("TextLabel")
+blacklistStatusLabel.Name="BlacklistStatus"
+blacklistStatusLabel.BackgroundTransparency=1
+blacklistStatusLabel.BorderSizePixel=0
+blacklistStatusLabel.Position=UDim2.new(0,10,0,530)
+blacklistStatusLabel.Size=UDim2.new(1,-20,0,16)
+blacklistStatusLabel.Font=Enum.Font.Code
+blacklistStatusLabel.Text=""
+blacklistStatusLabel.TextColor3=Color3.fromRGB(255,72,72)
+blacklistStatusLabel.TextSize=9
+blacklistStatusLabel.TextXAlignment=Enum.TextXAlignment.Left
+blacklistStatusLabel.ZIndex=32
+blacklistStatusLabel.Parent=playerPhotoRoot
+
+local blacklistAvoidanceBusy = false
+local blacklistAvoidanceToken = 0
+local blacklistAvoidanceHop
+
+blacklistAvoidanceHop = function(triggerPlayer)
+    if blacklistAvoidanceBusy or UniversalToolsRuntime.Busy then return false end
+    blacklistAvoidanceBusy = true
+    blacklistAvoidanceToken = blacklistAvoidanceToken + 1
+    local token = blacklistAvoidanceToken
+    if blacklistStatusLabel then
+        blacklistStatusLabel.Text = "Avoiding blacklisted player: " .. tostring(triggerPlayer and triggerPlayer.Name or "unknown")
+        blacklistStatusLabel.TextColor3 = Color3.fromRGB(255,72,72)
+    end
+
+    task.spawn(function()
+        local servers, err = universalFetchServers(8)
+        if token ~= blacklistAvoidanceToken then blacklistAvoidanceBusy = false return end
+        if not servers or #servers == 0 then
+            blacklistAvoidanceBusy = false
+            library:Notify({Message="Blacklist avoidance could not find a safe open server: "..tostring(err or "none available"),Duration=5})
+            return
+        end
+
+        table.sort(servers, function(a,b)
+            if a.playing == b.playing then
+                return (tonumber(a.ping) or math.huge) < (tonumber(b.ping) or math.huge)
+            end
+            return (tonumber(a.playing) or math.huge) < (tonumber(b.playing) or math.huge)
+        end)
+
+        blacklistAvoidanceBusy = false
+        universalTeleportToServer(servers[1])
+    end)
+    return true
+end
+
+local function scanCurrentServerForBlacklist()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and isPlayerBlacklisted(plr) then
+            blacklistAvoidanceHop(plr)
+            return plr
+        end
+    end
+    return nil
+end
+
 
 
 local blacklistFlashToken=0
@@ -31698,6 +31970,11 @@ if saved then
 playerSelectionLabel.Text="Selected: "..tostring(selectedServerPlayer.Name)
 rebuildServerPlayerList()
 showBlacklistFlash()
+if blacklistStatusLabel then
+    blacklistStatusLabel.Text="BLACKLISTED: "..tostring(selectedServerPlayer.Name)
+    blacklistStatusLabel.TextColor3=Color3.fromRGB(255,72,72)
+end
+if blacklistAvoidanceHop then blacklistAvoidanceHop(selectedServerPlayer) end
 else
 library:Notify({Message="Blacklist failed: "..tostring(err),Duration=4})
 end
@@ -31714,6 +31991,10 @@ if saved then
 playerReasonBox.Text=""
 playerSelectionLabel.Text="Selected: "..tostring(selectedServerPlayer.Name)
 rebuildServerPlayerList()
+if blacklistStatusLabel then
+blacklistStatusLabel.Text="Removed from blacklist: "..tostring(selectedServerPlayer.Name)
+blacklistStatusLabel.TextColor3=Color3.fromRGB(165,165,165)
+end
 else
 library:Notify({Message="Whitelist failed: "..tostring(err),Duration=4})
 end
@@ -31721,6 +32002,9 @@ end)
 
 utility:CreateConnection(Players.PlayerAdded, function(plr)
 task.defer(rebuildServerPlayerList)
+if plr ~= LocalPlayer and isPlayerBlacklisted(plr) then
+    task.defer(function() blacklistAvoidanceHop(plr) end)
+end
 end)
 
 utility:CreateConnection(Players.PlayerRemoving, function(plr)
@@ -31732,10 +32016,8 @@ task.defer(rebuildServerPlayerList)
 end)
 
 rebuildServerPlayerList()
-for _,plr in ipairs(Players:GetPlayers()) do
-if plr~=LocalPlayer and isPlayerBlacklisted(plr) then
-end
-end
+rebuildBlacklistList()
+task.defer(scanCurrentServerForBlacklist)
 
 if not configNameBox then
 configNameBox = createConfigNameField()
@@ -32306,9 +32588,9 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
 })
 
 local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
-__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.68-autoload-currentbuild-ui-halo-wave-fps-font-fpsboost-20260913"
+__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.69-autoload-currentbuild-ui-blacklist-merge-20260913"
 __devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
-__devkageEnv.__DEVKAGE_PACKAGE_SOURCE_BUILD = "DevKage-v5.2.68-autoload-currentbuild-ui-halo-wave-fps-font-fpsboost-20260913"
+__devkageEnv.__DEVKAGE_PACKAGE_SOURCE_BUILD = "DevKage-v5.2.69-autoload-currentbuild-ui-blacklist-merge-20260913"
 __devkageEnv.__DEVKAGE_PACKAGE_SOURCE_CURRENT = __DEVKAGE_EMBEDDED_SOURCE
 
 -- CURRENT LATE-BOOT AUTOEXEC OWNERSHIP (v5.2.55)
