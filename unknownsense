@@ -531,7 +531,7 @@ local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
 
 
 
-__devkageEnv.__DEVKAGE_RUNTIME_VERSION = "dual-script-autoload-v7-knife-movement-astra-ui-blacklist-fix"
+__devkageEnv.__DEVKAGE_RUNTIME_VERSION = "dual-script-autoload-v7-knife-movement-astra-smooth-ui-cursor-weather"
 local __devkageMultiInjectAutoBoot = __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT == true
 
 -- Autoexec coexistence boot mutex.
@@ -625,15 +625,7 @@ library.Theme = library.Theme or {
     TopBar = Color3.fromRGB(255, 255, 255),
     TopBarTransparency = 0,
     MenuAnimationSpeed = 1,
-    DPIScale = 1,
-    UIRainEnabled = false,
-    UISnowEnabled = false,
-    UIRainColor = Color3.fromRGB(90, 190, 255),
-    UISnowColor = Color3.fromRGB(245, 250, 255),
-    UIRainDensity = 28,
-    UISnowDensity = 20,
-    UIRainSpeed = 1,
-    UISnowSpeed = 0.75
+    DPIScale = 1
 }
 if library.Theme.TopBar == nil then library.Theme.TopBar = Color3.fromRGB(255, 255, 255) end
 if library.Theme.TopBarTransparency == nil then library.Theme.TopBarTransparency = 0 end
@@ -1065,9 +1057,8 @@ function library:CreateWindow(Properties)
                 end
             end)
 
-            -- Always show the native cursor while the DevKage menu is open.
-            -- A custom cursor can be a few pixels off on some executors/inset modes,
-            -- which makes small keybind controls feel impossible to click.
+            -- If the integrated custom cursor is alive, keep the native arrow hidden
+            -- so the neon cursor remains the only pointer over the menu.
             local wantedIcon = not externalCursorAlive()
             pcall(function()
                 if uis.MouseIconEnabled ~= wantedIcon then
@@ -1216,11 +1207,28 @@ function library:CreateWindow(Properties)
             Size                = UDim2.new(0, 660, 0, 560)
         })
         Window.MainFrame = ScreenGui_MainFrame
+
+        -- One composite animation layer makes open/close smooth and prevents
+        -- individual controls from finishing at different times.
+        local MenuAnimationGroup = Instance.new("CanvasGroup")
+        MenuAnimationGroup.Name = "DevKage_MenuAnimationGroup"
+        MenuAnimationGroup.AnchorPoint = Vector2.new(0.5, 0.5)
+        MenuAnimationGroup.Position = UDim2.fromScale(0.5, 0.5)
+        MenuAnimationGroup.Size = UDim2.fromScale(1, 1)
+        MenuAnimationGroup.BackgroundTransparency = 1
+        MenuAnimationGroup.BorderSizePixel = 0
+        MenuAnimationGroup.GroupTransparency = Window.Enabled and 0 or 1
+        MenuAnimationGroup.Parent = ScreenGui
+
         local MenuAnimationScale = Instance.new("UIScale")
-        MenuAnimationScale.Name = "DevKageMenuAnimationScale"
-        MenuAnimationScale.Scale = 1
-        MenuAnimationScale.Parent = ScreenGui_MainFrame
+        MenuAnimationScale.Name = "DevKage_MenuAnimationScale"
+        MenuAnimationScale.Scale = Window.Enabled and 1 or 0.965
+        MenuAnimationScale.Parent = MenuAnimationGroup
+
+        ScreenGui_MainFrame.Parent = MenuAnimationGroup
+        Window.MenuAnimationGroup = MenuAnimationGroup
         Window.MenuAnimationScale = MenuAnimationScale
+
         local ScreenGui_MainFrame_InnerBorder = utility:RenderObject("Frame", {
             BackgroundColor3    = Color3.fromRGB(40, 40, 40),
             BackgroundTransparency = 0,
@@ -1346,73 +1354,66 @@ function library:CreateWindow(Properties)
             function Window:Fade(state)
                 Window.FadeToken = Window.FadeToken + 1
                 local fadeToken = Window.FadeToken
+                local animationSpeed = math.clamp(tonumber(library.Theme.MenuAnimationSpeed) or 1, 0.25, 3)
+                local duration = (state and 0.22 or 0.18) / animationSpeed
+
+                if Window._MenuFadeTween then
+                    pcall(function() Window._MenuFadeTween:Cancel() end)
+                    Window._MenuFadeTween = nil
+                end
+                if Window._MenuScaleTween then
+                    pcall(function() Window._MenuScaleTween:Cancel() end)
+                    Window._MenuScaleTween = nil
+                end
+
+                local wasDisabled = ScreenGui and ScreenGui.Enabled == false
                 if ScreenGui then
                     ScreenGui.Enabled = true
                 end
 
-                local menuAnimationSpeed = math.clamp(tonumber(library.Theme.MenuAnimationSpeed) or 1, 0.25, 3)
-                if Window.MenuAnimationScale then
-                    if state then Window.MenuAnimationScale.Scale = 0.965 end
-                    tws:Create(
-                        Window.MenuAnimationScale,
-                        TweenInfo.new(0.22 / menuAnimationSpeed, Enum.EasingStyle.Quint, state and Enum.EasingDirection.Out or Enum.EasingDirection.In),
-                        {Scale = state and 1 or 0.975}
-                    ):Play()
-                end
-
-                for index, render in pairs(library.Renders) do
-                    if not render[3] then
-                        local obj   = render[1]
-                        local props = render[2]
-                        local baseDur = render[4] or 0.25
-                        local animationSpeed = menuAnimationSpeed
-                        local dur = baseDur / animationSpeed
-                        local ti    = TweenInfo.new(dur, Enum.EasingStyle.Quint,
-                            state and Enum.EasingDirection.Out or Enum.EasingDirection.In)
-                        local cls   = obj.ClassName
-
-                        if cls == "Frame" then
-                            local bt = props["BackgroundTransparency"] or 0
-                            if bt ~= 1 then
-                                tws:Create(obj, ti, {BackgroundTransparency = state and bt or 1}):Play()
-                            end
-                        elseif cls == "ImageLabel" then
-                            local bt = props["BackgroundTransparency"] or 0
-                            if bt ~= 1 then
-                                tws:Create(obj, ti, {BackgroundTransparency = state and bt or 1}):Play()
-                            end
-                            local it = props["ImageTransparency"] or 0
-                            if it ~= 1 then
-                                tws:Create(obj, ti, {ImageTransparency = state and it or 1}):Play()
-                            end
-                        elseif cls == "TextLabel" or cls == "TextButton" or cls == "TextBox" then
-                            local bt = props["BackgroundTransparency"] or 0
-                            if bt ~= 1 then
-                                tws:Create(obj, ti, {BackgroundTransparency = state and bt or 1}):Play()
-                            end
-                            local tt = props["TextTransparency"] or 0
-                            if tt ~= 1 then
-                                tws:Create(obj, ti, {TextTransparency = state and tt or 1}):Play()
-                            end
-                        elseif cls == "ScrollingFrame" then
-                            local bt = props["BackgroundTra]==================],
-    [==================[nsparency"] or 0
-                            if bt ~= 1 then
-                                tws:Create(obj, ti, {BackgroundTransparency = state and bt or 1}):Play()
-                            end
-                            local st = props["ScrollBarImageTransparency"] or 0
-                            if st ~= 1 then
-                                tws:Create(obj, ti, {ScrollBarImageTransparency = state and st or 1}):Play()
-                            end
-                        end
+                if MenuAnimationGroup then
+                    if state and wasDisabled then
+                        MenuAnimationGroup.GroupTransparency = 1
                     end
+
+                    local fadeInfo = TweenInfo.new(
+                        duration,
+                        Enum.EasingStyle.Quint,
+                        state and Enum.EasingDirection.Out or Enum.EasingDirection.In
+                    )
+                    Window._MenuFadeTween = tws:Create(
+                        MenuAnimationGroup,
+                        fadeInfo,
+                        {GroupTransparency = state and 0 or 1}
+                    )
+                    Window._MenuFadeTween:Play()
                 end
 
-                task.delay(math.max(0.08, 0.30 / menuAnimationSpeed), function()
+                if MenuAnimationScale then
+                    if state and wasDisabled then
+                        MenuAnimationScale.Scale = 0.965
+                    end
+
+                    local scaleInfo = TweenInfo.new(
+                        duration,
+                        state and Enum.EasingStyle.Back or Enum.EasingStyle.Quint,
+                        state and Enum.EasingDirection.Out or Enum.EasingDirection.In
+                    )
+                    Window._MenuScaleTween = tws:Create(
+                        MenuAnimationScale,
+                        scaleInfo,
+                        {Scale = state and 1 or 0.972}
+                    )
+                    Window._MenuScaleTween:Play()
+                end
+
+                task.delay(duration + 0.025, function()
                     if fadeToken ~= Window.FadeToken then return end
                     if ScreenGui and ScreenGui.Parent then
                         if state then
                             ScreenGui.Enabled = true
+                            if MenuAnimationGroup then MenuAnimationGroup.GroupTransparency = 0 end
+                            if MenuAnimationScale then MenuAnimationScale.Scale = 1 end
                         else
                             ScreenGui.Enabled = false
                         end
@@ -3158,7 +3159,7 @@ function sections:CreateToggle(Properties)
             TextColor3          = Color3.fromRGB(205, 205, 205),
             TextSize            = 9,
             TextStrokeTransparency = 1,
-            TextTransparency    = 1,
+            TextTransparency    = 0.5,
             TextXAlignment      = "Left"
         })
         local Content_BindValue = utility:RenderObject(Content.InlineBind and "TextButton" or "TextLabel", {
@@ -9377,8 +9378,8 @@ devkage_cursor_enabled             = true,
 devkage_cursor_profile             = "Custom",
 devkage_cursor_position_mode       = "Mouse",
 devkage_cursor_control_mode        = "Mouse",
-devkage_cursor_color               = Color3.fromRGB(255, 120, 220),
-devkage_cursor_color_secondary     = Color3.fromRGB(255, 230, 255),
+devkage_cursor_color               = Color3.new(1, 1, 1),
+devkage_cursor_color_secondary     = Color3.fromRGB(145, 85, 255),
 devkage_cursor_color_mode          = "Legacy",
 devkage_cursor_color_speed         = 1,
 devkage_cursor_color_spread        = 0.18,
@@ -9396,21 +9397,30 @@ devkage_cursor_spin_speed          = 205,
 devkage_cursor_spin_range          = 360,
 devkage_cursor_squash_x            = 1,
 devkage_cursor_squash_y            = 1,
-devkage_cursor_smooth_spin         = false,
+devkage_cursor_smooth_spin         = true,
 devkage_cursor_line_glow           = true,
-devkage_cursor_glow_thickness      = 18,
-devkage_cursor_glow_extra_length   = 10,
-devkage_cursor_glow_transparency   = 0.72,
-devkage_cursor_text_enabled        = false,
+devkage_cursor_glow_thickness      = 12,
+devkage_cursor_glow_extra_length   = 5,
+devkage_cursor_glow_transparency   = 0.68,
+devkage_cursor_text_enabled        = true,
 devkage_cursor_main_text           = "devkage",
 devkage_cursor_second_text         = "None",
 devkage_cursor_text_outline        = true,
+devkage_cursor_text_glow           = true,
+devkage_cursor_text_glow_follow_color = true,
+devkage_cursor_text_glow_color     = Color3.fromRGB(205, 185, 255),
+devkage_cursor_text_glow_size      = 10,
+devkage_cursor_text_glow_strength  = 0.80,
 devkage_cursor_main_text_size      = 20,
 devkage_cursor_second_text_size    = 15,
 devkage_cursor_size           = 25,
 devkage_cursor_thickness      = 3,
 devkage_cursor_rotation_speed = 0.8,
 devkage_cursor_pulse_speed    = 2.9,
+devkage_cursor_bounce         = true,
+devkage_cursor_bounce_amount  = 0.18,
+devkage_cursor_bounce_stretch = 0.12,
+devkage_cursor_bounce_curve   = 0.72,
 devkage_cursor_text           = true,
 skybox_enabled           = false,
 skybox_preset            = "Cloudy Moon",
@@ -9501,29 +9511,17 @@ local function apply_fov(enabled, value)
 local cam = workspace.CurrentCamera
 if not cam then return end
 if enabled then
-if VisualsState.original_fov_camera ~= cam then
+if not VisualsState.original_fov then
 VisualsState.original_fov = cam.FieldOfView
-VisualsState.original_fov_camera = cam
 end
 VisualsState.fov_value = math.clamp(tonumber(value) or VisualsState.fov_value or 70, 1, 120)
 cam.FieldOfView = VisualsState.fov_value
 else
-if VisualsState.original_fov and VisualsState.original_fov_camera == cam then
+if VisualsState.original_fov then
 cam.FieldOfView = VisualsState.original_fov
 end
-VisualsState.original_fov = nil
-VisualsState.original_fov_camera = nil
 end
 end
-
-utility:CreateConnection(workspace:GetPropertyChangedSignal("CurrentCamera"), function()
-    if not VisualsState.fov_changer then return end
-    task.defer(function()
-        VisualsState.original_fov = nil
-        VisualsState.original_fov_camera = nil
-        apply_fov(true, VisualsState.fov_value)
-    end)
-end)
 
 local function apply_fog(enabled)
 local lighting = game:GetService("Lighting")
@@ -26274,67 +26272,9 @@ local function universalHttpGet(url)
     return responseBody
 end
 
-local function universalResolveBlacklistedServerIds()
-    local env = (type(getgenv) == "function" and getgenv()) or _G
-    local blacklist = rawget(env, "__DevKagePlayerBlacklist")
-    local blockedServers = {}
-    if type(blacklist) ~= "table" or next(blacklist) == nil then
-        UniversalToolsRuntime.BlacklistedServers = blockedServers
-        return blockedServers
-    end
-
-    local userIds = {}
-    for key, entry in pairs(blacklist) do
-        local id = tonumber(type(entry) == "table" and entry.userId or key)
-        if id then userIds[#userIds + 1] = id end
-    end
-    if #userIds == 0 then return blockedServers end
-
-    local requestFn = rawget(env, "request")
-        or rawget(env, "http_request")
-        or (type(syn) == "table" and syn.request)
-    if type(requestFn) ~= "function" then return blockedServers end
-
-    for first = 1, #userIds, 100 do
-        local batch = {}
-        for i = first, math.min(first + 99, #userIds) do batch[#batch + 1] = userIds[i] end
-        local encodedOk, body = pcall(HttpService.JSONEncode, HttpService, {userIds = batch})
-        if encodedOk then
-            local requestOk, response = pcall(requestFn, {
-                Url = "https://presence.roblox.com/v1/presence/users",
-                Method = "POST",
-                Headers = {
-                    ["Accept"] = "application/json",
-                    ["Content-Type"] = "application/json",
-                },
-                Body = body,
-            })
-            if requestOk and type(response) == "table" then
-                local statusCode = tonumber(response.StatusCode or response.Status or response.status_code)
-                local responseBody = response.Body or response.body
-                if (not statusCode or (statusCode >= 200 and statusCode < 300)) and type(responseBody) == "string" then
-                    local decodedOk, data = pcall(HttpService.JSONDecode, HttpService, responseBody)
-                    if decodedOk and type(data) == "table" then
-                        for _, presence in ipairs(data.userPresences or {}) do
-                            if tonumber(presence.placeId) == tonumber(game.PlaceId) then
-                                local jobId = tostring(presence.gameId or "")
-                                if jobId ~= "" then blockedServers[jobId] = true end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    UniversalToolsRuntime.BlacklistedServers = blockedServers
-    return blockedServers
-end
-
 local function universalFetchServers(maxPages)
     maxPages = math.clamp(math.floor(tonumber(maxPages) or 4), 1, 8)
 
-    local blockedServerIds = universalResolveBlacklistedServerIds()
     local servers = {}
     local cursor = nil
     local placeId = tonumber(game.PlaceId)
@@ -26367,7 +26307,6 @@ local function universalFetchServers(maxPages)
             if id ~= ""
                 and id ~= tostring(game.JobId)
                 and not UniversalToolsRuntime.Visited[id]
-                and not blockedServerIds[id]
                 and capacity > 0
                 and playing < capacity then
 
@@ -27611,10 +27550,19 @@ local cursorStateMap = {
     devkage_cursor_main_text="MainText",
     devkage_cursor_second_text="SecondText",
     devkage_cursor_text_outline="TextOutline",
+    devkage_cursor_text_glow="TextGlow",
+    devkage_cursor_text_glow_follow_color="TextGlowFollowColor",
+    devkage_cursor_text_glow_color="TextGlowColor",
+    devkage_cursor_text_glow_size="TextGlowSize",
+    devkage_cursor_text_glow_strength="TextGlowStrength",
     devkage_cursor_main_text_size="MainTextSize",
     d]==================],
     [==================[evkage_cursor_second_text_size="SecondTextSize",
     devkage_cursor_pulse_speed="PulseSpeed",
+    devkage_cursor_bounce="Bounce",
+    devkage_cursor_bounce_amount="BounceAmount",
+    devkage_cursor_bounce_stretch="BounceStretch",
+    devkage_cursor_bounce_curve="BounceCurve",
 }
 
 local cursorBridgeEnv=(type(getgenv)=="function" and getgenv()) or _G
@@ -27712,12 +27660,17 @@ local ReferenceCursorRuntime = {
 
     ScreenGui = nil,
     AimContainer = nil,
+    AimScale = nil,
 
     Lines = {},
     MainText = nil,
     MainTextStroke = nil,
+    MainTextGlowOuter = nil,
+    MainTextGlowInner = nil,
     SecondText = nil,
     SecondTextStroke = nil,
+    SecondTextGlowOuter = nil,
+    SecondTextGlowInner = nil,
 
     Settings = {},
     Revision = -1,
@@ -27968,6 +27921,34 @@ local function referenceCursorReadSettings()
     target.TextOutline =
         source.TextOutline ~= false
 
+    target.TextGlow =
+        source.TextGlow ~= false
+
+    target.TextGlowFollowColor =
+        source.TextGlowFollowColor ~= false
+
+    target.TextGlowColor =
+        referenceCursorColor(
+            source.TextGlowColor,
+            Color3.fromRGB(205, 185, 255)
+        )
+
+    target.TextGlowSize =
+        referenceCursorNumber(
+            source.TextGlowSize,
+            10,
+            0,
+            30
+        )
+
+    target.TextGlowStrength =
+        referenceCursorNumber(
+            source.TextGlowStrength,
+            0.80,
+            0,
+            1
+        )
+
     target.MainTextSize =
         math.floor(
             referenceCursorNumber(
@@ -27996,12 +27977,47 @@ end
 
 
 local function referenceGetRainbowColor(t)
-    -- Smooth HSV cycling based on the supplied neon crosshair reference.
-    return Color3.fromHSV((t * 0.22) % 1, 0.95, 1)
+    local r =
+        math.sin(t * 0.6) * 0.5 + 0.5
+
+    local g =
+        math.sin(t * 0.6 + 2) * 0.5 + 0.5
+
+    local b =
+        math.sin(t * 0.6 + 4) * 0.5 + 0.5
+
+    return Color3.new(r, g, b)
 end
 
 local function referenceCalculateRotationSpeed(progress, baseRotationSpeed)
-    -- Constant rotation gives the supplied reference cursor its clean spin.
+    local slowdownStart = 0.6
+    local slowdownDuration = 0.35
+    local minSlowdownSpeed = 0.3
+
+    if progress >= slowdownStart then
+        local slowdownProgress =
+            (progress - slowdownStart)
+            / slowdownDuration
+
+        local easedProgress =
+            slowdownProgress
+            * slowdownProgress
+
+        local slowdownFactor =
+            1
+            - (
+                easedProgress
+                * (1 - minSlowdownSpeed)
+            )
+
+        return
+            baseRotationSpeed
+            * math.max(
+                slowdownFactor,
+                minSlowdownSpeed
+            )
+    end
+
     return baseRotationSpeed
 end
 
@@ -28015,7 +28031,13 @@ local function referenceSmoothRotation(currentRotation, targetRotation, smoothin
 end
 
 local function referenceSmoothPulse(t, speed)
-    return math.sin(t * speed) * 0.5 + 0.5
+    -- Restored cursor bounce: a rhythmic up/down spring instead of a flat
+    -- breathing pulse.  The absolute sine gives each beat a clean return to
+    -- the resting size, while the easing keeps the motion soft rather than
+    -- snapping at the top or bottom.
+    local phase = math.abs(math.sin(t * speed))
+    local eased = 1 - ((1 - phase) * (1 - phase) * (1 - phase))
+    return math.clamp(eased, 0, 1)
 end
 
 
@@ -28265,189 +28287,169 @@ local function referenceDestroyCursorGui()
     runtime.Lines = {}
     runtime.MainText = nil
     runtime.MainTextStroke = nil
+    runtime.MainTextGlowOuter = nil
+    runtime.MainTextGlowInner = nil
     runtime.SecondText = nil
     runtime.SecondTextStroke = nil
+    runtime.SecondTextGlowOuter = nil
+    runtime.SecondTextGlowInner = nil
     runtime.Host = nil
 end
 
 local function referenceCreateLine(parent, name)
+    -- High-quality code-only LED line.  The glow is built from several
+    -- progressively softer layers so it stays crisp instead of looking
+    -- like one oversized translucent rectangle.
+    local function makeGlowLayer(suffix, zIndex, transparency, edgeFade)
+        local glow = Instance.new("Frame")
+        glow.Name = name .. suffix
+        glow.BackgroundColor3 = Color3.new(1, 1, 1)
+        glow.BackgroundTransparency = transparency
+        glow.BorderSizePixel = 0
+        glow.Active = false
+        glow.Selectable = false
+        glow.ZIndex = zIndex
+        glow.Visible = false
+        glow.Parent = parent
+
+        local glowCorner = Instance.new("UICorner")
+        glowCorner.CornerRadius = UDim.new(1, 0)
+        glowCorner.Parent = glow
+
+        local gradient = Instance.new("UIGradient")
+        gradient.Name = "SoftFade"
+        gradient.Rotation = 90
+        gradient.Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0.00, math.clamp(edgeFade or 0.35, 0, 1)),
+            NumberSequenceKeypoint.new(0.16, 0.08),
+            NumberSequenceKeypoint.new(0.50, 0.00),
+            NumberSequenceKeypoint.new(0.84, 0.08),
+            NumberSequenceKeypoint.new(1.00, math.clamp(edgeFade or 0.35, 0, 1)),
+        })
+        gradient.Parent = glow
+
+        return glow
+    end
+
+    local farGlow   = makeGlowLayer("_FarGlow",   99995, 0.955, 0.72)
+    local outerGlow = makeGlowLayer("_OuterGlow", 99996, 0.920, 0.56)
+    local midGlow   = makeGlowLayer("_Glow",      99997, 0.835, 0.36)
+    local innerGlow = makeGlowLayer("_InnerGlow", 99998, 0.660, 0.20)
+
     local frame = Instance.new("Frame")
-
     frame.Name = name
-
-
-    frame.Size =
-        UDim2.new(
-            0,
-            3,
-            0,
-            25
-        )
-
-    frame.Position =
-        UDim2.new(
-            0.5,
-            -1.5,
-            0,
-            0
-        )
-
-    frame.BackgroundColor3 =
-        Color3.new(
-            1,
-            1,
-            1
-        )
-
+    frame.Size = UDim2.fromOffset(3, 18)
+    frame.Position = UDim2.fromScale(0.5, 0.5)
+    frame.AnchorPoint = Vector2.new(0.5, 0.5)
+    frame.BackgroundColor3 = Color3.new(1, 1, 1)
     frame.BorderSizePixel = 0
     frame.Active = false
     frame.Selectable = false
     frame.ZIndex = 100000
     frame.Parent = parent
 
-    local stroke =
-        Instance.new("UIStroke")
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0)
+    corner.Parent = frame
 
-    stroke.Name = "Outline"
-    stroke.ApplyStrokeMode =
-        Enum.ApplyStrokeMode.Border
+    local coreGradient = Instance.new("UIGradient")
+    coreGradient.Name = "LEDCoreGradient"
+    coreGradient.Rotation = 0
+    coreGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0.00, Color3.fromRGB(210, 205, 225)),
+        ColorSequenceKeypoint.new(0.18, Color3.fromRGB(255, 255, 255)),
+        ColorSequenceKeypoint.new(0.52, Color3.fromRGB(255, 255, 255)),
+        ColorSequenceKeypoint.new(0.84, Color3.fromRGB(238, 232, 255)),
+        ColorSequenceKeypoint.new(1.00, Color3.fromRGB(185, 175, 210)),
+    })
+    coreGradient.Parent = frame
 
-    stroke.Color = Color3.fromRGB(255, 230, 255)
-    stroke.Thickness = 1.8
-    stroke.Transparency = 0.15
-    stroke.Parent = frame
+    local outline = Instance.new("UIStroke")
+    outline.Name = "Outline"
+    outline.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    outline.Color = Color3.fromRGB(16, 14, 24)
+    outline.Thickness = 1.15
+    outline.Transparency = 0.08
+    outline.LineJoinMode = Enum.LineJoinMode.Round
+    outline.Parent = frame
 
-    local frameCorner = Instance.new("UICorner")
-    frameCorner.CornerRadius = UDim.new(1, 0)
-    frameCorner.Parent = frame
-
-    local glow =
-        Instance.new("Frame")
-
-    glow.Name =
-        name
-        .. "_Glow"
-
-    glow.BackgroundColor3 =
-        Color3.new(
-            1,
-            1,
-            1
-        )
-
-    glow.BackgroundTransparency = 1
-    glow.BorderSizePixel = 0
-    glow.Active = false
-    glow.Selectable = false
-    glow.ZIndex = 99999
-    glow.Visible = false
-    glow.Parent = parent
-
-    local glowCorner =
-        Instance.new("UICorner")
-
-    glowCorner.CornerRadius =
-        UDim.new(
-            1,
-            0
-        )
-
-    glowCorner.Parent = glow
-
-    local outerGlow = Instance.new("Frame")
-    outerGlow.Name = name .. "_OuterGlow"
-    outerGlow.BackgroundColor3 = Color3.new(1, 1, 1)
-    outerGlow.BackgroundTransparency = 1
-    outerGlow.BorderSizePixel = 0
-    outerGlow.Active = false
-    outerGlow.Selectable = false
-    outerGlow.ZIndex = 99998
-    outerGlow.Visible = false
-    outerGlow.Parent = parent
-    local outerCorner = Instance.new("UICorner")
-    outerCorner.CornerRadius = UDim.new(1, 0)
-    outerCorner.Parent = outerGlow
+    local highlight = Instance.new("UIStroke")
+    highlight.Name = "LEDHighlight"
+    highlight.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    highlight.Color = Color3.fromRGB(255, 250, 255)
+    highlight.Thickness = 0.55
+    highlight.Transparency = 0.28
+    highlight.LineJoinMode = Enum.LineJoinMode.Round
+    highlight.Parent = frame
 
     return {
         Frame = frame,
-        Stroke = stroke,
-        Glow = glow,
-        OuterGlow = outerGlow,
+        Stroke = outline,
+        HighlightStroke = highlight,
+        CoreGradient = coreGradient,
+        Glow = midGlow,
+        GlowInner = innerGlow,
+        GlowOuter = outerGlow,
+        GlowFar = farGlow,
     }
 end
 
 local function referenceCreateTextLabel(parent, name)
-    local label =
-        Instance.new("TextLabel")
+    local function makeGlowLayer(suffix, zIndex, textTransparency, strokeThickness, strokeTransparency)
+        local glow = Instance.new("TextLabel")
+        glow.Name = name .. suffix
+        glow.Text = name == "MainText" and "devkage" or ""
+        glow.Position = UDim2.fromOffset(0, 0)
+        glow.Size = UDim2.fromOffset(150, 23)
+        glow.BackgroundTransparency = 1
+        glow.BorderSizePixel = 0
+        glow.Font = Enum.Font.Arcade
+        glow.TextScaled = true
+        glow.TextColor3 = Color3.new(1, 1, 1)
+        glow.TextTransparency = textTransparency
+        glow.Active = false
+        glow.Selectable = false
+        glow.ZIndex = zIndex
+        glow.Parent = parent
 
+        local glowStroke = Instance.new("UIStroke")
+        glowStroke.Name = "NeonStroke"
+        glowStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+        glowStroke.Color = Color3.new(1, 1, 1)
+        glowStroke.Thickness = strokeThickness
+        glowStroke.Transparency = strokeTransparency
+        glowStroke.LineJoinMode = Enum.LineJoinMode.Round
+        glowStroke.Parent = glow
+        return glow
+    end
+
+    local outerGlow = makeGlowLayer("_OuterGlow", 99998, 0.88, 5.0, 0.78)
+    local innerGlow = makeGlowLayer("_InnerGlow", 100000, 0.62, 2.5, 0.48)
+
+    local label = Instance.new("TextLabel")
     label.Name = name
-
-    label.Text =
-        name == "MainText"
-        and "devkage"
-        or ""
-
-    label.Position =
-        UDim2.new(
-            0,
-            0,
-            0,
-            0
-        )
-
-    label.TextColor3 =
-        Color3.new(
-            1,
-            1,
-            1
-        )
-
-
-    label.Font =
-        Enum.Font.Arcade
-
-
+    label.Text = name == "MainText" and "devkage" or ""
+    label.Position = UDim2.fromOffset(0, 0)
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.Font = Enum.Font.Arcade
     label.TextScaled = true
-
     label.BackgroundTransparency = 1
     label.Active = false
     label.Selectable = false
-
-
-    label.Size =
-        UDim2.new(
-            0,
-            150,
-            0,
-            23
-        )
-
+    label.Size = UDim2.fromOffset(150, 23)
     label.ZIndex = 100001
     label.Parent = parent
 
-    local stroke =
-        Instance.new("UIStroke")
-
+    local stroke = Instance.new("UIStroke")
     stroke.Name = "TextOutline"
-
-    stroke.ApplyStrokeMode =
-        Enum.ApplyStrokeMode.Contextual
-
-    stroke.Color =
-        Color3.new(
-            0,
-            0,
-            0
-        )
-
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+    stroke.Color = Color3.fromRGB(18, 16, 28)
     stroke.Thickness = 1
-
-    stroke.LineJoinMode =
-        Enum.LineJoinMode.Round
-
+    stroke.Transparency = 0.08
+    stroke.LineJoinMode = Enum.LineJoinMode.Round
     stroke.Parent = label
 
-    return label, stroke
+    return label, stroke, outerGlow, innerGlow
 end
 
 local function referenceResolveGuiHost()
@@ -28564,7 +28566,7 @@ local function referenceCreateCursorGui()
     aimContainer.Parent = screenGui
 
     local aimScale = Instance.new("UIScale")
-    aimScale.Name = "NeonPulseScale"
+    aimScale.Name = "NeonCursorPulse"
     aimScale.Scale = 1
     aimScale.Parent = aimContainer
 
@@ -28593,14 +28595,18 @@ local function referenceCreateCursorGui()
     }
 
     runtime.MainText,
-    runtime.MainTextStroke =
+    runtime.MainTextStroke,
+    runtime.MainTextGlowOuter,
+    runtime.MainTextGlowInner =
         referenceCreateTextLabel(
             screenGui,
             "MainText"
         )
 
     runtime.SecondText,
-    runtime.SecondTextStroke =
+    runtime.SecondTextStroke,
+    runtime.SecondTextGlowOuter,
+    runtime.SecondTextGlowInner =
         referenceCreateTextLabel(
             screenGui,
             "SecondText"
@@ -28620,123 +28626,40 @@ local function referenceApplyFourArmLayout(
     currentLength,
     lineThickness
 )
-    local runtime =
-        ReferenceCursorRuntime
-
-    local lines =
-        runtime.Lines
-
+    local runtime = ReferenceCursorRuntime
+    local lines = runtime.Lines
     if #lines < 4 then return end
 
-    local top =
-        lines[1].Frame
+    local centerRadius = referenceCursorNumber(settings.CenterRadius, 12, 0, 60)
+    local squashX = referenceCursorNumber(settings.SquashX, 1, 0.25, 2)
+    local squashY = referenceCursorNumber(settings.SquashY, 1, 0.25, 2)
+    local spreadX = centerRadius * 0.72 * squashX
+    local spreadY = centerRadius * 0.72 * squashY
+    local length = math.max(2, math.abs(currentLength))
 
-    local bottom =
-        lines[2].Frame
-
-    local left =
-        lines[3].Frame
-
-    local right =
-        lines[4].Frame
+    local positions = {
+        Vector2.new(-spreadX, -spreadY),
+        Vector2.new( spreadX, -spreadY),
+        Vector2.new(-spreadX,  spreadY),
+        Vector2.new( spreadX,  spreadY),
+    }
+    -- Short diagonal LED bars exactly like the classic four-piece cursor.
+    local rotations = {-45, 45, 45, -45}
 
     for index = 1, 4 do
-        local line =
-            lines[index]
-
-        line.Frame.Visible = true
-
-        line.Frame.AnchorPoint =
-            Vector2.new(
-                0,
-                0
-            )
-
-        line.Frame.Rotation = 0
-
+        local line = lines[index]
+        local frame = line.Frame
+        frame.Visible = true
+        frame.AnchorPoint = Vector2.new(0.5, 0.5)
+        frame.Size = UDim2.fromOffset(lineThickness, length)
+        frame.Position = UDim2.new(0.5, positions[index].X, 0.5, positions[index].Y)
+        frame.Rotation = rotations[index]
         line.Stroke.Enabled = true
         line.Stroke.Thickness = 1
-        line.Stroke.Color =
-            Color3.new(
-                0,
-                0,
-                0
-            )
+        line.Stroke.Color = Color3.fromRGB(20, 18, 30)
+        line.Stroke.Transparency = 0.18
     end
-
-
-    top.Size =
-        UDim2.new(
-            0,
-            lineThickness,
-            0,
-            currentLength
-        )
-
-    bottom.Size =
-        UDim2.new(
-            0,
-            lineThickness,
-            0,
-            currentLength
-        )
-
-    left.Size =
-        UDim2.new(
-            0,
-            currentLength,
-            0,
-            lineThickness
-        )
-
-    right.Size =
-        UDim2.new(
-            0,
-            currentLength,
-            0,
-            lineThickness
-        )
-
-    top.Position =
-        UDim2.new(
-            0.5,
-            -lineThickness / 2,
-            0,
-            0
-        )
-
-    bottom.Position =
-        UDim2.new(
-            0.5,
-            -lineThickness / 2,
-            1,
-            -currentLength
-        )
-
-    left.Position =
-        UDim2.new(
-            0,
-            0,
-            0.5,
-            -lineThickness / 2
-        )
-
-    right.Position =
-        UDim2.new(
-            1,
-            -currentLength,
-            0.5,
-            -lineThickness / 2
-        )
 end
-
-
-
-
-
-
-
-
 
 local function referenceEnsureExtraArmCount(count)
     local runtime =
@@ -28882,108 +28805,94 @@ local function referenceApplyGlow(
     color,
     isHorizontalOrVerticalReference
 )
-    local glow = line.Glow
-    local outerGlow = line.OuterGlow
+    local mid = line.Glow
+    local inner = line.GlowInner
+    local outer = line.GlowOuter
+    local far = line.GlowFar
 
-    if settings.LineGlow ~= true
-        or not line.Frame.Visible then
+    local function setVisible(value)
+        if mid then mid.Visible = value end
+        if inner then inner.Visible = value end
+        if outer then outer.Visible = value end
+        if far then far.Visible = value end
+    end
 
-        glow.Visible = false
-        if outerGlow then outerGlow.Visible = false end
+    if settings.LineGlow ~= true or not line.Frame.Visible then
+        setVisible(false)
         return
     end
 
-    local glowThickness =
-        referenceCursorNumber(
-            settings.GlowThickness,
-            30,
-            0,
-            50
-        )
+    local glowThickness = referenceCursorNumber(settings.GlowThickness, 14, 0, 50)
+    local glowExtraLength = referenceCursorNumber(settings.GlowExtraLength, 6, 0, 50)
+    local baseTransparency = referenceCursorNumber(settings.GlowTransparency, 0.72, 0, 1)
 
-    local glowExtraLength =
-        referenceCursorNumber(
-            settings.GlowExtraLength,
-            15,
-            0,
-            50
-        )
+    local sourceSize = line.Frame.AbsoluteSize
+    local horizontal = sourceSize.X >= sourceSize.Y
 
-    local glowTransparency =
-        referenceCursorNumber(
-            settings.GlowTransparency,
-            0.43,
-            0,
-            1
-        )
-
-    referenceCopyFrameGeometry(
-        line.Frame,
-        glow
-    )
-
-    local sourceSize =
-        line.Frame.AbsoluteSize
-
-    if sourceSize.X >= sourceSize.Y then
-        glow.Size =
-            UDim2.fromOffset(
-                math.max(
-                    1,
-                    sourceSize.X
-                    + glowExtraLength
-                ),
-                math.max(
-                    1,
-                    sourceSize.Y
-                    + glowThickness
-                )
-            )
-    else
-        glow.Size =
-            UDim2.fromOffset(
-                math.max(
-                    1,
-                    sourceSize.X
-                    + glowThickness
-                ),
-                math.max(
-                    1,
-                    sourceSize.Y
-                    + glowExtraLength
-                )
-            )
-    end
-
-    glow.BackgroundColor3 = color:Lerp(Color3.new(1, 1, 1), 0.08)
-    glow.BackgroundTransparency = glowTransparency
-    glow.Visible = true
-
-    if outerGlow then
-        referenceCopyFrameGeometry(line.Frame, outerGlow)
-        local sourceSize = line.Frame.AbsoluteSize
-        local outerThickness = glowThickness + 10
-        local outerExtraLength = glowExtraLength + 8
-        if sourceSize.X >= sourceSize.Y then
-            outerGlow.Size = UDim2.fromOffset(
-                math.max(1, sourceSize.X + outerExtraLength),
-                math.max(1, sourceSize.Y + outerThickness)
+    local function fit(target, shortPad, longPad)
+        if not target then return end
+        referenceCopyFrameGeometry(line.Frame, target)
+        if horizontal then
+            target.Size = UDim2.fromOffset(
+                math.max(1, sourceSize.X + longPad),
+                math.max(1, sourceSize.Y + shortPad)
             )
         else
-            outerGlow.Size = UDim2.fromOffset(
-                math.max(1, sourceSize.X + outerThickness),
-                math.max(1, sourceSize.Y + outerExtraLength)
+            target.Size = UDim2.fromOffset(
+                math.max(1, sourceSize.X + shortPad),
+                math.max(1, sourceSize.Y + longPad)
             )
         end
-        outerGlow.BackgroundColor3 = color
-        outerGlow.BackgroundTransparency = math.clamp(glowTransparency + 0.16, 0, 0.98)
-        outerGlow.Visible = true
     end
+
+    fit(inner, math.max(2, glowThickness * 0.20), math.max(1, glowExtraLength * 0.28))
+    fit(mid,   math.max(4, glowThickness * 0.44), math.max(2, glowExtraLength * 0.58))
+    fit(outer, math.max(7, glowThickness * 0.78), math.max(3, glowExtraLength * 0.84))
+    fit(far,   math.max(9, glowThickness * 1.14), math.max(4, glowExtraLength * 1.16))
+
+    local whiteHot = color:Lerp(Color3.new(1, 1, 1), 0.80)
+    local innerColor = color:Lerp(Color3.new(1, 1, 1), 0.54)
+    local soft = color:Lerp(Color3.new(1, 1, 1), 0.22)
+
+    if inner then
+        inner.BackgroundColor3 = whiteHot
+        inner.BackgroundTransparency = math.clamp(baseTransparency - 0.22, 0.34, 0.80)
+    end
+    if mid then
+        mid.BackgroundColor3 = innerColor
+        mid.BackgroundTransparency = math.clamp(baseTransparency - 0.01, 0.54, 0.89)
+    end
+    if outer then
+        outer.BackgroundColor3 = soft
+        outer.BackgroundTransparency = math.clamp(baseTransparency + 0.12, 0.72, 0.955)
+    end
+    if far then
+        far.BackgroundColor3 = color
+        far.BackgroundTransparency = math.clamp(baseTransparency + 0.22, 0.82, 0.985)
+    end
+
+    if line.HighlightStroke then
+        line.HighlightStroke.Color = whiteHot
+        line.HighlightStroke.Transparency = math.clamp(baseTransparency * 0.34, 0.14, 0.44)
+    end
+    if line.Stroke then
+        line.Stroke.Color = Color3.fromRGB(15, 13, 23)
+        line.Stroke.Transparency = 0.08
+    end
+
+    if line.CoreGradient then
+        local edge = color:Lerp(Color3.fromRGB(45, 38, 62), 0.48)
+        line.CoreGradient.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0.00, edge),
+            ColorSequenceKeypoint.new(0.15, color:Lerp(Color3.new(1,1,1), 0.48)),
+            ColorSequenceKeypoint.new(0.46, whiteHot),
+            ColorSequenceKeypoint.new(0.72, color:Lerp(Color3.new(1,1,1), 0.58)),
+            ColorSequenceKeypoint.new(1.00, edge),
+        })
+    end
+
+    setVisible(true)
 end
-
-
-
-
 
 local function referenceCursorPosition(settings)
 
@@ -29107,12 +29016,7 @@ local function referenceApplyText(
 
         runtime.MainTextStroke.Thickness = 1
 
-        runtime.MainTextStroke.Color =
-            Color3.new(
-                0,
-                0,
-                0
-            )
+        runtime.MainTextStroke.Color = Color3.fromRGB(18, 16, 28)
 
         runtime.MainTextStroke.LineJoinMode =
             Enum.LineJoinMode.Round
@@ -29148,17 +29052,78 @@ local function referenceApplyText(
             settings.TextOutline ~= false
 
         runtime.SecondTextStroke.Thickness = 1
-
-        runtime.SecondTextStroke.Color =
-            Color3.new(
-                0,
-                0,
-                0
-            )
-
-        runtime.SecondTextStroke.LineJoinMode =
-            Enum.LineJoinMode.Round
+        runtime.SecondTextStroke.Color = Color3.fromRGB(18, 16, 28)
+        runtime.SecondTextStroke.LineJoinMode = Enum.LineJoinMode.Round
     end
+
+    local function syncTextGlow(label, outerGlow, innerGlow)
+        if not label then return end
+
+        local glowEnabled = settings.TextGlow ~= false
+        local visible = label.Visible == true and glowEnabled
+        local glowSize = referenceCursorNumber(settings.TextGlowSize, 10, 0, 30)
+        local glowStrength = referenceCursorNumber(settings.TextGlowStrength, 0.80, 0, 1)
+        local glowColor = color
+
+        if settings.TextGlowFollowColor == false then
+            glowColor = referenceCursorColor(
+                settings.TextGlowColor,
+                Color3.fromRGB(205, 185, 255)
+            )
+        end
+
+        for _, glow in ipairs({outerGlow, innerGlow}) do
+            if glow then
+                glow.Visible = visible
+                glow.Text = label.Text
+                glow.Font = label.Font
+                glow.TextScaled = true
+                glow.TextColor3 = glowColor
+            end
+        end
+
+        if outerGlow then
+            local outerX = glowSize
+            local outerY = glowSize * 0.80
+            outerGlow.Size = UDim2.new(
+                label.Size.X.Scale, label.Size.X.Offset + outerX,
+                label.Size.Y.Scale, label.Size.Y.Offset + outerY
+            )
+            outerGlow.Position = UDim2.new(
+                label.Position.X.Scale, label.Position.X.Offset - outerX * 0.5,
+                label.Position.Y.Scale, label.Position.Y.Offset - outerY * 0.5
+            )
+            outerGlow.TextTransparency = 1 - (0.16 * glowStrength)
+            local s = outerGlow:FindFirstChild("NeonStroke")
+            if s then
+                s.Color = glowColor
+                s.Thickness = math.clamp(glowSize * 0.50, 0.5, 15)
+                s.Transparency = 1 - (0.30 * glowStrength)
+            end
+        end
+
+        if innerGlow then
+            local innerSize = glowSize * 0.40
+            innerGlow.Size = UDim2.new(
+                label.Size.X.Scale, label.Size.X.Offset + innerSize,
+                label.Size.Y.Scale, label.Size.Y.Offset + innerSize
+            )
+            innerGlow.Position = UDim2.new(
+                label.Position.X.Scale, label.Position.X.Offset - innerSize * 0.5,
+                label.Position.Y.Scale, label.Position.Y.Offset - innerSize * 0.5
+            )
+            innerGlow.TextTransparency = 1 - (0.46 * glowStrength)
+            local s = innerGlow:FindFirstChild("NeonStroke")
+            if s then
+                s.Color = glowColor:Lerp(Color3.new(1,1,1), 0.45)
+                s.Thickness = math.clamp(glowSize * 0.25, 0.5, 8)
+                s.Transparency = 1 - (0.66 * glowStrength)
+            end
+        end
+    end
+
+    syncTextGlow(main, runtime.MainTextGlowOuter, runtime.MainTextGlowInner)
+    syncTextGlow(second, runtime.SecondTextGlowOuter, runtime.SecondTextGlowInner)
 end
 
 
@@ -29378,26 +29343,23 @@ local function referenceRouteCursorLayer()
     local runtime = ReferenceCursorRuntime
     if not runtime.ScreenGui or not runtime.AimContainer then return end
 
-
-
-
-
-
-    local menuGui = library.Window and library.Window.ScreenGui
-    local target = (library.Window and library.Window.Enabled == true and menuGui and menuGui.Parent)
-        and menuGui
-        or runtime.ScreenGui
-
-    for _, object in ipairs({runtime.AimContainer, runtime.MainText, runtime.SecondText}) do
+    -- Keep the cursor in its dedicated ultra-high DisplayOrder ScreenGui.
+    -- This avoids menu fade/clipping from affecting the pointer or its neon text.
+    local target = runtime.ScreenGui
+    for _, object in ipairs({
+        runtime.AimContainer,
+        runtime.MainText,
+        runtime.MainTextGlowOuter,
+        runtime.MainTextGlowInner,
+        runtime.SecondText,
+        runtime.SecondTextGlowOuter,
+        runtime.SecondTextGlowInner
+    }) do
         if object and object.Parent ~= target then
             pcall(function() object.Parent = target end)
         end
     end
 end
-
-
-
-
 
 local function referenceCursorRender(deltaTime)
     local runtime =
@@ -29473,19 +29435,18 @@ local function referenceCursorRender(deltaTime)
     runtime.ScreenGui.Enabled =
         enabled
 
-    local menuOpen = library.Window and library.Window.Enabled == true
+    referenceSetBridgeOwnership(enabled)
+    referenceApplyNativeMouseState(enabled)
 
-    referenceSetBridgeOwnership(
-        enabled
-    )
-
-    referenceApplyNativeMouseState(
-        enabled
-    )
-
-    if runtime.AimContainer then runtime.AimContainer.Visible = enabled end
+    if runtime.AimContainer then
+        runtime.AimContainer.Visible = enabled
+    end
 
     if not enabled then
+        if runtime.MainTextGlowOuter then runtime.MainTextGlowOuter.Visible = false end
+        if runtime.MainTextGlowInner then runtime.MainTextGlowInner.Visible = false end
+        if runtime.SecondTextGlowOuter then runtime.SecondTextGlowOuter.Visible = false end
+        if runtime.SecondTextGlowInner then runtime.SecondTextGlowInner.Visible = false end
         return
     end
 
@@ -29588,9 +29549,25 @@ local function referenceCursorRender(deltaTime)
 
 
 
-    local currentLength = lineLength
+    -- Adjustable bounce.  The curve keeps the reticle crisp at both ends
+    -- instead of continuously stretching it like a soft breathing animation.
+    local bounceEnabled = settings.Bounce ~= false and pulseSpeed > 0
+    local bounceAmount = referenceCursorNumber(settings.BounceAmount, 0.18, 0, 0.55)
+    local bounceStretch = referenceCursorNumber(settings.BounceStretch, 0.12, 0, 0.50)
+    local bounceCurve = referenceCursorNumber(settings.BounceCurve, 0.72, 0.10, 1)
+
+    local bounceWave = 0
+    if bounceEnabled then
+        local raw = math.clamp(pulse, 0, 1)
+        -- Ease toward the peak and settle naturally.
+        bounceWave = 1 - math.pow(1 - raw, 1 + (bounceCurve * 3.2))
+        bounceWave = math.sin(bounceWave * math.pi * 0.5)
+    end
+
+    local currentLength = lineLength * (1 + bounceStretch * bounceWave)
+
     if runtime.AimScale then
-        runtime.AimScale.Scale = 0.52 + ((1.58 - 0.52) * pulse)
+        runtime.AimScale.Scale = 1 + (bounceAmount * bounceWave)
     end
 
     local armCount =
@@ -29598,12 +29575,20 @@ local function referenceCursorRender(deltaTime)
             settings.ArmCount
         )
 
-    referenceApplyRadialLayout(
-        settings,
-        currentLength,
-        lineThickness,
-        armCount
-    )
+    if armCount == 4 then
+        referenceApplyFourArmLayout(
+            settings,
+            currentLength,
+            lineThickness
+        )
+    else
+        referenceApplyRadialLayout(
+            settings,
+            currentLength,
+            lineThickness,
+            armCount
+        )
+    end
 
     local firstColor =
         referenceResolveColor(
@@ -29639,8 +29624,10 @@ local function referenceCursorRender(deltaTime)
                 armCount == 4
             )
         else
-            line.Glow.Visible = false
-            if line.OuterGlow then line.OuterGlow.Visible = false end
+            if line.Glow then line.Glow.Visible = false end
+            if line.GlowInner then line.GlowInner.Visible = false end
+            if line.GlowOuter then line.GlowOuter.Visible = false end
+            if line.GlowFar then line.GlowFar.Visible = false end
         end
     end
 
@@ -29787,19 +29774,19 @@ table.insert(
 ReferenceCursorRuntime.ReferenceVisual = {
     GuiName = "AimSightGUI",
 
-    DefaultContainerWidth = 82,
-    DefaultContainerHeight = 82,
+    DefaultContainerWidth = 25,
+    DefaultContainerHeight = 25,
 
     DefaultLineThickness = 3,
-    DefaultLineLengthSetting = 18,
+    DefaultLineLengthSetting = 25,
 
     OriginalMinimumPulseLength = -10,
     OriginalMaximumPulseLength = -30,
 
     OriginalRotationProgressSpeed = 0.8,
-    OriginalSpinSpeedDegrees = 205,
+    OriginalSpinSpeedDegrees = 288,
 
-    OriginalPulseSpeed = 2.9,
+    OriginalPulseSpeed = 2.5,
 
     SlowdownStart = 0.6,
     SlowdownDuration = 0.35,
@@ -29883,7 +29870,11 @@ addSlider(animationSection,"devkage_cursor_spin_range","Spin Range",1,360,0,"°"
 addSlider(animationSection,"devkage_cursor_squash_x","Squash X",0.25,2,2,"x")
 addSlider(animationSection,"devkage_cursor_squash_y","Squash Y",0.25,2,2,"x")
 addToggle(animationSection,"devkage_cursor_smooth_spin","Smooth Spin")
-addSlider(animationSection,"devkage_cursor_pulse_speed","Pulse Speed",0,8,2,"x")
+addToggle(animationSection,"devkage_cursor_bounce","Bounce")
+addSlider(animationSection,"devkage_cursor_pulse_speed","Bounce Speed",0,8,2,"x")
+addSlider(animationSection,"devkage_cursor_bounce_amount","Bounce Amount",0,0.55,2,"x")
+addSlider(animationSection,"devkage_cursor_bounce_stretch","Arm Bounce",0,0.50,2,"x")
+addSlider(animationSection,"devkage_cursor_bounce_curve","Bounce Sharpness",0.10,1,2,"")
 
 addToggle(advancedSection,"devkage_cursor_line_glow","Line Glow")
 addSlider(advancedSection,"devkage_cursor_glow_thickness","Glow Thickness",0,50,0,"")
@@ -29894,6 +29885,11 @@ addToggle(textSection,"devkage_cursor_text_enabled","Text Enabled")
 addDropdown(textSection,"devkage_cursor_main_text","Main Text",{"devkage","Vortex.exe","DevKage","Crosshair"})
 addDropdown(textSection,"devkage_cursor_second_text","Second Text",{"None","devkage","DevKage","Vortex.exe","Crosshair"})
 addToggle(textSection,"devkage_cursor_text_outline","Text Outline")
+addToggle(textSection,"devkage_cursor_text_glow","Text Glow")
+addToggle(textSection,"devkage_cursor_text_glow_follow_color","Text Glow Follows Cursor Color")
+addColor(textSection,"devkage_cursor_text_glow_color","Text Glow Color")
+addSlider(textSection,"devkage_cursor_text_glow_size","Text Glow Size",0,30,1," px")
+addSlider(textSection,"devkage_cursor_text_glow_strength","Text Glow Strength",0,1,2,"")
 addSlider(textSection,"devkage_cursor_main_text_size","Main Text Size",8,40,0,"")
 addSlider(textSection,"devkage_cursor_second_text_size","Second Text Size",8,40,0,"")
 
@@ -30139,154 +30135,6 @@ UI.ThemeDPIScale = UI.ThemeSection:CreateDropdown({
 })
 library:ApplyTheme()
 
--- ============================================================
--- ASTRA UI WEATHER FX — visual-only overlay clipped to the menu.
--- ============================================================
-UI.UIWeatherSection = settingPage:CreateSection({Name="UI Weather FX",Side="Right",Size=390})
-local UIWeatherRuntime = {
-    Layer=nil, RainPool={}, SnowPool={}, RainClock=0, SnowClock=0, Random=Random.new(), Alive=true
-}
-
-local function ensureUIWeatherLayer()
-    if UIWeatherRuntime.Layer and UIWeatherRuntime.Layer.Parent then return UIWeatherRuntime.Layer end
-    local main = library.Window and library.Window.MainFrame
-    if not main then return nil end
-    local layer = Instance.new("Frame")
-    layer.Name = "DevKage_UIWeatherLayer"
-    layer.BackgroundTransparency = 1
-    layer.BorderSizePixel = 0
-    layer.Size = UDim2.fromScale(1,1)
-    layer.ClipsDescendants = true
-    layer.Active = false
-    layer.Selectable = false
-    layer.ZIndex = 29000
-    layer.Parent = main
-    UIWeatherRuntime.Layer = layer
-    return layer
-end
-
-local function acquireRainDrop()
-    local layer=ensureUIWeatherLayer(); if not layer then return nil end
-    local drop=table.remove(UIWeatherRuntime.RainPool)
-    if not drop or not drop.Parent then
-        drop=Instance.new("Frame")
-        drop.Name="AstraRainDrop"
-        drop.AnchorPoint=Vector2.new(0.5,0)
-        drop.BorderSizePixel=0
-        drop.Active=false
-        drop.ZIndex=29002
-        drop.Parent=layer
-        local corner=Instance.new("UICorner"); corner.CornerRadius=UDim.new(1,0); corner.Parent=drop
-        local stroke=Instance.new("UIStroke"); stroke.Name="Glow"; stroke.Thickness=2; stroke.Transparency=0.56; stroke.Parent=drop
-        local grad=Instance.new("UIGradient")
-        grad.Rotation=90
-        grad.Transparency=NumberSequence.new({
-            NumberSequenceKeypoint.new(0,0.96), NumberSequenceKeypoint.new(0.28,0.20), NumberSequenceKeypoint.new(1,0.62)
-        })
-        grad.Parent=drop
-    end
-    drop.Visible=true
-    return drop
-end
-
-local function releaseRainDrop(drop)
-    if not drop or not drop.Parent then return end
-    drop.Visible=false; drop.Position=UDim2.fromOffset(-100,-100)
-    UIWeatherRuntime.RainPool[#UIWeatherRuntime.RainPool+1]=drop
-end
-
-local function acquireSnowFlake()
-    local layer=ensureUIWeatherLayer(); if not layer then return nil end
-    local flake=table.remove(UIWeatherRuntime.SnowPool)
-    if not flake or not flake.Parent then
-        flake=Instance.new("TextLabel")
-        flake.Name="AstraSnowFlake"
-        flake.BackgroundTransparency=1
-        flake.BorderSizePixel=0
-        flake.Font=Enum.Font.GothamBold
-        flake.Text="✦"
-        flake.TextScaled=true
-        flake.TextStrokeTransparency=0.58
-        flake.Active=false
-        flake.ZIndex=29001
-        flake.Parent=layer
-    end
-    flake.Visible=true
-    return flake
-end
-
-local function releaseSnowFlake(flake)
-    if not flake or not flake.Parent then return end
-    flake.Visible=false; flake.Position=UDim2.fromOffset(-100,-100)
-    UIWeatherRuntime.SnowPool[#UIWeatherRuntime.SnowPool+1]=flake
-end
-
-local function spawnUIRain()
-    local layer=ensureUIWeatherLayer(); if not layer then return end
-    local size=layer.AbsoluteSize; if size.X < 4 or size.Y < 4 then return end
-    local drop=acquireRainDrop(); if not drop then return end
-    local rng=UIWeatherRuntime.Random
-    local width=rng:NextInteger(1,3); local height=rng:NextInteger(24,70)
-    local x=rng:NextNumber(2,math.max(3,size.X-2)); local drift=rng:NextNumber(-34,20)
-    local color=library.Theme.UIRainColor or Color3.fromRGB(90,190,255)
-    drop.Size=UDim2.fromOffset(width,height)
-    drop.Position=UDim2.fromOffset(x,-height-rng:NextInteger(0,80))
-    drop.BackgroundColor3=color
-    drop.BackgroundTransparency=rng:NextNumber(0.20,0.48)
-    local glow=drop:FindFirstChild("Glow")
-    if glow then glow.Color=color:Lerp(Color3.new(1,1,1),0.32); glow.Transparency=0.56 end
-    local speed=math.clamp(tonumber(library.Theme.UIRainSpeed) or 1,0.25,2.5)
-    local tween=tws:Create(drop,TweenInfo.new(rng:NextNumber(0.70,1.30)/speed,Enum.EasingStyle.Linear),{
-        Position=UDim2.fromOffset(x+drift,size.Y+height+12), BackgroundTransparency=0.76
-    })
-    tween:Play(); tween.Completed:Connect(function() releaseRainDrop(drop) end)
-end
-
-local function spawnUISnow()
-    local layer=ensureUIWeatherLayer(); if not layer then return end
-    local size=layer.AbsoluteSize; if size.X < 4 or size.Y < 4 then return end
-    local flake=acquireSnowFlake(); if not flake then return end
-    local rng=UIWeatherRuntime.Random
-    local px=rng:NextInteger(7,17); local x=rng:NextNumber(2,math.max(3,size.X-2)); local drift=rng:NextNumber(-90,90)
-    local color=library.Theme.UISnowColor or Color3.fromRGB(245,250,255)
-    flake.Size=UDim2.fromOffset(px,px)
-    flake.Position=UDim2.fromOffset(x,-px-rng:NextInteger(0,55))
-    flake.TextColor3=color; flake.TextStrokeColor3=color:Lerp(Color3.new(1,1,1),0.40)
-    flake.TextTransparency=rng:NextNumber(0.05,0.30); flake.Rotation=rng:NextInteger(0,359)
-    local speed=math.clamp(tonumber(library.Theme.UISnowSpeed) or 0.75,0.25,2)
-    local tween=tws:Create(flake,TweenInfo.new(rng:NextNumber(3.0,6.2)/speed,Enum.EasingStyle.Sine,Enum.EasingDirection.InOut),{
-        Position=UDim2.fromOffset(x+drift,size.Y+px+12), Rotation=flake.Rotation+rng:NextInteger(160,420), TextTransparency=0.72
-    })
-    tween:Play(); tween.Completed:Connect(function() releaseSnowFlake(flake) end)
-end
-
-local uiWeatherConnection=utility:CreateConnection(game:GetService("RunService").RenderStepped,function(dt)
-    if not UIWeatherRuntime.Alive or not library or not library.Window or library.Window.Enabled ~= true then return end
-    if library.Theme.UIRainEnabled == true then
-        UIWeatherRuntime.RainClock=UIWeatherRuntime.RainClock+(tonumber(dt) or 0)*math.clamp(tonumber(library.Theme.UIRainDensity) or 28,1,60)
-        while UIWeatherRuntime.RainClock>=1 do UIWeatherRuntime.RainClock=UIWeatherRuntime.RainClock-1; spawnUIRain() end
-    else UIWeatherRuntime.RainClock=0 end
-    if library.Theme.UISnowEnabled == true then
-        UIWeatherRuntime.SnowClock=UIWeatherRuntime.SnowClock+(tonumber(dt) or 0)*math.clamp(tonumber(library.Theme.UISnowDensity) or 20,1,50)*0.55
-        while UIWeatherRuntime.SnowClock>=1 do UIWeatherRuntime.SnowClock=UIWeatherRuntime.SnowClock-1; spawnUISnow() end
-    else UIWeatherRuntime.SnowClock=0 end
-end)
-
-table.insert(library.CleanupCallbacks,function()
-    UIWeatherRuntime.Alive=false
-    pcall(function() uiWeatherConnection:Disconnect() end)
-    if UIWeatherRuntime.Layer then pcall(function() UIWeatherRuntime.Layer:Destroy() end) end
-end)
-
-UI.UIRainToggle=UI.UIWeatherSection:CreateToggle({Name="Rain Dripping on UI",State=library.Theme.UIRainEnabled==true,Flag="theme.ui_rain",Callback=function(v) library.Theme.UIRainEnabled=v==true end})
-UI.UIRainColor=UI.UIWeatherSection:CreateColorpicker({Name="Rain Color",State=library.Theme.UIRainColor,Flag="theme.ui_rain_color",Callback=function(v) library.Theme.UIRainColor=v end})
-UI.UIRainDensity=UI.UIWeatherSection:CreateSlider({Name="Rain Density",State=library.Theme.UIRainDensity,Min=1,Max=60,Decimals=0,Flag="theme.ui_rain_density",Callback=function(v) library.Theme.UIRainDensity=v end})
-UI.UIRainSpeed=UI.UIWeatherSection:CreateSlider({Name="Rain Speed",State=library.Theme.UIRainSpeed,Min=0.25,Max=2.5,Decimals=2,Suffix="x",Flag="theme.ui_rain_speed",Callback=function(v) library.Theme.UIRainSpeed=v end})
-UI.UISnowToggle=UI.UIWeatherSection:CreateToggle({Name="Snow on UI",State=library.Theme.UISnowEnabled==true,Flag="theme.ui_snow",Callback=function(v) library.Theme.UISnowEnabled=v==true end})
-UI.UISnowColor=UI.UIWeatherSection:CreateColorpicker({Name="Snow Color",State=library.Theme.UISnowColor,Flag="theme.ui_snow_color",Callback=function(v) library.Theme.UISnowColor=v end})
-UI.UISnowDensity=UI.UIWeatherSection:CreateSlider({Name="Snow Density",State=library.Theme.UISnowDensity,Min=1,Max=50,Decimals=0,Flag="theme.ui_snow_density",Callback=function(v) library.Theme.UISnowDensity=v end})
-UI.UISnowSpeed=UI.UIWeatherSection:CreateSlider({Name="Snow Speed",State=library.Theme.UISnowSpeed,Min=0.25,Max=2,Decimals=2,Suffix="x",Flag="theme.ui_snow_speed",Callback=function(v) library.Theme.UISnowSpeed=v end})
-
 local premiumThemeSection=settingPage:CreateSection({Name="Premium Themes",Side="Right",Size=290})
 local premiumThemeOptions={"Classic Olive","Midnight Purple","Cyan Circuit","Rose Gold","Crimson Noir","Arctic Blue","YouTube Red","Emerald Luxe"}
 local premiumThemeProfiles={
@@ -30510,10 +30358,8 @@ local configNameBox
 local autoLoadBox
 local BLACKLIST_FILE = CONFIG_FOLDER .. "/_player_blacklist.json"
 local PlayerBlacklist = {}
-local blacklistEnvironment = (type(getgenv) == "function" and getgenv()) or _G
 local rebuildServerPlayerList
 local rebuildBlacklistList
-local blacklistStatusLabel
 
 local function loadPlayerBlacklist()
 PlayerBlacklist = {}
@@ -30532,7 +30378,6 @@ if tonumber(id) then
 PlayerBlacklist[id]=type(entry)=="table" and entry or {userId=tonumber(id),name=tostring(entry)}
 end
 end
-blacklistEnvironment.__DevKagePlayerBlacklist = PlayerBlacklist
 end
 
 local function savePlayerBlacklist()
@@ -30542,7 +30387,6 @@ if type(writefile)~="function" then return false,"This executor does not provide
 local encodedOk,encoded=pcall(function() return HttpService:JSONEncode(PlayerBlacklist) end)
 if not encodedOk then return false,tostring(encoded) end
 local wrote,err=pcall(writefile,BLACKLIST_FILE,encoded)
-if wrote then blacklistEnvironment.__DevKagePlayerBlacklist = PlayerBlacklist end
 return wrote,wrote and nil or tostring(err)
 end
 
@@ -30576,7 +30420,6 @@ return saved,err
 end
 
 loadPlayerBlacklist()
-blacklistEnvironment.__DevKagePlayerBlacklist = PlayerBlacklist
 
 local function configNames()
 local names,errorMessage = list_configs()
@@ -31028,7 +30871,6 @@ end
 
 local configMain = configPage:CreateSection({ Name = "Configs", Side = "Left", Size = 535 })
 local playerSection = configPage:CreateSection({ Name = "Players", Side = "Right", Size = 585 })
-local blacklistSection = configPage:CreateSection({ Name = "Blacklist", Side = "Right", Size = 360 })
 local configActions = configPage:CreateSection({ Name = "Config Auto-Load", Side = "Right", Size = 210 })
 local scriptSettingsSection = configPage:CreateSection({ Name = "Script Settings", Side = "Right", Size = 150 })
 local configPhotoRoot=Instance.new("Frame")
@@ -31094,151 +30936,6 @@ end
 end
 })
 
-
-local blacklistListFrame = Instance.new("ScrollingFrame")
-blacklistListFrame.Name = "PersistentBlacklist"
-blacklistListFrame.BackgroundColor3 = Color3.fromRGB(12,12,12)
-blacklistListFrame.BorderColor3 = Color3.fromRGB(0,0,0)
-blacklistListFrame.BorderSizePixel = 1
-blacklistListFrame.ScrollBarThickness = 4
-blacklistListFrame.ScrollBarImageColor3 = Color3.fromRGB(85,55,55)
-blacklistListFrame.CanvasSize = UDim2.new(0,0,0,0)
-blacklistListFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-blacklistListFrame.Size = UDim2.new(1,-40,0,270)
-blacklistListFrame.Position = UDim2.new(0,20,0,10)
-blacklistListFrame.ZIndex = 10
-blacklistListFrame.Parent = blacklistSection.Holder
-
-local blacklistListLayout = Instance.new("UIListLayout")
-blacklistListLayout.Padding = UDim.new(0,2)
-blacklistListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-blacklistListLayout.Parent = blacklistListFrame
-
-local blacklistInfo = Instance.new("TextLabel")
-blacklistInfo.BackgroundTransparency = 1
-blacklistInfo.Position = UDim2.new(0,20,0,287)
-blacklistInfo.Size = UDim2.new(1,-40,0,34)
-blacklistInfo.Font = Enum.Font.Code
-blacklistInfo.TextSize = 9
-blacklistInfo.TextWrapped = true
-blacklistInfo.TextXAlignment = Enum.TextXAlignment.Left
-blacklistInfo.TextYAlignment = Enum.TextYAlignment.Top
-blacklistInfo.TextColor3 = Color3.fromRGB(150,150,150)
-blacklistInfo.Text = "Saved automatically. Server hops exclude known servers containing blacklisted users; if one joins your current server, DevKage hops away."
-blacklistInfo.ZIndex = 10
-blacklistInfo.Parent = blacklistSection.Holder
-
-local function removeBlacklistedId(userId)
-    local key = tostring(userId or "")
-    if key == "" or not PlayerBlacklist[key] then return false, "Entry not found" end
-    local previous = PlayerBlacklist[key]
-    PlayerBlacklist[key] = nil
-    local saved, err = savePlayerBlacklist()
-    if not saved then PlayerBlacklist[key] = previous end
-    if rebuildBlacklistList then rebuildBlacklistList() end
-    if rebuildServerPlayerList then rebuildServerPlayerList() end
-    return saved, err
-end
-
-rebuildBlacklistList = function()
-    for _, child in ipairs(blacklistListFrame:GetChildren()) do
-        if child.Name == "BlacklistRow" or child.Name == "BlacklistEmpty" then child:Destroy() end
-    end
-
-    local entries = {}
-    for userId, entry in pairs(PlayerBlacklist) do
-        if type(entry) == "table" then
-            entries[#entries + 1] = {id=tostring(userId), data=entry}
-        end
-    end
-    table.sort(entries, function(a,b)
-        local an = tostring(a.data.displayName or a.data.name or a.id):lower()
-        local bn = tostring(b.data.displayName or b.data.name or b.id):lower()
-        return an < bn
-    end)
-
-    if #entries == 0 then
-        local empty = Instance.new("TextLabel")
-        empty.Name = "BlacklistEmpty"
-        empty.BackgroundTransparency = 1
-        empty.Size = UDim2.new(1,-8,0,32)
-        empty.Font = Enum.Font.Code
-        empty.TextSize = 10
-        empty.TextColor3 = Color3.fromRGB(130,130,130)
-        empty.Text = "Blacklist is empty"
-        empty.ZIndex = 11
-        empty.Parent = blacklistListFrame
-        return
-    end
-
-    for index, wrapper in ipairs(entries) do
-        local entry = wrapper.data
-        local row = Instance.new("Frame")
-        row.Name = "BlacklistRow"
-        row.BackgroundColor3 = Color3.fromRGB(29,18,18)
-        row.BorderColor3 = Color3.fromRGB(55,20,20)
-        row.BorderSizePixel = 1
-        row.Size = UDim2.new(1,-8,0,42)
-        row.LayoutOrder = index
-        row.ZIndex = 11
-        row.Parent = blacklistListFrame
-
-        local name = Instance.new("TextLabel")
-        name.BackgroundTransparency = 1
-        name.Position = UDim2.fromOffset(8,3)
-        name.Size = UDim2.new(1,-42,0,17)
-        name.Font = Enum.Font.Code
-        name.TextSize = 10
-        name.TextXAlignment = Enum.TextXAlignment.Left
-        name.TextColor3 = Color3.fromRGB(255,95,95)
-        local display = tostring(entry.displayName or entry.name or wrapper.id)
-        local username = tostring(entry.name or "")
-        name.Text = username ~= "" and (display .. "  @" .. username) or display
-        name.ZIndex = 12
-        name.Parent = row
-
-        local reason = Instance.new("TextLabel")
-        reason.BackgroundTransparency = 1
-        reason.Position = UDim2.fromOffset(8,20)
-        reason.Size = UDim2.new(1,-42,0,17)
-        reason.Font = Enum.Font.Code
-        reason.TextSize = 8
-        reason.TextXAlignment = Enum.TextXAlignment.Left
-        reason.TextTruncate = Enum.TextTruncate.AtEnd
-        reason.TextColor3 = Color3.fromRGB(155,120,120)
-        reason.Text = tostring(entry.reason or "No reason")
-        reason.ZIndex = 12
-        reason.Parent = row
-
-        local remove = Instance.new("TextButton")
-        remove.BackgroundColor3 = Color3.fromRGB(45,20,20)
-        remove.BorderColor3 = Color3.fromRGB(80,30,30)
-        remove.BorderSizePixel = 1
-        remove.AnchorPoint = Vector2.new(1,0.5)
-        remove.Position = UDim2.new(1,-6,0.5,0)
-        remove.Size = UDim2.fromOffset(24,24)
-        remove.Font = Enum.Font.Code
-        remove.Text = "×"
-        remove.TextSize = 13
-        remove.TextColor3 = Color3.fromRGB(255,105,105)
-        remove.AutoButtonColor = false
-        remove.ZIndex = 13
-        remove.Parent = row
-        remove.MouseButton1Click:Connect(function()
-            local ok, err = removeBlacklistedId(wrapper.id)
-            if ok then
-                if blacklistStatusLabel then
-                    blacklistStatusLabel.Text = "Removed from blacklist: " .. tostring(entry.name or wrapper.id)
-                    blacklistStatusLabel.TextColor3 = Color3.fromRGB(165,165,165)
-                end
-            else
-                library:Notify({Message="Blacklist remove failed: "..tostring(err),Duration=4})
-            end
-        end)
-    end
-end
-
-rebuildBlacklistList()
 
 local function createConfigNameField()
 local holder = Instance.new("Frame")
@@ -31600,7 +31297,7 @@ local function makePlayerActionButton(name,y)
     outer.BorderColor3=Color3.fromRGB(0,0,0)
     outer.BorderSizePixel=1
     outer.Position=UDim2.new(0,10,0,y)
-    outer.Size=UDim2.new(1,-20,0,29)
+    outer.Size=UDim2.new(1,-20,0,37)
     outer.ZIndex=10
     outer.Parent=playerPhotoRoot
 
@@ -31635,67 +31332,69 @@ local function makePlayerActionButton(name,y)
 end
 
 local selectPlayerButton=makePlayerActionButton("Blacklist",463)
-local clearPlayerButton=makePlayerActionButton("Whitelist",497)
+local clearPlayerButton=makePlayerActionButton("Whitelist",507)
 
 
-blacklistStatusLabel=Instance.new("TextLabel")
-blacklistStatusLabel.Name="BlacklistStatus"
-blacklistStatusLabel.BackgroundTransparency=1
-blacklistStatusLabel.BorderSizePixel=0
-blacklistStatusLabel.Position=UDim2.new(0,10,0,530)
-blacklistStatusLabel.Size=UDim2.new(1,-20,0,16)
-blacklistStatusLabel.Font=Enum.Font.Code
-blacklistStatusLabel.Text=""
-blacklistStatusLabel.TextColor3=Color3.fromRGB(255,72,72)
-blacklistStatusLabel.TextSize=9
-blacklistStatusLabel.TextXAlignment=Enum.TextXAlignment.Left
-blacklistStatusLabel.ZIndex=12
-blacklistStatusLabel.Parent=playerPhotoRoot
 
-local blacklistAvoidanceBusy = false
-local blacklistAvoidanceToken = 0
-local blacklistAvoidanceHop
+local blacklistFlashToken=0
+local blacklistFlashFrame=Instance.new("Frame")
+blacklistFlashFrame.Name="BlacklistFlash"
+blacklistFlashFrame.BackgroundColor3=Color3.fromRGB(110,8,8)
+blacklistFlashFrame.BackgroundTransparency=1
+blacklistFlashFrame.BorderSizePixel=0
+blacklistFlashFrame.Position=UDim2.new(0,10,0,463)
+blacklistFlashFrame.Size=UDim2.new(1,-20,0,81)
+blacklistFlashFrame.Visible=false
+blacklistFlashFrame.Active=false
+blacklistFlashFrame.ClipsDescendants=true
+blacklistFlashFrame.ZIndex=30
+blacklistFlashFrame.Parent=playerPhotoRoot
 
-blacklistAvoidanceHop = function(triggerPlayer)
-    if blacklistAvoidanceBusy or UniversalToolsRuntime.Busy then return false end
-    blacklistAvoidanceBusy = true
-    blacklistAvoidanceToken = blacklistAvoidanceToken + 1
-    local token = blacklistAvoidanceToken
-    if blacklistStatusLabel then
-        blacklistStatusLabel.Text = "Avoiding blacklisted player: " .. tostring(triggerPlayer and triggerPlayer.Name or "unknown")
-        blacklistStatusLabel.TextColor3 = Color3.fromRGB(255,72,72)
-    end
+local blacklistFlashStroke=Instance.new("UIStroke")
+blacklistFlashStroke.Color=Color3.fromRGB(255,45,45)
+blacklistFlashStroke.Transparency=1
+blacklistFlashStroke.Thickness=1
+blacklistFlashStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
+blacklistFlashStroke.Parent=blacklistFlashFrame
 
-    task.spawn(function()
-        local servers, err = universalFetchServers(8)
-        if token ~= blacklistAvoidanceToken then blacklistAvoidanceBusy = false return end
-        if not servers or #servers == 0 then
-            blacklistAvoidanceBusy = false
-            library:Notify({Message="Blacklist avoidance could not find a safe open server: "..tostring(err or "none available"),Duration=5})
-            return
-        end
+local blacklistFlashLabel=Instance.new("TextLabel")
+blacklistFlashLabel.BackgroundTransparency=1
+blacklistFlashLabel.BorderSizePixel=0
+blacklistFlashLabel.Size=UDim2.fromScale(1,1)
+blacklistFlashLabel.Font=Enum.Font.Code
+blacklistFlashLabel.Text="!blacklisted!"
+blacklistFlashLabel.TextColor3=Color3.fromRGB(255,72,72)
+blacklistFlashLabel.TextSize=11
+blacklistFlashLabel.TextStrokeColor3=Color3.fromRGB(45,0,0)
+blacklistFlashLabel.TextStrokeTransparency=0.25
+blacklistFlashLabel.TextTransparency=1
+blacklistFlashLabel.TextXAlignment=Enum.TextXAlignment.Center
+blacklistFlashLabel.TextYAlignment=Enum.TextYAlignment.Center
+blacklistFlashLabel.ZIndex=31
+blacklistFlashLabel.Parent=blacklistFlashFrame
 
-        table.sort(servers, function(a,b)
-            if a.playing == b.playing then
-                return (tonumber(a.ping) or math.huge) < (tonumber(b.ping) or math.huge)
-            end
-            return (tonumber(a.playing) or math.huge) < (tonumber(b.playing) or math.huge)
-        end)
-
-        blacklistAvoidanceBusy = false
-        universalTeleportToServer(servers[1])
-    end)
-    return true
+local function showBlacklistFlash()
+blacklistFlashToken=blacklistFlashToken+1
+local token=blacklistFlashToken
+blacklistFlashFrame.Visible=true
+task.spawn(function()
+local started=os.clock()
+while token==blacklistFlashToken and blacklistFlashFrame.Parent and os.clock()-started<1.5 do
+local elapsed=os.clock()-started
+local pulse=math.sin(elapsed*math.pi*8)*0.5+0.5
+blacklistFlashFrame.BackgroundTransparency=0.82-(pulse*0.26)
+blacklistFlashStroke.Transparency=0.55-(pulse*0.40)
+blacklistFlashLabel.TextTransparency=0.24-(pulse*0.20)
+blacklistFlashLabel.TextColor3=Color3.fromRGB(220,35,35):Lerp(Color3.fromRGB(255,105,105),pulse)
+RunService.RenderStepped:Wait()
 end
-
-local function scanCurrentServerForBlacklist()
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer and isPlayerBlacklisted(plr) then
-            blacklistAvoidanceHop(plr)
-            return plr
-        end
-    end
-    return nil
+if token==blacklistFlashToken and blacklistFlashFrame.Parent then
+blacklistFlashFrame.Visible=false
+blacklistFlashFrame.BackgroundTransparency=1
+blacklistFlashStroke.Transparency=1
+blacklistFlashLabel.TextTransparency=1
+end
+end)
 end
 
 selectPlayerButton.MouseButton1Click:Connect(function()
@@ -31707,11 +31406,7 @@ local saved,err=setPlayerBlacklisted(selectedServerPlayer,true,playerReasonBox.T
 if saved then
 playerSelectionLabel.Text="Selected: "..tostring(selectedServerPlayer.Name)
 rebuildServerPlayerList()
-if blacklistStatusLabel then
-blacklistStatusLabel.Text="BLACKLISTED: "..tostring(selectedServerPlayer.Name)
-blacklistStatusLabel.TextColor3=Color3.fromRGB(255,72,72)
-end
-if blacklistAvoidanceHop then blacklistAvoidanceHop(selectedServerPlayer) end
+showBlacklistFlash()
 else
 library:Notify({Message="Blacklist failed: "..tostring(err),Duration=4})
 end
@@ -31728,10 +31423,6 @@ if saved then
 playerReasonBox.Text=""
 playerSelectionLabel.Text="Selected: "..tostring(selectedServerPlayer.Name)
 rebuildServerPlayerList()
-if blacklistStatusLabel then
-blacklistStatusLabel.Text="Removed from blacklist: "..tostring(selectedServerPlayer.Name)
-blacklistStatusLabel.TextColor3=Color3.fromRGB(165,165,165)
-end
 else
 library:Notify({Message="Whitelist failed: "..tostring(err),Duration=4})
 end
@@ -31739,9 +31430,6 @@ end)
 
 utility:CreateConnection(Players.PlayerAdded, function(plr)
 task.defer(rebuildServerPlayerList)
-if plr ~= LocalPlayer and isPlayerBlacklisted(plr) then
-    task.defer(function() blacklistAvoidanceHop(plr) end)
-end
 end)
 
 utility:CreateConnection(Players.PlayerRemoving, function(plr)
@@ -31753,8 +31441,10 @@ task.defer(rebuildServerPlayerList)
 end)
 
 rebuildServerPlayerList()
-rebuildBlacklistList()
-task.defer(scanCurrentServerForBlacklist)
+for _,plr in ipairs(Players:GetPlayers()) do
+if plr~=LocalPlayer and isPlayerBlacklisted(plr) then
+end
+end
 
 if not configNameBox then
 configNameBox = createConfigNameField()
@@ -31968,7 +31658,7 @@ library:Notify({Message=ok and "Auto-load cleared" or ("Auto-load failed: "..tos
 end
 })
 
-configActions:CreateButton({Name="Refresh lists",Callback=function() rebuildConfigList(); rebuildServerPlayerList(); if rebuildBlacklistList then rebuildBlacklistList() end; if autoLoadStatusLabel then autoLoadStatusLabel:SetText("Auto-load: " .. ((get_autoload() ~= "" and get_autoload()) or "none") .. " | selected: " .. tostring(configSelected or "none")) end; library:Notify({Message="Lists refreshed",Duration=2}) end})
+configActions:CreateButton({Name="Refresh lists",Callback=function() rebuildConfigList(); rebuildServerPlayerList(); rebuildBlacklistList(); if autoLoadStatusLabel then autoLoadStatusLabel:SetText("Auto-load: " .. ((get_autoload() ~= "" and get_autoload()) or "none") .. " | selected: " .. tostring(configSelected or "none")) end; library:Notify({Message="Lists refreshed",Duration=2}) end})
 
 configActions:CreateButton({
 Name = "Delete selected",
