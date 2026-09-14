@@ -14301,7 +14301,7 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_65.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_67.lua"
 local SCRIPT_STABLE_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_current.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOLOAD_ENABLED_FILE = CONFIG_FOLDER .. "/_devkage_autoload_enabled.flag"
@@ -15226,6 +15226,14 @@ local function current_payload_is_installed()
 end
 
 local function remove_stale_devkage_payloads()
+    if type(delfile) ~= "function" then return end
+    -- Never allow an older payload filename to remain executable/available.
+    for _, staleCurrent in ipairs({
+        CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_65.lua",
+        CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_66.lua",
+    }) do
+        pcall(delfile, staleCurrent)
+    end
     if type(delfile) ~= "function" then return end
     for _, legacyName in ipairs({
         "_devkage_autoload_payload_v5_2_65.lua",
@@ -32407,9 +32415,9 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
 
 local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
 local __devkageCurrentBuild = "DevKage-v5.2.67-autoload-currentbuild-ui-halo-wave-fps-font-fpsboost-20260913"
-local __devkageCurrentBuildNumber = tonumber((__devkageCurrentBuild:match("v([%d%.]+)" ) or "0"):gsub("%.", "")) or 0
+local __devkageCurrentBuildNumber = tonumber(((__devkageCurrentBuild:match("v([%d%.]+)") or "0"):gsub("%.", ""))) or 0
 local __devkageLoadedBuild = tostring(rawget(__devkageEnv,"__DEVKAGE_PACKAGE_BUILD") or "")
-local __devkageLoadedNumber = tonumber((__devkageLoadedBuild:match("v([%d%.]+)") or "0"):gsub("%.", "")) or 0
+local __devkageLoadedNumber = tonumber(((__devkageLoadedBuild:match("v([%d%.]+)") or "0"):gsub("%.", ""))) or 0
 if __devkageLoadedNumber > __devkageCurrentBuildNumber then
     warn("[DevKage] newer build already loaded; refusing older package")
     return nil
