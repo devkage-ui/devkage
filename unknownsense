@@ -618,11 +618,11 @@ local cre = game:GetService("CoreGui")
 
 
 library.Theme = library.Theme or {
-    UI = Color3.fromRGB(23, 23, 23),
-    Toggle = Color3.fromRGB(175, 205, 75),
-    Slider = Color3.fromRGB(175, 205, 75),
-    Text = Color3.fromRGB(205, 205, 205),
-    TopBar = Color3.fromRGB(255, 255, 255),
+    UI = Color3.fromRGB(15, 15, 15),
+    Toggle = Color3.fromRGB(0, 255, 160),
+    Slider = Color3.fromRGB(0, 255, 160),
+    Text = Color3.fromRGB(180, 180, 180),
+    TopBar = Color3.fromRGB(0, 255, 160),
     TopBarTransparency = 0,
     MenuAnimationSpeed = 1,
     DPIScale = 1
@@ -637,7 +637,7 @@ if library.Theme.DPIScale == nil then library.Theme.DPIScale = 1 end
 if library.Theme.KeybindScale == nil then library.Theme.KeybindScale = 0.85 end
 if library.Theme.KeybindWidth == nil then library.Theme.KeybindWidth = 220 end
 if library.Theme.KeybindTransparency == nil then library.Theme.KeybindTransparency = 0.12 end
-if library.Theme.KeybindColor == nil then library.Theme.KeybindColor = Color3.fromRGB(18, 18, 18) end
+if library.Theme.KeybindColor == nil then library.Theme.KeybindColor = Color3.fromRGB(10, 10, 10) end
 if library.Theme.KeybindTopBar == nil then library.Theme.KeybindTopBar = library.Theme.TopBar end
 if library.Theme.KeybindTopBarTransparency == nil then
     library.Theme.KeybindTopBarTransparency = library.Theme.TopBarTransparency
@@ -652,7 +652,7 @@ library.ThemeRoot = library.ThemeRoot or nil
 function library:ThemeColorFromGray(gray)
     gray = math.clamp(tonumber(gray) or 0, 0, 1)
     if gray <= 0.001 then return Color3.new(0, 0, 0) end
-    local base = self.Theme and self.Theme.UI or Color3.fromRGB(23, 23, 23)
+    local base = self.Theme and self.Theme.UI or Color3.fromRGB(10, 10, 10)
     local scale = gray / (23 / 255)
     return Color3.new(
         math.clamp(base.R * scale, 0, 1),
@@ -1197,9 +1197,9 @@ function library:CreateWindow(Properties)
 
         local ScreenGui_MainFrame = utility:RenderObject("Frame", {
             AnchorPoint         = Vector2.new(0.5, 0.5),
-            BackgroundColor3    = Color3.fromRGB(18, 18, 18),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(12, 12, 12),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderMode          = "Inset",
             BorderSizePixel     = 1,
             Parent              = ScreenGui,
@@ -1230,16 +1230,16 @@ function library:CreateWindow(Properties)
         Window.MenuAnimationScale = MenuAnimationScale
 
         local ScreenGui_MainFrame_InnerBorder = utility:RenderObject("Frame", {
-            BackgroundColor3    = Color3.fromRGB(40, 40, 40),
+            BackgroundColor3    = Color3.fromRGB(20, 20, 20),
             BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = ScreenGui_MainFrame,
             Position            = UDim2.new(0, 1, 0, 1),
             Size                = UDim2.new(1, -2, 1, -2)
         })
         local MainFrame_InnerBorder_InnerFrame = utility:RenderObject("Frame", {
-            BackgroundColor3    = Color3.fromRGB(12, 12, 12),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 0,
             BorderColor3        = Color3.fromRGB(60, 60, 60),
             BorderMode          = "Inset",
@@ -1249,9 +1249,9 @@ function library:CreateWindow(Properties)
             Size                = UDim2.new(1, -6, 1, -6)
         })
         local InnerBorder_InnerFrame_Tabs = utility:RenderObject("ScrollingFrame", {
-            BackgroundColor3    = Color3.fromRGB(12, 12, 12),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = MainFrame_InnerBorder_InnerFrame,
             Position            = UDim2.new(0, 0, 0, 4),
@@ -1266,18 +1266,18 @@ function library:CreateWindow(Properties)
         })
         local InnerBorder_InnerFrame_Pages = utility:RenderObject("Frame", {
             AnchorPoint         = Vector2.new(1, 0),
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = MainFrame_InnerBorder_InnerFrame,
             Position            = UDim2.new(1, 0, 0, 4),
             Size                = UDim2.new(1, -73, 1, -4)
         })
         local InnerBorder_InnerFrame_TopGradient = utility:RenderObject("Frame", {
-            BackgroundColor3    = Color3.fromRGB(12, 12, 12),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = MainFrame_InnerBorder_InnerFrame,
             Position            = UDim2.new(0, 0, 0, 0),
@@ -1295,18 +1295,18 @@ function library:CreateWindow(Properties)
             PaddingTop = UDim.new(0, 9)
         })
         local InnerFrame_Pages_InnerBorder = utility:RenderObject("Frame", {
-            BackgroundColor3    = Color3.fromRGB(45, 45, 45),
+            BackgroundColor3    = Color3.fromRGB(20, 20, 20),
             BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = InnerBorder_InnerFrame_Pages,
             Position            = UDim2.new(0, 1, 0, 0),
             Size                = UDim2.new(1, -1, 1, 0)
         })
         local MainRainbowTopBar = utility:RenderObject("ImageLabel", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = InnerBorder_InnerFrame_TopGradient,
             Position            = UDim2.new(0, 1, 0, 1),
@@ -1319,7 +1319,7 @@ function library:CreateWindow(Properties)
         local Pages_InnerBorder_InnerFrame = utility:RenderObject("Frame", {
             BackgroundColor3    = Color3.fromRGB(20, 20, 20),
             BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = InnerFrame_Pages_InnerBorder,
             Position            = UDim2.new(0, 1, 0, 0),
@@ -1329,15 +1329,15 @@ function library:CreateWindow(Properties)
             Parent = Pages_InnerBorder_InnerFrame
         })
         utility:RenderObject("ImageLabel", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Pages_InnerBorder_InnerFrame,
             Position            = UDim2.new(0, 0, 0, 0),
             Size                = UDim2.new(1, 0, 1, 0),
             Image               = "rbxassetid://8547666218",
-            ImageColor3         = Color3.fromRGB(12, 12, 12),
+            ImageColor3         = Color3.fromRGB(10, 10, 10),
             ScaleType           = "Tile",
             TileSize            = UDim2.new(0, 8, 0, 8)
         })
@@ -1456,7 +1456,7 @@ function library:CreateWindow(Properties)
             local startPos   = nil
 
             local DragBar = utility:RenderObject("Frame", {
-                BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+                BackgroundColor3 = Color3.fromRGB(10, 10, 10),
                 BackgroundTransparency = 1,
                 BorderSizePixel = 0,
                 Parent = ScreenGui_MainFrame,
@@ -1656,7 +1656,7 @@ function library:Notify(Properties)
     label.BackgroundTransparency = 1
     label.Position = UDim2.new(0,10,0,5)
     label.Size = UDim2.new(1,-18,1,-10)
-    label.Font = Enum.Font.Code
+    label.Font = Enum.Font.GothamMedium
     label.TextSize = 10
     label.TextWrapped = true
     label.TextXAlignment = Enum.TextXAlignment.Left
@@ -1702,18 +1702,18 @@ function library:CreatePage(Properties)
     }
     do
         local Page_Tab = utility:RenderObject("Frame", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Page.Window["TabsHolder"],
             Size                = UDim2.new(1, 0, 0, 72),
             LayoutOrder          = Properties.layoutorder or Properties.LayoutOrder or 0
         })
         local Page_Tab_Border = utility:RenderObject("Frame", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Page_Tab,
             Size                = UDim2.new(1, 0, 1, 0),
@@ -1723,16 +1723,16 @@ function library:CreatePage(Properties)
         })
         local Page_Tab_Image = utility:RenderObject("ImageLabel", {
             AnchorPoint         = Vector2.new(0.5, 0.5),
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Page_Tab,
             Position            = UDim2.new(0.5, 0, 0.5, 0),
             Size                = Page.Size,
             ZIndex              = 8,
             Image               = Page.Image or "",
-            ImageColor3         = Color3.fromRGB(100, 100, 100),
+            ImageColor3         = Color3.fromRGB(150, 150, 150),
             ImageTransparency   = 0,
             Visible             = (Page.Image ~= nil and Page.Image ~= ""),
             Active              = false
@@ -1745,7 +1745,7 @@ function library:CreatePage(Properties)
             Position = UDim2.new(0.5, 0, 0.5, 0),
             Size = UDim2.new(1, -8, 1, -8),
             ZIndex = 9,
-            Font = Enum.Font.Code,
+            Font = Enum.Font.GothamMedium,
             Text = tostring(Properties.Glyph or Properties.glyph or "•"),
             TextColor3 = Color3.fromRGB(105,105,105),
             TextSize = 18,
@@ -1763,9 +1763,9 @@ function library:CreatePage(Properties)
         end
 
         local Page_Tab_Button = utility:RenderObject("TextButton", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Page_Tab,
             Size                = UDim2.new(1, 0, 1, 0),
@@ -1776,9 +1776,9 @@ function library:CreatePage(Properties)
             AutoButtonColor     = false
         })
         local Tab_Border_Inner = utility:RenderObject("Frame", {
-            BackgroundColor3    = Color3.fromRGB(40, 40, 40),
+            BackgroundColor3    = Color3.fromRGB(20, 20, 20),
             BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Page_Tab_Border,
             Position            = UDim2.new(0, 0, 0, 1),
@@ -1789,7 +1789,7 @@ function library:CreatePage(Properties)
         local Border_Inner_Inner = utility:RenderObject("Frame", {
             BackgroundColor3    = Color3.fromRGB(20, 20, 20),
             BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Tab_Border_Inner,
             Position            = UDim2.new(0, 0, 0, 1),
@@ -1798,23 +1798,23 @@ function library:CreatePage(Properties)
             RenderTime          = 0.15
         })
         utility:RenderObject("ImageLabel", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Border_Inner_Inner,
             Position            = UDim2.new(0, 0, 0, 0),
             Size                = UDim2.new(1, 0, 1, 0),
             Image               = "rbxassetid://8509210785",
-            ImageColor3         = Color3.fromRGB(12, 12, 12),
+            ImageColor3         = Color3.fromRGB(10, 10, 10),
             ScaleType           = "Tile",
             TileSize            = UDim2.new(0, 8, 0, 8),
             ZIndex              = 2
         })
         local Page_Page = utility:RenderObject("Frame", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Page.Window["PagesHolder"],
             Position            = UDim2.new(0, 20, 0, 20),
@@ -1822,9 +1822,9 @@ function library:CreatePage(Properties)
             Visible             = false
         })
         local Page_Page_Left = utility:RenderObject("ScrollingFrame", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Page_Page,
             Position            = UDim2.new(0, 0, 0, 0),
@@ -1836,9 +1836,9 @@ function library:CreatePage(Properties)
             ClipsDescendants     = true
         })
         local Page_Page_Right = utility:RenderObject("ScrollingFrame", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Page_Page,
             Position            = UDim2.new(0.5, 10, 0, 0),
@@ -1887,7 +1887,7 @@ function library:CreatePage(Properties)
                 or  Color3.fromRGB(90, 90, 90)
             Page_Tab_Glyph.TextColor3 = Page.Open
                 and Color3.fromRGB(235, 235, 235)
-                or  Color3.fromRGB(105, 105, 105)
+                or  Color3.fromRGB(150, 150, 150)
             if Page.Open then
                 Page.Window:SetPage(Page)
             end
@@ -1906,7 +1906,7 @@ function library:CreatePage(Properties)
                 or  Color3.fromRGB(90, 90, 90)
             Page_Tab_Glyph.TextColor3 = Page.Open
                 and Color3.fromRGB(235, 235, 235)
-                or  Color3.fromRGB(105, 105, 105)
+                or  Color3.fromRGB(150, 150, 150)
         end)
     end
     if #Page.Window.Pages == 0 then Page:Set(true) end
@@ -1927,9 +1927,9 @@ function pages:CreateSection(Properties)
     }
     do
         local Section_Holder = utility:RenderObject("Frame", {
-            BackgroundColor3    = Color3.fromRGB(40, 40, 40),
+            BackgroundColor3    = Color3.fromRGB(20, 20, 20),
             BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(12, 12, 12),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderMode          = "Inset",
             BorderSizePixel     = 1,
             Parent              = Section.Page[Section.Side],
@@ -1937,9 +1937,9 @@ function pages:CreateSection(Properties)
             ZIndex              = 2
         })
         local Section_Holder_Extra = utility:RenderObject("Frame", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Section_Holder,
             Position            = UDim2.new(0, 1, 0, 1),
@@ -1947,9 +1947,9 @@ function pages:CreateSection(Properties)
             ZIndex              = 2
         })
         local Section_Holder_Frame = utility:RenderObject("Frame", {
-            BackgroundColor3    = Color3.fromRGB(23, 23, 23),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Section_Holder,
             Position            = UDim2.new(0, 1, 0, 1),
@@ -1957,9 +1957,9 @@ function pages:CreateSection(Properties)
             ZIndex              = 2
         })
         local Section_Holder_TitleInline = utility:RenderObject("Frame", {
-            BackgroundColor3    = Color3.fromRGB(23, 23, 23),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Section_Holder,
             Position            = UDim2.new(0, 9, 0, -1),
@@ -1968,15 +1968,15 @@ function pages:CreateSection(Properties)
         })
         local Section_Holder_Title = utility:RenderObject("TextLabel", {
             AnchorPoint         = Vector2.new(0, 0.5),
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Section_Holder,
             Position            = UDim2.new(0, 12, 0, 0),
             Size                = UDim2.new(1, -26, 0, 15),
             ZIndex              = 5,
-            Font                = "Code",
+            Font                = "GothamMedium",
             RichText            = true,
             Text                = "<b>" .. Section.Name .. "</b>",
             TextColor3          = Color3.fromRGB(205, 205, 205),
@@ -1985,9 +1985,9 @@ function pages:CreateSection(Properties)
             TextXAlignment      = "Left"
         })
         local Holder_Extra_Gradient1 = utility:RenderObject("ImageLabel", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Section_Holder_Extra,
             Position            = UDim2.new(0, 1, 0, 1),
@@ -1997,13 +1997,13 @@ function pages:CreateSection(Properties)
     [==================[        Visible             = false,
             ZIndex              = 4,
             Image               = "rbxassetid://7783533907",
-            ImageColor3         = Color3.fromRGB(23, 23, 23)
+            ImageColor3         = Color3.fromRGB(10, 10, 10)
         })
         local Holder_Extra_Gradient2 = utility:RenderObject("ImageLabel", {
             AnchorPoint         = Vector2.new(0, 1),
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Section_Holder_Extra,
             Position            = UDim2.new(0, 0, 1, 0),
@@ -2011,12 +2011,12 @@ function pages:CreateSection(Properties)
             Visible             = false,
             ZIndex              = 4,
             Image               = "rbxassetid://7783533907",
-            ImageColor3         = Color3.fromRGB(23, 23, 23)
+            ImageColor3         = Color3.fromRGB(10, 10, 10)
         })
         local Holder_Extra_ArrowUp = utility:RenderObject("TextButton", {
             BackgroundColor3    = Color3.fromRGB(255, 0, 0),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Section_Holder_Extra,
             Position            = UDim2.new(1, -21, 0, 0),
@@ -2027,9 +2027,9 @@ function pages:CreateSection(Properties)
             ZIndex              = 4
         })
         local Holder_Extra_ArrowDown = utility:RenderObject("TextButton", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Section_Holder_Extra,
             Position            = UDim2.new(1, -21, 1, -14),
@@ -2040,9 +2040,9 @@ function pages:CreateSection(Properties)
             ZIndex              = 4
         })
         utility:RenderObject("ImageLabel", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Holder_Extra_ArrowUp,
             Position            = UDim2.new(0, 4, 0, 4),
@@ -2053,9 +2053,9 @@ function pages:CreateSection(Properties)
             ImageColor3         = Color3.fromRGB(205, 205, 205)
         })
         utility:RenderObject("ImageLabel", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Holder_Extra_ArrowDown,
             Position            = UDim2.new(0, 4, 0, 4),
@@ -2067,9 +2067,9 @@ function pages:CreateSection(Properties)
         })
         local Holder_Extra_Bar = utility:RenderObject("Frame", {
             AnchorPoint         = Vector2.new(1, 0),
-            BackgroundColor3    = Color3.fromRGB(45, 45, 45),
+            BackgroundColor3    = Color3.fromRGB(20, 20, 20),
             BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Section_Holder_Extra,
             Position            = UDim2.new(1, 0, 0, 0),
@@ -2078,9 +2078,9 @@ function pages:CreateSection(Properties)
             ZIndex              = 4
         })
         utility:RenderObject("Frame", {
-            BackgroundColor3    = Color3.fromRGB(45, 45, 45),
+            BackgroundColor3    = Color3.fromRGB(20, 20, 20),
             BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Section_Holder_Extra,
             Position            = UDim2.new(0, 0, 0, -1),
@@ -2088,9 +2088,9 @@ function pages:CreateSection(Properties)
             ZIndex              = 4
         })
         local Holder_Frame_ContentHolder = utility:RenderObject("ScrollingFrame", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Section_Holder_Frame,
             Position            = UDim2.new(0, 0, 0, 0),
@@ -2208,7 +2208,7 @@ local function bindRainbowBar(parent, zindex)
 
     local holder = Instance.new("Frame")
     holder.Name = "RainbowTopBarShadow"
-    holder.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
+    holder.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
     holder.BorderSizePixel = 0
     holder.Position = UDim2.new(0, 0, 0, 0)
     holder.Size = UDim2.new(1, 0, 0, 4)
@@ -2283,7 +2283,7 @@ function BindManager:EnsureUI(window)
     active.Position = UDim2.new(0, 14, 0.5, 0)
     active.Size = UDim2.new(0, math.clamp(tonumber(library.Theme.KeybindWidth) or 220, 150, 340), 0, 31)
     active.AutomaticSize = Enum.AutomaticSize.None
-    active.BackgroundColor3 = library.Theme.KeybindColor or Color3.fromRGB(18, 18, 18)
+    active.BackgroundColor3 = library.Theme.KeybindColor or Color3.fromRGB(10, 10, 10)
     active.BackgroundTransparency = math.clamp(tonumber(library.Theme.KeybindTransparency) or 0.12, 0, 0.95)
     active.BorderColor3 = Color3.fromRGB(5, 5, 5)
     active.BorderSizePixel = 1
@@ -2297,7 +2297,7 @@ function BindManager:EnsureUI(window)
     activeTitle.BackgroundTransparency = 1
     activeTitle.Position = UDim2.new(0, 6, 0, 4)
     activeTitle.Size = UDim2.new(1, -12, 0, 17)
-    activeTitle.Font = Enum.Font.Code
+    activeTitle.Font = Enum.Font.GothamMedium
     activeTitle.TextSize = 11
     activeTitle.TextColor3 = Color3.fromRGB(225, 225, 225)
     activeTitle.TextXAlignment = Enum.TextXAlignment.Center
@@ -2306,7 +2306,7 @@ function BindManager:EnsureUI(window)
     activeTitle.Parent = active
 
     local divider = Instance.new("Frame")
-    divider.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    divider.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
     divider.BorderSizePixel = 0
     divider.Position = UDim2.new(0, 5, 0, 23)
     divider.Size = UDim2.new(1, -10, 0, 1)
@@ -2360,7 +2360,7 @@ function BindManager:EnsureUI(window)
     modAlertLabel.Name = "AlertText"
     modAlertLabel.BackgroundTransparency = 1
     modAlertLabel.Size = UDim2.fromScale(1, 1)
-    modAlertLabel.Font = Enum.Font.Code
+    modAlertLabel.Font = Enum.Font.GothamMedium
     modAlertLabel.Text = "!mod!"
     modAlertLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
     modAlertLabel.TextSize = 9
@@ -2423,7 +2423,7 @@ function BindManager:EnsureUI(window)
     hackerLabel.Name = "AlertText"
     hackerLabel.BackgroundTransparency = 1
     hackerLabel.Size = UDim2.fromScale(1, 1)
-    hackerLabel.Font = Enum.Font.Code
+    hackerLabel.Font = Enum.Font.GothamMedium
     hackerLabel.Text = "!hacker!"
     hackerLabel.TextColor3 = Color3.fromRGB(255, 220, 65)
     hackerLabel.TextSize = 9
@@ -2466,7 +2466,7 @@ function BindManager:EnsureUI(window)
 
     local menu = Instance.new("Frame")
     menu.Name = "BindMenu"
-    menu.BackgroundColor3 = library.Theme.KeybindColor or Color3.fromRGB(18, 18, 18)
+    menu.BackgroundColor3 = library.Theme.KeybindColor or Color3.fromRGB(10, 10, 10)
     menu.BackgroundTransparency = math.clamp(tonumber(library.Theme.KeybindTransparency) or 0.12, 0, 0.95)
     menu.BorderColor3 = Color3.fromRGB(5, 5, 5)
     menu.BorderSizePixel = 1
@@ -2481,7 +2481,7 @@ function BindManager:EnsureUI(window)
     title.BackgroundTransparency = 1
     title.Position = UDim2.new(0, 7, 0, 5)
     title.Size = UDim2.new(1, -14, 0, 18)
-    title.Font = Enum.Font.Code
+    title.Font = Enum.Font.GothamMedium
     title.TextSize = 10
     title.TextColor3 = Color3.fromRGB(225, 225, 225)
     title.TextXAlignment = Enum.TextXAlignment.Center
@@ -2491,7 +2491,7 @@ function BindManager:EnsureUI(window)
     self.MenuTitle = title
 
     local menuDivider = Instance.new("Frame")
-    menuDivider.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    menuDivider.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
     menuDivider.BorderSizePixel = 0
     menuDivider.Position = UDim2.new(0, 6, 0, 25)
     menuDivider.Size = UDim2.new(1, -12, 0, 1)
@@ -2502,7 +2502,7 @@ function BindManager:EnsureUI(window)
     modeLabel.BackgroundTransparency = 1
     modeLabel.Position = UDim2.new(0, 8, 0, 29)
     modeLabel.Size = UDim2.new(1, -16, 0, 13)
-    modeLabel.Font = Enum.Font.Code
+    modeLabel.Font = Enum.Font.GothamMedium
     modeLabel.TextSize = 9
     modeLabel.TextColor3 = Color3.fromRGB(120, 120, 120)
     modeLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -2520,7 +2520,7 @@ function BindManager:EnsureUI(window)
         button.BorderSizePixel = 1
         button.Position = UDim2.new(0, 8, 0, 43 + ((index - 1) * 21))
         button.Size = UDim2.new(1, -16, 0, 18)
-        button.Font = Enum.Font.Code
+        button.Font = Enum.Font.GothamMedium
         button.TextSize = 9
         button.TextColor3 = Color3.fromRGB(195, 195, 195)
         button.TextXAlignment = Enum.TextXAlignment.Left
@@ -2541,7 +2541,7 @@ function BindManager:EnsureUI(window)
     keyButton.BorderSizePixel = 1
     keyButton.Position = UDim2.new(0, 8, 0, 109)
     keyButton.Size = UDim2.new(1, -16, 0, 30)
-    keyButton.Font = Enum.Font.Code
+    keyButton.Font = Enum.Font.GothamMedium
     keyButton.TextSize = 9
     keyButton.TextColor3 = Color3.fromRGB(205, 205, 205)
     keyButton.Text = "key  [ - ]"
@@ -2564,7 +2564,7 @@ function BindManager:EnsureUI(window)
     clearButton.BorderSizePixel = 1
     clearButton.Position = UDim2.new(0, 8, 0, 148)
     clearButton.Size = UDim2.new(0.5, -10, 0, 28)
-    clearButton.Font = Enum.Font.Code
+    clearButton.Font = Enum.Font.GothamMedium
     clearButton.TextSize = 9
     clearButton.TextColor3 = Color3]==================],
     [==================[.fromRGB(175, 175, 175)
@@ -2592,7 +2592,7 @@ function BindManager:EnsureUI(window)
     closeButton.BorderSizePixel = 1
     closeButton.Position = UDim2.new(0.5, 2, 0, 148)
     closeButton.Size = UDim2.new(0.5, -10, 0, 28)
-    closeButton.Font = Enum.Font.Code
+    closeButton.Font = Enum.Font.GothamMedium
     closeButton.TextSize = 9
     closeButton.TextColor3 = Color3.fromRGB(175, 175, 175)
     closeButton.Text = "close"
@@ -2887,12 +2887,12 @@ function BindManager:RefreshActive()
                 row.Size = UDim2.new(1, -4, 0, 19); row.ZIndex = 40002; row.Parent = self.ActiveList
                 local name = Instance.new("TextLabel")
                 name.BackgroundTransparency = 1; name.Size = UDim2.new(0.56, -3, 1, 0)
-                name.Font = Enum.Font.Code; name.TextSize = 10; name.TextColor3 = Color3.fromRGB(210,210,215)
+                name.Font = Enum.Font.GothamMedium; name.TextSize = 10; name.TextColor3 = Color3.fromRGB(210,210,215)
                 name.TextXAlignment = Enum.TextXAlignment.Left; name.TextTruncate = Enum.TextTruncate.AtEnd
                 name.ZIndex = 40003; name.Parent = row
                 local state = Instance.new("TextLabel")
                 state.BackgroundTransparency = 1; state.Position = UDim2.new(0.56, 0, 0, 0)
-                state.Size = UDim2.new(0.44, -2, 1, 0); state.Font = Enum.Font.Code; state.TextSize = 9
+                state.Size = UDim2.new(0.44, -2, 1, 0); state.Font = Enum.Font.GothamMedium; state.TextSize = 9
                 state.TextXAlignment = Enum.TextXAlignment.Right; state.ZIndex = 40003; state.Parent = row
                 record = {Row=row, Name=name, State=state}; self.ActiveRows[control] = record
             end
@@ -3110,18 +3110,18 @@ function sections:CreateToggle(Properties)
     }
     do
         local Content_Holder = utility:RenderObject("Frame", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Content.Section.Holder,
             Size                = UDim2.new(1, 0, 0, 28),
             ZIndex              = 3
         })
         local Content_Holder_Outline = utility:RenderObject("Frame", {
-            BackgroundColor3    = Color3.fromRGB(12, 12, 12),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Content_Holder,
             Position            = UDim2.new(0, 20, 0, 10),
@@ -3130,15 +3130,15 @@ function sections:CreateToggle(Properties)
         })
         utility:RenderObject("TextLabel", {
             AnchorPoint         = Vector2.new(0, 0),
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Content_Holder,
             Position            = UDim2.new(0, 41, 0, 0),
             Size                = UDim2.new(1, Content.InlineBind and -150 or -112, 1, 0),
             ZIndex              = 3,
-            Font                = "Code",
+            Font                = "GothamMedium",
             RichText            = true,
             Text                = Content.Name,
             TextWrapped         = true,
@@ -3149,15 +3149,15 @@ function sections:CreateToggle(Properties)
         })
         utility:RenderObject("TextLabel", {
             AnchorPoint         = Vector2.new(0, 0),
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Content_Holder,
             Position            = UDim2.new(0, 41, 0, 0),
             Size                = UDim2.new(1, Content.InlineBind and -150 or -112, 1, 0),
             ZIndex              = 3,
-            Font                = "Code",
+            Font                = "GothamMedium",
             RichText            = true,
             Text                = Content.Name,
             TextWrapped         = true,
@@ -3176,7 +3176,7 @@ function sections:CreateToggle(Properties)
             Position = Content.InlineBind and UDim2.new(1, -44, 0, 6) or UDim2.new(1, -64, 0, 0),
             Size = Content.InlineBind and UDim2.new(0, 34, 0, 16) or UDim2.new(0, 54, 1, 0),
             ZIndex = Content.InlineBind and 21 or 19,
-            Font = "Code",
+            Font = "GothamMedium",
             Text = "",
             TextColor3 = Color3.fromRGB(125, 125, 125),
             TextSize = 8,
@@ -3193,7 +3193,7 @@ function sections:CreateToggle(Properties)
                 Position = UDim2.new(1, -104, 0, 6),
                 Size = UDim2.new(0, 56, 0, 16),
                 ZIndex = 21,
-                Font = "Code", Text = "Toggle", TextSize = 8,
+                Font = "GothamMedium", Text = "Toggle", TextSize = 8,
                 TextColor3 = Color3.fromRGB(205, 205, 205),
                 AutoButtonColor = false,
             })
@@ -3217,9 +3217,9 @@ function sections:CreateToggle(Properties)
         end
 
         local Content_Holder_Button = utility:RenderObject("TextButton", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Content_Holder,
             Size                = UDim2.new(1, Content.InlineBind and -109 or 0, 1, 0),
@@ -3232,7 +3232,7 @@ function sections:CreateToggle(Properties)
         local Holder_Outline_Frame = utility:RenderObject("Frame", {
             BackgroundColor3    = Color3.fromRGB(77, 77, 77),
             BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Content_Holder_Outline,
             Position            = UDim2.new(0, 1, 0, 1),
@@ -3351,18 +3351,18 @@ function sections:CreateSlider(Properties)
     }
     do
         local Content_Holder = utility:RenderObject("Frame", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Content.Section.Holder,
             Size                = UDim2.new(1, 0, 0, (Content.Name and 24 or 13) + 5),
             ZIndex              = 3
         })
         local Content_Holder_Outline = utility:RenderObject("Frame", {
-            BackgroundColor3    = Color3.fromRGB(12, 12, 12),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Content_Holder,
             Position            = UDim2.new(0, 40, 0, Content.Name and 18 or 5),
@@ -3372,15 +3372,15 @@ function sections:CreateSlider(Properties)
         if Content.Name then
             utility:RenderObject("TextLabel", {
                 AnchorPoint         = Vector2.new(0, 0),
-                BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+                BackgroundColor3    = Color3.fromRGB(10, 10, 10),
                 BackgroundTransparency = 1,
-                BorderColor3        = Color3.fromRGB(0, 0, 0),
+                BorderColor3        = Color3.fromRGB(10, 10, 10),
                 BorderSizePixel     = 0,
                 Parent              = Content_Holder,
                 Position            = UDim2.new(0, 41, 0, 4),
                 Size                = UDim2.new(1, -41, 0, 10),
                 ZIndex              = 3,
-                Font                = "Code",
+                Font                = "GothamMedium",
                 RichText            = true,
                 Text                = Content.Name,
                 TextColor3          = Color3.fromRGB(205, 205, 205),
@@ -3390,15 +3390,15 @@ function sections:CreateSlider(Properties)
             })
             utility:RenderObject("TextLabel", {
                 AnchorPoint         = Vector2.new(0, 0),
-                BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+                BackgroundColor3    = Color3.fromRGB(10, 10, 10),
                 BackgroundTransparency = 1,
-                BorderColor3        = Color3.fromRGB(0, 0, 0),
+                BorderColor3        = Color3.fromRGB(10, 10, 10),
                 BorderSizePixel     = 0,
                 Parent              = Content_Holder,
                 Position            = UDim2.new(0, 41, 0, 4),
                 Size                = UDim2.new(1, -41, 0, 10),
                 ZIndex              = 3,
-                Font                = "Code",
+                Font                = "GothamMedium",
                 RichText            = true,
                 Text                = Content.Name,
                 TextColor3          = Color3.fromRGB(205, 205, 205),
@@ -3409,9 +3409,9 @@ function sections:CreateSlider(Properties)
             })
         end
         local Content_Holder_Button = utility:RenderObject("TextButton", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Content_Holder,
             Size                = UDim2.new(1, 0, 1, 0),
@@ -3431,7 +3431,7 @@ function sections:CreateSlider(Properties)
             Parent = Content_Holder,
             Position = UDim2.new(0, 20, 0, SliderButtonY),
             Size = UDim2.fromOffset(16, 16),
-            Font = "Code",
+            Font = "GothamMedium",
             Text = "-",
             TextColor3 = Color3.fromRGB(165, 165, 165),
             TextSize = 12,
@@ -3445,7 +3445,7 @@ function sections:CreateSlider(Properties)
             Parent = Content_Holder,
             Position = UDim2.new(1, -55, 0, SliderButtonY),
             Size = UDim2.fromOffset(16, 16),
-            Font = "Code",
+            Font = "GothamMedium",
             Text = "+",
             TextColor3 = Color3.fromRGB(165, 165, 165),
             TextSize = 12,
@@ -3457,7 +3457,7 @@ function sections:CreateSlider(Properties)
         local Holder_Outline_Frame = utility:RenderObject("Frame", {
             BackgroundColor3    = Color3.fromRGB(71, 71, 71),
             BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Content_Holder_Outline,
             Position            = UDim2.new(0, 1, 0, 1),
@@ -3467,7 +3467,7 @@ function sections:CreateSlider(Properties)
         local Outline_Frame_Slider = utility:RenderObject("Frame", {
             BackgroundColor3    = library.Theme.Slider,
             BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Holder_Outline_Frame,
             Position            = UDim2.new(0, 0, 0, 0),
@@ -3490,15 +3490,15 @@ function sections:CreateSlider(Properties)
         })
         local Frame_Slider_Title = utility:RenderObject("TextLabel", {
             AnchorPoint         = Vector2.new(0.5, 0),
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Outline_Frame_Slider,
             Position            = UDim2.new(1, 0, 0.5, 1),
             Size                = UDim2.new(0, 2, 1, 0),
             ZIndex              = 3,
-            Font                = "Code",
+            Font                = "GothamMedium",
             RichText            = true,
             Text                = "",
             TextColor3          = Color3.fromRGB(255, 255, 255),
@@ -3509,15 +3509,15 @@ function sections:CreateSlider(Properties)
         })
         utility:RenderObject("TextLabel", {
             AnchorPoint         = Vector2.new(0.5, 0),
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundColor3    = Color3.fromRGB(10, 10, 10),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderColor3        = Color3.fromRGB(10, 10, 10),
             BorderSizePixel     = 0,
             Parent              = Outline_Frame_Slider,
             Position            = UDim2.new(1, 0, 0.5, 1),
             Size                = UDim2.new(0, 2, 1, 0),
             ZIndex              = 3,
-            Font                = "Code",
+            Font                = "GothamMedium",
             RichText            = true,
             Text                = "",
             TextColor3          = Color3.fromRGB(255, 255, 255),
@@ -3666,7 +3666,7 @@ function sections:CreateDropdown(Properties)
             Position = UDim2.new(0,41,0,4),
             Size = UDim2.new(1,-41,0,10),
             ZIndex = 3,
-            Font = "Code",
+            Font = "GothamMedium",
             RichText = true,
             Text = Content.Name,
             TextColor3 = Color3.fromRGB(205,205,205),
@@ -3682,7 +3682,7 @@ function sections:CreateDropdown(Properties)
             Position = UDim2.new(0,41,0,4),
             Size = UDim2.new(1,-41,0,10),
             ZIndex = 3,
-            Font = "Code",
+            Font = "GothamMedium",
             RichText = true,
             Text = Content.Name,
             TextColor3 = Color3.fromRGB(205,205,205),
@@ -3716,7 +3716,7 @@ function sections:CreateDropdown(Properties)
             Position = UDim2.new(0,8,0,0),
             Size = UDim2.new(1,-22,1,0),
             ZIndex = 5,
-            Font = "Code",
+            Font = "GothamMedium",
             RichText = true,
             Text = "",
             TextColor3 = Color3.fromRGB(155,155,155),
@@ -3892,7 +3892,7 @@ function sections:CreateDropdown(Properties)
                 optionButton.Text = tostring(option)
                 optionButton.TextColor3 = index == Content.State and Content.Window.Accent or Color3.fromRGB(205,205,205)
                 optionButton.TextSize = 9
-                optionButton.Font = Enum.Font.Code
+                optionButton.Font = Enum.Font.GothamMedium
                 optionButton.TextXAlignment = Enum.TextXAlignment.Left
                 optionButton.TextYAlignment = Enum.TextYAlignment.Center
                 optionButton.ZIndex = 1202
@@ -3988,7 +3988,7 @@ function sections:CreateLabel(Properties)
     local label = utility:RenderObject("TextLabel", {
         BackgroundColor3=Color3.fromRGB(0,0,0), BackgroundTransparency=1,
         BorderSizePixel=0, Parent=holder, Position=UDim2.new(0,41,0,1),
-        Size=UDim2.new(1,-48,1,-2), Font="Code", RichText=true,
+        Size=UDim2.new(1,-48,1,-2), Font="GothamMedium", RichText=true,
         Text=Content.Text, TextColor3=Color3.fromRGB(155,155,155),
         TextSize=9, TextWrapped=true, TextXAlignment="Left",
         TextYAlignment="Center", ZIndex=3
@@ -4028,12 +4028,12 @@ function sections:CreateKeybind(Properties)
         utility:RenderObject("TextLabel", {
             AnchorPoint=Vector2.new(0,0),BackgroundColor3=Color3.fromRGB(0,0,0),BackgroundTransparency=1,BorderColor3=Color3.fromRGB(0,0,0),BorderSizePixel=0,
             Parent=Content_Holder,Position=UDim2.new(0,41,0,0),Size=UDim2.new(1,-41,1,0),ZIndex=3,
-            Font="Code",RichText=true,Text=Content.Name,TextColor3=Color3.fromRGB(205,205,205),TextSize=9,TextStrokeTransparency=1,TextXAlignment="Left"
+            Font="GothamMedium",RichText=true,Text=Content.Name,TextColor3=Color3.fromRGB(205,205,205),TextSize=9,TextStrokeTransparency=1,TextXAlignment="Left"
         })
         utility:RenderObject("TextLabel", {
             AnchorPoint=Vector2.new(0,0),BackgroundColor3=Color3.fromRGB(0,0,0),BackgroundTransparency=1,BorderColor3=Color3.fromRGB(0,0,0),BorderSizePixel=0,
             Parent=Content_Holder,Position=UDim2.new(0,41,0,0),Size=UDim2.new(1,-41,1,0),ZIndex=3,
-            Font="Code",RichText=true,Text=Content.Name,TextColor3=Color3.fromRGB(205,205,205),TextSize=9,TextStrokeTransparency=1,TextTransparency=1,TextXAlignment="Left"
+            Font="GothamMedium",RichText=true,Text=Content.Name,TextColor3=Color3.fromRGB(205,205,205),TextSize=9,TextStrokeTransparency=1,TextTransparency=1,TextXAlignment="Left"
         })
         local Content_Holder_Button = utility:RenderObject("TextButton", {
             BackgroundColor3=Color3.fromRGB(0,0,0),BackgroundTransparency=1,BorderColor3=Color3.fromRGB(0,0,0),BorderSizePixel=0,
@@ -4042,7 +4042,7 @@ function sections:CreateKeybind(Properties)
         local Content_Holder_Value = utility:RenderObject("TextLabel", {
             AnchorPoint=Vector2.new(0,0),BackgroundColor3=Color3.fromRGB(0,0,0),BackgroundTransparency=1,BorderColor3=Color3.fromRGB(0,0,0),BorderSizePixel=0,
             Parent=Content_Holder,Position=UDim2.new(0,41,0,0),Size=UDim2.new(1,-61,1,0),ZIndex=3,
-            Font="Code",RichText=true,Text="",TextColor3=Color3.fromRGB(114,114,114),TextStrokeColor3=Color3.fromRGB(15,15,15),TextSize=9,TextStrokeTransparency=0,TextXAlignment="Right"
+            Font="GothamMedium",RichText=true,Text="",TextColor3=Color3.fromRGB(114,114,114),TextStrokeColor3=Color3.fromRGB(15,15,15),TextSize=9,TextStrokeTransparency=0,TextXAlignment="Right"
         })
 
         function Content:Set(state)
@@ -4129,7 +4129,7 @@ function sections:CreateColorpicker(Properties)
             Position = UDim2.new(0,41,0,0),
             Size = UDim2.new(1,-76,1,0),
             ZIndex = 3,
-            Font = "Code",
+            Font = "GothamMedium",
             RichText = true,
             Text = Content.Name,
             TextColor3 = Color3.fromRGB(205,205,205),
@@ -4192,7 +4192,7 @@ function sections:CreateColorpicker(Properties)
         Header.BackgroundTransparency = 1
         Header.Position = UDim2.fromOffset(8,5)
         Header.Size = UDim2.new(1,-16,0,12)
-        Header.Font = Enum.Font.Code
+        Header.Font = Enum.Font.GothamMedium
         Header.Text = string.upper(Content.Name)
         Header.TextColor3 = Color3.fromRGB(205,205,205)
         Header.TextSize = 9
@@ -4370,7 +4370,7 @@ function sections:CreateColorpicker(Properties)
         RGBLabel.BackgroundTransparency = 1
         RGBLabel.Position = UDim2.fromOffset(8,169)
         RGBLabel.Size = UDim2.fromOffset(118,10)
-        RGBLabel.Font = Enum.Font.Code
+        RGBLabel.Font = Enum.Font.GothamMedium
         RGBLabel.Text = "R       G       B"
         RGBLabel.TextColor3 = Color3.fromRGB(140,140,140)
         RGBLabel.TextSize = 8
@@ -4382,7 +4382,7 @@ function sections:CreateColorpicker(Properties)
         AlphaLabel.BackgroundTransparency = 1
         AlphaLabel.Position = UDim2.fromOffset(146,169)
         AlphaLabel.Size = UDim2.fromOffset(70,10)
-        AlphaLabel.Font = Enum.Font.Code
+        AlphaLabel.Font = Enum.Font.GothamMedium
         AlphaLabel.Text = "TRANSP %"
         AlphaLabel.TextColor3 = Color3.fromRGB(140,140,140)
         AlphaLabel.TextSize = 8
@@ -4397,7 +4397,7 @@ function sections:CreateColorpicker(Properties)
             box.BorderSizePixel = 1
             box.Position = UDim2.fromOffset(x,182)
             box.Size = UDim2.fromOffset(width,14)
-            box.Font = Enum.Font.Code
+            box.Font = Enum.Font.GothamMedium
             box.TextColor3 = Color3.fromRGB(255,255,255)
             box.TextSize = 8
             box.ClearTextOnFocus = false
@@ -4667,12 +4667,12 @@ function sections:CreateInput(Properties)
         utility:RenderObject("TextLabel", {
             AnchorPoint=Vector2.new(0,0),BackgroundColor3=Color3.fromRGB(0,0,0),BackgroundTransparency=1,BorderColor3=Color3.fromRGB(0,0,0),BorderSizePixel=0,
             Parent=Content_Holder,Position=UDim2.new(0,41,0,0),Size=UDim2.new(1,-41,0,10),ZIndex=3,
-            Font="Code",RichText=true,Text=Content.Name,TextColor3=Color3.fromRGB(205,205,205),TextSize=9,TextStrokeTransparency=1,TextXAlignment="Left"
+            Font="GothamMedium",RichText=true,Text=Content.Name,TextColor3=Color3.fromRGB(205,205,205),TextSize=9,TextStrokeTransparency=1,TextXAlignment="Left"
         })
         utility:RenderObject("TextLabel", {
             AnchorPoint=Vector2.new(0,0),BackgroundColor3=Color3.fromRGB(0,0,0),BackgroundTransparency=1,BorderColor3=Color3.fromRGB(0,0,0),BorderSizePixel=0,
             Parent=Content_Holder,Position=UDim2.new(0,41,0,0),Size=UDim2.new(1,-41,0,10),ZIndex=3,
-            Font="Code",RichText=true,Text=Content.Name,TextColor3=Color3.fromRGB(205,205,205),TextSize=9,TextStrokeTransparency=1,TextTransparency=1,TextXAlignment="Left"
+            Font="GothamMedium",RichText=true,Text=Content.Name,TextColor3=Color3.fromRGB(205,205,205),TextSize=9,TextStrokeTransparency=1,TextTransparency=1,TextXAlignment="Left"
         })
         local Content_Holder_Box = utility:RenderObject("Frame", {
             BackgroundColor3=Color3.fromRGB(12,12,12),BackgroundTransparency=0,BorderColor3=Color3.fromRGB(0,0,0),BorderSizePixel=0,
@@ -4685,7 +4685,7 @@ function sections:CreateInput(Properties)
         local Box_TextBox = utility:RenderObject("TextBox", {
             BackgroundColor3=Color3.fromRGB(0,0,0),BackgroundTransparency=1,BorderColor3=Color3.fromRGB(0,0,0),BorderSizePixel=0,
             Parent=Box_Inner,Position=UDim2.new(0,4,0,0),Size=UDim2.new(1,-8,1,0),ZIndex=4,
-            Font="Code",PlaceholderColor3=Color3.fromRGB(155,155,155),PlaceholderText=Content.Placeholder,
+            Font="GothamMedium",PlaceholderColor3=Color3.fromRGB(155,155,155),PlaceholderText=Content.Placeholder,
             Text=Content.Value,TextColor3=Color3.fromRGB(255,255,255),TextSize=11,TextStrokeTransparency=1,TextXAlignment="Left"
         })
 
@@ -4742,7 +4742,7 @@ function sections:CreateButton(Properties)
         utility:RenderObject("TextLabel", {
             BackgroundColor3=Color3.fromRGB(0,0,0),BackgroundTransparency=1,BorderColor3=Color3.fromRGB(0,0,0),BorderSizePixel=0,
             Parent=Btn_Inner,Size=UDim2.new(1,0,1,0),ZIndex=4,
-            Font="Code",RichText=true,Text="<b>"..Content.Name.."</b>",
+            Font="GothamMedium",RichText=true,Text="<b>"..Content.Name.."</b>",
             TextColor3=Color3.fromRGB(205,205,205),TextSize=9,TextStrokeTransparency=1,TextXAlignment="Center"
         })
         local Btn_Button = utility:RenderObject("TextButton", {
@@ -10555,7 +10555,7 @@ local text = Instance.new("TextLabel")
 text.Name = "Marker"
 text.BackgroundTransparency = 1
 text.Size = UDim2.fromScale(1,1)
-text.Font = Enum.Font.Code
+text.Font = Enum.Font.GothamMedium
 text.TextScaled = true
 text.Text = "✚"
 text.Parent = marker
@@ -11108,7 +11108,7 @@ function HighQualityESPRuntime:Create(player)
 
     local function label(name,z,align)
         local l=Instance.new("TextLabel"); l.Name=name; l.BackgroundTransparency=1; l.BorderSizePixel=0
-        l.Font=Enum.Font.Code; l.TextSize=13; l.TextColor3=Color3.fromRGB(245,245,245); l.TextStrokeColor3=Color3.new(0,0,0)
+        l.Font=Enum.Font.GothamMedium; l.TextSize=13; l.TextColor3=Color3.fromRGB(245,245,245); l.TextStrokeColor3=Color3.new(0,0,0)
         l.TextStrokeTransparency=0.15; l.TextXAlignment=align or Enum.TextXAlignment.Center; l.ZIndex=z; l.Parent=holder; return l
     end
     local name=label("Name",112,Enum.TextXAlignment.Center)
@@ -11383,7 +11383,7 @@ local nameLabel = Instance.new("TextLabel")
 nameLabel.BackgroundTransparency = 1
 nameLabel.Size = UDim2.new(1,0,0,16)
 nameLabel.Position = UDim2.new(0,0,0,0)
-nameLabel.Font = Enum.Font.Code
+nameLabel.Font = Enum.Font.GothamMedium
 nameLabel.TextSize = 12
 nameLabel.TextColor3 = Color3.fromRGB(235,235,235)
 nameLabel.TextStrokeTransparency = 0.5
@@ -11395,7 +11395,7 @@ local flagsLabel = Instance.new("TextLabel")
 flagsLabel.BackgroundTransparency = 1
 flagsLabel.Size = UDim2.new(1,0,0,13)
 flagsLabel.Position = UDim2.new(0,0,0,15)
-flagsLabel.Font = Enum.Font.Code
+flagsLabel.Font = Enum.Font.GothamMedium
 flagsLabel.TextSize = 9
 flagsLabel.TextColor3 = Color3.fromRGB(175,175,175)
 flagsLabel.TextStrokeTransparency = 0.5
@@ -11407,7 +11407,7 @@ local weaponLabel = Instance.new("TextLabel")
 weaponLabel.BackgroundTransparency = 1
 weaponLabel.Size = UDim2.new(1,0,0,13)
 weaponLabel.Position = UDim2.new(0,0,0,29)
-weaponLabel.Font = Enum.Font.Code
+weaponLabel.Font = Enum.Font.GothamMedium
 weaponLabel.TextSize = 9
 weaponLabel.TextColor3 = VisualsState.glow_color
 weaponLabel.TextStrokeTransparency = 0.5
@@ -11419,7 +11419,7 @@ local ammoLabel = Instance.new("TextLabel")
 ammoLabel.BackgroundTransparency = 1
 ammoLabel.Size = UDim2.new(1,0,0,13)
 ammoLabel.Position = UDim2.new(0,0,0,43)
-ammoLabel.Font = Enum.Font.Code
+ammoLabel.Font = Enum.Font.GothamMedium
 ammoLabel.TextSize = 9
 ammoLabel.TextColor3 = Color3.fromRGB(205,205,205)
 ammoLabel.TextStrokeTransparency = 0.5
@@ -11431,7 +11431,7 @@ local distanceLabel = Instance.new("TextLabel")
 distanceLabel.BackgroundTransparency = 1
 distanceLabel.Size = UDim2.new(1,0,0,13)
 distanceLabel.Position = UDim2.new(0,0,0,57)
-distanceLabel.Font = Enum.Font.Code
+distanceLabel.Font = Enum.Font.GothamMedium
 distanceLabel.TextSize = 9
 distanceLabel.TextColor3 = Color3.fromRGB(155,155,155)
 distanceLabel.TextStrokeTransparency = 0.5
@@ -11441,13 +11441,13 @@ object.labels.distance = distanceLabel
 
 local healthNumber = Instance.new("TextLabel")
 healthNumber.BackgroundTransparency = 1; healthNumber.Size = UDim2.new(0,44,0,13); healthNumber.Position = UDim2.new(0,-52,0,0)
-healthNumber.Font = Enum.Font.Code; healthNumber.TextSize = 9; healthNumber.TextColor3 = Color3.fromRGB(220,220,220); healthNumber.TextStrokeTransparency = 0.5; healthNumber.TextXAlignment = Enum.TextXAlignment.Right; healthNumber.Text = ""; healthNumber.Parent = root
+healthNumber.Font = Enum.Font.GothamMedium; healthNumber.TextSize = 9; healthNumber.TextColor3 = Color3.fromRGB(220,220,220); healthNumber.TextStrokeTransparency = 0.5; healthNumber.TextXAlignment = Enum.TextXAlignment.Right; healthNumber.Text = ""; healthNumber.Parent = root
 object.labels.healthNumber = healthNumber
 local rankLabel = Instance.new("TextLabel")
-rankLabel.BackgroundTransparency = 1; rankLabel.Size = UDim2.new(1,0,0,13); rankLabel.Position = UDim2.new(0,0,0,71); rankLabel.Font = Enum.Font.Code; rankLabel.TextSize = 9; rankLabel.TextColor3 = Color3.fromRGB(160,160,160); rankLabel.TextStrokeTransparency = 0.5; rankLabel.Text = ""; rankLabel.Parent = root
+rankLabel.BackgroundTransparency = 1; rankLabel.Size = UDim2.new(1,0,0,13); rankLabel.Position = UDim2.new(0,0,0,71); rankLabel.Font = Enum.Font.GothamMedium; rankLabel.TextSize = 9; rankLabel.TextColor3 = Color3.fromRGB(160,160,160); rankLabel.TextStrokeTransparency = 0.5; rankLabel.Text = ""; rankLabel.Parent = root
 object.labels.rank = rankLabel
 local winstreakLabel = Instance.new("TextLabel")
-winstreakLabel.BackgroundTransparency = 1; winstreakLabel.Size = UDim2.new(1,0,0,13); winstreakLabel.Position = UDim2.new(0,0,0,84); winstreakLabel.Font = Enum.Font.Code; winstreakLabel.TextSize = 9; winstreakLabel.TextColor3 = Color3.fromRGB(180,180,180); winstreakLabel.TextStrokeTransparency = 0.5; winstreakLabel.Text = ""; winstreakLabel.Parent = root
+winstreakLabel.BackgroundTransparency = 1; winstreakLabel.Size = UDim2.new(1,0,0,13); winstreakLabel.Position = UDim2.new(0,0,0,84); winstreakLabel.Font = Enum.Font.GothamMedium; winstreakLabel.TextSize = 9; winstreakLabel.TextColor3 = Color3.fromRGB(180,180,180); winstreakLabel.TextStrokeTransparency = 0.5; winstreakLabel.Text = ""; winstreakLabel.Parent = root
 object.labels.winstreak = winstreakLabel
 
 local icon = Instance.new("ImageLabel")
@@ -13968,7 +13968,7 @@ local title = Instance.new("TextLabel")
 title.BackgroundTransparency = 1
 title.Position = UDim2.fromOffset(8, 5)
 title.Size = UDim2.new(1, -16, 0, 14)
-title.Font = Enum.Font.Code
+title.Font = Enum.Font.GothamMedium
 title.TextSize = 10
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.TextColor3 = Color3.fromRGB(220, 220, 220)
@@ -13979,7 +13979,7 @@ local name = Instance.new("TextLabel")
 name.BackgroundTransparency = 1
 name.Position = UDim2.fromOffset(8, 22)
 name.Size = UDim2.new(1, -16, 0, 14)
-name.Font = Enum.Font.Code
+name.Font = Enum.Font.GothamMedium
 name.TextSize = 11
 name.TextXAlignment = Enum.TextXAlignment.Left
 name.TextColor3 = Color3.fromRGB(245, 245, 245)
@@ -13990,7 +13990,7 @@ local healthText = Instance.new("TextLabel")
 healthText.BackgroundTransparency = 1
 healthText.Position = UDim2.fromOffset(8, 39)
 healthText.Size = UDim2.new(1, -16, 0, 14)
-healthText.Font = Enum.Font.Code
+healthText.Font = Enum.Font.GothamMedium
 healthText.TextSize = 10
 healthText.TextXAlignment = Enum.TextXAlignment.Left
 healthText.TextColor3 = Color3.fromRGB(205, 205, 205)
@@ -18608,7 +18608,7 @@ textLabel.BackgroundTransparency=1
 textLabel.BorderSizePixel=0
 textLabel.Position=UDim2.fromOffset(14,4)
 textLabel.Size=UDim2.new(1,-28,1,-6)
-textLabel.Font=Enum.Font.Code
+textLabel.Font=Enum.Font.GothamMedium
 textLabel.RichText=true
 textLabel.Text=""
 textLabel.TextColor3=(library.Theme and library.Theme.Text) or Color3.fromRGB(205,205,205)
@@ -18653,7 +18653,7 @@ end
 local padding=math.floor(math.clamp(tonumber(config.streamerHudPadding) or 14,0,80)*scale+0.5)
 local alignment=tostring(config.streamerHudTextAlignment or "Left")
 if alignment=="Auto" then alignment=fullWidth and "Left" or "Center" end
-self.Text.Font=Enum.Font.Code
+self.Text.Font=Enum.Font.GothamMedium
 self.Text.TextSize=math.floor(math.clamp(tonumber(config.streamerHudTextSize) or 11,8,22)*scale+0.5)
 self.Text.TextXAlignment=alignment=="Right" and Enum.TextXAlignment.Right or (alignment=="Left" and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center)
 self.Text.Position=UDim2.fromOffset(padding,4)
@@ -18690,7 +18690,7 @@ end
 self.Stroke.Color=Color3.fromRGB(47,47,47)
 self.Stroke.Transparency=style=="Broadcast" and 0.35 or 1
 self.Stroke.Thickness=math.clamp(tonumber(config.streamerHudStrokeThickness) or 1,0.5,3)
-self.Text.Font=Enum.Font.Code
+self.Text.Font=Enum.Font.GothamMedium
 self.Text.TextColor3=themeText
 self.Text.TextStrokeTransparency=1
 end
@@ -18870,7 +18870,7 @@ title.BackgroundColor3=Color3.fromRGB(23,23,23)
 title.BorderSizePixel=0
 title.Position=UDim2.new(0,12,0,-7)
 title.Size=UDim2.fromOffset(62,14)
-title.Font=Enum.Font.Code
+title.Font=Enum.Font.GothamMedium
 title.Text="Category"
 title.TextColor3=Color3.fromRGB(205,205,205)
 title.TextSize=11
@@ -19077,7 +19077,7 @@ label.AnchorPoint=Vector2.new(0.5,0)
 label.BackgroundTransparency=1
 label.Position=UDim2.new(0.5,0,0,52)
 label.Size=UDim2.new(1,-8,0,16)
-label.Font=Enum.Font.Code
+label.Font=Enum.Font.GothamMedium
 label.Text=category.Label
 label.TextColor3=Color3.fromRGB(115,115,115)
 label.TextSize=9
@@ -19512,7 +19512,7 @@ rangeLabel.AnchorPoint=Vector2.new(0.5,1)
 rangeLabel.BackgroundTransparency=1
 rangeLabel.Position=UDim2.new(0.5,0,1,-5)
 rangeLabel.Size=UDim2.new(1,-16,0,13)
-rangeLabel.Font=Enum.Font.Code
+rangeLabel.Font=Enum.Font.GothamMedium
 rangeLabel.TextColor3=Color3.fromRGB(160,165,175)
 rangeLabel.TextSize=9
 rangeLabel.TextStrokeTransparency=0.5
@@ -19862,7 +19862,7 @@ toggle.Size=UDim2.fromOffset(24,18)
 toggle.BackgroundTransparency=1
 toggle.BorderSizePixel=0
 toggle.AutoButtonColor=false
-toggle.Font=Enum.Font.Code
+toggle.Font=Enum.Font.GothamMedium
 toggle.Text="▼"
 toggle.TextColor3=Color3.fromRGB(175,205,75)
 toggle.TextSize=11
@@ -21390,7 +21390,7 @@ local title=Instance.new("TextLabel")
 title.BackgroundTransparency=1
 title.Position=UDim2.fromOffset(9,2)
 title.Size=UDim2.new(1,-13,0,14)
-title.Font=Enum.Font.Code
+title.Font=Enum.Font.GothamMedium
 title.TextColor3=Color3.fromRGB(235,235,240)
 title.TextSize=10
 title.TextStrokeTransparency=0.55
@@ -21402,7 +21402,7 @@ local detail=Instance.new("TextLabel")
 detail.BackgroundTransparency=1
 detail.Position=UDim2.fromOffset(9,16)
 detail.Size=UDim2.new(1,-13,0,12)
-detail.Font=Enum.Font.Code
+detail.Font=Enum.Font.GothamMedium
 detail.TextColor3=color
 detail.TextSize=8
 detail.TextStrokeTransparency=0.6
@@ -21714,7 +21714,7 @@ detail.Name="Detail"
 detail.BackgroundTransparency=1
 detail.Position=UDim2.fromOffset(11,22)
 detail.Size=UDim2.new(1,-16,0,14)
-detail.Font=Enum.Font.Code
+detail.Font=Enum.Font.GothamMedium
 detail.Text="WAYPOINT"
 detail.TextColor3=VisualsState.world_waypoint_color
 detail.TextSize=9
@@ -21835,7 +21835,7 @@ wmStats.Name="Stats"
 wmStats.BackgroundTransparency=1
 wmStats.Position=UDim2.fromOffset(10,21)
 wmStats.Size=UDim2.new(1,-15,0,15)
-wmStats.Font=Enum.Font.Code
+wmStats.Font=Enum.Font.GothamMedium
 wmStats.TextColor3=Color3.fromRGB(158,162,172)
 wmStats.TextSize=9
 wmStats.TextStrokeTransparency=0.75
@@ -22851,7 +22851,7 @@ animViewport.Parent=animViewportContainer
 local animStatus=Instance.new("TextLabel")
 animStatus.BackgroundTransparency=1
 animStatus.Size=UDim2.fromScale(1,1)
-animStatus.Font=Enum.Font.Code
+animStatus.Font=Enum.Font.GothamMedium
 animStatus.TextColor3=Color3.fromRGB(145,145,145)
 animStatus.TextSize=9
 animStatus.Text="Loading avatar…"
@@ -23874,8 +23874,8 @@ Default     = tostring(Players.LocalPlayer.UserId)
 })
 
 local viewportContainer = Instance.new("Frame")
-viewportContainer.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
-viewportContainer.BorderColor3     = Color3.fromRGB(0, 0, 0)
+viewportContainer.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+viewportContainer.BorderColor3     = Color3.fromRGB(10, 10, 10)
 viewportContainer.BorderSizePixel  = 1
 viewportContainer.Size             = UDim2.new(1, -48, 0, 190)
 viewportContainer.Position         = UDim2.new(0, 40, 0, 0)
@@ -23895,7 +23895,7 @@ vp3D.Parent                 = viewportContainer
 local vp3DLabel = Instance.new("TextLabel")
 vp3DLabel.BackgroundTransparency = 1
 vp3DLabel.Size                   = UDim2.new(1, 0, 1, 0)
-vp3DLabel.Font                   = Enum.Font.Code
+vp3DLabel.Font                   = Enum.Font.GothamMedium
 vp3DLabel.TextColor3             = Color3.fromRGB(120, 120, 120)
 vp3DLabel.TextSize               = 9
 vp3DLabel.Text                   = "Enter ID then Load"
@@ -23907,7 +23907,7 @@ yawIndicatorLabel.BackgroundTransparency = 1
 yawIndicatorLabel.AnchorPoint           = Vector2.new(0.5, 1)
 yawIndicatorLabel.Size                  = UDim2.new(1, 0, 0, 14)
 yawIndicatorLabel.Position              = UDim2.new(0.5, 0, 1, 0)
-yawIndicatorLabel.Font                  = Enum.Font.Code
+yawIndicatorLabel.Font                  = Enum.Font.GothamMedium
 yawIndicatorLabel.TextColor3            = Color3.fromRGB(175, 205, 75)
 yawIndicatorLabel.TextSize              = 9
 yawIndicatorLabel.Text                  = "Yaw: 0°"
@@ -30535,7 +30535,7 @@ luaEditor.MultiLine = true
 luaEditor.TextWrapped = false
 luaEditor.TextXAlignment = Enum.TextXAlignment.Left
 luaEditor.TextYAlignment = Enum.TextYAlignment.Top
-luaEditor.Font = Enum.Font.Code
+luaEditor.Font = Enum.Font.GothamMedium
 luaEditor.TextSize = 11
 luaEditor.TextColor3 = Color3.fromRGB(220,220,220)
 luaEditor.PlaceholderColor3 = Color3.fromRGB(120,120,120)
@@ -30550,7 +30550,7 @@ local luaHeader = Instance.new("TextLabel")
 luaHeader.BackgroundColor3 = Color3.fromRGB(18,18,18)
 luaHeader.BorderSizePixel = 0
 luaHeader.Size = UDim2.new(1,0,0,20)
-luaHeader.Font = Enum.Font.Code
+luaHeader.Font = Enum.Font.GothamMedium
 luaHeader.TextSize = 9
 luaHeader.TextColor3 = Color3.fromRGB(175,205,75)
 luaHeader.TextXAlignment = Enum.TextXAlignment.Left
@@ -30564,7 +30564,7 @@ luaFooter.BorderSizePixel = 0
 luaFooter.AnchorPoint = Vector2.new(0,1)
 luaFooter.Position = UDim2.new(0,0,1,0)
 luaFooter.Size = UDim2.new(1,0,0,20)
-luaFooter.Font = Enum.Font.Code
+luaFooter.Font = Enum.Font.GothamMedium
 luaFooter.TextSize = 9
 luaFooter.TextColor3 = Color3.fromRGB(125,125,125)
 luaFooter.TextXAlignment = Enum.TextXAlignment.Left
@@ -31327,7 +31327,7 @@ local box = Instance.new("TextBox")
 box.BackgroundTransparency = 1
 box.BorderSizePixel = 0
 box.ClearTextOnFocus = false
-box.Font = Enum.Font.Code
+box.Font = Enum.Font.GothamMedium
 box.PlaceholderColor3 = Color3.fromRGB(150,150,150)
 box.PlaceholderText = "Default"
 box.Text = ""
@@ -31342,7 +31342,7 @@ box.Parent = inner
 local marker = Instance.new("TextLabel")
 marker.BackgroundTransparency = 1
 marker.BorderSizePixel = 0
-marker.Font = Enum.Font.Code
+marker.Font = Enum.Font.GothamMedium
 marker.Text = "▢"
 marker.TextColor3 = Color3.fromRGB(145,145,145)
 marker.TextSize = 11
@@ -31388,7 +31388,7 @@ local blacklistInfo = Instance.new("TextLabel")
 blacklistInfo.BackgroundTransparency = 1
 blacklistInfo.Position = UDim2.new(0,20,0,287)
 blacklistInfo.Size = UDim2.new(1,-40,0,34)
-blacklistInfo.Font = Enum.Font.Code
+blacklistInfo.Font = Enum.Font.GothamMedium
 blacklistInfo.TextSize = 9
 blacklistInfo.TextWrapped = true
 blacklistInfo.TextXAlignment = Enum.TextXAlignment.Left
@@ -31432,7 +31432,7 @@ rebuildBlacklistList = function()
         empty.Name = "BlacklistEmpty"
         empty.BackgroundTransparency = 1
         empty.Size = UDim2.new(1,-8,0,32)
-        empty.Font = Enum.Font.Code
+        empty.Font = Enum.Font.GothamMedium
         empty.TextSize = 10
         empty.TextColor3 = Color3.fromRGB(130,130,130)
         empty.Text = "Blacklist is empty"
@@ -31457,7 +31457,7 @@ rebuildBlacklistList = function()
         name.BackgroundTransparency = 1
         name.Position = UDim2.fromOffset(8,3)
         name.Size = UDim2.new(1,-42,0,17)
-        name.Font = Enum.Font.Code
+        name.Font = Enum.Font.GothamMedium
         name.TextSize = 10
         name.TextXAlignment = Enum.TextXAlignment.Left
         name.TextColor3 = Color3.fromRGB(255,95,95)
@@ -31471,7 +31471,7 @@ rebuildBlacklistList = function()
         reason.BackgroundTransparency = 1
         reason.Position = UDim2.fromOffset(8,20)
         reason.Size = UDim2.new(1,-42,0,17)
-        reason.Font = Enum.Font.Code
+        reason.Font = Enum.Font.GothamMedium
         reason.TextSize = 8
         reason.TextXAlignment = Enum.TextXAlignment.Left
         reason.TextTruncate = Enum.TextTruncate.AtEnd
@@ -31487,7 +31487,7 @@ rebuildBlacklistList = function()
         remove.AnchorPoint = Vector2.new(1,0.5)
         remove.Position = UDim2.new(1,-6,0.5,0)
         remove.Size = UDim2.fromOffset(24,24)
-        remove.Font = Enum.Font.Code
+        remove.Font = Enum.Font.GothamMedium
         remove.Text = "×"
         remove.TextSize = 13
         remove.TextColor3 = Color3.fromRGB(255,105,105)
@@ -31540,7 +31540,7 @@ empty.Name = "ConfigEmpty"
 empty.BackgroundTransparency = 1
 empty.Size = UDim2.new(1,-8,0,26)
 empty.Text = listError or "No configs"
-empty.Font = Enum.Font.Code
+empty.Font = Enum.Font.GothamMedium
 empty.TextSize = 11
 empty.TextWrapped = true
 empty.TextColor3 = Color3.fromRGB(130,130,130)
@@ -31558,7 +31558,7 @@ row.Size = UDim2.new(1,-8,0,26)
 local currentAuto = get_autoload()
 row.Text = "    " .. tostring(name) .. ((currentAuto == name) and "   [AUTO]" or "")
 row.TextXAlignment = Enum.TextXAlignment.Left
-row.Font = Enum.Font.Code
+row.Font = Enum.Font.GothamMedium
 row.TextSize = 11
 row.TextColor3 = Color3.fromRGB(205,205,205)
 row.ZIndex = 11
@@ -31623,7 +31623,7 @@ if #playersNow == 0 then
     local empty = Instance.new("TextLabel")
     empty.BackgroundTransparency = 1
     empty.Size = UDim2.new(1,-8,0,24)
-    empty.Font = Enum.Font.Code
+    empty.Font = Enum.Font.GothamMedium
     empty.TextSize = 10
     empty.TextColor3 = Color3.fromRGB(125,125,125)
     empty.Text = "No other players"
@@ -31670,7 +31670,7 @@ for index, plr in ipairs(playersNow) do
     nameLabel.BackgroundTransparency = 1
     nameLabel.Position = UDim2.fromOffset(50,0)
     nameLabel.Size = UDim2.new(1,-58,1,0)
-    nameLabel.Font = Enum.Font.Code
+    nameLabel.Font = Enum.Font.GothamMedium
     nameLabel.TextSize = 10
     nameLabel.TextColor3 =
         (selectedServerPlayer == plr) and Color3.fromRGB(185,210,88)
@@ -31712,7 +31712,7 @@ serverPlayersCaption.BackgroundTransparency=1
 serverPlayersCaption.BorderSizePixel=0
 serverPlayersCaption.Position=UDim2.new(0,10,0,5)
 serverPlayersCaption.Size=UDim2.new(1,-20,0,18)
-serverPlayersCaption.Font=Enum.Font.Code
+serverPlayersCaption.Font=Enum.Font.GothamMedium
 serverPlayersCaption.Text="Server players"
 serverPlayersCaption.TextColor3=Color3.fromRGB(205,205,205)
 serverPlayersCaption.TextSize=10
@@ -31725,7 +31725,7 @@ serverPlayerCountLabel.BackgroundTransparency=1
 serverPlayerCountLabel.BorderSizePixel=0
 serverPlayerCountLabel.Position=UDim2.new(0,10,0,24)
 serverPlayerCountLabel.Size=UDim2.new(1,-20,0,15)
-serverPlayerCountLabel.Font=Enum.Font.Code
+serverPlayerCountLabel.Font=Enum.Font.GothamMedium
 serverPlayerCountLabel.Text="0 players in server"
 serverPlayerCountLabel.TextColor3=Color3.fromRGB(125,125,125)
 serverPlayerCountLabel.TextSize=9
@@ -31738,7 +31738,7 @@ playerSelectionLabel.BackgroundTransparency=1
 playerSelectionLabel.BorderSizePixel=0
 playerSelectionLabel.Position=UDim2.new(0,10,0,371)
 playerSelectionLabel.Size=UDim2.new(1,-20,0,16)
-playerSelectionLabel.Font=Enum.Font.Code
+playerSelectionLabel.Font=Enum.Font.GothamMedium
 playerSelectionLabel.TextSize=9
 playerSelectionLabel.TextColor3=Color3.fromRGB(135,135,135)
 playerSelectionLabel.TextXAlignment=Enum.TextXAlignment.Left
@@ -31751,7 +31751,7 @@ reasonCaption.BackgroundTransparency=1
 reasonCaption.BorderSizePixel=0
 reasonCaption.Position=UDim2.new(0,10,0,394)
 reasonCaption.Size=UDim2.new(1,-20,0,18)
-reasonCaption.Font=Enum.Font.Code
+reasonCaption.Font=Enum.Font.GothamMedium
 reasonCaption.Text="Reason"
 reasonCaption.TextColor3=Color3.fromRGB(205,205,205)
 reasonCaption.TextSize=10
@@ -31781,7 +31781,7 @@ playerReasonBox=Instance.new("TextBox")
 playerReasonBox.BackgroundTransparency=1
 playerReasonBox.BorderSizePixel=0
 playerReasonBox.ClearTextOnFocus=false
-playerReasonBox.Font=Enum.Font.Code
+playerReasonBox.Font=Enum.Font.GothamMedium
 playerReasonBox.PlaceholderColor3=Color3.fromRGB(105,105,105)
 playerReasonBox.PlaceholderText="Type a reason..."
 playerReasonBox.Text=""
@@ -31817,7 +31817,7 @@ local function makePlayerActionButton(name,y)
     button.BackgroundTransparency=1
     button.BorderSizePixel=0
     button.AutoButtonColor=false
-    button.Font=Enum.Font.Code
+    button.Font=Enum.Font.GothamMedium
     button.Text=name
     button.TextColor3=Color3.fromRGB(215,215,215)
     button.TextSize=10
@@ -31843,7 +31843,7 @@ blacklistStatusLabel.BackgroundTransparency=1
 blacklistStatusLabel.BorderSizePixel=0
 blacklistStatusLabel.Position=UDim2.new(0,10,0,530)
 blacklistStatusLabel.Size=UDim2.new(1,-20,0,16)
-blacklistStatusLabel.Font=Enum.Font.Code
+blacklistStatusLabel.Font=Enum.Font.GothamMedium
 blacklistStatusLabel.Text=""
 blacklistStatusLabel.TextColor3=Color3.fromRGB(255,72,72)
 blacklistStatusLabel.TextSize=9
@@ -31924,7 +31924,7 @@ local blacklistFlashLabel=Instance.new("TextLabel")
 blacklistFlashLabel.BackgroundTransparency=1
 blacklistFlashLabel.BorderSizePixel=0
 blacklistFlashLabel.Size=UDim2.fromScale(1,1)
-blacklistFlashLabel.Font=Enum.Font.Code
+blacklistFlashLabel.Font=Enum.Font.GothamMedium
 blacklistFlashLabel.Text="!blacklisted!"
 blacklistFlashLabel.TextColor3=Color3.fromRGB(255,72,72)
 blacklistFlashLabel.TextSize=11
@@ -32057,7 +32057,7 @@ inner.Parent = outer
 local label = Instance.new("TextLabel")
 label.BackgroundTransparency = 1
 label.BorderSizePixel = 0
-label.Font = Enum.Font.Code
+label.Font = Enum.Font.GothamMedium
 label.Text = tostring(properties.Name or "Button")
 label.TextColor3 = Color3.fromRGB(210,210,210)
 label.TextSize = 10
