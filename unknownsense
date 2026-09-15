@@ -1,5 +1,4 @@
-local __DEVKAGE_EMBEDDED_SOURCE = table.concat({
-    [==================[
+    --[==================[
 
 
 
@@ -751,7 +750,7 @@ function utility:RegisterThemeObject(Render, RenderProperties)
         if typeof(color) == "Color3" and transparent < 1 then
             local maxv = math.max(color.R, color.G, color.B)
             local minv = math.min(color.R, color.G, color.]==================],
-    [==================[B)
+    --[==================[B)
             if (maxv - minv) <= 0.012 and maxv <= 0.42 then
                 local gray = (color.R + color.G + color.B) / 3
                 library.ThemeUIObjects[#library.ThemeUIObjects + 1] = {
@@ -1994,7 +1993,7 @@ function pages:CreateSection(Properties)
             Rotation            = 180,
             Size                = UDim2.new(1, -2, 0, 20),
     ]==================],
-    [==================[        Visible             = false,
+    --[==================[        Visible             = false,
             ZIndex              = 4,
             Image               = "rbxassetid://7783533907",
             ImageColor3         = Color3.fromRGB(10, 10, 10)
@@ -2567,7 +2566,7 @@ function BindManager:EnsureUI(window)
     clearButton.Font = Enum.Font.GothamMedium
     clearButton.TextSize = 9
     clearButton.TextColor3 = Color3]==================],
-    [==================[.fromRGB(175, 175, 175)
+    --[==================[.fromRGB(175, 175, 175)
     clearButton.Text = "clear"
     clearButton.ZIndex = 50002
     clearButton.Parent = menu
@@ -3322,7 +3321,7 @@ end
             end)
             utility:CreateConnection(Content_BindValue.MouseButton1Click, function()
              ]==================],
-    [==================[   local manager = library and library.KeybindManager
+    --[==================[   local manager = library and library.KeybindManager
                 if manager then manager:BeginInlineCapture(Content) end
             end)
             utility:CreateConnection(Content_BindValue.MouseButton2Click, function()
@@ -3862,7 +3861,7 @@ function sections:CreateDropdown(Properties)
             AutoButtonColor = false,
             Active = true,
    ]==================],
-    [==================[         ZIndex = 30
+    --[==================[         ZIndex = 30
         })
 
         local popup = nil
@@ -4401,7 +4400,7 @@ function sections:CreateColorpicker(Properties)
             Color3.fromRGB(255,0,0),
             Color3.fromRGB(255,255,0),
 ]==================],
-    [==================[            Color3.fromRGB(0,255,0),
+    --[==================[            Color3.fromRGB(0,255,0),
             Color3.fromRGB(0,255,255),
             Color3.fromRGB(0,0,255),
             Color3.fromRGB(255,0,255),
@@ -4967,7 +4966,7 @@ local function ua_startExternalDetector()
                 if UA.CosmeticLibrary then
                     changed = changed
                         or (UA.ownsCosmeticWrapper and UA.CosmeticLibrary.OwnsCosmetic ~= UA.ownsCosmeticWrapp]==================],
-    [==================[er)
+    --[==================[er)
                         or (UA.ownsNormallyWrapper and UA.CosmeticLibrary.OwnsCosmeticNormally ~= UA.ownsNormallyWrapper)
                         or (UA.ownsUniversalWrapper and UA.CosmeticLibrary.OwnsCosmeticUniversally ~= UA.ownsUniversalWrapper)
                         or (UA.ownsForWeaponWrapper and UA.CosmeticLibrary.OwnsCosmeticForWeapon ~= UA.ownsForWeaponWrapper)
@@ -5561,7 +5560,7 @@ local function ua_installEmoteController()
     -- It only augments the live table returned by whatever implementation is
     -- current after the protected script loads.
     if not UA.EmoteController then ret]==================],
-    [==================[urn end
+    --[==================[urn end
     UA.emoteControllerInstalled = true
     ua_rebuildEmoteCatalog()
     ua_startEmoteSnapshotLoop()
@@ -6161,7 +6160,7 @@ streamerHudShowPing = true,
 streamerHudShowClock = true,
 streamerHudAccent = {175, 205, 75},
 streamerHudSecondary = {110, 165, 255]==================],
-    [==================[},
+    --[==================[},
 streamerHudTextColor = {205, 205, 205},
 streamerHudBackgroundAlpha = 0.03,
 streamerHudScale = 1,
@@ -6740,7 +6739,7 @@ IsInfluencer=config.influencer==true,Influencer=config.influencer==true,
 IsRobloxEmployee=config.admin==true,IsAdmin=config.admin==true,Admin=config.admin==true
 }) do
 pcall(function() player:SetAttribute(attribute,val]==================],
-    [==================[ue) end)
+    --[==================[ue) end)
 end
 end
 
@@ -7299,7 +7298,7 @@ do
     local environment=(type(getgenv)=="function" and getgenv()) or _G
     local previous=environment.__DevKageELOAutoLoadWatcher
    ]==================],
-    [==================[ if type(previous)=="table" and previous.Connection then
+    --[==================[ if type(previous)=="table" and previous.Connection then
         pcall(function() previous.Connection:Disconnect() end)
     end
 
@@ -7827,7 +7826,7 @@ function SpooferState.AvatarAssets.RepairAppearance(character, humanoid, templat
         object:SetAttribute("DevKageAvatarAsset", true)
     end
     if replaceClo]==================],
-    [==================[thing then
+    --[==================[thing then
         for _, object in ipairs(originals) do if not kept[object] then object:Destroy() end end
     end
     local manifest = assets.Manifest(template)
@@ -8356,7 +8355,7 @@ local function installRecordingPrivacySpoof(player, data, config)
         elseif object:IsA("ViewportFrame") then
             task.defer(function()
                 if not privacy.Active or not object.Parent t]==================],
-    [==================[hen return end
+    --[==================[hen return end
                 for _, child in ipairs(object:GetDescendants()) do
                     if child:IsA("Model") and isOriginalViewportModel(child) then
                         buildViewportProxy(child)
@@ -8849,7 +8848,7 @@ function SpooferState.ApplyAvatarIdOnly(userId)
     local function applyAvatarTick()
         if avatarToken ~= SpooferState.avatarOnlyToken then return end
         local cha]==================],
-    [==================[racter = LocalPlayer and LocalPlayer.Character
+    --[==================[racter = LocalPlayer and LocalPlayer.Character
         local humanoid = character and character:FindFirstChildOfClass("Humanoid")
         if not character or not humanoid or humanoid.Health <= 0 or SpooferState.avatarApplyBusy then return end
         if tonumber(SpooferState.avatarOnlyUserId) ~= avatarUserId then return end
@@ -9510,7 +9509,7 @@ mod_detector_enabled          = false,
 hacker_detector_enabled       = false,
 hacker_speed_threshold        = 180,
 hacker_spe]==================],
-    [==================[ed_duration         = 0.75,
+    --[==================[ed_duration         = 0.75,
 devkage_cursor_enabled             = true,
 devkage_cursor_profile             = "Custom",
 devkage_cursor_position_mode       = "Mouse",
@@ -10134,7 +10133,7 @@ function library.ExtraVisualRuntime:IsArmPart(part, model)
 
     local n = tostring(part.Name or ""):lower():gsub("[%s_%-]", "")
     for _, blocked in ipairs({"handguard"]==================],
-    [==================[,"handle","foregrip","charm","armor","hitbox","collision","trigger","proxy"}) do
+    --[==================[,"handle","foregrip","charm","armor","hitbox","collision","trigger","proxy"}) do
         if n:find(blocked, 1, true) then return false end
     end
 
@@ -10707,7 +10706,7 @@ end
 end
 
 VisualsState.skeletonRuntime = ]==================],
-    [==================[VisualsState.skeletonRuntime or {
+    --[==================[VisualsState.skeletonRuntime or {
     Players = {},
     Supported = type(Drawing) == "table" and type(Drawing.new) == "function",
     Segments = {
@@ -11258,7 +11257,7 @@ function HighQualityESPRuntime:GetBounds(character,camera)
     for x=-1,1,2 do for y=-1,1,2 do for z=-1,1,2 do
         local world=cf:PointToWorldSpace(Vector3.new(half.X*x,half.Y*y,half.Z*z))
         local p=camera:Worl]==================],
-    [==================[dToViewportPoint(world)
+    --[==================[dToViewportPoint(world)
         if p.Z>0.05 then
             count=count+1; minX=math.min(minX,p.X); maxX=math.max(maxX,p.X); minY=math.min(minY,p.Y); maxY=math.max(maxY,p.Y)
         end
@@ -11691,7 +11690,7 @@ object.labels.healthNumber.Visible = VisualsState.health_number
 object.labels.rank.Visible = VisualsState.rank
 object.labels.winstreak.Visible = VisualsState.winstreak
 object.l]==================],
-    [==================[abels.healthNumber.Text = VisualsState.health_number and string.format("%d HP", math.max(0, math.floor(humanoid.Health + 0.5))) or ""
+    --[==================[abels.healthNumber.Text = VisualsState.health_number and string.format("%d HP", math.max(0, math.floor(humanoid.Health + 0.5))) or ""
 local rankText = VisualsState.rank and getRankText(player) or ""
 local streakText = VisualsState.winstreak and getWinstreakText(player) or ""
 object.labels.rank.Text = VisualsState.rank and (rankText ~= "" and ("Rank: " .. rankText) or "Rank: --") or ""
@@ -12192,7 +12191,7 @@ end
 ]======], "@DevKage/WorldAtmosphereRuntime"))()({
 LightingService=LightingService,
 Adva]==================],
-    [==================[ncedLighting=AdvancedLighting,
+    --[==================[ncedLighting=AdvancedLighting,
 GetOrCreateEffect=getOrCreateEffect,
 })
 
@@ -12636,7 +12635,7 @@ return function(context)
             if roofCheck then cell.Blocked=occlusion and self:RoofAt(base,state) or false end
             local height=p.Profile.Height+(p.Profile.Rise and -1 or 1)*(cell.Layer-1)*6
             cell.Anchor.CFrame=CFrame.new(base+Vector3.]==================],
-    [==================[new(0,height,0))
+    --[==================[new(0,height,0))
             cell.Emitter.Enabled=not cell.Blocked
             cell.Emitter.Rate=cell.Blocked and 0 or cell.BaseRate
             cell.Emitter.Acceleration=Vector3.new(p.Wind*0.14+gust*2,p.Profile.Acceleration,gust+p.Wind*0.025)
@@ -12974,7 +12973,7 @@ do
         lastRandom = nil, randomAngle = 0, lastDamageFlip = -math.huge,
         bindName = "DevKage_AntiAim_v3", bound = false, paused = false,
 ]==================],
-    [==================[    }
+    --[==================[    }
 end
 
 function AntiAimState.Number(key)
@@ -13429,7 +13428,7 @@ function AntiAimState.Step(dt)
     end
     dt = tonumber(dt) or 0
     if dt]==================],
-    [==================[ ~= dt or dt <= 0 or dt == math.huge then return end
+    --[==================[ ~= dt or dt <= 0 or dt == math.huge then return end
     dt = math.min(dt, 1)
     runtime.elapsed = runtime.elapsed + dt
     humanoid.AutoRotate = false
@@ -13965,7 +13964,7 @@ function AntiAimMovement:Cleanup()
     AntiAimState.flight_enabled = false
     if self.noclipConnection then pcall(function() self.noclipConnection:Disconnect() end); self.noclipConnection = nil end
     if self.flightConnection then pcall(function() self.flightConnection:Disconnect() end); self.flightConnection ]==================],
-    [==================[= nil end
+    --[==================[= nil end
     self:RestoreCollisions()
     self:ClearFlightRig(true)
 end
@@ -14567,7 +14566,7 @@ math.clamp(tonumber(savedValue.g) or 255, 0, 255),
 math.clamp(tonumber(savedValue.b) or 255, 0, 255)
 )
 pcall(control.Set, control, color, tonumber(savedValue.alpha]==================],
-    [==================[), silent)
+    --[==================[), silent)
 elseif type(savedValue) == "boolean"
 or type(savedValue) == "number"
 or type(savedValue) == "string" then
@@ -14992,7 +14991,7 @@ task.spawn(function()
         local autoLoadEnabled = nil
         local settingsOk, rawSettings = pcall(readfile, SETTINGS_FILE)
         if settingsOk and type(rawSettings) == "string" and rawSettings ~=]==================],
-    [==================[ "" then
+    --[==================[ "" then
             local decodedOk, settings = pcall(HttpService.JSONDecode, HttpService, rawSettings)
             if decodedOk and type(settings) == "table" and settings.AutoLoad ~= nil then
                 autoLoadEnabled = settings.AutoLoad == true
@@ -15732,7 +15731,7 @@ light.Color = initialColor
 light.Brightness = tonumber(config.chinaHatBrightness) or 0
 light.Range = tonumber(config.chinaHatRange) or 12
 light.]==================],
-    [==================[Shadows = true
+    --[==================[Shadows = true
 light.Parent = cone
 
 cone.Parent = character
@@ -16357,7 +16356,7 @@ RainbowAuraState.dynamics[#RainbowAuraState.dynamics+1]={Kind="Orbit",Part=orb,I
 end
 makeParticle(22,0.08,0.55,0.16,2.6,"rbxasset://textures/particles/sparkles_main.dds")
 makeHighlight(math.clamp(RainbowAuraS]==================],
-    [==================[tate.alpha+0.50,0.62,0.95),0.04)
+    --[==================[tate.alpha+0.50,0.62,0.95),0.04)
 makeLight(1.35)
 elseif auraType == "Digital Rain" then
 makeParticle(72,3.5,7.5,0.14,1.4,"rbxasset://textures/particles/sparkles_main.dds")
@@ -16925,7 +16924,7 @@ runtimeEnv.__DevKageAvatarMods = (function()
             )
             shaft.Transparency = math.clamp(transparency() + 0.08,0,0.95)
             sh]==================],
-    [==================[aft.CanCollide = false
+    --[==================[aft.CanCollide = false
             shaft.CanTouch = false
             shaft.CanQuery = false
             shaft.CastShadow = false
@@ -17770,7 +17769,7 @@ runtimeEnv.__DevKageAvatarMods = (function()
 
     function API:Destroy()
         state.refreshToken = state.ref]==================],
-    [==================[reshToken + 1
+    --[==================[reshToken + 1
         clearVisuals()
         if state.characterConnection then
             pcall(function() state.characterConnection:Disconnect() end)
@@ -18766,7 +18765,7 @@ textLabel.Parent=root
 
 self.Gui=gui; self.Root=root; self.Text=textLabel; self.TopLine=topLine; self.TopLineHolder=topLineHolder; self.LineGradient=nil; self.Stroke=stroke; self.Corner=corner
 return tru]==================],
-    [==================[e
+    --[==================[e
 end
 
 function StreamerHUDRuntime:ApplyLayout()
@@ -19080,7 +19079,7 @@ local function line(name,position,size,rotation,parentObject)
 local frame=Instance.new("Frame")
 frame.Name=name
 frame.A]==================],
-    [==================[nchorPoint=Vector2.new(0.5,0.5)
+    --[==================[nchorPoint=Vector2.new(0.5,0.5)
 frame.BackgroundColor3=Color3.fromRGB(105,105,105)
 frame.BorderSizePixel=0
 frame.Position=position
@@ -19724,7 +19723,7 @@ self:ApplyLayout()
 local localRoot=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 if not localRoot then return end
 local range=math.max(10,tonumber(VisualsState.radar_range) ]==================],
-    [==================[or 350)
+    --[==================[or 350)
 self.RangeLabel.Text=string.format("%.0f studs",range)
 self.LocalArrow.TextColor3=VisualsState.radar_local_color
 self.LocalArrow.Rotation=VisualsState.radar_rotate and 0 or -math.deg(math.atan2(localRoot.CFrame.LookVector.X,-localRoot.CFrame.LookVector.Z))
@@ -20251,7 +20250,7 @@ killRecentAttackAt = 0,
 killRecentTarget = nil,
 killRecentTargetAt = 0,
 killGl]==================],
-    [==================[obalLastAt = 0,
+    --[==================[obalLastAt = 0,
 hitGlobalLastAt = 0,
 soundSerial = 0,
 soundFallbacks = 0,
@@ -20611,7 +20610,7 @@ if kind=="hit" then
 local presetName=tostring(VisualsState.hit_sound_preset or "Soft Tick")
 local preset=CombatSoundPresets[presetName] or CombatSoundPresets["Soft Tick"]
 local content=preset.Custom and normalizedCombatSoundContent(VisualsState.h]==================],
-    [==================[it_sound_id,PLAYER_ESP_HIT_SOUND_ID) or preset.Content
+    --[==================[it_sound_id,PLAYER_ESP_HIT_SOUND_ID) or preset.Content
 return content,
 math.clamp(tonumber(VisualsState.hit_sound_volume) or 35,0,100)/100,
 VisualsState.hit_sound_enabled==true,
@@ -21712,7 +21711,7 @@ function WorldMarkerRuntime:Update(dt)
             local humanoid=kind=="NPC" and object:FindFirstChildOfClass("Humanoid")
             if humanoid and VisualsState.world_object_esp_npc_health~=false then
                 detail=d]==================],
-    [==================[etail..string.format(" | %.0f HP",math.max(0,humanoid.Health))
+    --[==================[etail..string.format(" | %.0f HP",math.max(0,humanoid.Health))
             end
             marker.Gui.AlwaysOnTop=through;marker.Gui.MaxDistance=distanceLimit
             marker.Gui.Enabled=visible and VisualsState.world_object_esp_labels==true
@@ -23042,7 +23041,7 @@ animStatus.ZIndex=7
 animStatus.Parent=animViewportContainer
 
 local AnimPreview={world=nil,model=nil,camera=nil,track=nil,liveTrack=nil,rotation=math.pi,token=]==================],
-    [==================[0,loading=false,liveAnimate=nil,liveAnimateDisabled=nil}
+    --[==================[0,loading=false,liveAnimate=nil,liveAnimateDisabled=nil}
 local function animationSegmentBounds(track)
 local length=track and tonumber(track.Length) or 0
 if length<=0 then return nil,nil end
@@ -23562,7 +23561,7 @@ local function replaceProfileNumber(text, value)
     text = tostring(text or "")
     local replaced, count = text:gsub("%-?%d[%d,]*", tostring(value), 1)
 ]==================],
-    [==================[    if count == 0 then return text end
+    --[==================[    if count == 0 then return text end
     return replaced
 end
 
@@ -23974,7 +23973,7 @@ do
         AntiAimControls.yaw_cycle_key = section:CreateDropdown({Name="Cycle Yaw Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, AntiAimState.yaw_cycle_key) or 1, Flag="antiAimV3.yaw_cycle_key", Callback=function(index) AntiAimState.SetValue("yaw_cycle_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "Z") end})
         AntiAimControls.pitch_cycle_key = section:CreateDropdown({Name="Cycle Pitch Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, AntiAimState.pitch_cycle_key) or 1, Flag="antiAimV3.pitch_cycle_key", Callback=function(index) AntiAimState.SetValue("pitch_cycle_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "V") end})
         AntiAimControls.preset_cycle_key = section:CreateDropdown({Name="Cycle Preset Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt",]==================],
-    [==================[ "RightAlt", "LeftControl", "RightControl"}, AntiAimState.preset_cycle_key) or 1, Flag="antiAimV3.preset_cycle_key", Callback=function(index) AntiAimState.SetValue("preset_cycle_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "B") end})
+    --[==================[ "RightAlt", "LeftControl", "RightControl"}, AntiAimState.preset_cycle_key) or 1, Flag="antiAimV3.preset_cycle_key", Callback=function(index) AntiAimState.SetValue("preset_cycle_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "B") end})
         AntiAimControls.freestand_key = section:CreateDropdown({Name="Flip Freestanding Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, AntiAimState.freestand_key) or 1, Flag="antiAimV3.freestand_key", Callback=function(index) AntiAimState.SetValue("freestand_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "G") end})
         section:CreateButton({Name="Cycle Yaw Mode", Callback=function() AntiAimState.core.Actions.CycleYaw() end})
         section:CreateButton({Name="Cycle Pitch Mode", Callback=function() AntiAimState.core.Actions.CyclePitch() end})
@@ -24253,7 +24252,7 @@ local function restoreAvatarProperties()
     for instance, properties in pairs(Runtime.OriginalProperties) do
         if instance and instance.Parent then
             for pro]==================],
-    [==================[perty, value in pairs(properties) do
+    --[==================[perty, value in pairs(properties) do
                 pcall(function() instance[property] = value end)
             end
         end
@@ -24964,7 +24963,7 @@ end
 
 local function rapidFireGetEquippedTool()
     local character = LocalPlayer and LocalPlayer.Ch]==================],
-    [==================[aracter
+    --[==================[aracter
     if not character then return nil end
     for _, object in ipairs(character:GetChildren()) do
         if object:IsA("Tool") then return object end
@@ -25736,7 +25735,7 @@ local function stepBunnyHop(dt)
     end
 
     if movement and movement:OwnsHorizontal() then retur]==================],
-    [==================[n end
+    --[==================[n end
     local velocity = root.AssemblyLinearVelocity
     local horizontal = Vector3.new(velocity.X, 0, velocity.Z)
     local speed = horizontal.Magnitude
@@ -26333,7 +26332,7 @@ do
         if type(target) ~= "table" or type(target[key]) ~= "function" then return end
         self.Wrappers[#self.Wrappers + 1] = {
             Target = target, Key = key, Original = target[key], Replacement]==================],
-    [==================[ = replacement,
+    --[==================[ = replacement,
         }
         target[key] = replacement
     end
@@ -27134,7 +27133,7 @@ table.insert(library.CleanupCallbacks, function()
     if type(MaskShard) == "table"
         and type(MaskShard.Runtime) == "table"
         and MaskShard.Runtime.UniversalTools == UniversalTo]==================],
-    [==================[olsRuntime then
+    --[==================[olsRuntime then
         MaskShard.Runtime.UniversalTools = nil
     end
 end)
@@ -27547,7 +27546,7 @@ local HackerDetectorRuntime = {
 local function hackerDetectorSetAlert(active,duration)
     local manager=library and library.KeybindManager
     if not manager or not manager.SetHackerAle]==================],
-    [==================[rt then return end
+    --[==================[rt then return end
     manager:SetHackerAlert(active==true,library.Window,duration or 12)
 end
 
@@ -28078,7 +28077,7 @@ local cursorStateMap = {
     devkage_cursor_text_glow_strength="TextGlowStrength",
     devkage_cursor_main_text_size="MainTextSize",
     d]==================],
-    [==================[evkage_cursor_second_text_size="SecondTextSize",
+    --[==================[evkage_cursor_second_text_size="SecondTextSize",
     devkage_cursor_pulse_speed="PulseSpeed",
     devkage_cursor_bounce="Bounce",
     devkage_cursor_bounce_amount="BounceAmount",
@@ -29280,7 +29279,7 @@ local function referenceApplyRadialLayout(
                     0.5,
                     1
          ]==================],
-    [==================[       )
+    --[==================[       )
 
             line.Frame.Size =
                 UDim2.fromOffset(
@@ -30438,7 +30437,7 @@ addSlider(textSection,"devkage_cursor_second_text_size","Second Text Size",8,40,
 local cursorProfileOptions={"Custom","Precision","Minimal Dot","Creator Glow","Neon RGB","Cinematic","Classic"}
 local cursorProfiles={
 Precision={devkage]==================],
-    [==================[_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(235,245,255),devkage_cursor_color_secondary=Color3.fromRGB(90,175,255),devkage_cursor_color_mode="Two Tone",devkage_cursor_rainbow=false,devkage_cursor_line_width=2,devkage_cursor_line_length=12,devkage_cursor_center_radius=3,devkage_cursor_arm_count=4,devkage_cursor_spin=false,devkage_cursor_line_glow=true,devkage_cursor_glow_thickness=5,devkage_cursor_glow_extra_length=2,devkage_cursor_glow_transparency=0.58,devkage_cursor_text_enabled=false},
+    --[==================[_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(235,245,255),devkage_cursor_color_secondary=Color3.fromRGB(90,175,255),devkage_cursor_color_mode="Two Tone",devkage_cursor_rainbow=false,devkage_cursor_line_width=2,devkage_cursor_line_length=12,devkage_cursor_center_radius=3,devkage_cursor_arm_count=4,devkage_cursor_spin=false,devkage_cursor_line_glow=true,devkage_cursor_glow_thickness=5,devkage_cursor_glow_extra_length=2,devkage_cursor_glow_transparency=0.58,devkage_cursor_text_enabled=false},
 ["Minimal Dot"]={devkage_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(255,255,255),devkage_cursor_color_secondary=Color3.fromRGB(255,255,255),devkage_cursor_color_mode="Solid",devkage_cursor_rainbow=false,devkage_cursor_line_width=2,devkage_cursor_line_length=3,devkage_cursor_center_radius=2,devkage_cursor_arm_count=4,devkage_cursor_spin=false,devkage_cursor_line_glow=false,devkage_cursor_text_enabled=false},
 ["Creator Glow"]={devkage_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(190,80,255),devkage_cursor_color_secondary=Color3.fromRGB(70,205,255),devkage_cursor_color_mode="Gradient",devkage_cursor_color_speed=1.25,devkage_cursor_color_spread=0.55,devkage_cursor_rainbow=false,devkage_cursor_line_width=3,devkage_cursor_line_length=22,devkage_cursor_center_radius=6,devkage_cursor_arm_count=4,devkage_cursor_spin=true,devkage_cursor_spin_style="Static",devkage_cursor_spin_direction="Clockwise",devkage_cursor_spin_speed=46,devkage_cursor_spin_range=360,devkage_cursor_smooth_spin=true,devkage_cursor_line_glow=true,devkage_cursor_glow_thickness=14,devkage_cursor_glow_extra_length=8,devkage_cursor_glow_transparency=0.42,devkage_cursor_text_enabled=true,devkage_cursor_main_text="DevKage",devkage_cursor_second_text="None",devkage_cursor_text_outline=true},
 ["Neon RGB"]={devkage_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(255,60,210),devkage_cursor_color_secondary=Color3.fromRGB(65,180,255),devkage_cursor_color_mode="RGB Wave",devkage_cursor_color_speed=2.1,devkage_cursor_color_spread=0.72,devkage_cursor_rainbow=true,devkage_cursor_rainbow_speed=5,devkage_cursor_line_width=3,devkage_cursor_line_length=19,devkage_cursor_center_radius=5,devkage_cursor_arm_count=6,devkage_cursor_spin=true,devkage_cursor_spin_style="Static",devkage_cursor_spin_direction="Clockwise",devkage_cursor_spin_speed=72,devkage_cursor_smooth_spin=true,devkage_cursor_line_glow=true,devkage_cursor_glow_thickness=17,devkage_cursor_glow_extra_length=9,devkage_cursor_glow_transparency=0.34,devkage_cursor_text_enabled=false},
@@ -30994,7 +30993,7 @@ local function syncSupplementalSpooferControls(controls,config)
 local extra=type(controls.extra)=="table" and controls.extra or {}
 local toggleBindings={
 {"spoofDeviceToggle","spoofDevice"},{"deviceSpamToggle"]==================],
-    [==================[,"deviceSpam"},
+    --[==================[,"deviceSpam"},
 {"influencerToggle","influencer"},{"adminToggle","admin"},
 {"spoofAvatarToggle","spoofAvatar"},{"anonymousToggle","anonymousMode"},
 {"displayNameToggle","displayNameOverrideEnabled"},{"usernameToggle","usernameOverrideEnabled"},
@@ -31325,7 +31324,7 @@ controls.streamerWidthSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.s
 controls.streamerHeightSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudHeight) or 36,22,100),true)
 controls.streamerTextSizeSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudTextSize) or 14,8,32),true)
 controls.streamerPaddingSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamer]==================],
-    [==================[HudPadding) or 25,0,80),true)
+    --[==================[HudPadding) or 25,0,80),true)
 controls.streamerOffsetXSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudOffsetX) or 0,-1200,1200),true)
 controls.streamerOffsetYSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudOffsetY) or 12,-500,500),true)
 controls.streamerCornerSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudCornerRadius) or 7,0,24),true)
@@ -32177,7 +32176,7 @@ library:Notify({Message="Select a player first",Duration=3})
 return
 end
 local saved,err]==================],
-    [==================[=setPlayerBlacklisted(selectedServerPlayer,false)
+    --[==================[=setPlayerBlacklisted(selectedServerPlayer,false)
 if saved then
 playerReasonBox.Text=""
 playerSelectionLabel.Text="Selected: "..tostring(selectedServerPlayer.Name)
@@ -32755,7 +32754,7 @@ assert(function(alwaysOnMaskShards, environment, safeActivate, safeDeactivate)
 
         if environment.__DevKageMaskShardHealth == health then
             environment.__DevKageMaskShardHealt]==================],
-    [==================[h = nil
+    --[==================[h = nil
         end
         environment.__DevKageMaskShardStatus = {
             Active = false,
@@ -32860,41 +32859,6 @@ task.spawn(function()
         -- One scheduler turn before compiling the ~1.3MB embedded source.
         task.wait()
 
-        local loader = loadstring or load
-        if type(loader) ~= "function" then
-            error("DevKage requires loadstring support")
-        end
-
-        local chunk, compileError = loader(__DEVKAGE_EMBEDDED_SOURCE)
-        if not chunk then
-            error(compileError)
-        end
-
-        __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT = true
-        local runOk, runError = pcall(chunk)
-        __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT = nil
-        if not runOk then
-            error(runError)
-        end
-
-        __devkageEnv.__DEVKAGE_AUTO_STARTED_JOB = jobKey
-        __devkageEnv.__DEVKAGE_AUTOLOADED_BUILD = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
-        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
-        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
-        __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
-
-        warn("[DevKage LateBoot] current build loaded")
-    end)
-
-    if not ok then
-        __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT = nil
-        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
-        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
-        __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
-        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = nil
-        warn("[DevKage Package Boot] " .. tostring(err))
-    end
-end)
 
 -- Return immediately. The executor is free to start the other Auto Execute
 -- script while DevKage is waiting in its own LateBoot task.
