@@ -539,7 +539,7 @@ local __devkageMultiInjectAutoBoot = __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT ==
 -- window.  Starting two DevKage runtimes together is expensive and can leave
 -- duplicate frame/heartbeat workers.  Only duplicate auto boots of the same
 -- build and server are suppressed; unrelated autoexec scripts are untouched.
-do
+local function __devkageBootSequence()
     local environment = __devkageEnv
     local jobKey = tostring(game.PlaceId) .. ":" .. tostring(game.JobId)
     local buildKey = tostring(environment.__DEVKAGE_PACKAGE_BUILD or "")
@@ -573,6 +573,7 @@ do
     environment.__DEVKAGE_RUNTIME_BOOT_STATE = "starting"
     environment.__DEVKAGE_RUNTIME_BOOT_AT = now
 end
+__devkageBootSequence()
 
 
 
@@ -750,8 +751,7 @@ function utility:RegisterThemeObject(Render, RenderProperties)
         local transparent = tonumber(RenderProperties.BackgroundTransparency) or 0
         if typeof(color) == "Color3" and transparent < 1 then
             local maxv = math.max(color.R, color.G, color.B)
-            local minv = math.min(color.R, color.G, color.]==================],
-    [==================[B)
+            local minv = math.min(color.R, color.G, color.B)
             if (maxv - minv) <= 0.012 and maxv <= 0.42 then
                 local gray = (color.R + color.G + color.B) / 3
                 library.ThemeUIObjects[#library.ThemeUIObjects + 1] = {
@@ -2054,6 +2054,7 @@ end
 game:GetService("RunService").RenderStepped:Connect(updateCursor)
 
 
+function pages:CreateSection(Properties)
     Properties = Properties or {}
     local Section = {
         Name    = (Properties.name or Properties.Name or Properties.title or Properties.Title or "New Section"),
@@ -2077,16 +2078,6 @@ game:GetService("RunService").RenderStepped:Connect(updateCursor)
         local Section_Holder_Extra = utility:RenderObject("Frame", {
             BackgroundColor3    = Color3.fromRGB(0, 0, 0),
             BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
-            BorderSizePixel     = 0,
-            Parent              = Section_Holder,
-            Position            = UDim2.new(0, 1, 0, 1),
-            Size                = UDim2.new(1, -2, 1, -2),
-            ZIndex              = 2
-        })
-        local Section_Holder_Frame = utility:RenderObject("Frame", {
-            BackgroundColor3    = Color3.fromRGB(23, 23, 23),
-            BackgroundTransparency = 0,
             BorderColor3        = Color3.fromRGB(0, 0, 0),
             BorderSizePixel     = 0,
             Parent              = Section_Holder,
@@ -23307,7 +23298,6 @@ compactVisualSection(clientEffects,120)
 compactVisualSection(worldSection,120)
 compactVisualSection(worldIntelSection,120)
 compactVisualSection(waypointSection,120)
-compactVisualSection(viewmodelSection,120)
 compactVisualSection(creatorSection,120)
 compactVisualSection(lightingSection,140)
 compactVisualSection(snowSection,120)
@@ -23327,7 +23317,6 @@ makeVisualSectionFolder(clientEffects)
 makeVisualSectionFolder(worldSection)
 makeVisualSectionFolder(worldIntelSection)
 makeVisualSectionFolder(waypointSection)
-makeVisualSectionFolder(viewmodelSection)
 makeVisualSectionFolder(creatorSection)
 makeVisualSectionFolder(lightingSection)
 makeVisualSectionFolder(snowSection)
@@ -23337,9 +23326,9 @@ makeVisualSectionFolder(animationSection)
 
 VisualCategoryController.Sections={
 Enemy={playeresp,enemyModels,espOptions,espAppearance,espExtra,radarSection,threatCompassSection,espProfileSection},
-Models={enemyModels,espAppearance,viewmodelSection},
+Models={enemyModels,espAppearance},
 World={worldSection,worldIntelSection,waypointSection,lightingSection,snowSection,weatherSection,devkagePresetSection,PlayerESPUtilityRuntime.SkySection},
-Client={clientEffects,viewmodelSection,creatorSection,animationSection}
+Client={clientEffects,creatorSection,animationSection}
 }
 AdvancedLighting.ExtraVisuals=assert(loadstring([======[
 return function(context)
@@ -32067,20 +32056,6 @@ end
 
 
 
-local blacklistFlashToken=0
--- Flash elements removed per user request
-local blacklistFlashFrame=Instance.new("Frame")
-blacklistFlashFrame.Visible=false
-blacklistFlashFrame.Parent=playerPhotoRoot
-local blacklistFlashStroke=Instance.new("UIStroke")
-blacklistFlashStroke.Parent=blacklistFlashFrame
-local blacklistFlashLabel=Instance.new("TextLabel")
-blacklistFlashLabel.Parent=blacklistFlashFrame
-
-local function showBlacklistFlash()
--- Flashing logic removed per user request
-end
-
 selectPlayerButton.MouseButton1Click:Connect(function()
 if not selectedServerPlayer then
 library:Notify({Message="Select a player first",Duration=3})
@@ -32090,7 +32065,6 @@ local saved,err=setPlayerBlacklisted(selectedServerPlayer,true,playerReasonBox.T
 if saved then
 playerSelectionLabel.Text="Selected: "..tostring(selectedServerPlayer.Name)
 rebuildServerPlayerList()
-showBlacklistFlash()
 if blacklistStatusLabel then
     blacklistStatusLabel.Text="BLACKLISTED: "..tostring(selectedServerPlayer.Name)
     blacklistStatusLabel.TextColor3=Color3.fromRGB(255,72,72)
@@ -32106,8 +32080,7 @@ if not selectedServerPlayer then
 library:Notify({Message="Select a player first",Duration=3})
 return
 end
-local saved,err]==================],
-    [==================[=setPlayerBlacklisted(selectedServerPlayer,false)
+local saved,err=setPlayerBlacklisted(selectedServerPlayer,false)
 if saved then
 playerReasonBox.Text=""
 playerSelectionLabel.Text="Selected: "..tostring(selectedServerPlayer.Name)
