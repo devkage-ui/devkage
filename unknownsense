@@ -1,11 +1,20 @@
+local __DEVKAGE_EMBEDDED_SOURCE = table.concat({
+    [==================[
+
+
+
+
+
+
 local maskShardShutdownKey = {}
+
 -- ============================================================
--- MASK SHARD v9.7.0 '97 ULTIMATE BYPASS (SEPT 2026)
+-- MASK SHARD v9.7.0 — ULTIMATE BYPASS (SEPT 2026)
 -- ============================================================
 -- Full protection: memory, network, drawing, metatable,
 -- sandbox, stack, fflag, checkcaller, executor spoofing.
 -- Throttled memory wipe to avoid console spam.
--- Opiumwareoptimized.
+-- Opiumware‑optimized.
 -- ============================================================
 
 local MaskShard = {
@@ -97,7 +106,7 @@ local function protectMemory()
         pcall(function() debug.setinfo(1, "?") end)
     end
 
-    -- Spoof getfflag to disable new anticheat flags
+    -- Spoof getfflag to disable new anti‑cheat flags
     if type(getfflag) == "function" then
         local oldGetFFlag = getfflag
         getfflag = function(flag)
@@ -129,7 +138,7 @@ local function protectMemory()
     end
 end
 
--- === NETWORK SPOOFER (RECURSIONSAFE) ===
+-- === NETWORK SPOOFER (RECURSION‑SAFE) ===
 local function hookRemoteEvents()
     local remotes = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes")
     if not remotes then return end
@@ -194,7 +203,7 @@ local function hookRemoteEvents()
     end
 end
 
--- === DRAWING MASKER (with antiscan) ===
+-- === DRAWING MASKER (with anti‑scan) ===
 local function maskDrawingObjects()
     local Drawing = _G.Drawing
     if not Drawing then return end
@@ -373,7 +382,7 @@ local function clearStackTrace()
     end
 end
 
--- === ADDITIONAL ANTIDETECTION ===
+-- === ADDITIONAL ANTI‑DETECTION ===
 local function antiDebug()
     -- If the script is being debugged, pause execution
     if type(debug) == "table" and type(debug.getinfo) == "function" then
@@ -586,7 +595,7 @@ Assets = "Assets",
 Configs = "Configs"
 }
 
-local function initializeUI()
+local Passed, Statement = pcall(function()
 local utility = {}
 local pages   = {}
 local sections = {}
@@ -609,7 +618,7 @@ local cre = game:GetService("CoreGui")
 
 
 library.Theme = library.Theme or {
-    UI = Color3.fromRGB(10, 10, 10),
+    UI = Color3.fromRGB(23, 23, 23),
     Toggle = Color3.fromRGB(175, 205, 75),
     Slider = Color3.fromRGB(175, 205, 75),
     Text = Color3.fromRGB(205, 205, 205),
@@ -741,7 +750,8 @@ function utility:RegisterThemeObject(Render, RenderProperties)
         local transparent = tonumber(RenderProperties.BackgroundTransparency) or 0
         if typeof(color) == "Color3" and transparent < 1 then
             local maxv = math.max(color.R, color.G, color.B)
-            local minv = math.min(color.R, color.G, color.B)
+            local minv = math.min(color.R, color.G, color.]==================],
+    [==================[B)
             if (maxv - minv) <= 0.012 and maxv <= 0.42 then
                 local gray = (color.R + color.G + color.B) / 3
                 library.ThemeUIObjects[#library.ThemeUIObjects + 1] = {
@@ -925,7 +935,7 @@ function utility:SafeCallback(Callback, ...)
         return debug and debug.traceback and debug.traceback(tostring(Error), 2) or tostring(Error)
     end)
     if not Success then
-        warn("[DevKage UI] Control callback failed:" .. tostring(Result))
+        warn("[DevKage UI] Control callback failed:\n" .. tostring(Result))
     end
     return Success, Result
 end
@@ -1736,7 +1746,7 @@ function library:CreatePage(Properties)
             Size = UDim2.new(1, -8, 1, -8),
             ZIndex = 9,
             Font = Enum.Font.Code,
-            Text = tostring(Properties.Glyph or Properties.glyph or "'95"),
+            Text = tostring(Properties.Glyph or Properties.glyph or "•"),
             TextColor3 = Color3.fromRGB(105,105,105),
             TextSize = 18,
             TextXAlignment = Enum.TextXAlignment.Center,
@@ -1983,7 +1993,8 @@ function pages:CreateSection(Properties)
             Position            = UDim2.new(0, 1, 0, 1),
             Rotation            = 180,
             Size                = UDim2.new(1, -2, 0, 20),
-            Visible             = false,
+    ]==================],
+    [==================[        Visible             = false,
             ZIndex              = 4,
             Image               = "rbxassetid://7783533907",
             ImageColor3         = Color3.fromRGB(23, 23, 23)
@@ -2555,7 +2566,8 @@ function BindManager:EnsureUI(window)
     clearButton.Size = UDim2.new(0.5, -10, 0, 28)
     clearButton.Font = Enum.Font.Code
     clearButton.TextSize = 9
-    clearButton.TextColor3 = Color3.fromRGB(175, 175, 175)
+    clearButton.TextColor3 = Color3]==================],
+    [==================[.fromRGB(175, 175, 175)
     clearButton.Text = "clear"
     clearButton.ZIndex = 50002
     clearButton.Parent = menu
@@ -2910,7 +2922,7 @@ end
 function BindManager:RefreshMenu()
     local control = self.MenuControl
     if not control or not self.Menu then return end
-    self.MenuTitle.Text = "bind  '95  " .. string.lower(tostring(control.Name))
+    self.MenuTitle.Text = "bind  •  " .. string.lower(tostring(control.Name))
     for mode, button in pairs(self.MenuButtons) do
         local selected = control.BindConfigured == true and control.BindMode == mode
         button.BackgroundColor3 = selected and Color3.fromRGB(31,34,27) or Color3.fromRGB(24,24,24)
@@ -3194,7 +3206,8 @@ function sections:CreateToggle(Properties)
                 if manager then manager:ShowMenu(Content) end
             end)
             utility:CreateConnection(Content_BindValue.MouseButton1Click, function()
-                local manager = library and library.KeybindManager
+             ]==================],
+    [==================[   local manager = library and library.KeybindManager
                 if manager then manager:BeginInlineCapture(Content) end
             end)
             utility:CreateConnection(Content_BindValue.MouseButton2Click, function()
@@ -3733,7 +3746,8 @@ function sections:CreateDropdown(Properties)
             TextTransparency = 1,
             AutoButtonColor = false,
             Active = true,
-            ZIndex = 30
+   ]==================],
+    [==================[         ZIndex = 30
         })
 
         local popup = nil
@@ -3956,98 +3970,6 @@ function sections:CreateDropdown(Properties)
     end
 
     return utility:RegisterControl(Content, Properties)
-end
-
-function sections:CreateFolder(Properties)
-    Properties = Properties or {}
-    local FolderName = Properties.Name or "Folder"
-
-    local Folder_Root = utility:RenderObject("Frame", {
-        Name = "DevKage_Folder_" .. FolderName,
-        BackgroundColor3 = Color3.fromRGB(15, 15, 15),
-        BorderSizePixel = 0,
-        Size = UDim2.fromOffset(0, 25),
-        Visible = true,
-    })
-
-    local Folder_Header = utility:RenderObject("TextButton", {
-        Name = "Folder_Header",
-        Parent = Folder_Root,
-        BackgroundColor3 = Color3.fromRGB(20, 20, 20),
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 25),
-        Position = UDim2.fromOffset(0, 0),
-        Text = "  " .. FolderName,
-        TextColor3 = Color3.fromRGB(200, 200, 200),
-        Font = Enum.Font.GothamMedium,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextSize = 14,
-    })
-
-    local Folder_Content = utility:RenderObject("ScrollingFrame", {
-        Name = "Folder_Content",
-        Parent = Folder_Root,
-        BackgroundColor3 = Color3.fromRGB(10, 10, 10),
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 0),
-        Position = UDim2.fromOffset(0, 25),
-        CanvasSize = UDim2.new(0, 0, 0, 0),
-        ScrollBarThickness = 2,
-        Visible = false,
-    })
-
-    local Expanded = false
-    Folder_Header.MouseButton1Click:Connect(function()
-        Expanded = not Expanded
-        if Expanded then
-            Folder_Content.Visible = true
-            tws:Create(Folder_Root, TweenInfo.new(0.3), {Size = UDim2.new(1, 0, 0, Folder_Content.AbsoluteContentSize.Y + 25)}):Play()
-        else
-            tws:Create(Folder_Root, TweenInfo.new(0.3), {Size = UDim2.fromOffset(0, 25)}):Play()
-            task.delay(0.3, function() if not Expanded then Folder_Content.Visible = false end end)
-        end
-    end)
-
-    local Folder = {
-        Root = Folder_Root,
-        Header = Folder_Header,
-        Content = Folder_Content,
-    }
-
-    local methods = {
-        CreateToggle = function(props)
-            local t = sections:CreateToggle(props)
-            t.Holder.Parent = Folder_Content
-            return t
-        end,
-        CreateSlider = function(props)
-            local s = sections:CreateSlider(props)
-            s.Holder.Parent = Folder_Content
-            return s
-        end,
-        CreateDropdown = function(props)
-            local d = sections:CreateDropdown(props)
-            d.Holder.Parent = Folder_Content
-            return d
-        end,
-        CreateInput = function(props)
-            local i = sections:CreateInput(props)
-            i.Holder.Parent = Folder_Content
-            return i
-        end,
-        CreateButton = function(props)
-            local b = sections:CreateButton(props)
-            b.Holder.Parent = Folder_Content
-            return b
-        end,
-        CreateLabel = function(props)
-            local l = sections:CreateLabel(props)
-            l.Holder.Parent = Folder_Content
-            return l
-        end,
-    }
-
-    return setmetatable(Folder, methods)
 end
 
 function sections:CreateLabel(Properties)
@@ -4363,7 +4285,8 @@ function sections:CreateColorpicker(Properties)
         local hueStops = {
             Color3.fromRGB(255,0,0),
             Color3.fromRGB(255,255,0),
-            Color3.fromRGB(0,255,0),
+]==================],
+    [==================[            Color3.fromRGB(0,255,0),
             Color3.fromRGB(0,255,255),
             Color3.fromRGB(0,0,255),
             Color3.fromRGB(255,0,255),
@@ -4835,9 +4758,7 @@ function sections:CreateButton(Properties)
 end
 library.Utility = utility
 library.UserInputService = uis
-end -- end initializeUI
-
-local Passed, Statement = pcall(initializeUI)
+end) -- end pcall
 
 if not Passed then
 warn("UI Library failed to load:", Statement)
@@ -4928,7 +4849,8 @@ local function ua_startExternalDetector()
             pcall(function()
                 if UA.CosmeticLibrary then
                     changed = changed
-                        or (UA.ownsCosmeticWrapper and UA.CosmeticLibrary.OwnsCosmetic ~= UA.ownsCosmeticWrapper)
+                        or (UA.ownsCosmeticWrapper and UA.CosmeticLibrary.OwnsCosmetic ~= UA.ownsCosmeticWrapp]==================],
+    [==================[er)
                         or (UA.ownsNormallyWrapper and UA.CosmeticLibrary.OwnsCosmeticNormally ~= UA.ownsNormallyWrapper)
                         or (UA.ownsUniversalWrapper and UA.CosmeticLibrary.OwnsCosmeticUniversally ~= UA.ownsUniversalWrapper)
                         or (UA.ownsForWeaponWrapper and UA.CosmeticLibrary.OwnsCosmeticForWeapon ~= UA.ownsForWeaponWrapper)
@@ -5521,7 +5443,8 @@ local function ua_installEmoteController()
     -- Black-box coexistence mode never replaces EmoteController.GetEmotes.
     -- It only augments the live table returned by whatever implementation is
     -- current after the protected script loads.
-    if not UA.EmoteController then return end
+    if not UA.EmoteController then ret]==================],
+    [==================[urn end
     UA.emoteControllerInstalled = true
     ua_rebuildEmoteCatalog()
     ua_startEmoteSnapshotLoop()
@@ -6120,7 +6043,8 @@ streamerHudShowFPS = true,
 streamerHudShowPing = true,
 streamerHudShowClock = true,
 streamerHudAccent = {175, 205, 75},
-streamerHudSecondary = {110, 165, 255},
+streamerHudSecondary = {110, 165, 255]==================],
+    [==================[},
 streamerHudTextColor = {205, 205, 205},
 streamerHudBackgroundAlpha = 0.03,
 streamerHudScale = 1,
@@ -6698,7 +6622,8 @@ for attribute,value in pairs({
 IsInfluencer=config.influencer==true,Influencer=config.influencer==true,
 IsRobloxEmployee=config.admin==true,IsAdmin=config.admin==true,Admin=config.admin==true
 }) do
-pcall(function() player:SetAttribute(attribute,value) end)
+pcall(function() player:SetAttribute(attribute,val]==================],
+    [==================[ue) end)
 end
 end
 
@@ -7049,7 +6974,7 @@ SpooferState.marketplaceLabel=label
 end
 local parts={}
 if config.fakeGifting==true then parts[#parts+1]="Gifting Ready" end
-SpooferState.marketplaceLabel.Text=table.concat(parts,"  '95  ")
+SpooferState.marketplaceLabel.Text=table.concat(parts,"  •  ")
 return true
 end
 
@@ -7256,7 +7181,8 @@ end
 do
     local environment=(type(getgenv)=="function" and getgenv()) or _G
     local previous=environment.__DevKageELOAutoLoadWatcher
-    if type(previous)=="table" and previous.Connection then
+   ]==================],
+    [==================[ if type(previous)=="table" and previous.Connection then
         pcall(function() previous.Connection:Disconnect() end)
     end
 
@@ -7783,7 +7709,8 @@ function SpooferState.AvatarAssets.RepairAppearance(character, humanoid, templat
         if not object.Parent then object.Parent = character end
         object:SetAttribute("DevKageAvatarAsset", true)
     end
-    if replaceClothing then
+    if replaceClo]==================],
+    [==================[thing then
         for _, object in ipairs(originals) do if not kept[object] then object:Destroy() end end
     end
     local manifest = assets.Manifest(template)
@@ -8311,7 +8238,8 @@ local function installRecordingPrivacySpoof(player, data, config)
             end
         elseif object:IsA("ViewportFrame") then
             task.defer(function()
-                if not privacy.Active or not object.Parent then return end
+                if not privacy.Active or not object.Parent t]==================],
+    [==================[hen return end
                 for _, child in ipairs(object:GetDescendants()) do
                     if child:IsA("Model") and isOriginalViewportModel(child) then
                         buildViewportProxy(child)
@@ -8803,7 +8731,8 @@ function SpooferState.ApplyAvatarIdOnly(userId)
 
     local function applyAvatarTick()
         if avatarToken ~= SpooferState.avatarOnlyToken then return end
-        local character = LocalPlayer and LocalPlayer.Character
+        local cha]==================],
+    [==================[racter = LocalPlayer and LocalPlayer.Character
         local humanoid = character and character:FindFirstChildOfClass("Humanoid")
         if not character or not humanoid or humanoid.Health <= 0 or SpooferState.avatarApplyBusy then return end
         if tonumber(SpooferState.avatarOnlyUserId) ~= avatarUserId then return end
@@ -9463,7 +9392,8 @@ avatar_accessory_scale        = 1,
 mod_detector_enabled          = false,
 hacker_detector_enabled       = false,
 hacker_speed_threshold        = 180,
-hacker_speed_duration         = 0.75,
+hacker_spe]==================],
+    [==================[ed_duration         = 0.75,
 devkage_cursor_enabled             = true,
 devkage_cursor_profile             = "Custom",
 devkage_cursor_position_mode       = "Mouse",
@@ -10086,7 +10016,8 @@ function library.ExtraVisualRuntime:IsArmPart(part, model)
     if not part or not part:IsA("BasePart") then return false end
 
     local n = tostring(part.Name or ""):lower():gsub("[%s_%-]", "")
-    for _, blocked in ipairs({"handguard","handle","foregrip","charm","armor","hitbox","collision","trigger","proxy"}) do
+    for _, blocked in ipairs({"handguard"]==================],
+    [==================[,"handle","foregrip","charm","armor","hitbox","collision","trigger","proxy"}) do
         if n:find(blocked, 1, true) then return false end
     end
 
@@ -10626,14 +10557,14 @@ text.BackgroundTransparency = 1
 text.Size = UDim2.fromScale(1,1)
 text.Font = Enum.Font.Code
 text.TextScaled = true
-text.Text = ""
+text.Text = "✚"
 text.Parent = marker
 object.headMarker = marker
 object.headMarkerLabel = text
 end
 local text = object.headMarkerLabel
 local shape = VisualsState.head_marker_shape
-text.Text = shape == "Dot" and "" or shape == "Ring" and "" or ""
+text.Text = shape == "Dot" and "●" or shape == "Ring" and "○" or "✚"
 text.TextColor3 = VisualsState.head_marker_color
 text.TextTransparency = VisualsState.head_marker_alpha
 text.TextStrokeColor3 = VisualsState.head_marker_outline_color
@@ -10658,7 +10589,8 @@ effect.Enabled = false
 end
 end
 
-VisualsState.skeletonRuntime = VisualsState.skeletonRuntime or {
+VisualsState.skeletonRuntime = ]==================],
+    [==================[VisualsState.skeletonRuntime or {
     Players = {},
     Supported = type(Drawing) == "table" and type(Drawing.new) == "function",
     Segments = {
@@ -11208,7 +11140,8 @@ function HighQualityESPRuntime:GetBounds(character,camera)
     local minX,minY=math.huge,math.huge; local maxX,maxY=-math.huge,-math.huge; local count=0
     for x=-1,1,2 do for y=-1,1,2 do for z=-1,1,2 do
         local world=cf:PointToWorldSpace(Vector3.new(half.X*x,half.Y*y,half.Z*z))
-        local p=camera:WorldToViewportPoint(world)
+        local p=camera:Worl]==================],
+    [==================[dToViewportPoint(world)
         if p.Z>0.05 then
             count=count+1; minX=math.min(minX,p.X); maxX=math.max(maxX,p.X); minY=math.min(minY,p.Y); maxY=math.max(maxY,p.Y)
         end
@@ -11255,7 +11188,7 @@ function HighQualityESPRuntime:UpdatePlayer(player,camera)
     local tool=getPlayerTool(player); local bottomParts={}
     if VisualsState.weapon_text and tool then bottomParts[#bottomParts+1]=tool.Name end
     if VisualsState.distance then bottomParts[#bottomParts+1]=string.format("%.0f studs",getESPWorldDistance(player)) end
-    obj.Bottom.Text=table.concat(bottomParts,"  '95  "); obj.Bottom.Visible=#bottomParts>0; obj.Bottom.TextSize=math.max(9,ts-1)
+    obj.Bottom.Text=table.concat(bottomParts,"  •  "); obj.Bottom.Visible=#bottomParts>0; obj.Bottom.TextSize=math.max(9,ts-1)
     obj.Bottom.Position=UDim2.fromOffset(x-25,maxY+2); obj.Bottom.Size=UDim2.fromOffset(w+50,ts+4)
 
     local flagText=VisualsState.flags and getESPFlags(player) or ""
@@ -11640,7 +11573,8 @@ object.labels.flags.Text = flagsText
 object.labels.healthNumber.Visible = VisualsState.health_number
 object.labels.rank.Visible = VisualsState.rank
 object.labels.winstreak.Visible = VisualsState.winstreak
-object.labels.healthNumber.Text = VisualsState.health_number and string.format("%d HP", math.max(0, math.floor(humanoid.Health + 0.5))) or ""
+object.l]==================],
+    [==================[abels.healthNumber.Text = VisualsState.health_number and string.format("%d HP", math.max(0, math.floor(humanoid.Health + 0.5))) or ""
 local rankText = VisualsState.rank and getRankText(player) or ""
 local streakText = VisualsState.winstreak and getWinstreakText(player) or ""
 object.labels.rank.Text = VisualsState.rank and (rankText ~= "" and ("Rank: " .. rankText) or "Rank: --") or ""
@@ -12140,7 +12074,8 @@ return WorldLightingRuntime
 end
 ]======], "@DevKage/WorldAtmosphereRuntime"))()({
 LightingService=LightingService,
-AdvancedLighting=AdvancedLighting,
+Adva]==================],
+    [==================[ncedLighting=AdvancedLighting,
 GetOrCreateEffect=getOrCreateEffect,
 })
 
@@ -12583,7 +12518,8 @@ return function(context)
             local base=pos+offset
             if roofCheck then cell.Blocked=occlusion and self:RoofAt(base,state) or false end
             local height=p.Profile.Height+(p.Profile.Rise and -1 or 1)*(cell.Layer-1)*6
-            cell.Anchor.CFrame=CFrame.new(base+Vector3.new(0,height,0))
+            cell.Anchor.CFrame=CFrame.new(base+Vector3.]==================],
+    [==================[new(0,height,0))
             cell.Emitter.Enabled=not cell.Blocked
             cell.Emitter.Rate=cell.Blocked and 0 or cell.BaseRate
             cell.Emitter.Acceleration=Vector3.new(p.Wind*0.14+gust*2,p.Profile.Acceleration,gust+p.Wind*0.025)
@@ -12920,7 +12856,8 @@ do
         elapsed = 0, spin = 0, offsetSpin = 0, lastPush = nil,
         lastRandom = nil, randomAngle = 0, lastDamageFlip = -math.huge,
         bindName = "DevKage_AntiAim_v3", bound = false, paused = false,
-    }
+]==================],
+    [==================[    }
 end
 
 function AntiAimState.Number(key)
@@ -13374,7 +13311,8 @@ function AntiAimState.Step(dt)
         runtime.paused = false
     end
     dt = tonumber(dt) or 0
-    if dt ~= dt or dt <= 0 or dt == math.huge then return end
+    if dt]==================],
+    [==================[ ~= dt or dt <= 0 or dt == math.huge then return end
     dt = math.min(dt, 1)
     runtime.elapsed = runtime.elapsed + dt
     humanoid.AutoRotate = false
@@ -13909,7 +13847,8 @@ function AntiAimMovement:Cleanup()
     AntiAimState.noclip_enabled = false
     AntiAimState.flight_enabled = false
     if self.noclipConnection then pcall(function() self.noclipConnection:Disconnect() end); self.noclipConnection = nil end
-    if self.flightConnection then pcall(function() self.flightConnection:Disconnect() end); self.flightConnection = nil end
+    if self.flightConnection then pcall(function() self.flightConnection:Disconnect() end); self.flightConnection ]==================],
+    [==================[= nil end
     self:RestoreCollisions()
     self:ClearFlightRig(true)
 end
@@ -14270,9 +14209,9 @@ if AntiAimState.target_indicator_enabled then
    details[#details+1]=string.format("%d s/s",math.floor(Vector3.new(velocity.X,0,velocity.Z).Magnitude+0.5))
   end
   if AntiAimState.indicator_show_anti_aim and AntiAimState.enabled then
-   details[#details+1]=string.format("Y%d'b0 P%d'b0 R%d'b0",math.floor((AntiAimState.lastYaw or 0)+0.5),math.floor((AntiAimState.lastPitch or 0)+0.5),math.floor((AntiAimState.lastRoll or 0)+0.5))
+   details[#details+1]=string.format("Y%d° P%d° R%d°",math.floor((AntiAimState.lastYaw or 0)+0.5),math.floor((AntiAimState.lastPitch or 0)+0.5),math.floor((AntiAimState.lastRoll or 0)+0.5))
   end
-  AntiAimVisualRuntime.healthText.Text=table.concat(details,AntiAimState.indicator_compact and "  " or " '95 ")
+  AntiAimVisualRuntime.healthText.Text=table.concat(details,AntiAimState.indicator_compact and "  " or " • ")
  end
 else
  if AntiAimVisualRuntime.gui then AntiAimVisualRuntime.gui.Enabled = false end
@@ -14405,7 +14344,7 @@ local ok, files = pcall(listfiles, CONFIG_FOLDER)
 if not ok or type(files) ~= "table" then return {},"Could not list the config folder" end
 local names = {}
 for _, f in ipairs(files) do
-local normal = tostring(f):gsub("\\\", "/")
+local normal = tostring(f):gsub("\\", "/")
 local name = normal:match("([^/]+)%.json$")
 if name and name:sub(1,1) ~= "_" and name:match("^[%w_%-]+$") then table.insert(names, name) end
 end
@@ -14510,7 +14449,8 @@ math.clamp(tonumber(savedValue.r) or 255, 0, 255),
 math.clamp(tonumber(savedValue.g) or 255, 0, 255),
 math.clamp(tonumber(savedValue.b) or 255, 0, 255)
 )
-pcall(control.Set, control, color, tonumber(savedValue.alpha), silent)
+pcall(control.Set, control, color, tonumber(savedValue.alpha]==================],
+    [==================[), silent)
 elseif type(savedValue) == "boolean"
 or type(savedValue) == "number"
 or type(savedValue) == "string" then
@@ -14884,7 +14824,7 @@ local function script_autoload_payload_build(source)
         return nil
     end
 
-    local newline = source:find("", 1, true)
+    local newline = source:find("\n", 1, true)
     if not newline then return nil end
     return source:sub(#SCRIPT_AUTOLOAD_MARKER_PREFIX + 1, newline - 1)
 end
@@ -14898,7 +14838,7 @@ local function normalize_script_autoload_source(source)
 
 
     if source:sub(1, #SCRIPT_AUTOLOAD_MARKER_PREFIX) == SCRIPT_AUTOLOAD_MARKER_PREFIX then
-        local newline = source:find("", 1, true)
+        local newline = source:find("\n", 1, true)
         if not newline then return nil end
         source = source:sub(newline + 1)
     end
@@ -14934,7 +14874,8 @@ task.spawn(function()
 
         local autoLoadEnabled = nil
         local settingsOk, rawSettings = pcall(readfile, SETTINGS_FILE)
-        if settingsOk and type(rawSettings) == "string" and rawSettings ~= "" then
+        if settingsOk and type(rawSettings) == "string" and rawSettings ~=]==================],
+    [==================[ "" then
             local decodedOk, settings = pcall(HttpService.JSONDecode, HttpService, rawSettings)
             if decodedOk and type(settings) == "table" and settings.AutoLoad ~= nil then
                 autoLoadEnabled = settings.AutoLoad == true
@@ -15056,7 +14997,7 @@ task.spawn(function()
 
 
         local markerPrefix = "-- DEVKAGE_AUTOLOAD_BUILD:"
-        local newline = source:find("", 1, true)
+        local newline = source:find("\n", 1, true)
         local payloadBuild = nil
         if newline and source:sub(1, #markerPrefix) == markerPrefix then
             payloadBuild = source:sub(#markerPrefix + 1, newline - 1)
@@ -15426,7 +15367,7 @@ end
 
 
 
-local payloadSource = SCRIPT_AUTOLOAD_MARKER_PREFIX .. SCRIPT_AUTOLOAD_BUILD .. "" .. source
+local payloadSource = SCRIPT_AUTOLOAD_MARKER_PREFIX .. SCRIPT_AUTOLOAD_BUILD .. "\n" .. source
 local payloadAlreadyCurrent = bootRefresh == true and current_payload_is_installed()
 
 if not payloadAlreadyCurrent then
@@ -15673,7 +15614,8 @@ local light = Instance.new("PointLight")
 light.Color = initialColor
 light.Brightness = tonumber(config.chinaHatBrightness) or 0
 light.Range = tonumber(config.chinaHatRange) or 12
-light.Shadows = true
+light.]==================],
+    [==================[Shadows = true
 light.Parent = cone
 
 cone.Parent = character
@@ -16227,9 +16169,9 @@ RainbowAuraState.dynamics[#RainbowAuraState.dynamics + 1] = {Kind="Wing",Part=fe
 end
 end
 elseif auraType == "Hearts" then
-for i=1,6 do makeBillboardSymbol("",i,6) end
+for i=1,6 do makeBillboardSymbol("♥",i,6) end
 elseif auraType == "Stars" then
-for i=1,7 do makeBillboardSymbol("",i,7) end
+for i=1,7 do makeBillboardSymbol("★",i,7) end
 elseif auraType == "Void" then
 makeHighlight(math.clamp(RainbowAuraState.alpha+0.38,0,0.96),0.05)
 local smoke = auraTrack(Instance.new("Smoke"))
@@ -16297,7 +16239,8 @@ local orb=makeDynamicPart(Vector3.new(0.16,0.16,0.16),Enum.PartType.Ball)
 RainbowAuraState.dynamics[#RainbowAuraState.dynamics+1]={Kind="Orbit",Part=orb,Index=index,Count=8,Moon=true}
 end
 makeParticle(22,0.08,0.55,0.16,2.6,"rbxasset://textures/particles/sparkles_main.dds")
-makeHighlight(math.clamp(RainbowAuraState.alpha+0.50,0.62,0.95),0.04)
+makeHighlight(math.clamp(RainbowAuraS]==================],
+    [==================[tate.alpha+0.50,0.62,0.95),0.04)
 makeLight(1.35)
 elseif auraType == "Digital Rain" then
 makeParticle(72,3.5,7.5,0.14,1.4,"rbxasset://textures/particles/sparkles_main.dds")
@@ -16312,7 +16255,7 @@ makePremiumRings("Lightning Crown",2,28,0.82)
 makeParticle(42,0.4,2.8,0.16,1.1,"rbxasset://textures/particles/sparkles_main.dds")
 makeLight(1.9)
 elseif auraType == "Sakura Bloom" then
-for index=1,10 do makeBillboardSymbol("",index,10) end
+for index=1,10 do makeBillboardSymbol("✿",index,10) end
 makeParticle(34,0.4,1.8,0.28,2.8,"rbxasset://textures/particles/sparkles_main.dds")
 makeLight(0.8)
 elseif auraType == "Comet" then
@@ -16864,7 +16807,8 @@ runtimeEnv.__DevKageAvatarMods = (function()
                 math.min(1,feather.Color.B * 0.84 + 0.12)
             )
             shaft.Transparency = math.clamp(transparency() + 0.08,0,0.95)
-            shaft.CanCollide = false
+            sh]==================],
+    [==================[aft.CanCollide = false
             shaft.CanTouch = false
             shaft.CanQuery = false
             shaft.CastShadow = false
@@ -17204,7 +17148,7 @@ runtimeEnv.__DevKageAvatarMods = (function()
         coreStroke.Parent=coreFrame
         remember(coreStroke)
 
-        -- Specular highlight ring '97 thin bright inner edge like a real glowing tube
+        -- Specular highlight ring — thin bright inner edge like a real glowing tube
         local specFrame=Instance.new("Frame")
         specFrame.Name="SpecularRing"
         specFrame.AnchorPoint=Vector2.new(0.5,0.5)
@@ -17613,7 +17557,7 @@ runtimeEnv.__DevKageAvatarMods = (function()
                 local coreBrightness=glowBrightness()*glowPulseBoost
                 if entry.Core and entry.Core.Parent then
                     entry.Core.Color=hotColor
-                    -- Core ring is the sharpest, most opaque element '97 give it real presence
+                    -- Core ring is the sharpest, most opaque element — give it real presence
                     entry.Core.Transparency=math.clamp(alpha*0.82-0.04,0,0.84)
                     entry.Core.Thickness=math.clamp(11+coreBrightness*1.6+haloPulse*3.5,11,28)
                 end
@@ -17708,7 +17652,8 @@ runtimeEnv.__DevKageAvatarMods = (function()
     end
 
     function API:Destroy()
-        state.refreshToken = state.refreshToken + 1
+        state.refreshToken = state.ref]==================],
+    [==================[reshToken + 1
         clearVisuals()
         if state.characterConnection then
             pcall(function() state.characterConnection:Disconnect() end)
@@ -17768,9 +17713,7 @@ local spooferPage = library.Window:CreatePage({ Icon = "rbxassetid://8547236654"
 local spooferRightLayout=spooferPage.Right:FindFirstChildOfClass("UIListLayout")
 if spooferRightLayout then spooferRightLayout.SortOrder=Enum.SortOrder.LayoutOrder end
 
-local avatarModsFolder = spooferPage:CreateSection({ Name = "Avatar Mods", Side = "Left", Size = 315 })
-local chinaHatSection = avatarModsFolder
-
+local chinaHatSection = spooferPage:CreateSection({ Name = "Chinese Man Hat", Side = "Left", Size = 315 })
 
 local chinaHatToggle = chinaHatSection:CreateToggle({
 Name = "Enable Hat",
@@ -17866,273 +17809,7 @@ chinaHatToggle:Set(false)
 end
 })
 
--- Avatar Mod Helpers (Extracted from $udadPro)
-local function AttachAuraSafe(character, auraColor)
-    local torso = character:FindFirstChild('UpperTorso') or character:FindFirstChild('Torso')
-    if not torso then return end
-    for _, child in ipairs(torso:GetChildren()) do
-        if child.Name == 'AuraSafe' then child:Destroy() end
-    end
-    local container = Instance.new('Folder')
-    container.Name = 'AuraSafe'
-    container.Parent = torso
-    local pointLight = Instance.new('PointLight')
-    pointLight.Range = 5
-    pointLight.Brightness = 3
-    pointLight.Color = auraColor or Color3.fromRGB(255, 255, 255)
-    pointLight.Enabled = true
-    pointLight.Shadows = false
-    pointLight.Parent = container
-    local glowAttach = Instance.new('Attachment')
-    glowAttach.Name = 'Glow'
-    glowAttach.CFrame = CFrame.new(0, 0, 0)
-    glowAttach.Parent = container
-    local particleGlow = Instance.new('ParticleEmitter')
-    particleGlow.Brightness = 1
-    particleGlow.Color = ColorSequence.new(auraColor or Color3.fromRGB(255, 255, 255))
-    particleGlow.Enabled = true
-    particleGlow.Lifetime = NumberRange.new(1, 1)
-    particleGlow.LightEmission = 1
-    particleGlow.LightInfluence = 1
-    particleGlow.LockedToPart = true
-    particleGlow.Orientation = Enum.ParticleOrientation.FacingCamera
-    particleGlow.Rate = 4
-    particleGlow.Size = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 4.25),
-        NumberSequenceKeypoint.new(0.5, 0),
-        NumberSequenceKeypoint.new(1, 3.375),
-    })
-    particleGlow.Texture = 'rbxassetid://1075864321'
-    particleGlow.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 1),
-        NumberSequenceKeypoint.new(0.5, 0),
-        NumberSequenceKeypoint.new(1, 1),
-    })
-    particleGlow.Parent = glowAttach
-    local attach2Upper = Instance.new('Attachment')
-    attach2Upper.Name = '2'
-    attach2Upper.CFrame = CFrame.new(0, 2.125, 0)
-    attach2Upper.Parent = container
-    local attach2Lower = Instance.new('Attachment')
-    attach2Lower.Name = '2'
-    attach2Lower.CFrame = CFrame.new(0, -3, 0)
-    attach2Lower.Parent = container
-    local beamSafe1 = Instance.new('Beam')
-    beamSafe1.Attachment0 = attach2Lower
-    beamSafe1.Attachment1 = attach2Upper
-    beamSafe1.Brightness = 1
-    beamSafe1.Color = ColorSequence.new(auraColor or Color3.fromRGB(255, 255, 255))
-    beamSafe1.Enabled = true
-    beamSafe1.FaceCamera = true
-    beamSafe1.LightEmission = 1
-    beamSafe1.Texture = 'rbxassetid://7673945506'
-    beamSafe1.TextureSpeed = 2
-    beamSafe1.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 1),
-        NumberSequenceKeypoint.new(0.5, 0),
-        NumberSequenceKeypoint.new(1, 1),
-    })
-    beamSafe1.Width0 = 6
-    beamSafe1.Width1 = 6
-    beamSafe1.Parent = container
-    local beamSafe2 = Instance.new('Beam')
-    beamSafe2.Attachment0 = attach2Lower
-    beamSafe2.Attachment1 = attach2Upper
-    beamSafe2.Brightness = 1
-    beamSafe2.Color = ColorSequence.new(auraColor or Color3.fromRGB(255, 255, 255))
-    beamSafe2.Enabled = true
-    beamSafe2.FaceCamera = true
-    beamSafe2.LightEmission = 1
-    beamSafe2.Texture = 'http://www.roblox.com/asset/?id=6045867277'
-    beamSafe2.TextureSpeed = 1
-    beamSafe2.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 1),
-        NumberSequenceKeypoint.new(0.5, 0),
-        NumberSequenceKeypoint.new(1, 1),
-    })
-    beamSafe2.Width0 = 5
-    beamSafe2.Width1 = 5
-    beamSafe2.Parent = container
-    local beamSafe3 = Instance.new('Beam')
-    beamSafe3.Attachment0 = attach2Lower
-    beamSafe3.Attachment1 = attach2Upper
-    beamSafe3.Brightness = 1
-    beamSafe3.Color = ColorSequence.new(auraColor or Color3.fromRGB(255, 255, 255))
-    beamSafe3.Enabled = true
-    beamSafe3.FaceCamera = true
-    beamSafe3.LightEmission = 1
-    beamSafe3.Texture = 'rbxassetid://1849531275'
-    beamSafe3.TextureSpeed = 1
-    beamSafe3.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 1),
-        NumberSequenceKeypoint.new(0.5, 0),
-        NumberSequenceKeypoint.new(1, 1),
-    })
-    beamSafe3.Width0 = 6
-    beamSafe3.Width1 = 6
-    beamSafe3.Parent = container
-    local topSymbolAttach = Instance.new('Attachment')
-    topSymbolAttach.Name = '1TopSymbol'
-    topSymbolAttach.CFrame = CFrame.new(0, 5.75001049, 1) * CFrame.fromMatrix(Vector3.zero, Vector3.new(0, 0, -1), Vector3.new(-1, 0, 0), Vector3.new(0, 1, 0))
-    topSymbolAttach.Parent = container
-    local bottomSymbolAttach = Instance.new('Attachment')
-    bottomSymbolAttach.Name = '1BottomSymbol'
-    bottomSymbolAttach.CFrame = CFrame.new(0, -1.24998808, 1) * CFrame.fromMatrix(Vector3.zero, Vector3.new(0, 0, -1), Vector3.new(-1, 0, 0), Vector3.new(0, 1, 0))
-    bottomSymbolAttach.Parent = container
-    local beamSymbol = Instance.new('Beam')
-    beamSymbol.Attachment0 = topSymbolAttach
-    beamSymbol.Attachment1 = bottomSymbolAttach
-    beamSymbol.Brightness = 1
-    beamSymbol.Color = ColorSequence.new(auraColor or Color3.fromRGB(255, 255, 255))
-    beamSymbol.CurveSize0 = 0.5
-    beamSymbol.CurveSize1 = 0.5
-    beamSymbol.Enabled = true
-    beamSymbol.FaceCamera = false
-    beamSymbol.LightEmission = 1
-    beamSymbol.Segments = 100
-    beamSymbol.Texture = 'rbxassetid://8285797183'
-    beamSymbol.Transparency = NumberSequence.new(0, 0)
-    beamSymbol.Width0 = 7
-    beamSymbol.Width1 = 7
-    beamSymbol.Parent = container
-end
-
-local awInstances = {}
-local function destroyAw()
-    for _, inst in pairs(awInstances) do pcall(function() inst:Destroy() end) end
-    awInstances = {}
-end
-
-local function createAw(character, awColor)
-    if not character then return end
-    local hrp = character:FindFirstChild('UpperTorso') or character:FindFirstChild('Torso')
-    if not hrp then return end
-    destroyAw()
-    local att1 = Instance.new('Attachment')
-    att1.Name = 'AngelAttachment1'
-    att1.CFrame = CFrame.new(0, 4.25, 0)
-    att1.Parent = hrp
-    table.insert(awInstances, att1)
-    local pe1 = Instance.new('ParticleEmitter')
-    pe1.Acceleration = Vector3.new(0, -6, 0)
-    pe1.Brightness = 1
-    pe1.Color = ColorSequence.new(awColor or Color3.new(1, 1, 1))
-    pe1.EmissionDirection = Enum.NormalId.Bottom
-    pe1.Enabled = true
-    pe1.Lifetime = NumberRange.new(1, 2)
-    pe1.LightEmission = 1
-    pe1.LockedToPart = true
-    pe1.Orientation = Enum.ParticleOrientation.FacingCamera
-    pe1.Rate = 50
-    pe1.Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.5, 0.3), NumberSequenceKeypoint.new(1, 0.5, 0.3)})
-    pe1.Speed = NumberRange.new(2.5, 2.5)
-    pe1.SpreadAngle = Vector2.new(0, 360)
-    pe1.Texture = 'rbxassetid://7511321694'
-    pe1.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.1, 0), NumberSequenceKeypoint.new(0.3, 0), NumberSequenceKeypoint.new(0.8, 0), NumberSequenceKeypoint.new(1, 1)})
-    pe1.Parent = att1
-    table.insert(awInstances, pe1)
-    local pe2 = Instance.new('ParticleEmitter')
-    pe2.Acceleration = Vector3.new(0, -6, 0)
-    pe2.Brightness = 1
-    pe2.Color = ColorSequence.new(awColor or Color3.new(1, 1, 1))
-    pe2.EmissionDirection = Enum.NormalId.Bottom
-    pe2.Enabled = true
-    pe2.Lifetime = NumberRange.new(1, 2)
-    pe2.LightEmission = 1
-    pe2.LockedToPart = true
-    pe2.Orientation = Enum.ParticleOrientation.FacingCamera
-    pe2.Rate = 100
-    pe2.Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.5, 0.3), NumberSequenceKeypoint.new(1, 0.5, 0.3)})
-    pe2.Speed = NumberRange.new(2.5, 2.5)
-    pe2.SpreadAngle = Vector2.new(0, 360)
-    pe2.Texture = 'rbxassetid://1084976679'
-    pe2.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.2, 0), NumberSequenceKeypoint.new(0.8, 0), NumberSequenceKeypoint.new(1, 1)})
-    pe2.Parent = att1
-    table.insert(awInstances, pe2)
-    local att2 = Instance.new('Attachment')
-    att2.Name = 'AngelAttachment2'
-    att2.CFrame = CFrame.new(0, 0.75, 0.5)
-    att2.Parent = hrp
-    table.insert(awInstances, att2)
-    local att3 = Instance.new('Attachment')
-    att3.Name = 'AngelAttachment3'
-    att3.CFrame = CFrame.new(-5.25, 0, 2) * CFrame.fromMatrix(Vector3.zero, Vector3.new(0.866, 0, 0.5), Vector3.new(0, 1, 0), Vector3.new(-0.5, 0, 0.866))
-    att3.Parent = hrp
-    table.insert(awInstances, att3)
-    local att4 = Instance.new('Attachment')
-    att4.Name = 'AngelAttachment4'
-    att4.CFrame = CFrame.new(5.25, 0, 2) * CFrame.fromMatrix(Vector3.zero, Vector3.new(0.866, 0, -0.5), Vector3.new(0, 1, 0), Vector3.new(0.5, 0, 0.866))
-    att4.Parent = hrp
-    table.insert(awInstances, att4)
-    local beam1 = Instance.new('Beam')
-    beam1.Attachment0 = att2
-    beam1.Attachment1 = att3
-    beam1.Brightness = 1
-    beam1.Color = ColorSequence.new(awColor or Color3.new(1, 1, 1))
-    beam1.CurveSize0 = 2
-    beam1.CurveSize1 = 2
-    beam1.Enabled = true
-    beam1.LightEmission = 1
-    beam1.Texture = 'rbxassetid://9544400688'
-    beam1.Width0 = 4
-    beam1.Width1 = 6
-    beam1.Parent = hrp
-    table.insert(awInstances, beam1)
-    local beam2 = Instance.new('Beam')
-    beam2.Attachment0 = att2
-    beam2.Attachment1 = att4
-    beam2.Brightness = 1
-    beam2.Color = ColorSequence.new(awColor or Color3.new(1, 1, 1))
-    beam2.CurveSize0 = -2
-    beam2.CurveSize1 = -2
-    beam2.Enabled = true
-    beam2.LightEmission = 1
-    beam2.Texture = 'rbxassetid://9544400688'
-    beam2.Width0 = 4
-    beam2.Width1 = 6
-    beam2.Parent = hrp
-    table.insert(awInstances, beam2)
-    local pl = Instance.new('PointLight')
-    pl.Brightness = 4
-    pl.Color = awColor or Color3.new(1, 1, 1)
-    pl.Enabled = true
-    pl.Range = 5
-    pl.Parent = hrp
-    table.insert(awInstances, pl)
-end
-
-local bhInstances = {}
-local function destroyBh()
-    for _, inst in pairs(bhInstances) do pcall(function() inst:Destroy() end) end
-    bhInstances = {}
-end
-
-local function createBh(character, bhColor)
-    if not character then return end
-    destroyBh()
-    for _, part in pairs(character:GetChildren()) do
-        if part:IsA('BasePart') and part.Name ~= 'HumanoidRootPart' then
-            local atom1 = Instance.new('ParticleEmitter')
-            atom1.Acceleration = Vector3.new(0, 1, 0)
-            atom1.Brightness = 10
-            atom1.Color = ColorSequence.new(bhColor or Color3.new(1, 1, 1))
-            atom1.Drag = 50
-            atom1.EmissionDirection = Enum.NormalId.Top
-            atom1.Enabled = true
-            atom1.Lifetime = NumberRange.new(0.4, 0.6)
-            atom1.LightEmission = 1
-            atom1.Rate = 20
-            atom1.Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.125), NumberSequenceKeypoint.new(1, 0)})
-            atom1.Speed = NumberRange.new(30, 40)
-            atom1.SpreadAngle = Vector2.new(90, 90)
-            atom1.Texture = 'rbxassetid://11448304274'
-            atom1.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.5, 0), NumberSequenceKeypoint.new(1, 1)})
-            atom1.Parent = part
-            table.insert(bhInstances, atom1)
-        end
-    end
-end
-
+local avatarModsSection = spooferPage:CreateSection({ Name = "Avatar Mods", Side = "Left", Size = 715 })
 local avatarModsRuntime = ((type(getgenv)=="function" and getgenv()) or _G).__DevKageAvatarMods
 
 local avatarModsToggle = avatarModsSection:CreateToggle({
@@ -18140,27 +17817,7 @@ Name = "Enable Avatar Mods",
 State = getgenv().__DevKageConfig.avatarModsEnabled == true,
 Callback = function(v)
 getgenv().__DevKageConfig.avatarModsEnabled = v
-local character = game.Players.LocalPlayer.Character
-if v then
-    local modType = getgenv().__DevKageConfig.avatarModsType or "Wings + Halos"
-    local modColor = auraColorFromConfig(getgenv().__DevKageConfig.avatarModsColor, Color3.fromRGB(255,235,170))
-    if modType == "Angel Wings" then createAw(character, modColor)
-    elseif modType == "Head Halo" then AttachAuraSafe(character, modColor)
-    elseif modType == "Feet Halo" then AttachAuraSafe(character, modColor)
-    elseif modType == "Head + Feet Halos" then AttachAuraSafe(character, modColor)
-    elseif modType == "Wings + Halos" then createAw(character, modColor) AttachAuraSafe(character, modColor)
-    end
-else
-    destroyAw()
-    destroyBh()
-    if character then
-        local torso = character:FindFirstChild('UpperTorso') or character:FindFirstChild('Torso')
-        if torso then
-            local aura = torso:FindFirstChild('AuraSafe')
-            if aura then aura:Destroy() end
-        end
-    end
-end
+if avatarModsRuntime then avatarModsRuntime:SetEnabled(v) end
 end
 })
 
@@ -18173,17 +17830,7 @@ Options = avatarModsTypes,
 State = library.OptionIndex(avatarModsTypes,getgenv().__DevKageConfig.avatarModsType),
 Callback = function(idx)
 getgenv().__DevKageConfig.avatarModsType = avatarModsTypes[idx] or "Wings + Halos"
-local character = game.Players.LocalPlayer.Character
-local modType = getgenv().__DevKageConfig.avatarModsType or "Wings + Halos"
-local modColor = auraColorFromConfig(getgenv().__DevKageConfig.avatarModsColor, Color3.fromRGB(255,235,170))
-if getgenv().__DevKageConfig.avatarModsEnabled then
-    if modType == "Angel Wings" then createAw(character, modColor)
-    elseif modType == "Head Halo" then AttachAuraSafe(character, modColor)
-    elseif modType == "Feet Halo" then AttachAuraSafe(character, modColor)
-    elseif modType == "Head + Feet Halos" then AttachAuraSafe(character, modColor)
-    elseif modType == "Wings + Halos" then createAw(character, modColor) AttachAuraSafe(character, modColor)
-    end
-end
+if avatarModsRuntime then avatarModsRuntime:Refresh() end
 end
 })
 
@@ -18192,18 +17839,6 @@ Name = "Mod Color",
 State = auraColorFromConfig(getgenv().__DevKageConfig.avatarModsColor,Color3.fromRGB(255,235,170)),
 Alpha = tonumber(getgenv().__DevKageConfig.avatarModsAlpha) or 0.18,
 Callback = function(v,alpha)
-local character = game.Players.LocalPlayer.Character
-local modType = getgenv().__DevKageConfig.avatarModsType or "Wings + Halos"
-local modColor = v
-if getgenv().__DevKageConfig.avatarModsEnabled then
-    if modType == "Angel Wings" then createAw(character, modColor)
-    elseif modType == "Head Halo" then AttachAuraSafe(character, modColor)
-    elseif modType == "Feet Halo" then AttachAuraSafe(character, modColor)
-    elseif modType == "Head + Feet Halos" then AttachAuraSafe(character, modColor)
-    elseif modType == "Wings + Halos" then createAw(character, modColor) AttachAuraSafe(character, modColor)
-    end
-end
-end
 getgenv().__DevKageConfig.avatarModsColor = auraColorToConfig(v)
 if alpha ~= nil then getgenv().__DevKageConfig.avatarModsAlpha = alpha end
 end
@@ -18214,17 +17849,6 @@ Name = "Accent Color",
 State = auraColorFromConfig(getgenv().__DevKageConfig.avatarModsSecondaryColor,Color3.fromRGB(130,195,255)),
 Callback = function(v)
 getgenv().__DevKageConfig.avatarModsSecondaryColor=auraColorToConfig(v)
-local character = game.Players.LocalPlayer.Character
-local modType = getgenv().__DevKageConfig.avatarModsType or "Wings + Halos"
-local modColor = v
-if getgenv().__DevKageConfig.avatarModsEnabled then
-    if modType == "Angel Wings" then createAw(character, modColor)
-    elseif modType == "Head Halo" then AttachAuraSafe(character, modColor)
-    elseif modType == "Feet Halo" then AttachAuraSafe(character, modColor)
-    elseif modType == "Head + Feet Halos" then AttachAuraSafe(character, modColor)
-    elseif modType == "Wings + Halos" then createAw(character, modColor) AttachAuraSafe(character, modColor)
-    end
-end
 end
 })
 
@@ -18241,17 +17865,7 @@ Options = avatarModsMaterialOptions,
 State = library.OptionIndex(avatarModsMaterialOptions,getgenv().__DevKageConfig.avatarModsMaterial),
 Callback = function(idx)
 getgenv().__DevKageConfig.avatarModsMaterial=avatarModsMaterialOptions[idx] or "Neon"
-local character = game.Players.LocalPlayer.Character
-local modType = getgenv().__DevKageConfig.avatarModsType or "Wings + Halos"
-local modColor = auraColorFromConfig(getgenv().__DevKageConfig.avatarModsColor, Color3.fromRGB(255,235,170))
-if getgenv().__DevKageConfig.avatarModsEnabled then
-    if modType == "Angel Wings" then createAw(character, modColor)
-    elseif modType == "Head Halo" then AttachAuraSafe(character, modColor)
-    elseif modType == "Feet Halo" then AttachAuraSafe(character, modColor)
-    elseif modType == "Head + Feet Halos" then AttachAuraSafe(character, modColor)
-    elseif modType == "Wings + Halos" then createAw(character, modColor) AttachAuraSafe(character, modColor)
-    end
-end
+if avatarModsRuntime then avatarModsRuntime:Refresh() end
 end
 })
 
@@ -18262,17 +17876,7 @@ Options = avatarModsQualityOptions,
 State = library.OptionIndex(avatarModsQualityOptions,getgenv().__DevKageConfig.avatarModsQuality),
 Callback = function(idx)
 getgenv().__DevKageConfig.avatarModsQuality=avatarModsQualityOptions[idx] or "High"
-local character = game.Players.LocalPlayer.Character
-local modType = getgenv().__DevKageConfig.avatarModsType or "Wings + Halos"
-local modColor = auraColorFromConfig(getgenv().__DevKageConfig.avatarModsColor, Color3.fromRGB(255,235,170))
-if getgenv().__DevKageConfig.avatarModsEnabled then
-    if modType == "Angel Wings" then createAw(character, modColor)
-    elseif modType == "Head Halo" then AttachAuraSafe(character, modColor)
-    elseif modType == "Feet Halo" then AttachAuraSafe(character, modColor)
-    elseif modType == "Head + Feet Halos" then AttachAuraSafe(character, modColor)
-    elseif modType == "Wings + Halos" then createAw(character, modColor) AttachAuraSafe(character, modColor)
-    end
-end
+if avatarModsRuntime then avatarModsRuntime:Refresh() end
 end
 })
 
@@ -18297,17 +17901,7 @@ Name = "Mod Size", State = tonumber(getgenv().__DevKageConfig.avatarModsSize) or
 Min = 0.55, Max = 2, Decimals = 2, Suffix = "x",
 Callback = function(v)
 getgenv().__DevKageConfig.avatarModsSize = v
-local character = game.Players.LocalPlayer.Character
-local modType = getgenv().__DevKageConfig.avatarModsType or "Wings + Halos"
-local modColor = auraColorFromConfig(getgenv().__DevKageConfig.avatarModsColor, Color3.fromRGB(255,235,170))
-if getgenv().__DevKageConfig.avatarModsEnabled then
-    if modType == "Angel Wings" then createAw(character, modColor)
-    elseif modType == "Head Halo" then AttachAuraSafe(character, modColor)
-    elseif modType == "Feet Halo" then AttachAuraSafe(character, modColor)
-    elseif modType == "Head + Feet Halos" then AttachAuraSafe(character, modColor)
-    elseif modType == "Wings + Halos" then createAw(character, modColor) AttachAuraSafe(character, modColor)
-    end
-end
+if avatarModsRuntime then avatarModsRuntime:Refresh() end
 end
 })
 
@@ -18341,17 +17935,7 @@ Name = "Premium Particles",
 State = getgenv().__DevKageConfig.avatarModsParticles ~= false,
 Callback = function(v)
 getgenv().__DevKageConfig.avatarModsParticles=v
-local character = game.Players.LocalPlayer.Character
-local modType = getgenv().__DevKageConfig.avatarModsType or "Wings + Halos"
-local modColor = auraColorFromConfig(getgenv().__DevKageConfig.avatarModsColor, Color3.fromRGB(255,235,170))
-if getgenv().__DevKageConfig.avatarModsEnabled then
-    if modType == "Angel Wings" then createAw(character, modColor)
-    elseif modType == "Head Halo" then AttachAuraSafe(character, modColor)
-    elseif modType == "Feet Halo" then AttachAuraSafe(character, modColor)
-    elseif modType == "Head + Feet Halos" then AttachAuraSafe(character, modColor)
-    elseif modType == "Wings + Halos" then createAw(character, modColor) AttachAuraSafe(character, modColor)
-    end
-end
+if avatarModsRuntime then avatarModsRuntime:Refresh() end
 end
 })
 
@@ -18360,17 +17944,7 @@ Name = "Feather & Crystal Trails",
 State = getgenv().__DevKageConfig.avatarModsTrails ~= false,
 Callback = function(v)
 getgenv().__DevKageConfig.avatarModsTrails=v
-local character = game.Players.LocalPlayer.Character
-local modType = getgenv().__DevKageConfig.avatarModsType or "Wings + Halos"
-local modColor = auraColorFromConfig(getgenv().__DevKageConfig.avatarModsColor, Color3.fromRGB(255,235,170))
-if getgenv().__DevKageConfig.avatarModsEnabled then
-    if modType == "Angel Wings" then createAw(character, modColor)
-    elseif modType == "Head Halo" then AttachAuraSafe(character, modColor)
-    elseif modType == "Feet Halo" then AttachAuraSafe(character, modColor)
-    elseif modType == "Head + Feet Halos" then AttachAuraSafe(character, modColor)
-    elseif modType == "Wings + Halos" then createAw(character, modColor) AttachAuraSafe(character, modColor)
-    end
-end
+if avatarModsRuntime then avatarModsRuntime:Refresh() end
 end
 })
 
@@ -18379,38 +17953,18 @@ Name = "Ground Halo Waves",
 State = getgenv().__DevKageConfig.avatarModsGroundWaves ~= false,
 Callback = function(v)
 getgenv().__DevKageConfig.avatarModsGroundWaves=v
-local character = game.Players.LocalPlayer.Character
-local modType = getgenv().__DevKageConfig.avatarModsType or "Wings + Halos"
-local modColor = auraColorFromConfig(getgenv().__DevKageConfig.avatarModsColor, Color3.fromRGB(255,235,170))
-if getgenv().__DevKageConfig.avatarModsEnabled then
-    if modType == "Angel Wings" then createAw(character, modColor)
-    elseif modType == "Head Halo" then AttachAuraSafe(character, modColor)
-    elseif modType == "Feet Halo" then AttachAuraSafe(character, modColor)
-    elseif modType == "Head + Feet Halos" then AttachAuraSafe(character, modColor)
-    elseif modType == "Wings + Halos" then createAw(character, modColor) AttachAuraSafe(character, modColor)
-    end
-end
+if avatarModsRuntime then avatarModsRuntime:Refresh() end
 end
 })
 
 local avatarModsRebuildButton = avatarModsSection:CreateButton({
 Name = "Rebuild Avatar Mod",
 Callback = function()
-if not avatarModsToggle:Get() then avatarModsToggle:Set(true) elselocal character = game.Players.LocalPlayer.Character
-local modType = getgenv().__DevKageConfig.avatarModsType or "Wings + Halos"
-local modColor = auraColorFromConfig(getgenv().__DevKageConfig.avatarModsColor, Color3.fromRGB(255,235,170))
-if getgenv().__DevKageConfig.avatarModsEnabled then
-    if modType == "Angel Wings" then createAw(character, modColor)
-    elseif modType == "Head Halo" then AttachAuraSafe(character, modColor)
-    elseif modType == "Feet Halo" then AttachAuraSafe(character, modColor)
-    elseif modType == "Head + Feet Halos" then AttachAuraSafe(character, modColor)
-    elseif modType == "Wings + Halos" then createAw(character, modColor) AttachAuraSafe(character, modColor)
-    end
-end
+if not avatarModsToggle:Get() then avatarModsToggle:Set(true) elseif avatarModsRuntime then avatarModsRuntime:Refresh() end
 end
 })
 
-local rainbowAuraSection = avatarModsFolder
+local rainbowAuraSection = spooferPage:CreateSection({ Name = "Avatar Aura", Side = "Right", Size = 680 })
 rainbowAuraSection.Root.LayoutOrder=30
 
 local rainbowAuraToggle = rainbowAuraSection:CreateToggle({
@@ -18576,9 +18130,7 @@ if not rainbowAuraToggle:Get() then rainbowAuraToggle:Set(true) else startRainbo
 end
 })
 
-local accountSpooferFolder = spooferPage:CreateSection({ Name = "Account Spoofer", Side = "Left", Size = 505 })
-local spooferSection = accountSpooferFolder
-
+local spooferSection = spooferPage:CreateSection({ Name = "Spoofer Configuration", Side = "Left", Size = 505 })
 local spooferExtraControls={}
 spooferSection.Root.LayoutOrder=300
 local function refreshBasicLevelStreak()
@@ -18657,7 +18209,7 @@ end
 end
 })
 
-local eloStatusLabel=spooferSection:CreateLabel({Text="ELO ready '95 supports rating, MMR and ranked-point layouts"})
+local eloStatusLabel=spooferSection:CreateLabel({Text="ELO ready • supports rating, MMR and ranked-point layouts"})
 local function applyConfiguredELO()
 local value=normalizeSpoofELO(eloInput:Get())
 getgenv().__DevKageConfig.elo=value
@@ -18679,7 +18231,8 @@ if type(SpooferState.RefreshProfileStats)=="function" then task.defer(SpooferSta
 pcall(SpoofRankRuntime.InstallSeasonBridge)
 pcall(SpoofRankRuntime.RefreshSeasonCharms)
 pcall(SpooferState.RefreshLeaderboards)
-eloStatusLabel:SetText("ELO applied '95 "..tostring(value).." '95 "..SpoofRankRuntime.Resolve(getgenv().__DevKageConfig).." '95 live sync "..(getgenv().__DevKageConfig.eloLiveSync~=false and "on" or "off"))
+eloStatusLabel:SetText(]==================],
+    [==================["ELO applied • "..tostring(value).." • "..SpoofRankRuntime.Resolve(getgenv().__DevKageConfig).." • live sync "..(getgenv().__DevKageConfig.eloLiveSync~=false and "on" or "off"))
 end
 spooferSection:CreateButton({Name="Apply ELO Now",Callback=applyConfiguredELO})
 
@@ -18751,7 +18304,7 @@ if SpooferState.privacy and SpooferState.privacy.RefreshAll then pcall(SpooferSt
 pcall(SpooferState.RefreshLeaderboards)
 end
 
-local flagsSection = accountSpooferFolder
+local flagsSection = spooferPage:CreateSection({ Name = "Platform & Account Options", Side = "Right", Size = 635 })
 flagsSection.Root.LayoutOrder=-290
 local platformDrop = flagsSection:CreateDropdown({
 Name    = "Platform",
@@ -18798,15 +18351,14 @@ if SpooferState.running then StartSpoofer(getgenv().__DevKageConfig) else Spoofe
 end})
 
 do
-local profileSpoofsFolder = spooferPage:CreateSection({ Name = "Profile Spoofs", Side = "Right", Size = 350 })
-local section = profileSpoofsFolder
+local section=spooferPage:CreateSection({Name="Leaderboard Spoofs",Side="Right",Size=350})
 section.Root.LayoutOrder=-289
 spooferExtraControls.spoofELO=section:CreateToggle({Name="ELO",State=getgenv().__DevKageConfig.spoofELO~=false,Callback=function(value) getgenv().__DevKageConfig.spoofELO=value==true end})
 spooferExtraControls.spoofStreak=section:CreateToggle({Name="Win Streak",State=getgenv().__DevKageConfig.spoofStreak~=false,Callback=function(value) getgenv().__DevKageConfig.spoofStreak=value==true; if value then task.defer(refreshBasicLevelStreak) end end})
 spooferExtraControls.spoofKills=section:CreateToggle({Name="Eliminations",State=getgenv().__DevKageConfig.spoofKills~=false,Callback=function(value) getgenv().__DevKageConfig.spoofKills=value==true end})
 spooferExtraControls.spoofWins=section:CreateToggle({Name="Wins",State=getgenv().__DevKageConfig.spoofWins~=false,Callback=function(value) getgenv().__DevKageConfig.spoofWins=value==true end})
 spooferExtraControls.spoofLevel=section:CreateToggle({Name="Level",State=getgenv().__DevKageConfig.spoofLevel~=false,Callback=function(value) getgenv().__DevKageConfig.spoofLevel=value==true; if value then task.defer(refreshBasicLevelStreak) end end})
-spooferExtraControls.leaderboardStatus=section:CreateLabel({Text="Independent local leaderboard values '95 no server writes"})
+spooferExtraControls.leaderboardStatus=section:CreateLabel({Text="Independent local leaderboard values • no server writes"})
 section:CreateButton({Name="Apply Leaderboard Spoofs",Callback=function()
 local config=getgenv().__DevKageConfig
 config.level=tonumber(levelInput:Get()) or 999
@@ -18819,12 +18371,12 @@ pcall(updateStats,LocalPlayer,config)
 if SpooferState.targetPlayer then pcall(updateStats,SpooferState.targetPlayer,config) end
 local ok=SpooferState.RefreshLeaderboards()
 if SpooferState.privacy and SpooferState.privacy.RefreshAll then pcall(SpooferState.privacy.RefreshAll) end
-spooferExtraControls.leaderboardStatus:SetText(ok and "Leaderboard views refreshed" or "Leaderboard module unavailable '95 GUI values still applied")
+spooferExtraControls.leaderboardStatus:SetText(ok and "Leaderboard views refreshed" or "Leaderboard module unavailable • GUI values still applied")
 end})
 end
 
 do
-local section = profileSpoofsFolder
+local section=spooferPage:CreateSection({Name="Season Rank Charms",Side="Right",Size=520})
 section.Root.LayoutOrder=-288
 spooferExtraControls.rankDisplayDrop=section:CreateDropdown({Name="Charm Rank",Options=SpoofRankRuntime.Options,State=library.OptionIndex(SpoofRankRuntime.Options,SpoofRankRuntime.Normalize(getgenv().__DevKageConfig.rankDisplay)),Callback=function(index)
 getgenv().__DevKageConfig.rankDisplay=SpoofRankRuntime.Options[index] or "Use Spoofed ELO"
@@ -18845,7 +18397,7 @@ local seasonIndex=index
 local key="charmSeason"..tostring(index)
 spooferExtraControls[key]=section:CreateToggle({Name="Season "..tostring(index).." Charm",State=getgenv().__DevKageConfig[key]~=false,Callback=function(value) getgenv().__DevKageConfig[key]=value==true; if SpooferState.IsActive() then pcall(SpoofRankRuntime.RefreshSeasonCharms) end end})
 end
-spooferExtraControls.charmStatus=section:CreateLabel({Text="3600 base ELO '95 separate Arch placement '95 asset 105018154849972"})
+spooferExtraControls.charmStatus=section:CreateLabel({Text="3600 base ELO • separate Arch placement • asset 105018154849972"})
 section:CreateButton({Name="Force Archnemesis",Callback=function()
 local config=getgenv().__DevKageConfig
 config.rankDisplay="Archnemesis"
@@ -18857,19 +18409,19 @@ if SpooferState.targetPlayer then pcall(SpoofRankRuntime.Apply,SpooferState.targ
 local installed=SpoofRankRuntime.InstallSeasonBridge()
 pcall(SpoofRankRuntime.RefreshSeasonCharms)
 pcall(SpooferState.RefreshRankPresentation)
-spooferExtraControls.charmStatus:SetText((installed and "Archnemesis active" or SpooferState.seasonStatus).." '95 placement "..tostring(SpoofRankRuntime.ArchDivision(config)))
+spooferExtraControls.charmStatus:SetText((installed and "Archnemesis active" or SpooferState.seasonStatus).." • placement "..tostring(SpoofRankRuntime.ArchDivision(config)))
 end})
 section:CreateButton({Name="Refresh Rank Charms",Callback=function()
 SpooferState.localActive=true
 local installed=SpoofRankRuntime.InstallSeasonBridge()
 pcall(SpoofRankRuntime.RefreshSeasonCharms)
 pcall(SpooferState.RefreshRankPresentation)
-spooferExtraControls.charmStatus:SetText((installed and "Charm bridge active" or SpooferState.seasonStatus).." '95 "..SpoofRankRuntime.Resolve(getgenv().__DevKageConfig))
+spooferExtraControls.charmStatus:SetText((installed and "Charm bridge active" or SpooferState.seasonStatus).." • "..SpoofRankRuntime.Resolve(getgenv().__DevKageConfig))
 end})
 end
 
 do
-local section = profileSpoofsFolder
+local section=spooferPage:CreateSection({Name="Currency Spoofs",Side="Right",Size=600})
 section.Root.LayoutOrder=-287
 spooferExtraControls.spoofWeaponKeys=section:CreateToggle({Name="Keys",State=getgenv().__DevKageConfig.spoofWeaponKeys==true,Callback=function(value) getgenv().__DevKageConfig.spoofWeaponKeys=value==true end})
 local definitions={
@@ -18899,7 +18451,7 @@ end})
 end
 
 do
-local section = profileSpoofsFolder
+local section=spooferPage:CreateSection({Name="Duel History",Side="Right",Size=900})
 section.Root.LayoutOrder=-286
 spooferExtraControls.duelHistoryEnabled=section:CreateToggle({Name="Enable Duel History Spoof",State=getgenv().__DevKageConfig.duelHistoryEnabled==true,Callback=function(value) getgenv().__DevKageConfig.duelHistoryEnabled=value==true end})
 local function duelInput(key,name,defaultValue)
@@ -18936,7 +18488,7 @@ end})
 end
 
 do
-local section = profileSpoofsFolder
+local section=spooferPage:CreateSection({Name="Gifting Display",Side="Right",Size=155})
 section.Root.LayoutOrder=-285
 spooferExtraControls.fakeGifting=section:CreateToggle({Name="Fake Gifting",State=getgenv().__DevKageConfig.fakeGifting==true,Callback=function(value) getgenv().__DevKageConfig.fakeGifting=value==true; if SpooferState.IsActive() then SpooferState.RefreshMarketplaceDisplay() end end})
 section:CreateButton({Name="Apply Gifting Display",Callback=function() SpooferState.localActive=true; SpooferState.RefreshMarketplaceDisplay() end})
@@ -19068,7 +18620,8 @@ textLabel.ZIndex=43
 textLabel.Parent=root
 
 self.Gui=gui; self.Root=root; self.Text=textLabel; self.TopLine=topLine; self.TopLineHolder=topLineHolder; self.LineGradient=nil; self.Stroke=stroke; self.Corner=corner
-return true
+return tru]==================],
+    [==================[e
 end
 
 function StreamerHUDRuntime:ApplyLayout()
@@ -19193,8 +18746,7 @@ StreamerHUDRuntime:Destroy()
 if StreamerHUDEnvironment.__DevKageStreamerHUD==StreamerHUDRuntime then StreamerHUDEnvironment.__DevKageStreamerHUD=nil end
 end)
 
-local streamerModeFolder = spooferPage:CreateSection({Name="Streamer Mode",Side="Right",Size=1110})
-local streamerSection = streamerModeFolder
+local streamerSection=spooferPage:CreateSection({Name="Streamer / Recording HUD",Side="Right",Size=1110})
 streamerSection.Root.LayoutOrder=-280
 local streamerHudToggle=streamerSection:CreateToggle({Name="Enable DevSense HUD",State=getgenv().__DevKageConfig.streamerHudEnabled==true,Callback=function(value) getgenv().__DevKageConfig.streamerHudEnabled=value==true; StreamerHUDRuntime:RefreshConfig() end})
 local streamerPositions={"Top Bar","Top Center","Top Right","Bottom Bar","Bottom Center","Bottom Right"}
@@ -19382,7 +18934,8 @@ end
 local function line(name,position,size,rotation,parentObject)
 local frame=Instance.new("Frame")
 frame.Name=name
-frame.AnchorPoint=Vector2.new(0.5,0.5)
+frame.A]==================],
+    [==================[nchorPoint=Vector2.new(0.5,0.5)
 frame.BackgroundColor3=Color3.fromRGB(105,105,105)
 frame.BorderSizePixel=0
 frame.Position=position
@@ -19682,7 +19235,7 @@ arrow.AnchorPoint=Vector2.new(0.5,0.5)
 arrow.BackgroundTransparency=1
 arrow.BorderSizePixel=0
 arrow.Font=Enum.Font.GothamBold
-arrow.Text=""
+arrow.Text="▲"
 arrow.TextColor3=VisualsState.offscreen_arrow_color
 arrow.TextSize=VisualsState.offscreen_arrow_size
 arrow.TextStrokeColor3=Color3.fromRGB(0,0,0)
@@ -19945,7 +19498,7 @@ localArrow.BackgroundTransparency=1
 localArrow.Position=UDim2.fromScale(0.5,0.5)
 localArrow.Size=UDim2.fromOffset(18,18)
 localArrow.Font=Enum.Font.GothamBold
-localArrow.Text=""
+localArrow.Text="▲"
 localArrow.TextColor3=VisualsState.radar_local_color
 localArrow.TextSize=13
 localArrow.TextStrokeColor3=Color3.fromRGB(0,0,0)
@@ -20025,7 +19578,8 @@ self.Gui.Enabled=true
 self:ApplyLayout()
 local localRoot=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 if not localRoot then return end
-local range=math.max(10,tonumber(VisualsState.radar_range) or 350)
+local range=math.max(10,tonumber(VisualsState.radar_range) ]==================],
+    [==================[or 350)
 self.RangeLabel.Text=string.format("%.0f studs",range)
 self.LocalArrow.TextColor3=VisualsState.radar_local_color
 self.LocalArrow.Rotation=VisualsState.radar_rotate and 0 or -math.deg(math.atan2(localRoot.CFrame.LookVector.X,-localRoot.CFrame.LookVector.Z))
@@ -20140,7 +19694,7 @@ heading.BorderSizePixel=0
 heading.Position=UDim2.new(0.5,0,0,3)
 heading.Size=UDim2.fromOffset(68,16)
 heading.Font=Enum.Font.GothamBold
-heading.Text="N  000'b0"
+heading.Text="N  000°"
 heading.TextColor3=Color3.fromRGB(230,232,238)
 heading.TextSize=10
 heading.TextStrokeTransparency=0.55
@@ -20193,7 +19747,7 @@ marker.BorderSizePixel=0
 marker.Position=UDim2.fromScale(0.5,0.38)
 marker.Size=UDim2.fromOffset(82,32)
 marker.Font=Enum.Font.GothamSemibold
-marker.Text=""
+marker.Text="▼"
 marker.TextColor3=VisualsState.threat_compass_color
 marker.TextSize=10
 marker.TextStrokeColor3=Color3.fromRGB(0,0,0)
@@ -20222,7 +19776,7 @@ local tween=tws:Create(stroke,TweenInfo.new(0.72,Enum.EasingStyle.Quad,Enum.Easi
 tween:Play()
 task.delay(0.76,function() if self.Alert and self.Alert.Parent then self.Alert.Visible=false; if stroke and stroke.Parent then stroke.Thickness=7 end end end)
 end
-library:Notify({Message=string.format("Nearby player: %s '95 %d studs",player.DisplayName or player.Name,math.floor(distance+0.5)),Duration=2})
+library:Notify({Message=string.format("Nearby player: %s • %d studs",player.DisplayName or player.Name,math.floor(distance+0.5)),Duration=2})
 end
 
 function ThreatCompassRuntime:Update(dt)
@@ -20240,7 +19794,7 @@ local look=camera.CFrame.LookVector
 local heading=(math.deg(math.atan2(-look.X,-look.Z))+360)%360
 local cardinals={"N","NE","E","SE","S","SW","W","NW"}
 local cardinal=cardinals[(math.floor((heading+22.5)/45)%8)+1]
-self.Heading.Text=string.format("%s  %03d'b0",cardinal,math.floor(heading+0.5)%360)
+self.Heading.Text=string.format("%s  %03d°",cardinal,math.floor(heading+0.5)%360)
 local candidates={}
 local maxDistance=math.max(25,tonumber(VisualsState.threat_compass_max_distance) or 1200)
 for _,player in ipairs(Players:GetPlayers()) do
@@ -20273,7 +19827,7 @@ local sameTeam=LocalPlayer.Team~=nil and player.Team~=nil and LocalPlayer.Team==
 local visible=isESPCharacterVisible(player.Character,false)
 local color=sameTeam and VisualsState.radar_team_color or (visible and VisualsState.threat_compass_visible_color or VisualsState.threat_compass_color)
 marker.TextColor3=color
-local pieces={""}
+local pieces={"▼"}
 if VisualsState.threat_compass_show_names then pieces[#pieces+1]=(player.DisplayName or player.Name):sub(1,11) end
 if VisualsState.threat_compass_show_distance then pieces[#pieces+1]=string.format("%d",math.floor(entry.Distance+0.5)) end
 marker.Text=table.concat(pieces," ")
@@ -20309,7 +19863,7 @@ toggle.BackgroundTransparency=1
 toggle.BorderSizePixel=0
 toggle.AutoButtonColor=false
 toggle.Font=Enum.Font.Code
-toggle.Text=""
+toggle.Text="▼"
 toggle.TextColor3=Color3.fromRGB(175,205,75)
 toggle.TextSize=11
 toggle.ZIndex=70
@@ -20338,7 +19892,7 @@ if section.__Collapsed==collapsed then return end
 section.__Collapsed=collapsed
 
 if collapsed then
-toggle.Text=""
+toggle.Text="▶"
 tweenHeight(collapsedHeight,function()
 if section.__Collapsed then
 holder.Visible=false
@@ -20348,7 +19902,7 @@ end)
 else
 holder.Visible=true
 if extra then extra.Visible=true end
-toggle.Text=""
+toggle.Text="▼"
 tweenHeight(section.__ExpandedHeight or section.Size or 120)
 end
 end
@@ -20360,8 +19914,7 @@ end)
 section.SetCollapsed=setCollapsed
 end
 
-local enemyVisualsFolder = visualsPage:CreateSection({Name="Enemy Visuals",Side="Left",Size=390})
-local playeresp = enemyVisualsFolder
+local playeresp = visualsPage:CreateSection({Name="Enemy ESP",Side="Left",Size=390})
 visualToggle(playeresp,"esp_enabled","Enabled",function() HighQualityESPRuntime:SetEnabled(VisualsState.esp_enabled and VisualsState.high_quality_esp); refresh_esp_highlights(); rebuildESPObjects(); refreshChams() end)
 visualToggle(playeresp,"bounding_box","Bounding Box")
 visualToggle(playeresp,"health_bar","Health Bar")
@@ -20375,7 +19928,7 @@ visualToggle(playeresp,"glow","Glow",refresh_esp_highlights)
 visualToggle(playeresp,"offscreen_arrow","Off-screen Arrow")
 visualToggle(playeresp,"visualize_aimbot","Visualize Aimbot")
 
-local espOptions = enemyVisualsFolder
+local espOptions = visualsPage:CreateSection({Name="Enemy ESP Options",Side="Left",Size=680})
 visualToggle(espOptions,"high_quality_esp","High Quality ESP",function() HighQualityESPRuntime:SetEnabled(VisualsState.esp_enabled and VisualsState.high_quality_esp); rebuildESPObjects() end)
 visualToggle(espOptions,"teamcheck","Team Check",function() refresh_esp_highlights(); rebuildESPObjects(); refreshChams(); ReferenceESPRuntime:RefreshRagdolls() end)
 visualToggle(espOptions,"highlights","Show Highlights",refresh_esp_highlights)
@@ -20412,8 +19965,7 @@ visualSlider(espOptions,"esp_low_health_threshold","Low Health Threshold",1,99,0
 visualToggle(espOptions,"esp_spawn_protection_flag","Spawn Protection Flag")
 visualToggle(espOptions,"esp_target_warning","Aim Radius Target Flag")
 
-local radarTrackingFolder = visualsPage:CreateSection({Name="Radar & Tracking",Side="Right",Size=430})
-local radarSection = radarTrackingFolder
+local radarSection = visualsPage:CreateSection({Name="Premium Radar",Side="Right",Size=430})
 visualToggle(radarSection,"radar_enabled","Enabled",function(v) if not v and RadarRuntime.Gui then RadarRuntime.Gui.Enabled=false end end)
 visualSlider(radarSection,"radar_size","Radar Size",110,320,0,"px",function() RadarRuntime:ApplyLayout() end)
 visualSlider(radarSection,"radar_range","Radar Range",50,3000,0," studs")
@@ -20425,7 +19977,7 @@ visualColor(radarSection,"radar_enemy_color",nil,"Enemy Dot Color")
 visualColor(radarSection,"radar_team_color",nil,"Team Dot Color")
 visualColor(radarSection,"radar_local_color",nil,"Local Arrow Color")
 
-local threatCompassSection = radarTrackingFolder
+local threatCompassSection=visualsPage:CreateSection({Name="Threat Compass",Side="Right",Size=500})
 visualToggle(threatCompassSection,"threat_compass_enabled","Enabled",function(v) if not v and ThreatCompassRuntime.Gui then ThreatCompassRuntime.Gui.Enabled=false end end)
 visualSlider(threatCompassSection,"threat_compass_max_distance","Maximum Distance",50,5000,0," studs")
 visualSlider(threatCompassSection,"threat_compass_max_targets","Maximum Targets",1,20,0,"")
@@ -20438,7 +19990,7 @@ visualToggle(threatCompassSection,"proximity_alert_enabled","Proximity Alert")
 visualSlider(threatCompassSection,"proximity_alert_distance","Alert Distance",5,500,0," studs")
 visualSlider(threatCompassSection,"proximity_alert_cooldown","Alert Cooldown",0.5,20,1,"s")
 
-local espProfileSection = radarTrackingFolder
+local espProfileSection=visualsPage:CreateSection({Name="ESP Profiles",Side="Right",Size=300})
 local espProfileOptions={"Custom","Performance","Balanced","Creator","Full Intel","Cinematic","Accessibility"}
 local espProfileData={
 Performance={
@@ -20495,7 +20047,7 @@ rebuildESPObjects()
 refreshChams()
 ReferenceESPRuntime:RefreshRagdolls()
 library.ExtraVisualRuntime:UpdateEnemyChams()
-library:Notify({Message="ESP profile applied '95 "..tostring(name),Duration=2})
+library:Notify({Message="ESP profile applied • "..tostring(name),Duration=2})
 return true
 end
 espProfileSection:CreateButton({Name="Apply ESP Profile",Callback=function() applyESPProfile(VisualsState.esp_profile) end})
@@ -20512,8 +20064,7 @@ if ThreatCompassRuntime.Gui then ThreatCompassRuntime.Gui.Enabled=false end
 end})
 UI.ApplyESPProfile=applyESPProfile
 
-local effectsFolder = visualsPage:CreateSection({Name="Effects",Side="Left",Size=430})
-local clientEffects = effectsFolder
+local clientEffects = visualsPage:CreateSection({Name="Client Effects",Side="Left",Size=430})
 local PlayerESPUtilityRuntime = {
 sky = nil,
 skyMood = nil,
@@ -20534,7 +20085,8 @@ killAttackStarted = false,
 killRecentAttackAt = 0,
 killRecentTarget = nil,
 killRecentTargetAt = 0,
-killGlobalLastAt = 0,
+killGl]==================],
+    [==================[obalLastAt = 0,
 hitGlobalLastAt = 0,
 soundSerial = 0,
 soundFallbacks = 0,
@@ -20786,7 +20338,7 @@ Lighting=Lighting, Settings=VisualsState, Advanced=AdvancedLighting,
 Owner=PlayerESPUtilityRuntime, Presets=PlayerESPSkyboxes, ContentProvider=game:GetService("ContentProvider"),
 })
 VisualsState.skybox_preset=PlayerESPUtilityRuntime.CustomSky:Normalize(VisualsState.skybox_preset)
-PlayerESPUtilityRuntime.SkySection=visualsPage:CreateSection({Name="Environment",Side="Right",Size=360})
+PlayerESPUtilityRuntime.SkySection=visualsPage:CreateSection({Name="Sky & Moon",Side="Right",Size=360})
 local function restorePlayerESPOriginalSky() PlayerESPUtilityRuntime.CustomSky:Restore() end
 local function applyPlayerESPSkybox() PlayerESPUtilityRuntime.CustomSky:Apply() end
 table.insert(library.CleanupCallbacks,function() PlayerESPUtilityRuntime.CustomSky:Destroy() end)
@@ -20809,7 +20361,7 @@ Callback=function(v)
 VisualsState.skybox_rotation_enabled=v
 end
 })
-visualSlider(PlayerESPUtilityRuntime.SkySection,"skybox_rotation_speed","Skybox Rotation Speed",0,30,1,"'b0/s",function() end)
+visualSlider(PlayerESPUtilityRuntime.SkySection,"skybox_rotation_speed","Skybox Rotation Speed",0,30,1,"°/s",function() end)
 
 utility:CreateConnection(game:GetService("RunService").Heartbeat,function(dt)
 if not VisualsState.skybox_enabled or not VisualsState.skybox_rotation_enabled then return end
@@ -20892,7 +20444,8 @@ local function combatSoundSettings(kind)
 if kind=="hit" then
 local presetName=tostring(VisualsState.hit_sound_preset or "Soft Tick")
 local preset=CombatSoundPresets[presetName] or CombatSoundPresets["Soft Tick"]
-local content=preset.Custom and normalizedCombatSoundContent(VisualsState.hit_sound_id,PLAYER_ESP_HIT_SOUND_ID) or preset.Content
+local content=preset.Custom and normalizedCombatSoundContent(VisualsState.h]==================],
+    [==================[it_sound_id,PLAYER_ESP_HIT_SOUND_ID) or preset.Content
 return content,
 math.clamp(tonumber(VisualsState.hit_sound_volume) or 35,0,100)/100,
 VisualsState.hit_sound_enabled==true,
@@ -21018,7 +20571,7 @@ registerPlayerESPCombatConnection(playedConnection)
 if sound.IsLoaded or sound.TimeLength>0 then
 playWhenReady()
 else
-setCombatSoundStatus("Loading "..((kind=="hit") and "hit" or "kill").." sound'85")
+setCombatSoundStatus("Loading "..((kind=="hit") and "hit" or "kill").." sound…")
 task.spawn(function()
 pcall(function() PlayerESPContentProvider:PreloadAsync({sound}) end)
 if not completed and sound.Parent then
@@ -21036,7 +20589,7 @@ disconnectLocalConnections()
 removeCombatSound(sound)
 if allowFallback and VisualsState.kill_sound_fallback~=false and content~=PLAYER_ESP_FALLBACK_SOUND then
 PlayerESPUtilityRuntime.soundFallbacks=PlayerESPUtilityRuntime.soundFallbacks+1
-setCombatSoundStatus("Primary unavailable '95 using local fallback")
+setCombatSoundStatus("Primary unavailable • using local fallback")
 spawnCombatSound(kind,PLAYER_ESP_FALLBACK_SOUND,volume,kind=="hit" and 1.42 or 1.04,force,false,0)
 else
 setCombatSoundStatus("Sound unavailable in this experience")
@@ -21207,7 +20760,7 @@ if not value then return end
 local previous=PlayerESPUtilityRuntime.killCounterValues[object]
 PlayerESPUtilityRuntime.killCounterValues[object]=value
 if previous~=nil and value>previous and VisualsState.kill_sound_enabled and killHealthDetectionEnabled() then
-setCombatSoundStatus("Kill detected '95 stat counter")
+setCombatSoundStatus("Kill detected • stat counter")
 playPlayerESPKillSound(false)
 end
 end
@@ -21229,7 +20782,7 @@ if not value then return end
 local previous=PlayerESPUtilityRuntime.killAttributeValues[name]
 PlayerESPUtilityRuntime.killAttributeValues[name]=value
 if previous~=nil and value>previous and VisualsState.kill_sound_enabled and killHealthDetectionEnabled() then
-setCombatSoundStatus("Kill detected '95 stat attribute")
+setCombatSoundStatus("Kill detected • stat attribute")
 playPlayerESPKillSound(false)
 end
 end
@@ -21339,7 +20892,7 @@ local initial=tostring(object.Text or "")
 PlayerESPUtilityRuntime.killFeedTexts[object]=initial
 
 if isNew and VisualsState.kill_sound_enabled and killFeedDetectionEnabled() and combatTextCreditsLocal(initial) then
-setCombatSoundStatus("Kill detected '95 UI feed")
+setCombatSoundStatus("Kill detected • UI feed")
 playPlayerESPKillSound(false)
 end
 
@@ -21348,7 +20901,7 @@ local value=tostring(object.Text or "")
 local previous=PlayerESPUtilityRuntime.killFeedTexts[object]
 PlayerESPUtilityRuntime.killFeedTexts[object]=value
 if value~=previous and VisualsState.kill_sound_enabled and killFeedDetectionEnabled() and combatTextCreditsLocal(value) then
-setCombatSoundStatus("Kill detected '95 UI feed")
+setCombatSoundStatus("Kill detected • UI feed")
 playPlayerESPKillSound(false)
 end
 end)
@@ -21417,7 +20970,7 @@ if not VisualsState.kill_sound_enabled then return end
 local activeMode=tostring(VisualsState.kill_sound_detection or "Hybrid")
 if activeMode=="Health + Stats" then return end
 if combatPayloadCreditsLocal(...) then
-setCombatSoundStatus("Kill detected '95 event feed")
+setCombatSoundStatus("Kill detected • event feed")
 playPlayerESPKillSound(false)
 end
 end)
@@ -21482,7 +21035,7 @@ Flag="visuals.kill_sound_preset",
 Callback=function(index)
 VisualsState.kill_sound_preset=CombatSoundPresetNames[index] or "Arcade Confirm"
 warmCombatSound("kill")
-setCombatSoundStatus("Kill preset '95 "..VisualsState.kill_sound_preset)
+setCombatSoundStatus("Kill preset • "..VisualsState.kill_sound_preset)
 end
 })
 
@@ -21518,7 +21071,8 @@ end
 end
 })
 
-VisualControls.kill_sound_pitch=clientEffects:CreateSlider({
+VisualControls.kill_sound_pitch=clientEffects:CreateSlider(]==================],
+    [==================[{
 Name="Kill Sound Pitch",
 State=VisualsState.kill_sound_pitch,
 Min=0.5,
@@ -21551,7 +21105,7 @@ Flag="visuals.kill_sound_detection",
 Callback=function(index)
 VisualsState.kill_sound_detection=combatDetectionModes[index] or "Hybrid"
 if VisualsState.kill_sound_enabled then startCombatWatchers() end
-setCombatSoundStatus("Detection '95 "..VisualsState.kill_sound_detection)
+setCombatSoundStatus("Detection • "..VisualsState.kill_sound_detection)
 end
 })
 
@@ -21628,13 +21182,13 @@ Callback=function(v) VisualsState.hit_sound_length=math.clamp(tonumber(v) or 0,0
 })
 
 clientEffects:CreateButton({Name="Play Hit Sound",Callback=function() playPlayerESPHitSound(true) end})
-clientEffects:CreateLabel({Text="Custom length only affects Custom ID playback '95 0.00s plays the full sound '95 TF2 Hit is included in both preset lists."})
+clientEffects:CreateLabel({Text="Custom length only affects Custom ID playback • 0.00s plays the full sound • TF2 Hit is included in both preset lists."})
 combatSoundStatusControl=clientEffects:CreateLabel({Text="Audio status: "..tostring(PlayerESPUtilityRuntime.soundLastStatus or "Ready")})
 clientEffects:CreateButton({Name="Re-arm Combat Detector",Callback=function()
 startCombatWatchers()
 warmCombatSound("kill")
 warmCombatSound("hit")
-setCombatSoundStatus("Detector armed '95 listeners active")
+setCombatSoundStatus("Detector armed • listeners active")
 end})
 
 table.insert(library.CleanupCallbacks,function()
@@ -21645,8 +21199,7 @@ end)
 
 if VisualsState.skybox_enabled then applyPlayerESPSkybox() end
 
-local modelVisualsFolder = visualsPage:CreateSection({Name="Model Visuals",Side="Right",Size=235})
-local enemyModels = modelVisualsFolder
+local enemyModels = visualsPage:CreateSection({Name="Enemy Models",Side="Right",Size=235})
 visualToggle(enemyModels,"chams","Player",refreshChams)
 visualColor(enemyModels,"chams_color","chams_alpha","Player Color",refreshChams)
 visualToggle(enemyModels,"esp_outline_through_walls","Player Through Walls",function(v)
@@ -21660,7 +21213,7 @@ visualColor(enemyModels,"enemy_hidden_color",nil,"Through Walls Color",function(
 visualToggle(enemyModels,"ragdoll_esp","Ragdolls",function() ReferenceESPRuntime:RefreshRagdolls() end)
 visualColor(enemyModels,"ragdoll_esp_color",nil,"Ragdoll Color",function() ReferenceESPRuntime:RefreshRagdolls() end)
 
-local espAppearance = modelVisualsFolder
+local espAppearance = visualsPage:CreateSection({Name="Model Appearance",Side="Right",Size=650})
 visualDropdown(espAppearance,"esp_style","Style",{"Neon","ForceField","Glass","SmoothPlastic","Original"},refreshChams)
 visualSlider(espAppearance,"esp_glow_transparency","World Glow Strength",0,1,2,"",refreshChams)
 visualToggle(espAppearance,"esp_outline","Outline",refreshChams)
@@ -21679,7 +21232,7 @@ visualToggle(espAppearance,"esp_hide_clothes","Hide Clothes",refreshChams)
 visualDropdown(espAppearance,"esp_head_style","Head Style",{"Normal","Neon","Hidden"},refreshChams)
 visualToggle(espAppearance,"esp_accessories","Accessories",refreshChams)
 
-local espExtra = modelVisualsFolder
+local espExtra = visualsPage:CreateSection({Name="Enemy ESP Details",Side="Right",Size=650})
 visualSlider(espExtra,"skeleton_thickness","Skeleton Thickness",0.5,5,1,"",function(v) if VisualsState.skeletonRuntime then VisualsState.skeletonRuntime:SetSkeletonThickness(v) end end)
 visualColor(espExtra,"glow_color","glow_alpha","ESP Accent / Skeleton")
 visualToggle(espExtra,"skeleton_outline","Skeleton Outline")
@@ -21978,7 +21531,8 @@ function WorldMarkerRuntime:Update(dt)
             if VisualsState.world_object_esp_show_distance~=false then detail=detail..string.format(" | %.0f studs",distance) end
             local humanoid=kind=="NPC" and object:FindFirstChildOfClass("Humanoid")
             if humanoid and VisualsState.world_object_esp_npc_health~=false then
-                detail=detail..string.format(" | %.0f HP",math.max(0,humanoid.Health))
+                detail=d]==================],
+    [==================[etail..string.format(" | %.0f HP",math.max(0,humanoid.Health))
             end
             marker.Gui.AlwaysOnTop=through;marker.Gui.MaxDistance=distanceLimit
             marker.Gui.Enabled=visible and VisualsState.world_object_esp_labels==true
@@ -22054,7 +21608,7 @@ VisualsState.world_waypoint_z=position.Z
 self:DestroyVisuals()
 VisualsState.world_waypoint_enabled=true
 if VisualControls and VisualControls.world_waypoint_enabled then VisualControls.world_waypoint_enabled:Set(true,true) end
-self:SetStatus((source or "placed").." '95 active")
+self:SetStatus((source or "placed").." • active")
 return self:Ensure()
 end
 
@@ -22200,7 +21754,7 @@ if stroke then stroke.Color=color end
 if accent then accent.BackgroundColor3=color end
 local localRoot=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 local distance=localRoot and (self.Position-localRoot.Position).Magnitude or nil
-self.Detail.Text=(VisualsState.world_waypoint_show_distance and distance) and string.format("WAYPOINT  '95  %.0f STUDS",distance) or "WAYPOINT"
+self.Detail.Text=(VisualsState.world_waypoint_show_distance and distance) and string.format("WAYPOINT  •  %.0f STUDS",distance) or "WAYPOINT"
 end
 
 WorldWaypointRuntime.Connection=utility:CreateConnection(RunService.RenderStepped,function(dt) WorldWaypointRuntime:Update(dt) end)
@@ -22409,19 +21963,18 @@ local seconds=math.max(0,math.floor(os.clock()-self.StartedAt))
 stats[#stats+1]=string.format("%02d:%02d",math.floor(seconds/60),seconds%60)
 end
 if VisualsState.creator_place_name then stats[#stats+1]=tostring(game.Name or "Experience") end
-self.Stats.Text=table.concat(stats,"  '95  ")
+self.Stats.Text=table.concat(stats,"  •  ")
 end
 end
 
 CreatorOverlayRuntime.Connection=utility:CreateConnection(RunService.RenderStepped,function(dt) CreatorOverlayRuntime:Update(dt) end)
 table.insert(library.CleanupCallbacks,function() CreatorOverlayRuntime:Destroy() end)
 
-local worldExplorationFolder = visualsPage:CreateSection({Name="World Exploration",Side="Left",Size=470})
-local worldSection = worldExplorationFolder
+local worldSection = visualsPage:CreateSection({Name="World Camera & Tools",Side="Left",Size=470})
 visualToggle(worldSection,"third_person","Third Person",function(v) library.ExtraVisualRuntime:SetThirdPerson(v) end)
 visualSlider(worldSection,"third_person_distance","Third Person Distance",5,90,1," studs",function() if VisualsState.third_person then library.ExtraVisualRuntime:SetThirdPerson(true) end end)
 visualToggle(worldSection,"fov_changer","FOV Changer",function(v) apply_fov(v,VisualsState.fov_value) end)
-visualSlider(worldSection,"fov_value","FOV Value",20,120,0,"'b0",function(v) if VisualsState.fov_changer then apply_fov(true,v) end end)
+visualSlider(worldSection,"fov_value","FOV Value",20,120,0,"°",function(v) if VisualsState.fov_changer then apply_fov(true,v) end end)
 visualToggle(worldSection,"devkage_stretch","DevKage Stretch",refreshChams)
 visualSlider(worldSection,"devkage_stretch_scale","Stretch Scale",0.25,5,2,"x",refreshChams)
 visualToggle(worldSection,"motion_blur","Motion Blur",function(v) setMotionBlur(v,VisualsState.motion_blur_intensity) end)
@@ -22433,7 +21986,7 @@ visualColor(worldSection,"world_tool_esp_color",nil,"Tool ESP Color",function() 
 visualToggle(worldSection,"world_tool_esp_through_walls","Tool ESP Through Walls",function() library.ExtraVisualRuntime:RefreshWorldTools() end)
 visualToggle(worldSection,"world_tool_esp_glow","Tool ESP Glow",function() library.ExtraVisualRuntime:RefreshWorldTools() end)
 
-local worldIntelSection = worldExplorationFolder
+local worldIntelSection=visualsPage:CreateSection({Name="World ESP",Side="Left",Size=560})
 visualToggle(worldIntelSection,"world_object_esp","Object ESP",function(v) if v then WorldMarkerRuntime:Refresh() else WorldMarkerRuntime:Update(99) end end)
 visualToggle(worldIntelSection,"world_object_esp_labels","Object Labels")
 visualToggle(worldIntelSection,"world_object_esp_highlight","Object Highlights",function() WorldMarkerRuntime:Refresh() end)
@@ -22473,8 +22026,9 @@ visualColor(worldIntelSection,"world_object_esp_vehicle_color",nil,"Vehicle Colo
 visualColor(worldIntelSection,"world_object_esp_spawn_color",nil,"Spawn Color")
 worldIntelSection:CreateLabel({Text="World ESP uses bounded local markers and automatically removes stale objects."})
 
-local waypointSection = worldExplorationFolder
-visualToggle(waypointSection,"world_waypoint_enabled","Enabled",function(v)
+local waypointSection=visualsPage:CreateSection({Name="World Waypoint",Side="Left",Size=430})
+visualToggle(waypointSection,"world_waypoint_enabled","Enabl]==================],
+    [==================[ed",function(v)
 if v then
 if not WorldWaypointRuntime.Position then library:Notify({Message="Place the waypoint at your position or mouse target",Duration=3}) else WorldWaypointRuntime:Ensure() end
 elseif WorldWaypointRuntime.Folder then WorldWaypointRuntime.Folder.Parent=nil end
@@ -22504,21 +22058,37 @@ WorldWaypointRuntime:SetPosition(Vector3.new(tonumber(VisualsState.world_waypoin
 end)
 end
 
+local viewmodelSection = visualsPage:CreateSection({Name="Viewmodel Appearance",Side="Left",Size=465})
+visualToggle(viewmodelSection,"viewmodel_weapon_chams","Weapon Chams",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
+visualColor(viewmodelSection,"viewmodel_weapon_color",nil,"Weapon Color",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
+visualDropdown(viewmodelSection,"viewmodel_weapon_material","Weapon Material",{"Neon","Metallic","ForceField","Glass","SmoothPlastic","Plastic"},function() library.ExtraVisualRuntime:RefreshViewmodel() end)
+visualSlider(viewmodelSection,"viewmodel_weapon_transparency","Weapon Transparency",0,0.95,2,"",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
+visualSlider(viewmodelSection,"viewmodel_weapon_glow","Neon Glow",0,1,2,"",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
+visualToggle(viewmodelSection,"viewmodel_arm_chams","Arm Chams",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
+visualColor(viewmodelSection,"viewmodel_arm_color",nil,"Arm Color",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
+visualDropdown(viewmodelSection,"viewmodel_arm_material","Arm Material",{"Neon","ForceField","Glass","SmoothPlastic","Plastic"},function() library.ExtraVisualRuntime:RefreshViewmodel() end)
+visualSlider(viewmodelSection,"viewmodel_arm_transparency","Arm Transparency",0,0.95,2,"",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
 
+local creatorSection=visualsPage:CreateSection({Name="Creator Overlay",Side="Right",Size=520})
+visualToggle(creatorSection,"creator_overlay_enabled","Enable Creator Overlay",function() CreatorOverlayRuntime:ApplyLayout() end)
+visualToggle(creatorSection,"creator_watermark","Watermark")
+VisualControls.creator_watermark_text=creatorSection:CreateInput({
+Name="Watermark Text",Default=tostring(VisualsState.creator_watermark_text or "DEVKAGE"),Placeholder="DEVKAGE",MaxLength=40,Flag="visuals.creator_watermark_text",
+Callback=function(value) VisualsState.creator_watermark_text=tostring(value or "DEVKAGE"); CreatorOverlayRuntime:ApplyLayout() end
+})
+visualDropdown(creatorSection,"creator_watermark_position","Watermark Position",{"Top Left","Top Right","Bottom Left","Bottom Right"},function() CreatorOverlayRuntime:ApplyLayout() end)
+visualColor(creatorSection,"creator_overlay_accent",nil,"Overlay Accent",function() CreatorOverlayRuntime:ApplyLayout() end)
+visualToggle(creatorSection,"creator_fps_counter","FPS Counter")
+visualToggle(creatorSection,"creator_session_clock","Session Clock")
+visualToggle(creatorSection,"creator_place_name","Experience Label")
+visualToggle(creatorSection,"creator_cinematic_bars","Cinematic Bars",function() CreatorOverlayRuntime:ApplyLayout() end)
+visualSlider(creatorSection,"creator_bar_size","Bar Size",0,25,0,"%",function() CreatorOverlayRuntime:ApplyLayout() end)
+visualToggle(creatorSection,"creator_vignette","Vignette",function() CreatorOverlayRuntime:ApplyLayout() end)
+visualSlider(creatorSection,"creator_vignette_strength","Vignette Strength",0,100,0,"%",function() CreatorOverlayRuntime:ApplyLayout() end)
+visualToggle(creatorSection,"creator_center_dot","Recording Center Dot",function() CreatorOverlayRuntime:ApplyLayout() end)
+visualToggle(creatorSection,"creator_hide_when_menu_open","Hide Overlay With Menu")
 
-
-
-
-
-
-
-
-
-
--- Creator overlay removed per request
-
-local atmosphereFolder = visualsPage:CreateSection({Name="Atmosphere",Side="Right",Size=1965})
-local lightingSection = atmosphereFolder
+local lightingSection = visualsPage:CreateSection({Name="Lighting & Atmosphere",Side="Right",Size=1965})
 LightingControls = {}
 local function lightingToggle(key,name,changed)
 LightingControls[key]=lightingSection:CreateToggle({Name=name,State=AdvancedLighting[key],Flag="lighting."..key,Callback=function(value) AdvancedLighting[key]=value; changed(value) end})
@@ -22624,7 +22194,7 @@ end)
 lightingToggle("geographicLatitudeEnabled","Custom Geographic Latitude",function(value)
 WorldLightingRuntime.SetGeographicLatitude(value,AdvancedLighting.geographicLatitude)
 end)
-lightingSlider("geographicLatitude","Geographic Latitude",-90,90,1,"'b0",function(value)
+lightingSlider("geographicLatitude","Geographic Latitude",-90,90,1,"°",function(value)
 if AdvancedLighting.geographicLatitudeEnabled then WorldLightingRuntime.SetGeographicLatitude(true,value) end
 end)
 lightingToggle("environmentDiffuseEnabled","Custom Diffuse Scale",function(value)
@@ -22716,8 +22286,8 @@ lightingColor("atmosphereColor","Atmosphere Color",function() markAtmosphereCust
 lightingColor("atmosphereDecay","Atmosphere Decay",function() markAtmosphereCustom(); refreshAtmosphere() end)
 lightingToggle("atmosphereGlowEnabled","Atmosphere Glow",function() refreshAtmosphere() end)
 lightingSlider("atmosphereGlowIntensity","Glow Intensity",0,5,2,"",function() if AdvancedLighting.atmosphereGlowEnabled then refreshAtmosphere() end end)
-LightingControls.atmosphereUniform=lightingSection:CreateToggle({Name="Uniform 360'b0 Atmosphere",State=AdvancedLighting.atmosphereUniform,Flag="lighting.atmosphereUniform",PreserveLegacyIndex=true,Callback=function(value) AdvancedLighting.atmosphereUniform=value; refreshAtmosphere() end})
-lightingSlider("atmosphereCoverageStrength","360'b0 Coverage Strength",0,1,2,"",function() refreshAtmosphere() end)
+LightingControls.atmosphereUniform=lightingSection:CreateToggle({Name="Uniform 360° Atmosphere",State=AdvancedLighting.atmosphereUniform,Flag="lighting.atmosphereUniform",PreserveLegacyIndex=true,Callback=function(value) AdvancedLighting.atmosphereUniform=value; refreshAtmosphere() end})
+lightingSlider("atmosphereCoverageStrength","360° Coverage Strength",0,1,2,"",function() refreshAtmosphere() end)
 lightingSlider("atmosphereDecayBlend","Decay Directionality",0,1,2,"",function() refreshAtmosphere() end)
 lightingSection:CreateLabel({Text="Uniform mode keeps the native Atmosphere and adds an all-direction distance envelope for consistent map coverage."})
 
@@ -22783,8 +22353,7 @@ lightingSlider("nearBlur","Near Blur",0,1,2,"",refreshDepthOfField)
 lightingSlider("farBlur","Far Blur",0,1,2,"",refreshDepthOfField)
 lightingSlider("exposure","Exposure",-5,5,2,"",function(v) setLightingProperty("ExposureCompensation",v) end)
 
-local weatherFolder = visualsPage:CreateSection({Name="Weather",Side="Left",Size=500})
-local snowSection = weatherFolder
+local snowSection = visualsPage:CreateSection({Name="Snowfall",Side="Left",Size=500})
 local function snowToggle(key,name,changed)
 LightingControls[key]=snowSection:CreateToggle({Name=name,State=AdvancedLighting[key],Flag="lighting."..key,Callback=function(value) AdvancedLighting[key]=value; changed(value) end})
 end
@@ -22809,9 +22378,10 @@ snowSlider("snowTurbulence","Snow Swirl",0,2,2,"",function() refreshSnow() end)
 snowColor("snowColor","Snow Color",function() refreshSnow() end)
 snowSection:CreateLabel({Text="Depth layers, soft fades, wind drift, and roof occlusion follow your camera."})
 
-local weatherSection = weatherFolder
+local weatherSection=visualsPage:CreateSection({Name="Weather",Side="Right",Size=720})
 local function weatherToggle(key,name,changed)
-LightingControls[key]=weatherSection:CreateToggle({Name=name,State=AdvancedLighting[key],Flag="lighting."..key,Callback=function(value) AdvancedLighting[key]=value; changed(value) end})
+LightingControls[key]=weatherSection:CreateToggle({Name=name,State=AdvancedLighting[key],Flag="li]==================],
+    [==================[ghting."..key,Callback=function(value) AdvancedLighting[key]=value; changed(value) end})
 end
 local function weatherSlider(key,name,minimum,maximum,decimals,suffix,changed)
 LightingControls[key]=weatherSection:CreateSlider({Name=name,State=AdvancedLighting[key],Min=minimum,Max=maximum,Decimals=decimals,Suffix=suffix or "",Flag="lighting."..key,Callback=function(value) AdvancedLighting[key]=value; changed(value) end})
@@ -22836,11 +22406,11 @@ weatherSlider("weatherLightningStrength","Lightning Strength",0,1,2,"",function(
 LightingControls.weatherRoofOcclusion=weatherSection:CreateToggle({Name="Weather Roof Occlusion",State=AdvancedLighting.weatherRoofOcclusion,Flag="lighting.weatherRoofOcclusion",PreserveLegacyIndex=true,Callback=function(value) AdvancedLighting.weatherRoofOcclusion=value; refreshSnow(); refreshPremiumWeather() end})
 weatherSlider("weatherCoverage","Weather Coverage",60,260,0," studs",function() buildPremiumWeather(); refreshPremiumWeather() end)
 weatherSlider("weatherTurbulence","Wind Turbulence",0,2,2,"",function() refreshPremiumWeather() end)
-local weatherStatusLabel=weatherSection:CreateLabel({Text="Renderer ready '95 each weather type uses a separate motion and shape profile"})
+local weatherStatusLabel=weatherSection:CreateLabel({Text="Renderer ready • each weather type uses a separate motion and shape profile"})
 weatherSection:CreateButton({Name="Restart Weather Renderer",Callback=function()
 stopPremiumWeather()
-if AdvancedLighting.weatherEnabled then buildPremiumWeather(); refreshPremiumWeather(); weatherStatusLabel:SetText("Renderer restarted '95 "..tostring(AdvancedLighting.weatherType).." '95 "..tostring(AdvancedLighting.weatherQuality))
-else weatherStatusLabel:SetText("Renderer stopped '95 enable weather to start") end
+if AdvancedLighting.weatherEnabled then buildPremiumWeather(); refreshPremiumWeather(); weatherStatusLabel:SetText("Renderer restarted • "..tostring(AdvancedLighting.weatherType).." • "..tostring(AdvancedLighting.weatherQuality))
+else weatherStatusLabel:SetText("Renderer stopped • enable weather to start") end
 end})
 weatherSection:CreateLabel({Text="Storms can flash the scene; rain streaks, embers, ash, leaves, stars, mist and sakura each use separate motion profiles."})
 
@@ -22972,13 +22542,12 @@ if VisualControls.skybox_preset then VisualControls.skybox_preset:Set(library.Op
 if VisualControls.skybox_mood_strength then VisualControls.skybox_mood_strength:Set(profile.MoodStrength,true) end
 syncDevKageLightingControls()
 applyDevKagePresetAvatar(profile)
-if devkagePresetStatus then devkagePresetStatus:SetText(name.." active '95 "..profile.Skybox.." sky '95 avatar "..(VisualsState.devkage_preset_avatar and "on" or "unchanged")) end
+if devkagePresetStatus then devkagePresetStatus:SetText(name.." active • "..profile.Skybox.." sky • avatar "..(VisualsState.devkage_preset_avatar and "on" or "unchanged")) end
 library:Notify({Message=name.." applied",Duration=3})
 return true
 end
 
-local presetsFolder = visualsPage:CreateSection({Name="Presets",Side="Left",Size=360})
-local devkagePresetSection = presetsFolder
+local devkagePresetSection=visualsPage:CreateSection({Name="DevKage World Presets",Side="Left",Size=360})
 local devkagePresetOptions={"Custom","DevKage Day","DevKage Night"}
 VisualControls.devkage_world_preset=devkagePresetSection:CreateDropdown({Name="Selected Look",Options=devkagePresetOptions,State=library.OptionIndex(devkagePresetOptions,VisualsState.devkage_world_preset),Flag="visuals.devkage_world_preset",Callback=function(index)
 local name=devkagePresetOptions[index] or "Custom"
@@ -22989,7 +22558,7 @@ visualToggle(devkagePresetSection,"devkage_preset_avatar","Apply Matching Avatar
 devkagePresetSection:CreateButton({Name="Apply DevKage Day",Callback=function() VisualControls.devkage_world_preset:Set(library.OptionIndex(devkagePresetOptions,"DevKage Day"),true); applyDevKageWorldPreset("DevKage Day") end})
 devkagePresetSection:CreateButton({Name="Apply DevKage Night",Callback=function() VisualControls.devkage_world_preset:Set(library.OptionIndex(devkagePresetOptions,"DevKage Night"),true); applyDevKageWorldPreset("DevKage Night") end})
 devkagePresetSection:CreateButton({Name="Reapply Selected Look",Callback=function() if VisualsState.devkage_world_preset~="Custom" then applyDevKageWorldPreset(VisualsState.devkage_world_preset) else library:Notify({Message="Select DevKage Day or DevKage Night",Duration=3}) end end})
-devkagePresetStatus=devkagePresetSection:CreateLabel({Text="Night uses Heaven with a violet cinematic grade '95 Day uses bright warm dream clouds"})
+devkagePresetStatus=devkagePresetSection:CreateLabel({Text="Night uses Heaven with a violet cinematic grade • Day uses bright warm dream clouds"})
 UI.applyDevKageWorldPreset=applyDevKageWorldPreset
 
 
@@ -23235,8 +22804,7 @@ end
 
 UI.WorldVisualGuard=WorldVisualGuard
 
-local animationsFolder = visualsPage:CreateSection({Name="Animations",Side="Left",Size=350})
-local animationSection = animationsFolder
+local animationSection = visualsPage:CreateSection({Name="Animation Preview",Side="Left",Size=350})
 VisualControls.animation_id = animationSection:CreateInput({Name="Animation ID",Placeholder="123456789",Default=tostring(VisualsState.animation_id or ""):match("%d+") or "",Numeric=true,DigitsOnly=true,MaxLength=20,Flag="visuals.animation_id",Callback=function(v) VisualsState.animation_id=tostring(v or ""):gsub("%D","") end})
 visualSlider(animationSection,"animation_speed","Animation Speed",0.05,5,2,"x",function(v)
 if UI.ESPAnimationTrack then pcall(function() UI.ESPAnimationTrack:AdjustSpeed(v) end) end
@@ -23286,11 +22854,12 @@ animStatus.Size=UDim2.fromScale(1,1)
 animStatus.Font=Enum.Font.Code
 animStatus.TextColor3=Color3.fromRGB(145,145,145)
 animStatus.TextSize=9
-animStatus.Text="Loading avatar'85"
+animStatus.Text="Loading avatar…"
 animStatus.ZIndex=7
 animStatus.Parent=animViewportContainer
 
-local AnimPreview={world=nil,model=nil,camera=nil,track=nil,liveTrack=nil,rotation=math.pi,token=0,loading=false,liveAnimate=nil,liveAnimateDisabled=nil}
+local AnimPreview={world=nil,model=nil,camera=nil,track=nil,liveTrack=nil,rotation=math.pi,token=]==================],
+    [==================[0,loading=false,liveAnimate=nil,liveAnimateDisabled=nil}
 local function animationSegmentBounds(track)
 local length=track and tonumber(track.Length) or 0
 if length<=0 then return nil,nil end
@@ -23370,7 +22939,7 @@ end
 AnimPreview.loading=true
 AnimPreview.token=AnimPreview.token+1
 local token=AnimPreview.token
-animStatus.Text="Loading avatar'85"; animStatus.Visible=true
+animStatus.Text="Loading avatar…"; animStatus.Visible=true
 task.spawn(function()
 local ok,model=pcall(SpooferState.AvatarAssets.LoadModel,LocalPlayer.UserId)
 if token~=AnimPreview.token then AnimPreview.loading=false; if model then pcall(function() model:Destroy() end) end return end
@@ -23520,14 +23089,14 @@ local id=tostring(raw or ""):match("%d+")
 if not id or id=="" then animStatus.Text="Enter a valid animation ID"; animStatus.Visible=true; return end
 VisualsState.animation_id=id
 if VisualControls.animation_id and VisualControls.animation_id.Set then VisualControls.animation_id:Set(id,true) end
-animStatus.Text="Loading "..id.."'85"
+animStatus.Text="Loading "..id.."…"
 animStatus.Visible=true
 playPreviewTrack(id)
 local liveOk,liveErr=playLiveCharacterAnimation(id)
 if liveOk then
 animStatus.Text="Playing "..id.."  ["..tostring(math.floor(VisualsState.animation_start_percent or 0)).."%-"..tostring(math.floor(VisualsState.animation_end_percent or 100)).."%]"
 else
-animStatus.Text="Preview loading '95 character: "..tostring(liveErr)
+animStatus.Text="Preview loading • character: "..tostring(liveErr)
 end
 animStatus.Visible=true
 task.delay(2,function()
@@ -23602,7 +23171,7 @@ VisualCategoryController.Sections={
 Enemy={playeresp,enemyModels,espOptions,espAppearance,espExtra,radarSection,threatCompassSection,espProfileSection},
 Models={enemyModels,espAppearance,viewmodelSection},
 World={worldSection,worldIntelSection,waypointSection,lightingSection,snowSection,weatherSection,devkagePresetSection,PlayerESPUtilityRuntime.SkySection},
-Client={clientEffects,viewmodelSection,animationSection}
+Client={clientEffects,viewmodelSection,creatorSection,animationSection}
 }
 AdvancedLighting.ExtraVisuals=assert(loadstring([======[
 return function(context)
@@ -23811,7 +23380,8 @@ end
 local function replaceProfileNumber(text, value)
     text = tostring(text or "")
     local replaced, count = text:gsub("%-?%d[%d,]*", tostring(value), 1)
-    if count == 0 then return text end
+]==================],
+    [==================[    if count == 0 then return text end
     return replaced
 end
 
@@ -24003,7 +23573,7 @@ function utility:ResolveAntiAimIcon()
 end
 
 if __devkageMultiInjectAutoBoot then task.wait() end
-local antiAimPage = library.Window:CreatePage({ Icon = utility:ResolveAntiAimIcon(), Glyph = "", Size = UDim2.new(0, 36, 0, 36) })
+local antiAimPage = library.Window:CreatePage({ Icon = utility:ResolveAntiAimIcon(), Glyph = "◉", Size = UDim2.new(0, 36, 0, 36) })
 local AntiAimControls = {}
 local yawModes = AntiAimState.core.YawModes
 local pitchModes = AntiAimState.core.PitchModes
@@ -24121,35 +23691,35 @@ do
     local core = AntiAimState.core
     core.Syncing = true
     do
-        local aaConfigFolder = antiAimPage:CreateSection({Name="AA Configuration", Side="Left", Size=337})
-local section = aaConfigFolder
+        local section = antiAimPage:CreateSection({Name="Anti-Aim", Side="Left", Size=337})
         AntiAimControls.enabled = section:CreateToggle({Name="Enable Anti-Aim", State=AntiAimState.enabled, Flag="antiAimV3.enabled", Callback=function(value) AntiAimState.SetValue("enabled", value) end})
         AntiAimControls.preset = section:CreateDropdown({Name="Preset", Options={"Custom", "Classic AA", "Rage AA", "Safe AA", "Full Fake", "Side Fake", "Chaos", "Micro Safe", "Freestanding Rage", "Body Pitch", "Opposite Strafe", "GS Preset", "Look Down Backward", "Look Up Backward", "Look Down Jitter", "Look Up Jitter", "Side Down", "Side Up", "Forward Down", "Forward Up", "Pitch Only Down", "Pitch Only Up", "Soft Down", "Spin Up", "Micro Down"}, State=table.find({"Custom", "Classic AA", "Rage AA", "Safe AA", "Full Fake", "Side Fake", "Chaos", "Micro Safe", "Freestanding Rage", "Body Pitch", "Opposite Strafe", "GS Preset", "Look Down Backward", "Look Up Backward", "Look Down Jitter", "Look Up Jitter", "Side Down", "Side Up", "Forward Down", "Forward Up", "Pitch Only Down", "Pitch Only Up", "Soft Down", "Spin Up", "Micro Down"}, AntiAimState.preset) or 1, Flag="antiAimV3.preset", Callback=function(index) AntiAimState.SetValue("preset", ({"Custom", "Classic AA", "Rage AA", "Safe AA", "Full Fake", "Side Fake", "Chaos", "Micro Safe", "Freestanding Rage", "Body Pitch", "Opposite Strafe", "GS Preset", "Look Down Backward", "Look Up Backward", "Look Down Jitter", "Look Up Jitter", "Side Down", "Side Up", "Forward Down", "Forward Up", "Pitch Only Down", "Pitch Only Up", "Soft Down", "Spin Up", "Micro Down"})[index] or "Custom") end})
         AntiAimControls.yaw_mode = section:CreateDropdown({Name="Yaw Mode", Options={"Backward", "Forward", "Left", "Right", "Jitter", "Micro Jitter", "Safe Jitter", "Jitter 180", "Spin", "Offset Spin", "Sway", "Random", "Freestanding", "Velocity Snap", "Opposite Strafe", "Static"}, State=table.find({"Backward", "Forward", "Left", "Right", "Jitter", "Micro Jitter", "Safe Jitter", "Jitter 180", "Spin", "Offset Spin", "Sway", "Random", "Freestanding", "Velocity Snap", "Opposite Strafe", "Static"}, AntiAimState.yaw_mode) or 1, Flag="antiAimV3.yaw_mode", Callback=function(index) AntiAimState.SetValue("yaw_mode", ({"Backward", "Forward", "Left", "Right", "Jitter", "Micro Jitter", "Safe Jitter", "Jitter 180", "Spin", "Offset Spin", "Sway", "Random", "Freestanding", "Velocity Snap", "Opposite Strafe", "Static"})[index] or "Jitter") end})
         AntiAimControls.yaw_base = section:CreateDropdown({Name="Yaw Base", Options={"Camera", "Movement", "Character", "At Target", "World"}, State=table.find({"Camera", "Movement", "Character", "At Target", "World"}, AntiAimState.yaw_base) or 1, Flag="antiAimV3.yaw_base", Callback=function(index) AntiAimState.SetValue("yaw_base", ({"Camera", "Movement", "Character", "At Target", "World"})[index] or "Camera") end})
-        AntiAimControls.yaw_offset = section:CreateSlider({Name="Additional Yaw Offset", State=AntiAimState.yaw_offset, Min=-180, Max=180, Decimals=0, Suffix="'b0", Flag="antiAimV3.yaw_offset", Callback=function(value) AntiAimState.SetValue("yaw_offset", value) end})
-        AntiAimControls.static_yaw_offset = section:CreateSlider({Name="Static Yaw Offset", State=AntiAimState.static_yaw_offset, Min=-180, Max=180, Decimals=0, Suffix="'b0", Flag="antiAimV3.static_yaw_offset", Callback=function(value) AntiAimState.SetValue("static_yaw_offset", value) end})
+        AntiAimControls.yaw_offset = section:CreateSlider({Name="Additional Yaw Offset", State=AntiAimState.yaw_offset, Min=-180, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.yaw_offset", Callback=function(value) AntiAimState.SetValue("yaw_offset", value) end})
+        AntiAimControls.static_yaw_offset = section:CreateSlider({Name="Static Yaw]==================],
+    [==================[ Offset", State=AntiAimState.static_yaw_offset, Min=-180, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.static_yaw_offset", Callback=function(value) AntiAimState.SetValue("static_yaw_offset", value) end})
         AntiAimControls.yaw_invert = section:CreateToggle({Name="Invert Yaw", State=AntiAimState.yaw_invert, Flag="antiAimV3.yaw_invert", Callback=function(value) AntiAimState.SetValue("yaw_invert", value) end})
         AntiAimControls.body_only_mode = section:CreateToggle({Name="Body Rotation Only", State=AntiAimState.body_only_mode, Flag="antiAimV3.body_only_mode", Callback=function(value) AntiAimState.SetValue("body_only_mode", value) end})
         section:CreateLabel({Text="Body mode tilts the root; off uses the neck."})
         core.StatusControl = section:CreateLabel({Text="Status: Disabled"})
     end
     do
-        local section = aaConfigFolder
+        local section = antiAimPage:CreateSection({Name="Pitch & Roll", Side="Right", Size=410})
         AntiAimControls.pitch_mode = section:CreateDropdown({Name="Pitch Mode", Options={"None", "Down", "Up", "Zero", "Jitter", "Down Override", "Up Override", "Custom"}, State=table.find({"None", "Down", "Up", "Zero", "Jitter", "Down Override", "Up Override", "Custom"}, AntiAimState.pitch_mode) or 1, Flag="antiAimV3.pitch_mode", Callback=function(index) AntiAimState.SetValue("pitch_mode", ({"None", "Down", "Up", "Zero", "Jitter", "Down Override", "Up Override", "Custom"})[index] or "Down") end})
-        AntiAimControls.pitch_down = section:CreateSlider({Name="Down Angle", State=AntiAimState.pitch_down, Min=0, Max=89, Decimals=0, Suffix="'b0", Flag="antiAimV3.pitch_down", Callback=function(value) AntiAimState.SetValue("pitch_down", value) end})
-        AntiAimControls.pitch_up = section:CreateSlider({Name="Up Angle", State=AntiAimState.pitch_up, Min=-89, Max=0, Decimals=0, Suffix="'b0", Flag="antiAimV3.pitch_up", Callback=function(value) AntiAimState.SetValue("pitch_up", value) end})
-        AntiAimControls.pitch_zero = section:CreateSlider({Name="Zero Mode Offset", State=AntiAimState.pitch_zero, Min=-89, Max=89, Decimals=0, Suffix="'b0", Flag="antiAimV3.pitch_zero", Callback=function(value) AntiAimState.SetValue("pitch_zero", value) end})
-        AntiAimControls.pitch_custom = section:CreateSlider({Name="Custom Pitch", State=AntiAimState.pitch_custom, Min=-89, Max=89, Decimals=0, Suffix="'b0", Flag="antiAimV3.pitch_custom", Callback=function(value) AntiAimState.SetValue("pitch_custom", value) end})
-        AntiAimControls.pitch_jitter_range = section:CreateSlider({Name="Pitch Jitter Range", State=AntiAimState.pitch_jitter_range, Min=0, Max=89, Decimals=0, Suffix="'b0", Flag="antiAimV3.pitch_jitter_range", Callback=function(value) AntiAimState.SetValue("pitch_jitter_range", value) end})
+        AntiAimControls.pitch_down = section:CreateSlider({Name="Down Angle", State=AntiAimState.pitch_down, Min=0, Max=89, Decimals=0, Suffix="°", Flag="antiAimV3.pitch_down", Callback=function(value) AntiAimState.SetValue("pitch_down", value) end})
+        AntiAimControls.pitch_up = section:CreateSlider({Name="Up Angle", State=AntiAimState.pitch_up, Min=-89, Max=0, Decimals=0, Suffix="°", Flag="antiAimV3.pitch_up", Callback=function(value) AntiAimState.SetValue("pitch_up", value) end})
+        AntiAimControls.pitch_zero = section:CreateSlider({Name="Zero Mode Offset", State=AntiAimState.pitch_zero, Min=-89, Max=89, Decimals=0, Suffix="°", Flag="antiAimV3.pitch_zero", Callback=function(value) AntiAimState.SetValue("pitch_zero", value) end})
+        AntiAimControls.pitch_custom = section:CreateSlider({Name="Custom Pitch", State=AntiAimState.pitch_custom, Min=-89, Max=89, Decimals=0, Suffix="°", Flag="antiAimV3.pitch_custom", Callback=function(value) AntiAimState.SetValue("pitch_custom", value) end})
+        AntiAimControls.pitch_jitter_range = section:CreateSlider({Name="Pitch Jitter Range", State=AntiAimState.pitch_jitter_range, Min=0, Max=89, Decimals=0, Suffix="°", Flag="antiAimV3.pitch_jitter_range", Callback=function(value) AntiAimState.SetValue("pitch_jitter_range", value) end})
         AntiAimControls.pitch_jitter_speed = section:CreateSlider({Name="Pitch Jitter Speed", State=AntiAimState.pitch_jitter_speed, Min=0.1, Max=120, Decimals=1, Suffix=" flips/s", Flag="antiAimV3.pitch_jitter_speed", Callback=function(value) AntiAimState.SetValue("pitch_jitter_speed", value) end})
-        AntiAimControls.pitch_down_override = section:CreateSlider({Name="Down Override Angle", State=AntiAimState.pitch_down_override, Min=0, Max=89, Decimals=0, Suffix="'b0", Flag="antiAimV3.pitch_down_override", Callback=function(value) AntiAimState.SetValue("pitch_down_override", value) end})
-        AntiAimControls.pitch_up_override = section:CreateSlider({Name="Up Override Angle", State=AntiAimState.pitch_up_override, Min=-89, Max=0, Decimals=0, Suffix="'b0", Flag="antiAimV3.pitch_up_override", Callback=function(value) AntiAimState.SetValue("pitch_up_override", value) end})
-        AntiAimControls.roll_angle = section:CreateSlider({Name="Roll Angle", State=AntiAimState.roll_angle, Min=-90, Max=90, Decimals=0, Suffix="'b0", Flag="antiAimV3.roll_angle", Callback=function(value) AntiAimState.SetValue("roll_angle", value) end})
-        AntiAimControls.roll_jitter = section:CreateSlider({Name="Roll Jitter Range", State=AntiAimState.roll_jitter, Min=0, Max=90, Decimals=0, Suffix="'b0", Flag="antiAimV3.roll_jitter", Callback=function(value) AntiAimState.SetValue("roll_jitter", value) end})
+        AntiAimControls.pitch_down_override = section:CreateSlider({Name="Down Override Angle", State=AntiAimState.pitch_down_override, Min=0, Max=89, Decimals=0, Suffix="°", Flag="antiAimV3.pitch_down_override", Callback=function(value) AntiAimState.SetValue("pitch_down_override", value) end})
+        AntiAimControls.pitch_up_override = section:CreateSlider({Name="Up Override Angle", State=AntiAimState.pitch_up_override, Min=-89, Max=0, Decimals=0, Suffix="°", Flag="antiAimV3.pitch_up_override", Callback=function(value) AntiAimState.SetValue("pitch_up_override", value) end})
+        AntiAimControls.roll_angle = section:CreateSlider({Name="Roll Angle", State=AntiAimState.roll_angle, Min=-90, Max=90, Decimals=0, Suffix="°", Flag="antiAimV3.roll_angle", Callback=function(value) AntiAimState.SetValue("roll_angle", value) end})
+        AntiAimControls.roll_jitter = section:CreateSlider({Name="Roll Jitter Range", State=AntiAimState.roll_jitter, Min=0, Max=90, Decimals=0, Suffix="°", Flag="antiAimV3.roll_jitter", Callback=function(value) AntiAimState.SetValue("roll_jitter", value) end})
     end
     do
-        local section = aaConfigFolder
+        local section = antiAimPage:CreateSection({Name="Match Compatibility", Side="Right", Size=158})
         AntiAimControls.use_match_character = section:CreateToggle({Name="Use Match Character", State=AntiAimState.use_match_character, Flag="antiAimV3.use_match_character", Callback=function(value) AntiAimState.SetValue("use_match_character", value) end})
         AntiAimControls.override_other_anti_aim = section:CreateToggle({Name="Override Other Anti-Aim", State=AntiAimState.override_other_anti_aim, Flag="antiAimV3.override_other_anti_aim", Callback=function(value) AntiAimState.SetValue("override_other_anti_aim", value) end})
         AntiAimControls.reapply_before_physics = section:CreateToggle({Name="Reapply Before Physics", State=AntiAimState.reapply_before_physics, Flag="antiAimV3.reapply_before_physics", Callback=function(value) AntiAimState.SetValue("reapply_before_physics", value) end})
@@ -24157,22 +23727,22 @@ local section = aaConfigFolder
         section:CreateLabel({Text="Uses the active fighter and preserves movement."})
     end
     do
-        local section = aaConfigFolder
-        AntiAimControls.jitter_range = section:CreateSlider({Name="Jitter Range", State=AntiAimState.jitter_range, Min=0, Max=180, Decimals=0, Suffix="'b0", Flag="antiAimV3.jitter_range", Callback=function(value) AntiAimState.SetValue("jitter_range", value) end})
+        local section = antiAimPage:CreateSection({Name="Yaw Jitter", Side="Left", Size=370})
+        AntiAimControls.jitter_range = section:CreateSlider({Name="Jitter Range", State=AntiAimState.jitter_range, Min=0, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.jitter_range", Callback=function(value) AntiAimState.SetValue("jitter_range", value) end})
         AntiAimControls.jitter_speed = section:CreateSlider({Name="Jitter Speed", State=AntiAimState.jitter_speed, Min=0.1, Max=120, Decimals=1, Suffix=" flips/s", Flag="antiAimV3.jitter_speed", Callback=function(value) AntiAimState.SetValue("jitter_speed", value) end})
-        AntiAimControls.micro_jitter_range = section:CreateSlider({Name="Micro Jitter Range", State=AntiAimState.micro_jitter_range, Min=0, Max=90, Decimals=0, Suffix="'b0", Flag="antiAimV3.micro_jitter_range", Callback=function(value) AntiAimState.SetValue("micro_jitter_range", value) end})
+        AntiAimControls.micro_jitter_range = section:CreateSlider({Name="Micro Jitter Range", State=AntiAimState.micro_jitter_range, Min=0, Max=90, Decimals=0, Suffix="°", Flag="antiAimV3.micro_jitter_range", Callback=function(value) AntiAimState.SetValue("micro_jitter_range", value) end})
         AntiAimControls.micro_jitter_speed = section:CreateSlider({Name="Micro Jitter Speed", State=AntiAimState.micro_jitter_speed, Min=0.1, Max=120, Decimals=1, Suffix=" flips/s", Flag="antiAimV3.micro_jitter_speed", Callback=function(value) AntiAimState.SetValue("micro_jitter_speed", value) end})
-        AntiAimControls.safe_jitter_base = section:CreateSlider({Name="Safe Jitter Base", State=AntiAimState.safe_jitter_base, Min=-180, Max=180, Decimals=0, Suffix="'b0", Flag="antiAimV3.safe_jitter_base", Callback=function(value) AntiAimState.SetValue("safe_jitter_base", value) end})
-        AntiAimControls.safe_jitter_range = section:CreateSlider({Name="Safe Jitter Range", State=AntiAimState.safe_jitter_range, Min=0, Max=90, Decimals=0, Suffix="'b0", Flag="antiAimV3.safe_jitter_range", Callback=function(value) AntiAimState.SetValue("safe_jitter_range", value) end})
+        AntiAimControls.safe_jitter_base = section:CreateSlider({Name="Safe Jitter Base", State=AntiAimState.safe_jitter_base, Min=-180, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.safe_jitter_base", Callback=function(value) AntiAimState.SetValue("safe_jitter_base", value) end})
+        AntiAimControls.safe_jitter_range = section:CreateSlider({Name="Safe Jitter Range", State=AntiAimState.safe_jitter_range, Min=0, Max=90, Decimals=0, Suffix="°", Flag="antiAimV3.safe_jitter_range", Callback=function(value) AntiAimState.SetValue("safe_jitter_range", value) end})
         AntiAimControls.safe_jitter_speed = section:CreateSlider({Name="Safe Jitter Speed", State=AntiAimState.safe_jitter_speed, Min=0.1, Max=120, Decimals=1, Suffix=" flips/s", Flag="antiAimV3.safe_jitter_speed", Callback=function(value) AntiAimState.SetValue("safe_jitter_speed", value) end})
-        AntiAimControls.jitter_180_base = section:CreateSlider({Name="Jitter 180 Base", State=AntiAimState.jitter_180_base, Min=-180, Max=180, Decimals=0, Suffix="'b0", Flag="antiAimV3.jitter_180_base", Callback=function(value) AntiAimState.SetValue("jitter_180_base", value) end})
-        AntiAimControls.jitter_180_range = section:CreateSlider({Name="Jitter 180 Range", State=AntiAimState.jitter_180_range, Min=0, Max=180, Decimals=0, Suffix="'b0", Flag="antiAimV3.jitter_180_range", Callback=function(value) AntiAimState.SetValue("jitter_180_range", value) end})
+        AntiAimControls.jitter_180_base = section:CreateSlider({Name="Jitter 180 Base", State=AntiAimState.jitter_180_base, Min=-180, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.jitter_180_base", Callback=function(value) AntiAimState.SetValue("jitter_180_base", value) end})
+        AntiAimControls.jitter_180_range = section:CreateSlider({Name="Jitter 180 Range", State=AntiAimState.jitter_180_range, Min=0, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.jitter_180_range", Callback=function(value) AntiAimState.SetValue("jitter_180_range", value) end})
         AntiAimControls.jitter_180_speed = section:CreateSlider({Name="Jitter 180 Speed", State=AntiAimState.jitter_180_speed, Min=0.1, Max=120, Decimals=1, Suffix=" flips/s", Flag="antiAimV3.jitter_180_speed", Callback=function(value) AntiAimState.SetValue("jitter_180_speed", value) end})
     end
     do
-        local section = aaConfigFolder
+        local section = antiAimPage:CreateSection({Name="Desync & Update Timing", Side="Right", Size=283})
         AntiAimControls.desync_enabled = section:CreateToggle({Name="Desync Effect", State=AntiAimState.desync_enabled, Flag="antiAimV3.desync_enabled", Callback=function(value) AntiAimState.SetValue("desync_enabled", value) end})
-        AntiAimControls.desync_delta = section:CreateSlider({Name="Desync Yaw Offset", State=AntiAimState.desync_delta, Min=-180, Max=180, Decimals=0, Suffix="'b0", Flag="antiAimV3.desync_delta", Callback=function(value) AntiAimState.SetValue("desync_delta", value) end})
+        AntiAimControls.desync_delta = section:CreateSlider({Name="Desync Yaw Offset", State=AntiAimState.desync_delta, Min=-180, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.desync_delta", Callback=function(value) AntiAimState.SetValue("desync_delta", value) end})
         AntiAimControls.desync_alternate = section:CreateToggle({Name="Alternate Desync Offset", State=AntiAimState.desync_alternate, Flag="antiAimV3.desync_alternate", Callback=function(value) AntiAimState.SetValue("desync_alternate", value) end})
         AntiAimControls.desync_speed = section:CreateSlider({Name="Desync Alternation Speed", State=AntiAimState.desync_speed, Min=0.1, Max=60, Decimals=1, Suffix=" cycles/s", Flag="antiAimV3.desync_speed", Callback=function(value) AntiAimState.SetValue("desync_speed", value) end})
         AntiAimControls.fake_lag_enabled = section:CreateToggle({Name="Fake Lag", State=AntiAimState.fake_lag_enabled, Flag="antiAimV3.fake_lag_enabled", Callback=function(value) AntiAimState.SetValue("fake_lag_enabled", value) end})
@@ -24182,17 +23752,17 @@ local section = aaConfigFolder
         AntiAimControls.smooth_speed = section:CreateSlider({Name="Transition Speed", State=AntiAimState.smooth_speed, Min=0.1, Max=60, Decimals=1, Suffix=" /s", Flag="antiAimV3.smooth_speed", Callback=function(value) AntiAimState.SetValue("smooth_speed", value) end})
     end
     do
-        local section = aaConfigFolder
-        AntiAimControls.spin_speed = section:CreateSlider({Name="Spin Speed", State=AntiAimState.spin_speed, Min=-1440, Max=1440, Decimals=0, Suffix="'b0/s", Flag="antiAimV3.spin_speed", Callback=function(value) AntiAimState.SetValue("spin_speed", value) end})
-        AntiAimControls.offset_spin_speed = section:CreateSlider({Name="Offset Spin Speed", State=AntiAimState.offset_spin_speed, Min=-1440, Max=1440, Decimals=0, Suffix="'b0/s", Flag="antiAimV3.offset_spin_speed", Callback=function(value) AntiAimState.SetValue("offset_spin_speed", value) end})
-        AntiAimControls.offset_spin_pitch = section:CreateSlider({Name="Offset Spin Pitch", State=AntiAimState.offset_spin_pitch, Min=-89, Max=89, Decimals=0, Suffix="'b0", Flag="antiAimV3.offset_spin_pitch", Callback=function(value) AntiAimState.SetValue("offset_spin_pitch", value) end})
-        AntiAimControls.sway_range = section:CreateSlider({Name="Sway Amplitude", State=AntiAimState.sway_range, Min=0, Max=180, Decimals=0, Suffix="'b0", Flag="antiAimV3.sway_range", Callback=function(value) AntiAimState.SetValue("sway_range", value) end})
+        local section = antiAimPage:CreateSection({Name="Spin, Sway & Random", Side="Left", Size=268})
+        AntiAimControls.spin_speed = section:CreateSlider({Name="Spin Speed", State=AntiAimState.spin_speed, Min=-1440, Max=1440, Decimals=0, Suffix="°/s", Flag="antiAimV3.spin_speed", Callback=function(value) AntiAimState.SetValue("spin_speed", value) end})
+        AntiAimControls.offset_spin_speed = section:CreateSlider({Name="Offset Spin Speed", State=AntiAimState.offset_spin_speed, Min=-1440, Max=1440, Decimals=0, Suffix="°/s", Flag="antiAimV3.offset_spin_speed", Callback=function(value) AntiAimState.SetValue("offset_spin_speed", value) end})
+        AntiAimControls.offset_spin_pitch = section:CreateSlider({Name="Offset Spin Pitch", State=AntiAimState.offset_spin_pitch, Min=-89, Max=89, Decimals=0, Suffix="°", Flag="antiAimV3.offset_spin_pitch", Callback=function(value) AntiAimState.SetValue("offset_spin_pitch", value) end})
+        AntiAimControls.sway_range = section:CreateSlider({Name="Sway Amplitude", State=AntiAimState.sway_range, Min=0, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.sway_range", Callback=function(value) AntiAimState.SetValue("sway_range", value) end})
         AntiAimControls.sway_speed = section:CreateSlider({Name="Sway Frequency", State=AntiAimState.sway_speed, Min=0.05, Max=10, Decimals=2, Suffix=" Hz", Flag="antiAimV3.sway_speed", Callback=function(value) AntiAimState.SetValue("sway_speed", value) end})
-        AntiAimControls.random_range = section:CreateSlider({Name="Random Yaw Range", State=AntiAimState.random_range, Min=0, Max=180, Decimals=0, Suffix="'b0", Flag="antiAimV3.random_range", Callback=function(value) AntiAimState.SetValue("random_range", value) end})
+        AntiAimControls.random_range = section:CreateSlider({Name="Random Yaw Range", State=AntiAimState.random_range, Min=0, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.random_range", Callback=function(value) AntiAimState.SetValue("random_range", value) end})
         AntiAimControls.random_interval = section:CreateSlider({Name="Random Update Interval", State=AntiAimState.random_interval, Min=0.01, Max=2, Decimals=2, Suffix=" s", Flag="antiAimV3.random_interval", Callback=function(value) AntiAimState.SetValue("random_interval", value) end})
     end
     do
-        local section = aaConfigFolder
+        local section = antiAimPage:CreateSection({Name="Conditions & Targeting", Side="Right", Size=270})
         AntiAimControls.pause_while_typing = section:CreateToggle({Name="Pause While Typing", State=AntiAimState.pause_while_typing, Flag="antiAimV3.pause_while_typing", Callback=function(value) AntiAimState.SetValue("pause_while_typing", value) end})
         AntiAimControls.pause_while_seated = section:CreateToggle({Name="Pause While Seated", State=AntiAimState.pause_while_seated, Flag="antiAimV3.pause_while_seated", Callback=function(value) AntiAimState.SetValue("pause_while_seated", value) end})
         AntiAimControls.ground_only = section:CreateToggle({Name="Ground Only", State=AntiAimState.ground_only, Flag="antiAimV3.ground_only", Callback=function(value) AntiAimState.SetValue("ground_only", value) end})
@@ -24204,25 +23774,26 @@ local section = aaConfigFolder
         AntiAimControls.target_update_delay = section:CreateSlider({Name="Target Scan Interval", State=AntiAimState.target_update_delay, Min=0.03, Max=2, Decimals=2, Suffix=" s", Flag="antiAimV3.target_update_delay", Callback=function(value) AntiAimState.SetValue("target_update_delay", value) end})
     end
     do
-        local section = aaConfigFolder
+        local section = antiAimPage:CreateSection({Name="Velocity & Movement", Side="Left", Size=360})
         AntiAimControls.velocity_snap_enabled = section:CreateToggle({Name="Automatic Velocity Switching", State=AntiAimState.velocity_snap_enabled, Flag="antiAimV3.velocity_snap_enabled", Callback=function(value) AntiAimState.SetValue("velocity_snap_enabled", value) end})
         AntiAimControls.velocity_threshold = section:CreateSlider({Name="Velocity Threshold", State=AntiAimState.velocity_threshold, Min=0, Max=100, Decimals=1, Suffix=" studs/s", Flag="antiAimV3.velocity_threshold", Callback=function(value) AntiAimState.SetValue("velocity_threshold", value) end})
         AntiAimControls.velocity_slow_mode = section:CreateDropdown({Name="Slow Movement Mode", Options={"Backward", "Forward", "Left", "Right", "Jitter", "Micro Jitter", "Safe Jitter", "Jitter 180", "Spin", "Offset Spin", "Sway", "Random", "Freestanding", "Opposite Strafe", "Static"}, State=table.find({"Backward", "Forward", "Left", "Right", "Jitter", "Micro Jitter", "Safe Jitter", "Jitter 180", "Spin", "Offset Spin", "Sway", "Random", "Freestanding", "Opposite Strafe", "Static"}, AntiAimState.velocity_slow_mode) or 1, Flag="antiAimV3.velocity_slow_mode", Callback=function(index) AntiAimState.SetValue("velocity_slow_mode", ({"Backward", "Forward", "Left", "Right", "Jitter", "Micro Jitter", "Safe Jitter", "Jitter 180", "Spin", "Offset Spin", "Sway", "Random", "Freestanding", "Opposite Strafe", "Static"})[index] or "Safe Jitter") end})
         AntiAimControls.velocity_move_mode = section:CreateDropdown({Name="Fast Movement Mode", Options={"Backward", "Forward", "Left", "Right", "Jitter", "Micro Jitter", "Safe Jitter", "Jitter 180", "Spin", "Offset Spin", "Sway", "Random", "Freestanding", "Opposite Strafe", "Static"}, State=table.find({"Backward", "Forward", "Left", "Right", "Jitter", "Micro Jitter", "Safe Jitter", "Jitter 180", "Spin", "Offset Spin", "Sway", "Random", "Freestanding", "Opposite Strafe", "Static"}, AntiAimState.velocity_move_mode) or 1, Flag="antiAimV3.velocity_move_mode", Callback=function(index) AntiAimState.SetValue("velocity_move_mode", ({"Backward", "Forward", "Left", "Right", "Jitter", "Micro Jitter", "Safe Jitter", "Jitter 180", "Spin", "Offset Spin", "Sway", "Random", "Freestanding", "Opposite Strafe", "Static"})[index] or "Jitter") end})
-        AntiAimControls.opposite_strafe_offset = section:CreateSlider({Name="Opposite Strafe Offset", State=AntiAimState.opposite_strafe_offset, Min=0, Max=180, Decimals=0, Suffix="'b0", Flag="antiAimV3.opposite_strafe_offset", Callback=function(value) AntiAimState.SetValue("opposite_strafe_offset", value) end})
+        AntiAimControls.opposite_strafe_offset = section:CreateSlider({Name="Opposite Strafe Offset", State=AntiAimState.opposite_strafe_offset, Min=0, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.opposite_strafe_offset", Callback=function(value) AntiAimState.SetValue("opposite_strafe_offset", value) end})
         AntiAimControls.movement_override = section:CreateToggle({Name="Movement Yaw Offsets", State=AntiAimState.movement_override, Flag="antiAimV3.movement_override", Callback=function(value) AntiAimState.SetValue("movement_override", value) end})
         AntiAimControls.movement_threshold = section:CreateSlider({Name="Movement Offset Threshold", State=AntiAimState.movement_threshold, Min=0, Max=50, Decimals=1, Suffix=" studs/s", Flag="antiAimV3.movement_threshold", Callback=function(value) AntiAimState.SetValue("movement_threshold", value) end})
-        AntiAimControls.standing_yaw_add = section:CreateSlider({Name="Standing Yaw Offset", State=AntiAimState.standing_yaw_add, Min=-180, Max=180, Decimals=0, Suffix="'b0", Flag="antiAimV3.standing_yaw_add", Callback=function(value) AntiAimState.SetValue("standing_yaw_add", value) end})
-        AntiAimControls.moving_yaw_add = section:CreateSlider({Name="Moving Yaw Offset", State=AntiAimState.moving_yaw_add, Min=-180, Max=180, Decimals=0, Suffix="'b0", Flag="antiAimV3.moving_yaw_add", Callback=function(value) AntiAimState.SetValue("moving_yaw_add", value) end})
-        AntiAimControls.air_yaw_add = section:CreateSlider({Name="Airborne Yaw Offset", State=AntiAimState.air_yaw_add, Min=-180, Max=180, Decimals=0, Suffix="'b0", Flag="antiAimV3.air_yaw_add", Callback=function(value) AntiAimState.SetValue("air_yaw_add", value) end})
+        AntiAimControls.standing_yaw_add = section:CreateSlider({Name="Standing Yaw Offset", State=AntiAimState.standing_yaw_add, Min=-180, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.standing_yaw_add", Callback=function(value) AntiAimState.SetValue("standing_yaw_add", value) end})
+        AntiAimControls.moving_yaw_add = section:CreateSlider({Name="Moving Yaw Offset", State=AntiAimState.moving_yaw_add, Min=-180, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.moving_yaw_add", Callback=function(value) AntiAimState.SetValue("moving_yaw_add", value) end})
+        AntiAimControls.air_yaw_add = section:CreateSlider({Name="Airborne Yaw Offset", State=AntiAimState.air_yaw_add, Min=-180, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.air_yaw_add", Callback=function(value) AntiAimState.SetValue("air_yaw_add", value) end})
     end
     do
-        local section = aaConfigFolder
+        local section = antiAimPage:CreateSection({Name="Keybinds & Actions", Side="Right", Size=361})
         AntiAimControls.keybinds_enabled = section:CreateToggle({Name="Enable Anti-Aim Keybinds", State=AntiAimState.keybinds_enabled, Flag="antiAimV3.keybinds_enabled", Callback=function(value) AntiAimState.SetValue("keybinds_enabled", value) end})
         AntiAimControls.toggle_key = section:CreateDropdown({Name="Toggle Anti-Aim Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, AntiAimState.toggle_key) or 1, Flag="antiAimV3.toggle_key", Callback=function(index) AntiAimState.SetValue("toggle_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "X") end})
         AntiAimControls.yaw_cycle_key = section:CreateDropdown({Name="Cycle Yaw Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, AntiAimState.yaw_cycle_key) or 1, Flag="antiAimV3.yaw_cycle_key", Callback=function(index) AntiAimState.SetValue("yaw_cycle_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "Z") end})
         AntiAimControls.pitch_cycle_key = section:CreateDropdown({Name="Cycle Pitch Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, AntiAimState.pitch_cycle_key) or 1, Flag="antiAimV3.pitch_cycle_key", Callback=function(index) AntiAimState.SetValue("pitch_cycle_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "V") end})
-        AntiAimControls.preset_cycle_key = section:CreateDropdown({Name="Cycle Preset Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, AntiAimState.preset_cycle_key) or 1, Flag="antiAimV3.preset_cycle_key", Callback=function(index) AntiAimState.SetValue("preset_cycle_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "B") end})
+        AntiAimControls.preset_cycle_key = section:CreateDropdown({Name="Cycle Preset Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt",]==================],
+    [==================[ "RightAlt", "LeftControl", "RightControl"}, AntiAimState.preset_cycle_key) or 1, Flag="antiAimV3.preset_cycle_key", Callback=function(index) AntiAimState.SetValue("preset_cycle_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "B") end})
         AntiAimControls.freestand_key = section:CreateDropdown({Name="Flip Freestanding Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, AntiAimState.freestand_key) or 1, Flag="antiAimV3.freestand_key", Callback=function(index) AntiAimState.SetValue("freestand_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "G") end})
         section:CreateButton({Name="Cycle Yaw Mode", Callback=function() AntiAimState.core.Actions.CycleYaw() end})
         section:CreateButton({Name="Cycle Pitch Mode", Callback=function() AntiAimState.core.Actions.CyclePitch() end})
@@ -24230,16 +23801,16 @@ local section = aaConfigFolder
         section:CreateButton({Name="Reset Anti-Aim Settings", Callback=function() AntiAimState.core.Actions.Reset() end})
     end
     do
-        local section = aaConfigFolder
-        AntiAimControls.freestand_base = section:CreateSlider({Name="Freestanding Base", State=AntiAimState.freestand_base, Min=-180, Max=180, Decimals=0, Suffix="'b0", Flag="antiAimV3.freestand_base", Callback=function(value) AntiAimState.SetValue("freestand_base", value) end})
-        AntiAimControls.freestand_flip_angle = section:CreateSlider({Name="Freestanding Side Angle", State=AntiAimState.freestand_flip_angle, Min=0, Max=180, Decimals=0, Suffix="'b0", Flag="antiAimV3.freestand_flip_angle", Callback=function(value) AntiAimState.SetValue("freestand_flip_angle", value) end})
+        local section = antiAimPage:CreateSection({Name="Freestanding", Side="Left", Size=222})
+        AntiAimControls.freestand_base = section:CreateSlider({Name="Freestanding Base", State=AntiAimState.freestand_base, Min=-180, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.freestand_base", Callback=function(value) AntiAimState.SetValue("freestand_base", value) end})
+        AntiAimControls.freestand_flip_angle = section:CreateSlider({Name="Freestanding Side Angle", State=AntiAimState.freestand_flip_angle, Min=0, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.freestand_flip_angle", Callback=function(value) AntiAimState.SetValue("freestand_flip_angle", value) end})
         AntiAimControls.freestand_direction = section:CreateDropdown({Name="Freestanding Side", Options={"Right", "Left"}, State=table.find({"Right", "Left"}, AntiAimState.freestand_direction) or 1, Flag="antiAimV3.freestand_direction", Callback=function(index) AntiAimState.SetValue("freestand_direction", ({"Right", "Left"})[index] or "Right") end})
         AntiAimControls.freestand_auto_flip = section:CreateToggle({Name="Flip Side on Damage", State=AntiAimState.freestand_auto_flip, Flag="antiAimV3.freestand_auto_flip", Callback=function(value) AntiAimState.SetValue("freestand_auto_flip", value) end})
         AntiAimControls.freestand_hit_cooldown = section:CreateSlider({Name="Damage Flip Cooldown", State=AntiAimState.freestand_hit_cooldown, Min=0, Max=2, Decimals=2, Suffix=" s", Flag="antiAimV3.freestand_hit_cooldown", Callback=function(value) AntiAimState.SetValue("freestand_hit_cooldown", value) end})
         section:CreateButton({Name="Flip Freestanding Side", Callback=function() AntiAimState.core.Actions.FlipSide() end})
     end
     do
-        local section = aaConfigFolder
+        local section = antiAimPage:CreateSection({Name="Movement Tools", Side="Left", Size=110})
         AntiAimControls.noclip_enabled = section:CreateToggle({Name="Noclip", State=AntiAimState.noclip_enabled, Flag="antiAimV3.noclip_enabled", Callback=function(value) AntiAimState.SetValue("noclip_enabled", value) end})
         AntiAimControls.flight_enabled = section:CreateToggle({Name="Flight", State=AntiAimState.flight_enabled, Flag="antiAimV3.flight_enabled", Callback=function(value) AntiAimState.SetValue("flight_enabled", value) end})
         AntiAimControls.flight_speed = section:CreateSlider({Name="Flight Speed", State=AntiAimState.flight_speed, Min=10, Max=500, Decimals=0, Suffix=" studs/s", Flag="antiAimV3.flight_speed", Callback=function(value) AntiAimState.SetValue("flight_speed", value) end})
@@ -24249,8 +23820,7 @@ local section = aaConfigFolder
     AntiAimState.SyncControls()
 end
 
-local backtrackFolder = antiAimPage:CreateSection({ Name = "Backtrack", Side = "Left", Size = 545 })
-local backtrackSection = backtrackFolder
+local backtrackSection = antiAimPage:CreateSection({ Name = "Backtrack", Side = "Left", Size = 545 })
 AntiAimControls.backtrack_enabled=backtrackSection:CreateToggle({Name="Enabled",State=AntiAimState.backtrack_enabled,Flag="antiAim.backtrack_enabled",Callback=function(v) AntiAimState.backtrack_enabled=v; if not v then aa_clearBacktrack() end end})
 AntiAimControls.backtrack_rainbow=backtrackSection:CreateToggle({Name="Rainbow",State=AntiAimState.backtrack_rainbow,Flag="antiAim.backtrack_rainbow",Callback=function(v) AntiAimState.backtrack_rainbow=v end})
 AntiAimControls.backtrack_ghost_color=backtrackSection:CreateColorpicker({Name="Ghost Color",State=AntiAimState.backtrack_ghost_color,Flag="antiAim.backtrack_ghost_color",Callback=function(v) AntiAimState.backtrack_ghost_color=v end})
@@ -24267,8 +23837,7 @@ local backtrackQualityOptions={"Performance","High","Ultra"}
 AntiAimControls.backtrack_quality=backtrackSection:CreateDropdown({Name="Ghost Quality",Options=backtrackQualityOptions,State=library.OptionIndex(backtrackQualityOptions,AntiAimState.backtrack_quality),Flag="antiAim.backtrack_quality",Callback=function(v) AntiAimState.backtrack_quality=backtrackQualityOptions[v] or "High"; aa_clearBacktrack() end})
 AntiAimControls.backtrack_max_entries=backtrackSection:CreateSlider({Name="Maximum Ghosts",State=AntiAimState.backtrack_max_entries,Min=4,Max=80,Decimals=0,Flag="antiAim.backtrack_max_entries",Callback=function(v) AntiAimState.backtrack_max_entries=math.floor(v) end})
 
-local indicatorFolder = antiAimPage:CreateSection({ Name = "Indicators", Side = "Right", Size = 375 })
-local targetSection = indicatorFolder
+local targetSection = antiAimPage:CreateSection({ Name = "Target Indicator", Side = "Right", Size = 375 })
 AntiAimControls.target_indicator_enabled=targetSection:CreateToggle({Name="Enabled",State=AntiAimState.target_indicator_enabled,Flag="antiAim.target_indicator_enabled",Callback=function(v) AntiAimState.target_indicator_enabled=v; if not v and AntiAimVisualRuntime.gui then AntiAimVisualRuntime.gui.Enabled=false end end})
 AntiAimControls.indicator_position_mode=targetSection:CreateDropdown({Name="Position",Options=UI.AntiAimIndicatorPositions,State=library.OptionIndex(UI.AntiAimIndicatorPositions,AntiAimState.indicator_position_mode),Flag="antiAim.indicator_position_mode",Callback=function(v) AntiAimState.indicator_position_mode=UI.AntiAimIndicatorPositions[v] or "Follow Target" end})
 AntiAimControls.target_radius=targetSection:CreateSlider({Name="Target Radius",State=AntiAimState.target_radius,Min=10,Max=2000,Decimals=0,Suffix="px",Flag="antiAim.target_radius",Callback=function(v) AntiAimState.target_radius=v end})
@@ -24280,7 +23849,7 @@ AntiAimControls.window_height=targetSection:CreateSlider({Name="Window Height",S
 AntiAimControls.offset_x=targetSection:CreateSlider({Name="Offset X",State=AntiAimState.offset_x,Min=-1000,Max=1000,Decimals=0,Suffix="px",Flag="antiAim.offset_x",Callback=function(v) AntiAimState.offset_x=v end})
 AntiAimControls.offset_y=targetSection:CreateSlider({Name="Offset Y",State=AntiAimState.offset_y,Min=-1000,Max=1000,Decimals=0,Suffix="px",Flag="antiAim.offset_y",Callback=function(v) AntiAimState.offset_y=v end})
 
-local indicatorSection = indicatorFolder
+local indicatorSection = antiAimPage:CreateSection({ Name = "Indicator Visuals", Side = "Right", Size = 525 })
 AntiAimControls.indicator_accent_color=indicatorSection:CreateColorpicker({Name="Accent Color",State=AntiAimState.indicator_accent_color,Flag="antiAim.indicator_accent_color",Callback=function(v) AntiAimState.indicator_accent_color=v end})
 AntiAimControls.indicator_rainbow=indicatorSection:CreateToggle({Name="Rainbow",State=AntiAimState.indicator_rainbow,Flag="antiAim.indicator_rainbow",Callback=function(v) AntiAimState.indicator_rainbow=v end})
 AntiAimControls.indicator_glow=indicatorSection:CreateToggle({Name="Glow",State=AntiAimState.indicator_glow,Flag="antiAim.indicator_glow",Callback=function(v) AntiAimState.indicator_glow=v end})
@@ -24297,8 +23866,7 @@ AntiAimControls.indicator_show_speed=indicatorSection:CreateToggle({Name="Show S
 AntiAimControls.indicator_show_anti_aim=indicatorSection:CreateToggle({Name="Show Anti-Aim Values",State=AntiAimState.indicator_show_anti_aim,Flag="antiAim.indicator_show_anti_aim",Callback=function(v) AntiAimState.indicator_show_anti_aim=v end})
 AntiAimControls.indicator_compact=indicatorSection:CreateToggle({Name="Compact Layout",State=AntiAimState.indicator_compact,Flag="antiAim.indicator_compact",Callback=function(v) AntiAimState.indicator_compact=v end})
 
-local previewFolder = antiAimPage:CreateSection({ Name = "Preview", Side = "Right", Size = 310 })
-local aaDisplaySection = previewFolder
+local aaDisplaySection = antiAimPage:CreateSection({ Name = "3D Avatar Preview", Side = "Right", Size = 310 })
 local avatarIdInput = aaDisplaySection:CreateInput({
 Name        = "Avatar User ID",
 Placeholder = tostring(Players.LocalPlayer.UserId),
@@ -24342,7 +23910,7 @@ yawIndicatorLabel.Position              = UDim2.new(0.5, 0, 1, 0)
 yawIndicatorLabel.Font                  = Enum.Font.Code
 yawIndicatorLabel.TextColor3            = Color3.fromRGB(175, 205, 75)
 yawIndicatorLabel.TextSize              = 9
-yawIndicatorLabel.Text                  = "Yaw: 0'b0"
+yawIndicatorLabel.Text                  = "Yaw: 0°"
 yawIndicatorLabel.ZIndex                = 7
 yawIndicatorLabel.Parent                = viewportContainer
 
@@ -24369,7 +23937,7 @@ local function vp3_updateCamera()
         VP3.center + Vector3.new(math.sin(angle) * distance, height * 0.04, math.cos(angle) * distance),
         VP3.center)
     yawIndicatorLabel.Text = AntiAimState.enabled
-        and string.format("Yaw: %d'b0  Pitch: %d'b0  Roll: %d'b0", math.floor((AntiAimState.lastYaw or 0)+0.5), math.floor((AntiAimState.lastPitch or 0)+0.5), math.floor((AntiAimState.lastRoll or 0)+0.5))
+        and string.format("Yaw: %d°  Pitch: %d°  Roll: %d°", math.floor((AntiAimState.lastYaw or 0)+0.5), math.floor((AntiAimState.lastPitch or 0)+0.5), math.floor((AntiAimState.lastRoll or 0)+0.5))
         or "Anti-Aim disabled"
 end
 local function vp3_loadUserId(userId)
@@ -24381,7 +23949,7 @@ local function vp3_loadUserId(userId)
     VP3.token = VP3.token + 1
     local token = VP3.token
     VP3.loading = true
-    vp3DLabel.Text, vp3DLabel.Visible = "Loading complete avatar'85", true
+    vp3DLabel.Text, vp3DLabel.Visible = "Loading complete avatar…", true
     task.spawn(function()
         local char
         local ok, err = pcall(function()
@@ -24500,7 +24068,8 @@ end
 local function restoreAvatarProperties()
     for instance, properties in pairs(Runtime.OriginalProperties) do
         if instance and instance.Parent then
-            for property, value in pairs(properties) do
+            for pro]==================],
+    [==================[perty, value in pairs(properties) do
                 pcall(function() instance[property] = value end)
             end
         end
@@ -25210,7 +24779,8 @@ local function rapidFireLoadItems()
 end
 
 local function rapidFireGetEquippedTool()
-    local character = LocalPlayer and LocalPlayer.Character
+    local character = LocalPlayer and LocalPlayer.Ch]==================],
+    [==================[aracter
     if not character then return nil end
     for _, object in ipairs(character:GetChildren()) do
         if object:IsA("Tool") then return object end
@@ -25692,8 +25262,7 @@ local function rapidFireWeaponNames(loadModule)
     return names
 end
 
-local combatLogicFolder = ragePage:CreateSection({ Name = "Combat Logic", Side = "Left", Size = 337 })
-local rapidFireSection = combatLogicFolder
+local rapidFireSection = ragePage:CreateSection({
     Name = "Rapid Fire",
     Side = "Right",
     Size = 805
@@ -25701,7 +25270,7 @@ local rapidFireSection = combatLogicFolder
 
 local rapidFireStatus = rapidFireSection:CreateLabel({
     Text = rapidFireIsRivals()
-        and "RIVALS '95 melee cooldown scaler ready"
+        and "RIVALS • melee cooldown scaler ready"
         or "RIVALS client not detected"
 })
 
@@ -25718,11 +25287,11 @@ local function rapidFireUpdateStatus(weaponName)
         or (rapidFireLooksGunData(data) and "gun" or "weapon")
 
     local text =
-        (rapidFireIsRivals() and "RIVALS '95 " or "Unsupported game '95 ")
+        (rapidFireIsRivals() and "RIVALS • " or "Unsupported game • ")
         .. kind
-        .. " '95 "
+        .. " • "
         .. weaponName
-        .. " '95 "
+        .. " • "
         .. tostring(percent)
         .. "%"
 
@@ -25873,13 +25442,13 @@ rapidFireRateSlider = rapidFireSection:CreateSlider({
 
             if ok then
                 rapidFireStatus:SetText(
-                    "RIVALS '95 "
+                    "RIVALS • "
                     .. tostring(kind)
-                    .. " '95 "
+                    .. " • "
                     .. weaponName
-                    .. " '95 "
+                    .. " • "
                     .. tostring(percent)
-                    .. "% '95 "
+                    .. "% • "
                     .. tostring(changed)
                     .. " cooldown"
                     .. (changed == 1 and "" or "s")
@@ -25981,7 +25550,8 @@ local function stepBunnyHop(dt)
         return
     end
 
-    if movement and movement:OwnsHorizontal() then return end
+    if movement and movement:OwnsHorizontal() then retur]==================],
+    [==================[n end
     local velocity = root.AssemblyLinearVelocity
     local horizontal = Vector3.new(velocity.X, 0, velocity.Z)
     local speed = horizontal.Magnitude
@@ -26016,7 +25586,7 @@ local function stepBunnyHop(dt)
 end
 
 rapidFireSection:CreateLabel({
-    Text = "Bunny Hop '95 lightweight runtime"
+    Text = "Bunny Hop • lightweight runtime"
 })
 
 KnifeCombatRuntime.Controls.BunnyHop = rapidFireSection:CreateToggle({
@@ -26577,7 +26147,8 @@ do
     function Movement:Wrap(target, key, replacement)
         if type(target) ~= "table" or type(target[key]) ~= "function" then return end
         self.Wrappers[#self.Wrappers + 1] = {
-            Target = target, Key = key, Original = target[key], Replacement = replacement,
+            Target = target, Key = key, Original = target[key], Replacement]==================],
+    [==================[ = replacement,
         }
         target[key] = replacement
     end
@@ -26832,7 +26403,7 @@ end)
 
 
 
-local universalSection = combatLogicFolder
+local universalSection = ragePage:CreateSection({
     Name = "Universal Tools",
     Side = "Right",
     Size = 650
@@ -26899,8 +26470,8 @@ local function universalRefreshInfo()
     if #shortJob > 12 then shortJob = shortJob:sub(1, 12) .. "..." end
 
     local text = tostring(playerCount) .. "/" .. tostring(maxPlayers) .. " players"
-    if ping then text = text .. "  '95  " .. tostring(ping) .. "ms" end
-    if shortJob ~= "" then text = text .. "  '95  " .. shortJob end
+    if ping then text = text .. "  •  " .. tostring(ping) .. "ms" end
+    if shortJob ~= "" then text = text .. "  •  " .. shortJob end
 
     universalSetStatus(text)
     return text
@@ -27249,9 +26820,9 @@ universalSection:CreateButton({
             end
 
             local summary = tostring(#servers) .. " open servers"
-            if bestPing < math.huge then summary = summary .. "  '95  best " .. tostring(math.floor(bestPing + 0.5)) .. "ms" end
-            if lowestPopulation < math.huge then summary = summary .. "  '95  low " .. tostring(lowestPopulation) end
-            if highestPopulation > 0 then summary = summary .. "  '95  high " .. tostring(highestPopulation) end
+            if bestPing < math.huge then summary = summary .. "  •  best " .. tostring(math.floor(bestPing + 0.5)) .. "ms" end
+            if lowestPopulation < math.huge then summary = summary .. "  •  low " .. tostring(lowestPopulation) end
+            if highestPopulation > 0 then summary = summary .. "  •  high " .. tostring(highestPopulation) end
 
             universalSetStatus(summary)
             universalNotify(summary, 4)
@@ -27376,7 +26947,8 @@ table.insert(library.CleanupCallbacks, function()
 
     if type(MaskShard) == "table"
         and type(MaskShard.Runtime) == "table"
-        and MaskShard.Runtime.UniversalTools == UniversalToolsRuntime then
+        and MaskShard.Runtime.UniversalTools == UniversalTo]==================],
+    [==================[olsRuntime then
         MaskShard.Runtime.UniversalTools = nil
     end
 end)
@@ -27648,9 +27220,8 @@ return function(context)
         if environment.__DevKageTargetingRuntime==self then environment.__DevKageTargetingRuntime=nil end
     end
     local sections={
-        local shootingFolder = ragePage:CreateSection({ Name = "Shooting", Side = "Left", Size = 510 })
-local Locks = shootingFolder
-        local Shoot = shootingFolder
+        Locks=context.Page:CreateSection({Name="Target Locks",Side="Left",Size=510}),
+        Shoot=context.Page:CreateSection({Name="Auto Shoot & Weapon Options",Side="Right",Size=420}),
     }
     local function toggle(section,key,name)
         runtime.Controls[key]=section:CreateToggle({Name=name,State=runtime:Config()[key]==true,Flag="gun."..key,PreserveLegacyIndex=true,
@@ -27724,13 +27295,12 @@ HttpService=game:GetService("HttpService"),
 UI.AimControls=UI.AimControls or {}
 for key,control in pairs(UI.GunTargeting.Controls) do UI.AimControls[key]=control end
 
-local moddingFolder = ragePage:CreateSection({Name="Modding",Side="Left",Size=290})
-local modDetectorSection = moddingFolder
-local worldTextureSection = moddingFolder
-local accessoriesSection = moddingFolder
-local creatorPresetSection = moddingFolder
-local avatarSection = moddingFolder
-local accessorySettingsSection = moddingFolder
+local modDetectorSection = ragePage:CreateSection({Name="Mod Detector",Side="Left",Size=290})
+local worldTextureSection = ragePage:CreateSection({Name="World Texture",Side="Left",Size=330})
+local accessoriesSection = ragePage:CreateSection({Name="Accessories",Side="Left",Size=300})
+local creatorPresetSection = ragePage:CreateSection({Name="Creator Presets",Side="Left",Size=330})
+local avatarSection = ragePage:CreateSection({Name="Avatar",Side="Right",Size=330})
+local accessorySettingsSection = ragePage:CreateSection({Name="Accessory Settings",Side="Right",Size=760})
 
 local function trackVisualControl(key, control)
     UI.VisualControls[key] = control
@@ -27785,7 +27355,8 @@ local HackerDetectorRuntime = {
 
 local function hackerDetectorSetAlert(active,duration)
     local manager=library and library.KeybindManager
-    if not manager or not manager.SetHackerAlert then return end
+    if not manager or not manager.SetHackerAle]==================],
+    [==================[rt then return end
     manager:SetHackerAlert(active==true,library.Window,duration or 12)
 end
 
@@ -27812,7 +27383,7 @@ local function hackerDetectorStep(dt)
                         if now-last>=12 then
                             HackerDetectorRuntime.LastAlert[plr]=now
                             hackerDetectorSetAlert(true,12)
-                            library:Notify({Message="!hacker!  "..plr.DisplayName.."  '95  "..math.floor(velocity+0.5).." studs/s",Duration=4})
+                            library:Notify({Message="!hacker!  "..plr.DisplayName.."  •  "..math.floor(velocity+0.5).." studs/s",Duration=4})
                         end
                     end
                 else
@@ -28145,22 +27716,22 @@ avatarSlider(accessorySettingsSection,"avatar_beard_scale","Beard Size",0.2,3,2,
 avatarSlider(accessorySettingsSection,"avatar_beard_offset_x","Beard Left / Right",-3,3,2,"")
 avatarSlider(accessorySettingsSection,"avatar_beard_offset","Beard Up / Down",-3,3,2,"")
 avatarSlider(accessorySettingsSection,"avatar_beard_offset_z","Beard Forward / Back",-3,3,2,"")
-avatarSlider(accessorySettingsSection,"avatar_beard_rotation_x","Beard Rotation X",-180,180,0,"'b0")
-avatarSlider(accessorySettingsSection,"avatar_beard_rotation_y","Beard Rotation Y",-180,180,0,"'b0")
-avatarSlider(accessorySettingsSection,"avatar_beard_rotation_z","Beard Rotation Z",-180,180,0,"'b0")
+avatarSlider(accessorySettingsSection,"avatar_beard_rotation_x","Beard Rotation X",-180,180,0,"°")
+avatarSlider(accessorySettingsSection,"avatar_beard_rotation_y","Beard Rotation Y",-180,180,0,"°")
+avatarSlider(accessorySettingsSection,"avatar_beard_rotation_z","Beard Rotation Z",-180,180,0,"°")
 
 avatarColor(accessorySettingsSection,"avatar_horn_color","Purple Horns Color")
 avatarSlider(accessorySettingsSection,"avatar_horn_scale","Purple Horns Size",0.2,3,2,"x")
 avatarSlider(accessorySettingsSection,"avatar_horn_offset_x","Horns Left / Right",-3,3,2,"")
 avatarSlider(accessorySettingsSection,"avatar_horn_offset","Horns Up / Down",-3,3,2,"")
 avatarSlider(accessorySettingsSection,"avatar_horn_offset_z","Horns Forward / Back",-3,3,2,"")
-avatarSlider(accessorySettingsSection,"avatar_horn_rotation_x","Horns Rotation X",-180,180,0,"'b0")
-avatarSlider(accessorySettingsSection,"avatar_horn_rotation_y","Horns Rotation Y",-180,180,0,"'b0")
-avatarSlider(accessorySettingsSection,"avatar_horn_rotation_z","Horns Rotation Z",-180,180,0,"'b0")
+avatarSlider(accessorySettingsSection,"avatar_horn_rotation_x","Horns Rotation X",-180,180,0,"°")
+avatarSlider(accessorySettingsSection,"avatar_horn_rotation_y","Horns Rotation Y",-180,180,0,"°")
+avatarSlider(accessorySettingsSection,"avatar_horn_rotation_z","Horns Rotation Z",-180,180,0,"°")
 
-avatarSlider(accessorySettingsSection,"avatar_rotation_x","All Accessories Rotation X",-180,180,0,"'b0")
-avatarSlider(accessorySettingsSection,"avatar_rotation_y","All Accessories Rotation Y",-180,180,0,"'b0")
-avatarSlider(accessorySettingsSection,"avatar_rotation_z","All Accessories Rotation Z",-180,180,0,"'b0")
+avatarSlider(accessorySettingsSection,"avatar_rotation_x","All Accessories Rotation X",-180,180,0,"°")
+avatarSlider(accessorySettingsSection,"avatar_rotation_y","All Accessories Rotation Y",-180,180,0,"°")
+avatarSlider(accessorySettingsSection,"avatar_rotation_z","All Accessories Rotation Z",-180,180,0,"°")
 avatarSlider(accessorySettingsSection,"avatar_accessory_scale","All Accessories Scale",0.2,3,2,"x")
 
 local avatarPresetOptions={"Clean Avatar","Mystic Horned","Elder Mage","Zombie Creator","Royal Demon","Minimal Headless"}
@@ -28271,12 +27842,11 @@ end)()
 assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
 local mouseLockPage = library.Window:CreatePage({Icon="rbxassetid://8547249956",Glyph="A",Size=UDim2.new(0,36,0,36)})
-local crosshairFolder = mouseLockPage:CreateSection({Name="Crosshair",Side="Left",Size=650})
-local crosshairSection = crosshairFolder
-local textSection = crosshairFolder
-local animationSection = crosshairFolder
-local advancedSection = crosshairFolder
-local profileSection = crosshairFolder
+local crosshairSection = mouseLockPage:CreateSection({Name="Crosshair",Side="Left",Size=650})
+local textSection = mouseLockPage:CreateSection({Name="Crosshair Text",Side="Left",Size=360})
+local animationSection = mouseLockPage:CreateSection({Name="Crosshair Animation",Side="Right",Size=470})
+local advancedSection = mouseLockPage:CreateSection({Name="Crosshair Glow",Side="Right",Size=300})
+local profileSection = mouseLockPage:CreateSection({Name="Creator Profiles",Side="Right",Size=300})
 
 local cursorStateMap = {
     devkage_cursor_enabled="Enabled",
@@ -28316,7 +27886,8 @@ local cursorStateMap = {
     devkage_cursor_text_glow_size="TextGlowSize",
     devkage_cursor_text_glow_strength="TextGlowStrength",
     devkage_cursor_main_text_size="MainTextSize",
-    devkage_cursor_second_text_size="SecondTextSize",
+    d]==================],
+    [==================[evkage_cursor_second_text_size="SecondTextSize",
     devkage_cursor_pulse_speed="PulseSpeed",
     devkage_cursor_bounce="Bounce",
     devkage_cursor_bounce_amount="BounceAmount",
@@ -29517,7 +29088,8 @@ local function referenceApplyRadialLayout(
                 Vector2.new(
                     0.5,
                     1
-                )
+         ]==================],
+    [==================[       )
 
             line.Frame.Size =
                 UDim2.fromOffset(
@@ -29874,7 +29446,7 @@ local function referenceApplyText(
                 label.Position.X.Scale, label.Position.X.Offset - innerSize * 0.5,
                 label.Position.Y.Scale, label.Position.Y.Offset - innerSize * 0.5
             )
-            -- Inner glow is the hot neon core '97 crisp and bright
+            -- Inner glow is the hot neon core — crisp and bright
             innerGlow.TextTransparency = math.clamp(1 - (0.78 * glowStrength), 0.04, 0.55)
             local s = innerGlow:FindFirstChild("NeonStroke")
             if s then
@@ -30639,13 +30211,13 @@ addSlider(crosshairSection,"devkage_cursor_line_width","Line Width",1,10,0,"")
 addSlider(crosshairSection,"devkage_cursor_line_length","Line Length",1,100,0,"")
 addSlider(crosshairSection,"devkage_cursor_center_radius","Center Radius",0,60,0,"")
 addSlider(crosshairSection,"devkage_cursor_arm_count","Arm Count",1,12,0,"")
-addSlider(crosshairSection,"devkage_cursor_angle_offset","Angle Offset",0,360,0,"'b0")
+addSlider(crosshairSection,"devkage_cursor_angle_offset","Angle Offset",0,360,0,"°")
 
 addToggle(animationSection,"devkage_cursor_spin","Spin")
 addDropdown(animationSection,"devkage_cursor_spin_style","Spin Style",{"Static","Ping Pong","Stepped"})
 addDropdown(animationSection,"devkage_cursor_spin_direction","Spin Direction",{"Counter Clockwise","Clockwise"})
-addSlider(animationSection,"devkage_cursor_spin_speed","Spin Speed",0,360,0,"'b0/s")
-addSlider(animationSection,"devkage_cursor_spin_range","Spin Range",1,360,0,"'b0")
+addSlider(animationSection,"devkage_cursor_spin_speed","Spin Speed",0,360,0,"°/s")
+addSlider(animationSection,"devkage_cursor_spin_range","Spin Range",1,360,0,"°")
 addSlider(animationSection,"devkage_cursor_squash_x","Squash X",0.25,2,2,"x")
 addSlider(animationSection,"devkage_cursor_squash_y","Squash Y",0.25,2,2,"x")
 addToggle(animationSection,"devkage_cursor_smooth_spin","Smooth Spin")
@@ -30674,7 +30246,8 @@ addSlider(textSection,"devkage_cursor_second_text_size","Second Text Size",8,40,
 
 local cursorProfileOptions={"Custom","Precision","Minimal Dot","Creator Glow","Neon RGB","Cinematic","Classic"}
 local cursorProfiles={
-Precision={devkage_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(235,245,255),devkage_cursor_color_secondary=Color3.fromRGB(90,175,255),devkage_cursor_color_mode="Two Tone",devkage_cursor_rainbow=false,devkage_cursor_line_width=2,devkage_cursor_line_length=12,devkage_cursor_center_radius=3,devkage_cursor_arm_count=4,devkage_cursor_spin=false,devkage_cursor_line_glow=true,devkage_cursor_glow_thickness=5,devkage_cursor_glow_extra_length=2,devkage_cursor_glow_transparency=0.58,devkage_cursor_text_enabled=false},
+Precision={devkage]==================],
+    [==================[_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(235,245,255),devkage_cursor_color_secondary=Color3.fromRGB(90,175,255),devkage_cursor_color_mode="Two Tone",devkage_cursor_rainbow=false,devkage_cursor_line_width=2,devkage_cursor_line_length=12,devkage_cursor_center_radius=3,devkage_cursor_arm_count=4,devkage_cursor_spin=false,devkage_cursor_line_glow=true,devkage_cursor_glow_thickness=5,devkage_cursor_glow_extra_length=2,devkage_cursor_glow_transparency=0.58,devkage_cursor_text_enabled=false},
 ["Minimal Dot"]={devkage_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(255,255,255),devkage_cursor_color_secondary=Color3.fromRGB(255,255,255),devkage_cursor_color_mode="Solid",devkage_cursor_rainbow=false,devkage_cursor_line_width=2,devkage_cursor_line_length=3,devkage_cursor_center_radius=2,devkage_cursor_arm_count=4,devkage_cursor_spin=false,devkage_cursor_line_glow=false,devkage_cursor_text_enabled=false},
 ["Creator Glow"]={devkage_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(190,80,255),devkage_cursor_color_secondary=Color3.fromRGB(70,205,255),devkage_cursor_color_mode="Gradient",devkage_cursor_color_speed=1.25,devkage_cursor_color_spread=0.55,devkage_cursor_rainbow=false,devkage_cursor_line_width=3,devkage_cursor_line_length=22,devkage_cursor_center_radius=6,devkage_cursor_arm_count=4,devkage_cursor_spin=true,devkage_cursor_spin_style="Static",devkage_cursor_spin_direction="Clockwise",devkage_cursor_spin_speed=46,devkage_cursor_spin_range=360,devkage_cursor_smooth_spin=true,devkage_cursor_line_glow=true,devkage_cursor_glow_thickness=14,devkage_cursor_glow_extra_length=8,devkage_cursor_glow_transparency=0.42,devkage_cursor_text_enabled=true,devkage_cursor_main_text="DevKage",devkage_cursor_second_text="None",devkage_cursor_text_outline=true},
 ["Neon RGB"]={devkage_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(255,60,210),devkage_cursor_color_secondary=Color3.fromRGB(65,180,255),devkage_cursor_color_mode="RGB Wave",devkage_cursor_color_speed=2.1,devkage_cursor_color_spread=0.72,devkage_cursor_rainbow=true,devkage_cursor_rainbow_speed=5,devkage_cursor_line_width=3,devkage_cursor_line_length=19,devkage_cursor_center_radius=5,devkage_cursor_arm_count=6,devkage_cursor_spin=true,devkage_cursor_spin_style="Static",devkage_cursor_spin_direction="Clockwise",devkage_cursor_spin_speed=72,devkage_cursor_smooth_spin=true,devkage_cursor_line_glow=true,devkage_cursor_glow_thickness=17,devkage_cursor_glow_extra_length=9,devkage_cursor_glow_transparency=0.34,devkage_cursor_text_enabled=false},
@@ -30723,12 +30296,10 @@ assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
 local settingPage = library.Window:CreatePage({ Icon = "rbxassetid://8547256547", Glyph = "L", Size = UDim2.new(0, 36, 0, 36) })
 UI.LuaPage = settingPage
-local scriptingFolder = settingPage:CreateSection({ Name = "Scripting", Side = "Left", Size = 520 })
-local luaSection = scriptingFolder
-local luaControls = scriptingFolder
+local luaSection = settingPage:CreateSection({ Name = "Lua Editor", Side = "Left", Size = 520 })
+local luaControls = settingPage:CreateSection({ Name = "Lua Controls", Side = "Right", Size = 300 })
 
-UI.CustomizationFolder = settingPage:CreateSection({ Name = "Customization", Side = "Right", Size = 305 })
-UI.ThemeSection = UI.CustomizationFolder
+UI.ThemeSection = settingPage:CreateSection({ Name = "Theme Changer", Side = "Right", Size = 305 })
 UI.ThemeControls = {}
 UI.ThemeControls.UI = UI.ThemeSection:CreateColorpicker({
     Name = "Menu Color",
@@ -30773,7 +30344,7 @@ UI.ThemeTopBarOpacity = UI.ThemeSection:CreateSlider({
     end
 })
 
-UI.KeybindThemeSection = UI.CustomizationFolder
+UI.KeybindThemeSection = settingPage:CreateSection({
     Name = "Keybind UI",
     Side = "Right",
     Size = 360
@@ -30915,7 +30486,7 @@ UI.ThemeDPIScale = UI.ThemeSection:CreateDropdown({
 })
 library:ApplyTheme()
 
-local premiumThemeSection = UI.CustomizationFolder
+local premiumThemeSection=settingPage:CreateSection({Name="Premium Themes",Side="Right",Size=290})
 local premiumThemeOptions={"Classic Olive","Midnight Purple","Cyan Circuit","Rose Gold","Crimson Noir","Arctic Blue","YouTube Red","Emerald Luxe"}
 local premiumThemeProfiles={
 ["Classic Olive"]={UI=Color3.fromRGB(23,23,23),Toggle=Color3.fromRGB(175,205,75),Slider=Color3.fromRGB(175,205,75),Text=Color3.fromRGB(205,205,205),TopBar=Color3.fromRGB(255,255,255),TopBarTransparency=0,MenuAnimationSpeed=1},
@@ -30983,7 +30554,7 @@ luaHeader.Font = Enum.Font.Code
 luaHeader.TextSize = 9
 luaHeader.TextColor3 = Color3.fromRGB(175,205,75)
 luaHeader.TextXAlignment = Enum.TextXAlignment.Left
-luaHeader.Text = "  DEVKAGE LUA  '95  Ctrl+Enter to run  '95  Tab inserts spaces"
+luaHeader.Text = "  DEVKAGE LUA  •  Ctrl+Enter to run  •  Tab inserts spaces"
 luaHeader.ZIndex = 12
 luaHeader.Parent = luaEditorFrame
 
@@ -30997,7 +30568,7 @@ luaFooter.Font = Enum.Font.Code
 luaFooter.TextSize = 9
 luaFooter.TextColor3 = Color3.fromRGB(125,125,125)
 luaFooter.TextXAlignment = Enum.TextXAlignment.Left
-luaFooter.Text = "  1 line  '95  0 characters"
+luaFooter.Text = "  1 line  •  0 characters"
 luaFooter.ZIndex = 12
 luaFooter.Parent = luaEditorFrame
 
@@ -31047,7 +30618,7 @@ if source:match("^%s*$") then setLuaStatus("Nothing to execute"); return end
 getgenv().__DevKageConfig.luaCode=source
 local compiled,fn,compileError=compileLuaSource(source)
 if not compiled then
-setLuaStatus("Compile error '95 " .. tostring(compileError):gsub("[\\]+"," "):sub(1,100))
+setLuaStatus("Compile error • " .. tostring(compileError):gsub("[\r\n]+"," "):sub(1,100))
 warn("[DevKage Lua] Compile error:",compileError)
 return
 end
@@ -31064,8 +30635,8 @@ luaExecutionThread=nil
 if ran then
 setLuaStatus(string.format("Completed in %.3fs",os.clock()-started))
 else
-setLuaStatus("Runtime error '95 " .. tostring(runtimeError):gsub("[\\]+"," "):sub(1,100))
-warn("[DevKage Lua] Runtime error:"..tostring(runtimeError))
+setLuaStatus("Runtime error • " .. tostring(runtimeError):gsub("[\r\n]+"," "):sub(1,100))
+warn("[DevKage Lua] Runtime error:\n"..tostring(runtimeError))
 end
 end)
 end
@@ -31080,7 +30651,7 @@ end
 luaControls:CreateButton({Name="Execute Lua",Callback=executeLuaEditor})
 luaControls:CreateButton({Name="Validate Syntax",Callback=function()
 local ok,_,err=compileLuaSource(luaEditor.Text)
-setLuaStatus(ok and "Syntax valid" or ("Compile error '95 "..tostring(err):gsub("[\\]+"," "):sub(1,100)))
+setLuaStatus(ok and "Syntax valid" or ("Compile error • "..tostring(err):gsub("[\r\n]+"," "):sub(1,100)))
 end})
 luaControls:CreateButton({Name="Stop Active Task",Callback=function() stopLuaExecution(true) end})
 luaControls:CreateButton({Name="Clear Editor",Callback=function() luaEditor.Text=""; getgenv().__DevKageConfig.luaCode=""; setLuaStatus("Editor cleared") end})
@@ -31089,8 +30660,8 @@ luaControls:CreateButton({Name="Load From Config",Callback=function() luaEditor.
 
 local function updateLuaMetrics()
 local text=tostring(luaEditor.Text or "")
-local _,newlines=text:gsub("","")
-luaFooter.Text=string.format("  %d line%s  '95  %d characters",newlines+1,newlines==0 and "" or "s",#text)
+local _,newlines=text:gsub("\n","")
+luaFooter.Text=string.format("  %d line%s  •  %d characters",newlines+1,newlines==0 and "" or "s",#text)
 end
 utility:CreateConnection(luaEditor:GetPropertyChangedSignal("Text"),updateLuaMetrics)
 utility:CreateConnection(luaEditor.FocusLost,function() getgenv().__DevKageConfig.luaCode=luaEditor.Text end)
@@ -31231,7 +30802,8 @@ end
 local function syncSupplementalSpooferControls(controls,config)
 local extra=type(controls.extra)=="table" and controls.extra or {}
 local toggleBindings={
-{"spoofDeviceToggle","spoofDevice"},{"deviceSpamToggle","deviceSpam"},
+{"spoofDeviceToggle","spoofDevice"},{"deviceSpamToggle"]==================],
+    [==================[,"deviceSpam"},
 {"influencerToggle","influencer"},{"adminToggle","admin"},
 {"spoofAvatarToggle","spoofAvatar"},{"anonymousToggle","anonymousMode"},
 {"displayNameToggle","displayNameOverrideEnabled"},{"usernameToggle","usernameOverrideEnabled"},
@@ -31561,7 +31133,8 @@ controls.streamerAlignmentDrop:Set(library.OptionIndex(controls.streamerAlignmen
 controls.streamerWidthSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudWidth) or 660,260,1800),true)
 controls.streamerHeightSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudHeight) or 36,22,100),true)
 controls.streamerTextSizeSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudTextSize) or 14,8,32),true)
-controls.streamerPaddingSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudPadding) or 25,0,80),true)
+controls.streamerPaddingSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamer]==================],
+    [==================[HudPadding) or 25,0,80),true)
 controls.streamerOffsetXSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudOffsetX) or 0,-1200,1200),true)
 controls.streamerOffsetYSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudOffsetY) or 12,-500,500),true)
 controls.streamerCornerSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudCornerRadius) or 7,0,24),true)
@@ -31653,14 +31226,11 @@ end
 return true
 end
 
-local configFolder = configPage:CreateSection({ Name = "Configuration", Side = "Left", Size = 535 })
-local configMain = configFolder
-local playerManagementFolder = configPage:CreateSection({ Name = "Player Management", Side = "Right", Size = 585 })
-local playerSection = playerManagementFolder
-local blacklistSection = playerManagementFolder
-local configActions = configFolder
-local globalSettingsFolder = configPage:CreateSection({ Name = "Global Settings", Side = "Right", Size = 150 })
-local scriptSettingsSection = globalSettingsFolder
+local configMain = configPage:CreateSection({ Name = "Configs", Side = "Left", Size = 535 })
+local playerSection = configPage:CreateSection({ Name = "Players", Side = "Right", Size = 585 })
+local blacklistSection = configPage:CreateSection({ Name = "Blacklist", Side = "Right", Size = 360 })
+local configActions = configPage:CreateSection({ Name = "Config Auto-Load", Side = "Right", Size = 210 })
+local scriptSettingsSection = configPage:CreateSection({ Name = "Script Settings", Side = "Right", Size = 150 })
 local configPhotoRoot=Instance.new("Frame")
 configPhotoRoot.Name="ConfigPhotoRoot"
 configPhotoRoot.BackgroundTransparency=1
@@ -31773,7 +31343,7 @@ local marker = Instance.new("TextLabel")
 marker.BackgroundTransparency = 1
 marker.BorderSizePixel = 0
 marker.Font = Enum.Font.Code
-marker.Text = ""
+marker.Text = "▢"
 marker.TextColor3 = Color3.fromRGB(145,145,145)
 marker.TextSize = 11
 marker.TextXAlignment = Enum.TextXAlignment.Center
@@ -31918,7 +31488,7 @@ rebuildBlacklistList = function()
         remove.Position = UDim2.new(1,-6,0.5,0)
         remove.Size = UDim2.fromOffset(24,24)
         remove.Font = Enum.Font.Code
-        remove.Text = "'d7"
+        remove.Text = "×"
         remove.TextSize = 13
         remove.TextColor3 = Color3.fromRGB(255,105,105)
         remove.AutoButtonColor = false
@@ -32329,10 +31899,10 @@ end
 
 
 
-
-
-
-
+local blacklistFlashToken=0
+local blacklistFlashFrame=Instance.new("Frame")
+blacklistFlashFrame.Name="BlacklistFlash"
+blacklistFlashFrame.BackgroundColor3=Color3.fromRGB(110,8,8)
 blacklistFlashFrame.BackgroundTransparency=1
 blacklistFlashFrame.BorderSizePixel=0
 blacklistFlashFrame.Position=UDim2.new(0,10,0,463)
@@ -32343,15 +31913,15 @@ blacklistFlashFrame.ClipsDescendants=true
 blacklistFlashFrame.ZIndex=30
 blacklistFlashFrame.Parent=playerPhotoRoot
 
-
-
+local blacklistFlashStroke=Instance.new("UIStroke")
+blacklistFlashStroke.Color=Color3.fromRGB(255,45,45)
 blacklistFlashStroke.Transparency=1
 blacklistFlashStroke.Thickness=1
 blacklistFlashStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
 blacklistFlashStroke.Parent=blacklistFlashFrame
 
-
-
+local blacklistFlashLabel=Instance.new("TextLabel")
+blacklistFlashLabel.BackgroundTransparency=1
 blacklistFlashLabel.BorderSizePixel=0
 blacklistFlashLabel.Size=UDim2.fromScale(1,1)
 blacklistFlashLabel.Font=Enum.Font.Code
@@ -32366,7 +31936,7 @@ blacklistFlashLabel.TextYAlignment=Enum.TextYAlignment.Center
 blacklistFlashLabel.ZIndex=31
 blacklistFlashLabel.Parent=blacklistFlashFrame
 
-
+local function showBlacklistFlash()
 blacklistFlashToken=blacklistFlashToken+1
 local token=blacklistFlashToken
 blacklistFlashFrame.Visible=true
@@ -32399,7 +31969,7 @@ local saved,err=setPlayerBlacklisted(selectedServerPlayer,true,playerReasonBox.T
 if saved then
 playerSelectionLabel.Text="Selected: "..tostring(selectedServerPlayer.Name)
 rebuildServerPlayerList()
-
+showBlacklistFlash()
 if blacklistStatusLabel then
     blacklistStatusLabel.Text="BLACKLISTED: "..tostring(selectedServerPlayer.Name)
     blacklistStatusLabel.TextColor3=Color3.fromRGB(255,72,72)
@@ -32415,7 +31985,8 @@ if not selectedServerPlayer then
 library:Notify({Message="Select a player first",Duration=3})
 return
 end
-local saved,err=setPlayerBlacklisted(selectedServerPlayer,false)
+local saved,err]==================],
+    [==================[=setPlayerBlacklisted(selectedServerPlayer,false)
 if saved then
 playerReasonBox.Text=""
 playerSelectionLabel.Text="Selected: "..tostring(selectedServerPlayer.Name)
@@ -32992,7 +32563,8 @@ assert(function(alwaysOnMaskShards, environment, safeActivate, safeDeactivate)
         end
 
         if environment.__DevKageMaskShardHealth == health then
-            environment.__DevKageMaskShardHealth = nil
+            environment.__DevKageMaskShardHealt]==================],
+    [==================[h = nil
         end
         environment.__DevKageMaskShardStatus = {
             Active = false,
@@ -33011,3 +32583,128 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
 
 
 -- END OF FILE
+
+]==================]
+})
+
+local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
+__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.69-autoload-currentbuild-ui-blacklist-merge-20260913"
+__devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
+__devkageEnv.__DEVKAGE_PACKAGE_SOURCE_BUILD = "DevKage-v5.2.69-autoload-currentbuild-ui-blacklist-merge-20260913"
+__devkageEnv.__DEVKAGE_PACKAGE_SOURCE_CURRENT = __DEVKAGE_EMBEDDED_SOURCE
+
+-- CURRENT LATE-BOOT AUTOEXEC OWNERSHIP (v5.2.55)
+-- Do not disable/delete the current loader here. The embedded runtime owns
+-- DevKage's exact loader/payload files and refreshes them through
+-- configure_script_autoload(). Unrelated Auto Execute scripts are untouched.
+
+-- AUTOEXEC COEXISTENCE / LATE-BOOT SINGLE-BOOT ENTRYPOINT (v5.2.57)
+--
+-- This is intentionally modeled after the supplied working LateBoot build:
+-- schedule immediately, let the executor continue launching its other Auto
+-- Execute script, wait for Roblox readiness in the background, then give that
+-- other script a fixed grace period before DevKage compiles its large runtime.
+task.spawn(function()
+    local ok, err = pcall(function()
+        local players = game:GetService("Players")
+        local workspaceService = game:GetService("Workspace")
+
+        if not game:IsLoaded() then
+            game.Loaded:Wait()
+        end
+
+        local readyDeadline = os.clock() + 20
+        while not players.LocalPlayer and os.clock() < readyDeadline do
+            task.wait(0.1)
+        end
+        local localPlayer = players.LocalPlayer
+        if not localPlayer then
+            error("LocalPlayer unavailable after readiness timeout")
+        end
+
+        while not localPlayer:FindFirstChildOfClass("PlayerGui") and os.clock() < readyDeadline do
+            task.wait(0.1)
+        end
+        while not workspaceService.CurrentCamera and os.clock() < readyDeadline do
+            task.wait(0.1)
+        end
+
+        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = true
+
+        -- The other autoexec normally needs roughly 5-7 seconds. 8.5 seconds
+        -- gives it headroom while keeping DevKage responsive.
+        local lateDelay = tonumber(rawget(__devkageEnv, "__DEVKAGE_LATE_BOOT_DELAY")) or 8.5
+        if lateDelay < 7.5 then lateDelay = 7.5 end
+        warn(string.format("[DevKage LateBoot] waiting %.1fs for other autoexec", lateDelay))
+        task.wait(lateDelay)
+
+        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = nil
+
+        local jobId = tostring(game.JobId or "")
+        local jobKey = tostring(game.PlaceId) .. ":" .. (jobId ~= "" and jobId or "current")
+
+        -- Claim ownership only AFTER the grace period. This is the key behavior
+        -- from the working LateBoot design.
+        if __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB == jobKey then
+            local lockBuild = tostring(__devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD or "")
+            local lockAt = tonumber(__devkageEnv.__DEVKAGE_AUTO_STARTING_AT) or 0
+            if lockBuild == tostring(__devkageEnv.__DEVKAGE_PACKAGE_BUILD)
+                and lockAt > 0 and (os.clock() - lockAt) < 45 then
+                return
+            end
+            __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
+            __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+            __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
+        end
+
+        if __devkageEnv.__DEVKAGE_AUTO_STARTED_JOB == jobKey
+            and __devkageEnv.__DEVKAGE_AUTOLOADED_BUILD == __devkageEnv.__DEVKAGE_PACKAGE_BUILD then
+            return
+        end
+
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = jobKey
+        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = os.clock()
+
+        -- One scheduler turn before compiling the ~1.3MB embedded source.
+        task.wait()
+
+        local loader = loadstring or load
+        if type(loader) ~= "function" then
+            error("DevKage requires loadstring support")
+        end
+
+        local chunk, compileError = loader(__DEVKAGE_EMBEDDED_SOURCE)
+        if not chunk then
+            error(compileError)
+        end
+
+        __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT = true
+        local runOk, runError = pcall(chunk)
+        __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT = nil
+        if not runOk then
+            error(runError)
+        end
+
+        __devkageEnv.__DEVKAGE_AUTO_STARTED_JOB = jobKey
+        __devkageEnv.__DEVKAGE_AUTOLOADED_BUILD = __devkageEnv.__DEVKAGE_PACKAGE_BUILD
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
+        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
+
+        warn("[DevKage LateBoot] current build loaded")
+    end)
+
+    if not ok then
+        __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT = nil
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_JOB = nil
+        __devkageEnv.__DEVKAGE_AUTOLOAD_RUNNING_BUILD = nil
+        __devkageEnv.__DEVKAGE_AUTO_STARTING_AT = nil
+        __devkageEnv.__DEVKAGE_LATE_BOOT_WAITING = nil
+        warn("[DevKage Package Boot] " .. tostring(err))
+    end
+end)
+
+-- Return immediately. The executor is free to start the other Auto Execute
+-- script while DevKage is waiting in its own LateBoot task.
+return nil
