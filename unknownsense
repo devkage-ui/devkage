@@ -1915,7 +1915,145 @@ function library:CreatePage(Properties)
 end
 
 
-function pages:CreateSection(Properties)
+-- [[ // Cursor Manager // ]]
+local CursorManager = {
+    Enabled = true,
+    Color = Color3.new(1, 1, 1),
+    Brightness = 1,
+    LineThickness = 3,
+    LineLength = 25,
+    RotationSpeed = 0.8,
+    PulseSpeed = 2.5,
+    Text = "Yokai.win",
+    TextColor = Color3.new(1, 1, 1),
+}
+
+local cursorGui, cursorContainer, cursorText
+local cursorLines = {}
+local cursorTime = 0
+local cursorRotationProgress = 0
+local cursorSmoothedRotation = 5
+
+local function createCursorLine(parent, name, size, pos, color)
+    local frame = Instance.new("Frame")
+    frame.Name = name
+    frame.Size = size
+    frame.Position = pos
+    frame.BackgroundColor3 = color
+    frame.BorderSizePixel = 0
+    frame.ZIndex = 5
+    frame.Parent = parent
+
+    local stroke = Instance.new("UIStroke")
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    stroke.Color = Color3.new(0,0,0)
+    stroke.Thickness = 1
+    stroke.Parent = frame
+    return frame
+end
+
+local function createCursorGlow(parent, name, size, pos, color)
+    local frame = Instance.new("Frame")
+    frame.Name = name
+    frame.Size = size
+    frame.Position = pos
+    frame.BackgroundColor3 = color
+    frame.BorderSizePixel = 0
+    frame.ZIndex = 4
+    frame.Parent = parent
+    return frame
+end
+
+local function setupCursor()
+    if cursorGui then cursorGui:Destroy() end
+
+    cursorGui = Instance.new("ScreenGui")
+    cursorGui.Name = "YokaiCursorGUI"
+    cursorGui.ResetOnSpawn = false
+    cursorGui.Parent = game:GetService("CoreGui")
+
+    cursorContainer = Instance.new("Frame")
+    cursorContainer.BackgroundTransparency = 1
+    cursorContainer.Size = UDim2.new(0, 25, 0, 25)
+    cursorContainer.AnchorPoint = Vector2.new(0.5, 0.5)
+    cursorContainer.Parent = cursorGui
+
+    cursorLines.top = createCursorLine(cursorContainer, "Top", UDim2.new(0, CursorManager.LineThickness, 0, CursorManager.LineLength), UDim2.new(0.5, -CursorManager.LineThickness/2, 0, 0), CursorManager.Color)
+    cursorLines.bottom = createCursorLine(cursorContainer, "Bottom", UDim2.new(0, CursorManager.LineThickness, 0, CursorManager.LineLength), UDim2.new(0.5, -CursorManager.LineThickness/2, 1, -CursorManager.LineLength), CursorManager.Color)
+    cursorLines.left = createCursorLine(cursorContainer, "Left", UDim2.new(0, CursorManager.LineLength, 0, CursorManager.LineThickness), UDim2.new(0, 0, 0.5, -CursorManager.LineThickness/2), CursorManager.Color)
+    cursorLines.right = createCursorLine(cursorContainer, "Right", UDim2.new(0, CursorManager.LineLength, 0, CursorManager.LineThickness), UDim2.new(1, -CursorManager.LineLength, 0.5, -CursorManager.LineThickness/2), CursorManager.Color)
+
+    cursorLines.topGlow = createCursorGlow(cursorContainer, "TopGlow", UDim2.new(0, 10, 0, 2), UDim2.new(0.5, -5, 0, -5), CursorManager.Color)
+    cursorLines.bottomGlow = createCursorGlow(cursorContainer, "BottomGlow", UDim2.new(0, 10, 0, 2), UDim2.new(0.5, -5, 1, 5), CursorManager.Color)
+    cursorLines.leftGlow1 = createCursorGlow(cursorContainer, "LeftGlow1", UDim2.new(0, 2, 0, 5), UDim2.new(0, -5, 0.2, 0), CursorManager.Color)
+    cursorLines.leftGlow2 = createCursorGlow(cursorContainer, "LeftGlow2", UDim2.new(0, 2, 0, 5), UDim2.new(0, -5, 0.8, -5), CursorManager.Color)
+    cursorLines.rightGlow1 = createCursorGlow(cursorContainer, "RightGlow1", UDim2.new(0, 2, 0, 5), UDim2.new(1, 5, 0.2, 0), CursorManager.Color)
+    cursorLines.rightGlow2 = createCursorGlow(cursorContainer, "RightGlow2", UDim2.new(0, 2, 0, 5), UDim2.new(1, 5, 0.8, -5), CursorManager.Color)
+
+    cursorText = Instance.new("TextLabel")
+    cursorText.Text = CursorManager.Text
+    cursorText.TextColor3 = CursorManager.TextColor
+    cursorText.Font = Enum.Font.Arcade
+    cursorText.TextScaled = true
+    cursorText.BackgroundTransparency = 1
+    cursorText.Size = UDim2.new(0, 150, 0, 23)
+    cursorText.ZIndex = 10
+    cursorText.Parent = cursorGui
+
+    local stroke = Instance.new("UIStroke")
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+    stroke.Color = Color3.new(0, 0, 0)
+    stroke.Thickness = 1
+    stroke.LineJoinMode = Enum.LineJoinMode.Round
+    stroke.Parent = cursorText
+end
+
+local function updateCursor(dt)
+    if not CursorManager.Enabled then
+        if cursorGui then cursorGui.Enabled = false end
+        return
+    end
+    if not cursorGui then setupCursor() end
+    cursorGui.Enabled = true
+
+    local mouse = game:GetService("Players").LocalPlayer:GetMouse()
+    cursorTime = cursorTime + dt
+    cursorContainer.Position = UDim2.new(0, mouse.X, 0, mouse.Y)
+    cursorText.Position = UDim2.new(0, mouse.X - 70, 0, mouse.Y + 50)
+
+    cursorRotationProgress = (cursorRotationProgress + CursorManager.RotationSpeed * dt) % 1
+    local targetRotation = cursorRotationProgress * 360
+    cursorSmoothedRotation = cursorSmoothedRotation + (targetRotation - cursorSmoothedRotation) * 1
+    cursorContainer.Rotation = cursorSmoothedRotation
+
+    local pulse = math.sin(cursorTime * CursorManager.PulseSpeed) * 0.5 + 0.5
+    local currentLength = -10 + (-30 - (-10)) * (pulse * pulse)
+
+    cursorLines.top.Size = UDim2.new(0, CursorManager.LineThickness, 0, currentLength)
+    cursorLines.bottom.Size = UDim2.new(0, CursorManager.LineThickness, 0, currentLength)
+    cursorLines.left.Size = UDim2.new(0, currentLength, 0, CursorManager.LineThickness)
+    cursorLines.right.Size = UDim2.new(0, currentLength, 0, CursorManager.LineThickness)
+
+    cursorLines.top.Position = UDim2.new(0.5, -CursorManager.LineThickness/2, 0, 0)
+    cursorLines.bottom.Position = UDim2.new(0.5, -CursorManager.LineThickness/2, 1, -currentLength)
+    cursorLines.left.Position = UDim2.new(0, 0, 0.5, -CursorManager.LineThickness/2)
+    cursorLines.right.Position = UDim2.new(1, -currentLength, 0.5, -CursorManager.LineThickness/2)
+
+    local rainbow = Color3.fromHSV((cursorTime * 0.1) % 1, 0.8, 1)
+    local finalColor = rainbow:Lerp(CursorManager.Color, 0.5)
+
+    for _, line in pairs(cursorLines) do
+        if line:IsA("Frame") then
+            line.BackgroundColor3 = finalColor
+            line.BackgroundTransparency = 1 - (CursorManager.Brightness * 0.8)
+        end
+    end
+    cursorText.TextColor3 = finalColor
+end
+
+game:GetService("RunService").RenderStepped:Connect(updateCursor)
+
+
     Properties = Properties or {}
     local Section = {
         Name    = (Properties.name or Properties.Name or Properties.title or Properties.Title or "New Section"),
@@ -17372,28 +17510,46 @@ runtimeEnv.__DevKageAvatarMods = (function()
         state.model = model
         remember(model)
 
-        -- Integrated Avatar Particles from $udadPro
+        -- Integrated Avatar Particles from $udadPro (fixed blob effect)
         state.avatarParticles = {}
-        local function addParticle(parent, name, texture, color, size, rate)
+        local function addParticle(parent, name, texture, color, size, rate, properties)
             local p = Instance.new("ParticleEmitter")
             p.Name = name
             p.Texture = texture
             p.Color = ColorSequence.new(color)
-            p.Size = NumberSequence.new(size)
+            p.Size = size
             p.Rate = rate
             p.Lifetime = NumberRange.new(0.5, 1)
             p.Speed = NumberRange.new(2, 5)
+            if properties then
+                for prop, val in pairs(properties) do
+                    p[prop] = val
+                end
+            end
             p.Parent = parent
             table.insert(state.avatarParticles, p)
             remember(p)
         end
 
+        -- Attach particles to different body parts to avoid blobbing
         if root then
-            local att = Instance.new("Attachment", root)
-            remember(att)
-            addParticle(att, "AvatarGlow", "rbxassetid://8708637750", primaryColor(), 12, 50)
-            addParticle(att, "AvatarShards", "rbxassetid://4509687978", secondaryColor(), 5, 30)
-            addParticle(att, "AvatarSpikes", "rbxassetid://8708637750", primaryColor(), 3, 20)
+            local rootAtt = Instance.new("Attachment", root)
+            remember(rootAtt)
+            addParticle(rootAtt, "AvatarGlow", "rbxassetid://8708637750", primaryColor(), 12, 50, {Brightness = 5, ZOffset = -0.5})
+            addParticle(rootAtt, "AvatarShards", "rbxassetid://4509687978", secondaryColor(), 5, 30, {Acceleration = Vector3.new(0, -50, 0)})
+        end
+
+        if torso then
+            local torsoAtt = Instance.new("Attachment", torso)
+            remember(torsoAtt)
+            addParticle(torsoAtt, "AuraSpikes", "rbxassetid://7451697448", primaryColor(), 3, 100, {Acceleration = Vector3.new(0, 100, 0), Speed = NumberRange.new(10, 25)})
+            addParticle(torsoAtt, "AuraSpecks", "rbxassetid://4509687978", secondaryColor(), 1, 100, {Acceleration = Vector3.new(0, -25, 0)})
+        end
+
+        if head then
+            local headAtt = Instance.new("Attachment", head)
+            remember(headAtt)
+            addParticle(headAtt, "HeadGlow", "rbxassetid://8708637750", primaryColor(), 8, 40, {Brightness = 10})
         end
 
         local preset = normalizedType()
@@ -22807,6 +22963,16 @@ end
 UI.WorldVisualGuard=WorldVisualGuard
 
 local animationSection = visualsPage:CreateSection({Name="Animation Preview",Side="Left",Size=350})
+
+local cursorSection = visualsPage:CreateSection({Name="Cursor Customization",Side="Right",Size=300})
+visualColor(cursorSection,"cursor_color",nil,"Cursor Color",function() CursorManager.Color = Color3.fromRGB(getgenv().__DevKageConfig.cursor_color[1], getgenv().__DevKageConfig.cursor_color[2], getgenv().__DevKageConfig.cursor_color[3]) end)
+visualSlider(cursorSection,"cursor_brightness",nil,"Cursor Brightness",0,1,1,"",function() CursorManager.Brightness = getgenv().__DevKageConfig.cursor_brightness end)
+visualSlider(cursorSection,"cursor_line_thickness",nil,"Line Thickness",1,10,3,"",function() CursorManager.LineThickness = getgenv().__DevKageConfig.cursor_line_thickness end)
+visualSlider(cursorSection,"cursor_line_length",nil,"Line Length",10,50,25,"",function() CursorManager.LineLength = getgenv().__DevKageConfig.cursor_line_length end)
+visualSlider(cursorSection,"cursor_rot_speed",nil,"Rotation Speed",0,2,0.8,"",function() CursorManager.RotationSpeed = getgenv().__DevKageConfig.cursor_rot_speed end)
+visualSlider(cursorSection,"cursor_pulse_speed",nil,"Pulse Speed",0,5,2.5,"",function() CursorManager.PulseSpeed = getgenv().__DevKageConfig.cursor_pulse_speed end)
+visualToggle(cursorSection,"cursor_enabled","Enable Custom Cursor",function() CursorManager.Enabled = getgenv().__DevKageConfig.cursor_enabled end)
+
 VisualControls.animation_id = animationSection:CreateInput({Name="Animation ID",Placeholder="123456789",Default=tostring(VisualsState.animation_id or ""):match("%d+") or "",Numeric=true,DigitsOnly=true,MaxLength=20,Flag="visuals.animation_id",Callback=function(v) VisualsState.animation_id=tostring(v or ""):gsub("%D","") end})
 visualSlider(animationSection,"animation_speed","Animation Speed",0.05,5,2,"x",function(v)
 if UI.ESPAnimationTrack then pcall(function() UI.ESPAnimationTrack:AdjustSpeed(v) end) end
