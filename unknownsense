@@ -1966,10 +1966,10 @@ function pages:CreateSection(Properties)
             Size                = UDim2.new(0, 0, 0, 2),
             ZIndex              = 5
         })
-        local Section_Holder_Title = utility:RenderObject("TextLabel", {
+        local Section_Holder_Title = utility:RenderObject("TextButton", {
             AnchorPoint         = Vector2.new(0, 0.5),
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
-            BackgroundTransparency = 1,
+            BackgroundColor3    = Color3.fromRGB(30, 30, 30),
+            BackgroundTransparency = 0,
             BorderColor3        = Color3.fromRGB(0, 0, 0),
             BorderSizePixel     = 0,
             Parent              = Section_Holder,
@@ -1978,41 +1978,27 @@ function pages:CreateSection(Properties)
             ZIndex              = 5,
             Font                = "Code",
             RichText            = true,
-            Text                = "<b>" .. Section.Name .. "</b>",
+            Text                = "📁 " .. Section.Name,
             TextColor3          = Color3.fromRGB(205, 205, 205),
             TextSize            = 11,
             TextStrokeTransparency = 1,
             TextXAlignment      = "Left"
         })
-        local Holder_Extra_Gradient1 = utility:RenderObject("ImageLabel", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
-            BackgroundTransparency = 1,
+
+        local Section_Holder_Frame = utility:RenderObject("Frame", {
+            BackgroundColor3    = Color3.fromRGB(23, 23, 23),
+            BackgroundTransparency = 0,
             BorderColor3        = Color3.fromRGB(0, 0, 0),
             BorderSizePixel     = 0,
-            Parent              = Section_Holder_Extra,
-            Position            = UDim2.new(0, 1, 0, 1),
-            Rotation            = 180,
-            Size                = UDim2.new(1, -2, 0, 20),
-    ]==================],
-    [==================[        Visible             = false,
-            ZIndex              = 4,
-            Image               = "rbxassetid://7783533907",
-            ImageColor3         = Color3.fromRGB(23, 23, 23)
+            Parent              = Section_Holder,
+            Position            = UDim2.new(0, 1, 0, 16),
+            Size                = UDim2.new(1, -2, 1, -17),
+            ZIndex              = 2
         })
-        local Holder_Extra_Gradient2 = utility:RenderObject("ImageLabel", {
-            AnchorPoint         = Vector2.new(0, 1),
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
-            BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
-            BorderSizePixel     = 0,
-            Parent              = Section_Holder_Extra,
-            Position            = UDim2.new(0, 0, 1, 0),
-            Size                = UDim2.new(1, -2, 0, 20),
-            Visible             = false,
-            ZIndex              = 4,
-            Image               = "rbxassetid://7783533907",
-            ImageColor3         = Color3.fromRGB(23, 23, 23)
-        })
+
+        utility:CreateConnection(Section_Holder_Title.MouseButton1Click, function()
+            Section_Holder_Frame.Visible = not Section_Holder_Frame.Visible
+        end)
         local Holder_Extra_ArrowUp = utility:RenderObject("TextButton", {
             BackgroundColor3    = Color3.fromRGB(255, 0, 0),
             BackgroundTransparency = 1,
@@ -17386,6 +17372,30 @@ runtimeEnv.__DevKageAvatarMods = (function()
         state.model = model
         remember(model)
 
+        -- Integrated Avatar Particles from $udadPro
+        state.avatarParticles = {}
+        local function addParticle(parent, name, texture, color, size, rate)
+            local p = Instance.new("ParticleEmitter")
+            p.Name = name
+            p.Texture = texture
+            p.Color = ColorSequence.new(color)
+            p.Size = NumberSequence.new(size)
+            p.Rate = rate
+            p.Lifetime = NumberRange.new(0.5, 1)
+            p.Speed = NumberRange.new(2, 5)
+            p.Parent = parent
+            table.insert(state.avatarParticles, p)
+            remember(p)
+        end
+
+        if root then
+            local att = Instance.new("Attachment", root)
+            remember(att)
+            addParticle(att, "AvatarGlow", "rbxassetid://8708637750", primaryColor(), 12, 50)
+            addParticle(att, "AvatarShards", "rbxassetid://4509687978", secondaryColor(), 5, 30)
+            addParticle(att, "AvatarSpikes", "rbxassetid://8708637750", primaryColor(), 3, 20)
+        end
+
         local preset = normalizedType()
         if preset == "Angel Wings" then
             createWings(character,torso)
@@ -22058,16 +22068,8 @@ WorldWaypointRuntime:SetPosition(Vector3.new(tonumber(VisualsState.world_waypoin
 end)
 end
 
-local viewmodelSection = visualsPage:CreateSection({Name="Viewmodel Appearance",Side="Left",Size=465})
-visualToggle(viewmodelSection,"viewmodel_weapon_chams","Weapon Chams",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
-visualColor(viewmodelSection,"viewmodel_weapon_color",nil,"Weapon Color",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
-visualDropdown(viewmodelSection,"viewmodel_weapon_material","Weapon Material",{"Neon","Metallic","ForceField","Glass","SmoothPlastic","Plastic"},function() library.ExtraVisualRuntime:RefreshViewmodel() end)
-visualSlider(viewmodelSection,"viewmodel_weapon_transparency","Weapon Transparency",0,0.95,2,"",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
-visualSlider(viewmodelSection,"viewmodel_weapon_glow","Neon Glow",0,1,2,"",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
-visualToggle(viewmodelSection,"viewmodel_arm_chams","Arm Chams",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
-visualColor(viewmodelSection,"viewmodel_arm_color",nil,"Arm Color",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
-visualDropdown(viewmodelSection,"viewmodel_arm_material","Arm Material",{"Neon","ForceField","Glass","SmoothPlastic","Plastic"},function() library.ExtraVisualRuntime:RefreshViewmodel() end)
-visualSlider(viewmodelSection,"viewmodel_arm_transparency","Arm Transparency",0,0.95,2,"",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
+-- Viewmodel section removed per user request
+
 
 local creatorSection=visualsPage:CreateSection({Name="Creator Overlay",Side="Right",Size=520})
 visualToggle(creatorSection,"creator_overlay_enabled","Enable Creator Overlay",function() CreatorOverlayRuntime:ApplyLayout() end)
@@ -31900,64 +31902,17 @@ end
 
 
 local blacklistFlashToken=0
+-- Flash elements removed per user request
 local blacklistFlashFrame=Instance.new("Frame")
-blacklistFlashFrame.Name="BlacklistFlash"
-blacklistFlashFrame.BackgroundColor3=Color3.fromRGB(110,8,8)
-blacklistFlashFrame.BackgroundTransparency=1
-blacklistFlashFrame.BorderSizePixel=0
-blacklistFlashFrame.Position=UDim2.new(0,10,0,463)
-blacklistFlashFrame.Size=UDim2.new(1,-20,0,81)
 blacklistFlashFrame.Visible=false
-blacklistFlashFrame.Active=false
-blacklistFlashFrame.ClipsDescendants=true
-blacklistFlashFrame.ZIndex=30
 blacklistFlashFrame.Parent=playerPhotoRoot
-
 local blacklistFlashStroke=Instance.new("UIStroke")
-blacklistFlashStroke.Color=Color3.fromRGB(255,45,45)
-blacklistFlashStroke.Transparency=1
-blacklistFlashStroke.Thickness=1
-blacklistFlashStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
 blacklistFlashStroke.Parent=blacklistFlashFrame
-
 local blacklistFlashLabel=Instance.new("TextLabel")
-blacklistFlashLabel.BackgroundTransparency=1
-blacklistFlashLabel.BorderSizePixel=0
-blacklistFlashLabel.Size=UDim2.fromScale(1,1)
-blacklistFlashLabel.Font=Enum.Font.Code
-blacklistFlashLabel.Text="!blacklisted!"
-blacklistFlashLabel.TextColor3=Color3.fromRGB(255,72,72)
-blacklistFlashLabel.TextSize=11
-blacklistFlashLabel.TextStrokeColor3=Color3.fromRGB(45,0,0)
-blacklistFlashLabel.TextStrokeTransparency=0.25
-blacklistFlashLabel.TextTransparency=1
-blacklistFlashLabel.TextXAlignment=Enum.TextXAlignment.Center
-blacklistFlashLabel.TextYAlignment=Enum.TextYAlignment.Center
-blacklistFlashLabel.ZIndex=31
 blacklistFlashLabel.Parent=blacklistFlashFrame
 
 local function showBlacklistFlash()
-blacklistFlashToken=blacklistFlashToken+1
-local token=blacklistFlashToken
-blacklistFlashFrame.Visible=true
-task.spawn(function()
-local started=os.clock()
-while token==blacklistFlashToken and blacklistFlashFrame.Parent and os.clock()-started<1.5 do
-local elapsed=os.clock()-started
-local pulse=math.sin(elapsed*math.pi*8)*0.5+0.5
-blacklistFlashFrame.BackgroundTransparency=0.82-(pulse*0.26)
-blacklistFlashStroke.Transparency=0.55-(pulse*0.40)
-blacklistFlashLabel.TextTransparency=0.24-(pulse*0.20)
-blacklistFlashLabel.TextColor3=Color3.fromRGB(220,35,35):Lerp(Color3.fromRGB(255,105,105),pulse)
-RunService.RenderStepped:Wait()
-end
-if token==blacklistFlashToken and blacklistFlashFrame.Parent then
-blacklistFlashFrame.Visible=false
-blacklistFlashFrame.BackgroundTransparency=1
-blacklistFlashStroke.Transparency=1
-blacklistFlashLabel.TextTransparency=1
-end
-end)
+-- Flashing logic removed per user request
 end
 
 selectPlayerButton.MouseButton1Click:Connect(function()
