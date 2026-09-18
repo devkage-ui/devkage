@@ -1,5 +1,5 @@
 local __DEVKAGE_EMBEDDED_SOURCE = table.concat({
-    [==================[
+    
 
 
 
@@ -1933,544 +1933,54 @@ local cursorTime = 0
 local cursorRotation = 0
 
 local function createCursorElement(parent, name, size, pos, color, isGlow)
-    local frame = Instance.new("Frame")
-    frame.Name = name
-    frame.Size = size
-    frame.Position = pos
-    frame.BackgroundColor3 = color
-    frame.BorderSizePixel = 0
-    frame.ZIndex = isGlow and 4 or 5
-    frame.Parent = parent
-    return frame
+	local frame = Instance.new("Frame")
+	frame.Name = name
+	frame.Size = size
+	frame.Position = pos
+	frame.BackgroundColor3 = color
+	frame.BorderSizePixel = 0
+	frame.ZIndex = isGlow and 4 or 5
+	frame.BackgroundTransparency = isGlow and 0.5 or 0
+	frame.Parent = parent
+	return frame
 end
+
 
 local function setupCursor()
-    if cursorGui then cursorGui:Destroy() end
-    cursorGui = Instance.new("ScreenGui")
-    cursorGui.Name = "DevKageCursorGUI"
-    cursorGui.ResetOnSpawn = false
-    cursorGui.Parent = game:GetService("CoreGui")
+	if cursorGui then cursorGui:Destroy() end
+	cursorGui = Instance.new("ScreenGui")
+	cursorGui.Name = "DevKageCursorGUI"
+	cursorGui.ResetOnSpawn = false
+	cursorGui.Parent = game:GetService("CoreGui")
 
-    cursorContainer = Instance.new("Frame")
-    cursorContainer.BackgroundTransparency = 1
-    cursorContainer.Size = UDim2.new(0, 100, 0, 100)
-    cursorContainer.AnchorPoint = Vector2.new(0.5, 0.5)
-    cursorContainer.Parent = cursorGui
+	cursorContainer = Instance.new("Frame")
+	cursorContainer.BackgroundTransparency = 1
+	cursorContainer.Size = UDim2.new(0, 100, 0, 100)
+	cursorContainer.AnchorPoint = Vector2.new(0.5, 0.5)
+	cursorContainer.Parent = cursorGui
 
-    cursorLines.top = createCursorElement(cursorContainer, "Top", UDim2.new(0, CursorState.LineThickness, 0, CursorState.LineLength), UDim2.new(0.5, -CursorState.LineThickness/2, 0.5, -CursorState.LineLength/2), CursorState.Color, false)
-    cursorLines.bottom = createCursorElement(cursorContainer, "Bottom", UDim2.new(0, CursorState.LineThickness, 0, CursorState.LineLength), UDim2.new(0.5, -CursorState.LineThickness/2, 0.5, CursorState.LineLength/2), CursorState.Color, false)
-    cursorLines.left = createCursorElement(cursorContainer, "Left", UDim2.new(0, CursorState.LineLength, 0, CursorState.LineThickness), UDim2.new(0.5, -CursorState.LineLength/2, 0.5, -CursorState.LineThickness/2), CursorState.Color, false)
-    cursorLines.right = createCursorElement(cursorContainer, "Right", UDim2.new(0, CursorState.LineLength, 0, CursorState.LineThickness), UDim2.new(0.5, CursorState.LineLength/2, 0.5, -CursorState.LineThickness/2), CursorState.Color, false)
+	-- Main Lines
+	cursorLines.top = createCursorElement(cursorContainer, "Top", UDim2.new(0, CursorState.LineThickness, 0, CursorState.LineLength), UDim2.new(0.5, -CursorState.LineThickness/2, 0.5, -CursorState.LineLength/2), CursorState.Color, false)
+	cursorLines.bottom = createCursorElement(cursorContainer, "Bottom", UDim2.new(0, CursorState.LineThickness, 0, CursorState.LineLength), UDim2.new(0.5, -CursorState.LineThickness/2, 0.5, CursorState.LineLength/2), CursorState.Color, false)
+	cursorLines.left = createCursorElement(cursorContainer, "Left", UDim2.new(0, CursorState.LineLength, 0, CursorState.LineThickness), UDim2.new(0.5, -CursorState.LineLength/2, 0.5, -CursorState.LineThickness/2), CursorState.Color, false)
+	cursorLines.right = createCursorElement(cursorContainer, "Right", UDim2.new(0, CursorState.LineLength, 0, CursorState.LineThickness), UDim2.new(0.5, CursorState.LineLength/2, 0.5, -CursorState.LineThickness/2), CursorState.Color, false)
 
-    cursorText = Instance.new("TextLabel")
-    cursorText.Text = CursorState.Text
-    cursorText.TextColor3 = CursorState.Color
-    cursorText.Font = Enum.Font.Code
-    cursorText.TextSize = 14
-    cursorText.BackgroundTransparency = 1
-    cursorText.Size = UDim2.new(0, 100, 0, 20)
-    cursorText.ZIndex = 10
-    cursorText.Parent = cursorGui
+	-- End Caps (The "Tiktac Toe" look)
+	cursorLines.topCap = createCursorElement(cursorContainer, "TopCap", UDim2.new(0, CursorState.LineLength * 0.2, 0, CursorState.LineThickness), UDim2.new(0.5, -CursorState.LineLength * 0.1, 0.5, -CursorState.LineLength/2 - CursorState.LineThickness/2), CursorState.Color, false)
+	cursorLines.bottomCap = createCursorElement(cursorContainer, "BottomCap", UDim2.new(0, CursorState.LineLength * 0.2, 0, CursorState.LineThickness), UDim2.new(0.5, -CursorState.LineLength * 0.1, 0.5, CursorState.LineLength/2), CursorState.Color, false)
+	cursorLines.leftCap = createCursorElement(cursorContainer, "LeftCap", UDim2.new(0, CursorState.LineThickness, 0, CursorState.LineLength * 0.2), UDim2.new(0.5, -CursorState.LineLength/2 - CursorState.LineThickness/2, 0.5, -CursorState.LineLength * 0.1), CursorState.Color, false)
+	cursorLines.rightCap = createCursorElement(cursorContainer, "RightCap", UDim2.new(0, CursorState.LineThickness, 0, CursorState.LineLength * 0.2), UDim2.new(0.5, CursorState.LineLength/2, 0.5, -CursorState.LineLength * 0.1), CursorState.Color, false)
+
+	cursorText = Instance.new("TextLabel")
+	cursorText.Text = CursorState.Text
+	cursorText.TextColor3 = CursorState.Color
+	cursorText.Font = Enum.Font.Code
+	cursorText.TextSize = 14
+	cursorText.BackgroundTransparency = 1
+	cursorText.Size = UDim2.new(0, 100, 0, 20)
+	cursorText.ZIndex = 10
+	cursorText.Parent = cursorGui
 end
-
-local function updateCursor(dt)
-    if not CursorState.Enabled or not library.Window.Enabled then
-        if cursorGui then cursorGui.Enabled = false end
-        return
-    end
-    if not cursorGui then setupCursor() end
-    cursorGui.Enabled = true
-
-    local mouse = game:GetService("Players").LocalPlayer:GetMouse()
-    cursorTime = cursorTime + dt
-    cursorContainer.Position = UDim2.new(0, mouse.X, 0, mouse.Y)
-    cursorText.Position = UDim2.new(0, mouse.X - 50, 0, mouse.Y + 20)
-
-    cursorRotation = cursorRotation + (CursorState.RotationSpeed * dt * 50)
-    cursorContainer.Rotation = cursorRotation
-
-    local pulse = math.sin(cursorTime * CursorState.PulseSpeed) * 0.1 + 0.9
-    local currentLen = CursorState.LineLength * pulse
-
-    cursorLines.top.Size = UDim2.new(0, CursorState.LineThickness, 0, currentLen)
-    cursorLines.top.Position = UDim2.new(0.5, -CursorState.LineThickness/2, 0.5, -currentLen/2)
-    cursorLines.bottom.Size = UDim2.new(0, CursorState.LineThickness, 0, currentLen)
-    cursorLines.bottom.Position = UDim2.new(0.5, -CursorState.LineThickness/2, 0.5, currentLen/2)
-    cursorLines.left.Size = UDim2.new(0, currentLen, 0, CursorState.LineThickness)
-    cursorLines.left.Position = UDim2.new(0.5, -currentLen/2, 0.5, -CursorState.LineThickness/2)
-    cursorLines.right.Size = UDim2.new(0, currentLen, 0, CursorState.LineThickness)
-    cursorLines.right.Position = UDim2.new(0.5, currentLen/2, 0.5, -CursorState.LineThickness/2)
-
-    local color = CursorState.Color
-    for _, line in pairs(cursorLines) do
-        line.BackgroundColor3 = color
-        line.BackgroundTransparency = 1 - (CursorState.Brightness * 0.7)
-    end
-    cursorText.TextColor3 = color
-end
-
-game:GetService("RunService").RenderStepped:Connect(updateCursor)
-
-
-game:GetService("RunService").RenderStepped:Connect(updateCursor)
-
-
-function pages:CreateSection(Properties)
-    Properties = Properties or {}
-    local Section = {
-        Name    = (Properties.name or Properties.Name or Properties.title or Properties.Title or "New Section"),
-        Size    = (Properties.size or Properties.Size or 150),
-        Side    = (Properties.side or Properties.Side or "Left"),
-        Content = {},
-        Window  = self.Window,
-        Page    = self
-    }
-    do
-        local Section_Holder = utility:RenderObject("Frame", {
-            BackgroundColor3    = Color3.fromRGB(40, 40, 40),
-            BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(12, 12, 12),
-            BorderMode          = "Inset",
-            BorderSizePixel     = 1,
-            Parent              = Section.Page[Section.Side],
-            Size                = UDim2.new(1, 0, 0, Section.Size),
-            ZIndex              = 2
-        })
-        local Section_Holder_Extra = utility:RenderObject("Frame", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
-            BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
-            BorderSizePixel     = 0,
-            Parent              = Section_Holder,
-            Position            = UDim2.new(0, 1, 0, 1),
-            Size                = UDim2.new(1, -2, 1, -2),
-            ZIndex              = 2
-        })
-        local Section_Holder_TitleInline = utility:RenderObject("Frame", {
-            BackgroundColor3    = Color3.fromRGB(23, 23, 23),
-            BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
-            BorderSizePixel     = 0,
-            Parent              = Section_Holder,
-            Position            = UDim2.new(0, 9, 0, -1),
-            Size                = UDim2.new(0, 0, 0, 2),
-            ZIndex              = 5
-        })
-        local Section_Holder_Title = utility:RenderObject("TextButton", {
-            AnchorPoint         = Vector2.new(0, 0.5),
-            BackgroundColor3    = Color3.fromRGB(30, 30, 30),
-            BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
-            BorderSizePixel     = 0,
-            Parent              = Section_Holder,
-            Position            = UDim2.new(0, 12, 0, 0),
-            Size                = UDim2.new(1, -26, 0, 15),
-            ZIndex              = 5,
-            Font                = "Code",
-            RichText            = true,
-            Text                = Section.Name,
-            TextColor3          = Color3.fromRGB(205, 205, 205),
-            TextSize            = 11,
-            TextStrokeTransparency = 1,
-            TextXAlignment      = "Left"
-        })
-
-        local Section_Holder_Frame = utility:RenderObject("Frame", {
-            BackgroundColor3    = Color3.fromRGB(23, 23, 23),
-            BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
-            BorderSizePixel     = 0,
-            Parent              = Section_Holder,
-            Position            = UDim2.new(0, 1, 0, 16),
-            Size                = UDim2.new(1, -2, 1, -17),
-            ZIndex              = 2
-        })
-
-        utility:CreateConnection(Section_Holder_Title.MouseButton1Click, function()
-            Section_Holder_Frame.Visible = not Section_Holder_Frame.Visible
-        end)
-        local Holder_Extra_ArrowUp = utility:RenderObject("TextButton", {
-            BackgroundColor3    = Color3.fromRGB(255, 0, 0),
-            BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
-            BorderSizePixel     = 0,
-            Parent              = Section_Holder_Extra,
-            Position            = UDim2.new(1, -21, 0, 0),
-            Size                = UDim2.new(0, 15, 0, 14),
-            Text                = "",
-            TextTransparency    = 1,
-            Visible             = false,
-            ZIndex              = 4
-        })
-        local Holder_Extra_ArrowDown = utility:RenderObject("TextButton", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
-            BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
-            BorderSizePixel     = 0,
-            Parent              = Section_Holder_Extra,
-            Position            = UDim2.new(1, -21, 1, -14),
-            Size                = UDim2.new(0, 15, 0, 14),
-            Text                = "",
-            TextTransparency    = 1,
-            Visible             = false,
-            ZIndex              = 4
-        })
-        utility:RenderObject("ImageLabel", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
-            BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
-            BorderSizePixel     = 0,
-            Parent              = Holder_Extra_ArrowUp,
-            Position            = UDim2.new(0, 4, 0, 4),
-            Size                = UDim2.new(0, 7, 0, 6),
-            Visible             = true,
-            ZIndex              = 4,
-            Image               = "rbxassetid://8548757311",
-            ImageColor3         = Color3.fromRGB(205, 205, 205)
-        })
-        utility:RenderObject("ImageLabel", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
-            BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
-            BorderSizePixel     = 0,
-            Parent              = Holder_Extra_ArrowDown,
-            Position            = UDim2.new(0, 4, 0, 4),
-            Size                = UDim2.new(0, 7, 0, 6),
-            Visible             = true,
-            ZIndex              = 4,
-            Image               = "rbxassetid://8548723563",
-            ImageColor3         = Color3.fromRGB(205, 205, 205)
-        })
-        local Holder_Extra_Bar = utility:RenderObject("Frame", {
-            AnchorPoint         = Vector2.new(1, 0),
-            BackgroundColor3    = Color3.fromRGB(45, 45, 45),
-            BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
-            BorderSizePixel     = 0,
-            Parent              = Section_Holder_Extra,
-            Position            = UDim2.new(1, 0, 0, 0),
-            Size                = UDim2.new(0, 6, 1, 0),
-            Visible             = false,
-            ZIndex              = 4
-        })
-        utility:RenderObject("Frame", {
-            BackgroundColor3    = Color3.fromRGB(45, 45, 45),
-            BackgroundTransparency = 0,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
-            BorderSizePixel     = 0,
-            Parent              = Section_Holder_Extra,
-            Position            = UDim2.new(0, 0, 0, -1),
-            Size                = UDim2.new(1, 0, 0, 1),
-            ZIndex              = 4
-        })
-        local Holder_Frame_ContentHolder = utility:RenderObject("ScrollingFrame", {
-            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
-            BackgroundTransparency = 1,
-            BorderColor3        = Color3.fromRGB(0, 0, 0),
-            BorderSizePixel     = 0,
-            Parent              = Section_Holder_Frame,
-            Position            = UDim2.new(0, 0, 0, 0),
-            Size                = UDim2.new(1, 0, 1, 0),
-            ZIndex              = 4,
-            AutomaticCanvasSize = "Y",
-            BottomImage         = "rbxassetid://7783554086",
-            CanvasSize          = UDim2.new(0, 0, 0, 0),
-            MidImage            = "rbxassetid://7783554086",
-            ScrollBarImageColor3= Color3.fromRGB(65, 65, 65),
-            ScrollBarImageTransparency = 0,
-            ScrollBarThickness  = 5,
-            TopImage            = "rbxassetid://7783554086",
-            VerticalScrollBarInset = "None"
-        })
-        utility:RenderObject("UIListLayout", {
-            Padding             = UDim.new(0, 0),
-            Parent              = Holder_Frame_ContentHolder,
-            FillDirection       = "Vertical",
-            HorizontalAlignment = "Center",
-            VerticalAlignment   = "Top"
-        })
-        utility:RenderObject("UIPadding", {
-            Parent         = Holder_Frame_ContentHolder,
-            PaddingTop     = UDim.new(0, 15),
-            PaddingBottom  = UDim.new(0, 15)
-        })
-
-        Section_Holder_TitleInline.Size = UDim2.new(0, Section_Holder_Title.TextBounds.X + 6, 0, 2)
-
-        Section["Holder"] = Holder_Frame_ContentHolder
-        Section["Extra"]  = Section_Holder_Extra
-        Section["Root"]   = Section_Holder
-        Section["Frame"]  = Section_Holder_Frame
-        Section["Title"]  = Section_Holder_Title
-
-        function Section:CloseContent()
-            if Section.Content.Open then
-                Section.Content:Close()
-                Section.Content = {}
-            end
-        end
-
-        utility:CreateConnection(Holder_Frame_ContentHolder:GetPropertyChangedSignal("AbsoluteCanvasSize"), function()
-            local overflow = Holder_Frame_ContentHolder.AbsoluteCanvasSize.Y > Holder_Frame_ContentHolder.AbsoluteWindowSize.Y
-            Holder_Extra_Gradient1.Visible = overflow
-            Holder_Extra_Gradient2.Visible = overflow
-            Holder_Extra_Bar.Visible        = overflow
-            if overflow then
-                Holder_Extra_ArrowUp.Visible   = Holder_Frame_ContentHolder.CanvasPosition.Y > 5
-                Holder_Extra_ArrowDown.Visible = Holder_Frame_ContentHolder.CanvasPosition.Y + 5 < (Holder_Frame_ContentHolder.AbsoluteCanvasSize.Y - Holder_Frame_ContentHolder.AbsoluteSize.Y)
-            end
-        end)
-        utility:CreateConnection(Holder_Frame_ContentHolder:GetPropertyChangedSignal("CanvasPosition"), function()
-            if Section.Content.Open then
-                Section.Content:Close()
-                Section.Content = {}
-            end
-            Holder_Extra_ArrowUp.Visible   = Holder_Frame_ContentHolder.CanvasPosition.Y > 1
-            Holder_Extra_ArrowDown.Visible = Holder_Frame_ContentHolder.CanvasPosition.Y + 1 < (Holder_Frame_ContentHolder.AbsoluteCanvasSize.Y - Holder_Frame_ContentHolder.AbsoluteSize.Y)
-        end)
-        utility:CreateConnection(Holder_Extra_ArrowUp.MouseButton1Click, function()
-            Holder_Frame_ContentHolder.CanvasPosition = Vector2.new(0, math.clamp(Holder_Frame_ContentHolder.CanvasPosition.Y - 10, 0, Holder_Frame_ContentHolder.AbsoluteCanvasSize.Y - Holder_Frame_ContentHolder.AbsoluteSize.Y))
-        end)
-        utility:CreateConnection(Holder_Extra_ArrowDown.MouseButton1Click, function()
-            Holder_Frame_ContentHolder.CanvasPosition = Vector2.new(0, math.clamp(Holder_Frame_ContentHolder.CanvasPosition.Y + 10, 0, Holder_Frame_ContentHolder.AbsoluteCanvasSize.Y - Holder_Frame_ContentHolder.AbsoluteSize.Y))
-        end)
-    end
-    return setmetatable(Section, sections)
-end
-
-
-library.KeybindManager = library.KeybindManager or {
-    Controls = {},
-    Order = {},
-    Counter = 0,
-    Overlay = nil,
-    ActiveFrame = nil,
-    ActiveList = nil,
-    Menu = nil,
-    MenuTitle = nil,
-    MenuButtons = {},
-    MenuKeyButton = nil,
-    MenuControl = nil,
-    CaptureControl = nil,
-    InputReady = false,
-    CleanupReady = false,
-    ModAlertFrame = nil,
-    ModAlertLabel = nil,
-    ModAlertStroke = nil,
-    ModAlertActive = false,
-    ModAlertFlashConnection = nil,
-    ModAlertExpiresAt = 0,
-    HackerAlertFrame = nil,
-    HackerAlertLabel = nil,
-    HackerAlertStroke = nil,
-    HackerAlertActive = false,
-    HackerAlertFlashConnection = nil,
-    HackerAlertExpiresAt = 0,
-    StartupBatch = true,
-    RefreshPending = false,
-    RainbowBars = {},
-}
-
-local BindManager = library.KeybindManager
-local BindShortNames = {
-    MouseButton1 = "M1", MouseButton2 = "M2", MouseButton3 = "M3",
-    LeftShift = "LS", RightShift = "RS", LeftControl = "LC", RightControl = "RC",
-    LeftAlt = "LA", RightAlt = "RA", CapsLock = "CAPS", Backspace = "BKSP",
-    Return = "ENTER", Space = "SPACE", Insert = "INS", Delete = "DEL",
-    PageUp = "PGUP", PageDown = "PGDN",
-}
-
-local function bindRainbowBar(parent, zindex)
-
-    local holder = Instance.new("Frame")
-    holder.Name = "RainbowTopBarShadow"
-    holder.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
-    holder.BorderSizePixel = 0
-    holder.Position = UDim2.new(0, 0, 0, 0)
-    holder.Size = UDim2.new(1, 0, 0, 4)
-    holder.ZIndex = zindex - 1
-    holder.Parent = parent
-
-    local bar = Instance.new("ImageLabel")
-    bar.Name = "RainbowTopBar"
-    bar.BackgroundTransparency = 1
-    bar.BorderSizePixel = 0
-    bar.Position = UDim2.new(0, 1, 0, 1)
-    bar.Size = UDim2.new(1, -2, 1, -2)
-    bar.Image = "rbxassetid://8508019876"
-    bar.ImageColor3 = library.Theme.KeybindTopBar or library.Theme.TopBar
-    bar.ImageTransparency = math.clamp(
-        tonumber(library.Theme.KeybindTopBarTransparency)
-            or tonumber(library.Theme.TopBarTransparency)
-            or 0,
-        0,
-        1
-    )
-    bar.ZIndex = zindex
-    bar.Parent = holder
-    BindManager.RainbowBars = BindManager.RainbowBars or {}
-    BindManager.RainbowBars[#BindManager.RainbowBars + 1] = bar
-    return bar
-end
-
-function BindManager:KeyText(binding)
-    if type(binding) ~= "table" or not binding[1] or not binding[2] then return "-" end
-    return BindShortNames[binding[2]] or tostring(binding[2]):upper()
-end
-
-function BindManager:InputBinding(input)
-    if input.KeyCode and input.KeyCode ~= Enum.KeyCode.Unknown then
-        return {"KeyCode", input.KeyCode.Name}
-    end
-    local inputType = input.UserInputType
-    if inputType == Enum.UserInputType.MouseButton1
-        or inputType == Enum.UserInputType.MouseButton2
-        or inputType == Enum.UserInputType.MouseButton3 then
-        return {"UserInputType", inputType.Name}
-    end
-    return nil
-end
-
-function BindManager:Matches(binding, input)
-    if type(binding) ~= "table" or not binding[1] or not binding[2] then return false end
-    if binding[1] == "KeyCode" then
-        return input.KeyCode and input.KeyCode.Name == binding[2]
-    elseif binding[1] == "UserInputType" then
-        return input.UserInputType and input.UserInputType.Name == binding[2]
-    end
-    return false
-end
-
-function BindManager:EnsureUI(window)
-    if self.Overlay and self.Overlay.Parent then return end
-
-    local overlay = Instance.new("ScreenGui")
-    overlay.Name = "DevKage_KeybindOverlay"
-    overlay.DisplayOrder = 10050
-    overlay.IgnoreGuiInset = true
-    overlay.ResetOnSpawn = false
-    overlay.ZIndexBehavior = Enum.ZIndexBehavior.Global
-    overlay.Parent = cre
-    self.Overlay = overlay
-
-    local active = Instance.new("Frame")
-    active.Name = "ActiveKeybinds"
-    active.AnchorPoint = Vector2.new(0, 0.5)
-    active.Position = UDim2.new(0, 14, 0.5, 0)
-    active.Size = UDim2.new(0, math.clamp(tonumber(library.Theme.KeybindWidth) or 220, 150, 340), 0, 31)
-    active.AutomaticSize = Enum.AutomaticSize.None
-    active.BackgroundColor3 = library.Theme.KeybindColor or Color3.fromRGB(18, 18, 18)
-    active.BackgroundTransparency = math.clamp(tonumber(library.Theme.KeybindTransparency) or 0.12, 0, 0.95)
-    active.BorderColor3 = Color3.fromRGB(5, 5, 5)
-    active.BorderSizePixel = 1
-    active.Visible = false
-    active.ZIndex = 40000
-    active.Parent = overlay
-    self.ActiveFrame = active
-    bindRainbowBar(active, 40004)
-
-    local activeTitle = Instance.new("TextLabel")
-    activeTitle.BackgroundTransparency = 1
-    activeTitle.Position = UDim2.new(0, 6, 0, 4)
-    activeTitle.Size = UDim2.new(1, -12, 0, 17)
-    activeTitle.Font = Enum.Font.Code
-    activeTitle.TextSize = 11
-    activeTitle.TextColor3 = Color3.fromRGB(225, 225, 225)
-    activeTitle.TextXAlignment = Enum.TextXAlignment.Center
-    activeTitle.Text = "keybinds"
-    activeTitle.ZIndex = 40002
-    activeTitle.Parent = active
-
-    local divider = Instance.new("Frame")
-    divider.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    divider.BorderSizePixel = 0
-    divider.Position = UDim2.new(0, 5, 0, 23)
-    divider.Size = UDim2.new(1, -10, 0, 1)
-    divider.ZIndex = 40002
-    divider.Parent = active
-
-    local activeList = Instance.new("ScrollingFrame")
-    activeList.Name = "Entries"
-    activeList.BackgroundTransparency = 1
-    activeList.Position = UDim2.new(0, 6, 0, 26)
-    activeList.Size = UDim2.new(1, -12, 0, 0)
-    activeList.AutomaticSize = Enum.AutomaticSize.None
-    activeList.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    activeList.CanvasSize = UDim2.new()
-    activeList.ScrollBarThickness = 3
-    activeList.ScrollBarImageColor3 = Color3.fromRGB(110, 120, 95)
-    activeList.BorderSizePixel = 0
-    activeList.ScrollingDirection = Enum.ScrollingDirection.Y
-    activeList.ZIndex = 40001
-    activeList.Parent = active
-    self.ActiveList = activeList
-
-    local activeLayout = Instance.new("UIListLayout")
-    activeLayout.Padding = UDim.new(0, 0)
-    activeLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    activeLayout.Parent = activeList
-
-    local activePadding = Instance.new("UIPadding")
-    activePadding.PaddingBottom = UDim.new(0, 5)
-    activePadding.Parent = activeList
-
-    local modAlert = Instance.new("Frame")
-    modAlert.Name = "ModAlert"
-    modAlert.BackgroundColor3 = Color3.fromRGB(75, 10, 10)
-    modAlert.BorderSizePixel = 0
-    modAlert.Size = UDim2.new(1, 0, 0, 18)
-    modAlert.LayoutOrder = -100000
-    modAlert.Visible = false
-    modAlert.ZIndex = 40004
-    modAlert.Parent = activeList
-    self.ModAlertFrame = modAlert
-
-    local modAlertStroke = Instance.new("UIStroke")
-    modAlertStroke.Color = Color3.fromRGB(255, 35, 35)
-    modAlertStroke.Thickness = 1
-    modAlertStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    modAlertStroke.Parent = modAlert
-    self.ModAlertStroke = modAlertStroke
-
-    local modAlertLabel = Instance.new("TextLabel")
-    modAlertLabel.Name = "AlertText"
-    modAlertLabel.BackgroundTransparency = 1
-    modAlertLabel.Size = UDim2.fromScale(1, 1)
-    modAlertLabel.Font = Enum.Font.Code
-    modAlertLabel.Text = "!mod!"
-    modAlertLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
-    modAlertLabel.TextSize = 9
-    modAlertLabel.TextStrokeColor3 = Color3.fromRGB(40, 0, 0)
-    modAlertLabel.TextStrokeTransparency = 0.2
-    modAlertLabel.TextXAlignment = Enum.TextXAlignment.Center
-    modAlertLabel.ZIndex = 40005
-    modAlertLabel.Parent = modAlert
-    self.ModAlertLabel = modAlertLabel
-
-    if not self.ModAlertFlashConnection then
-        local modRunService = game:GetService("RunService")
-        self.ModAlertFlashConnection = utility:CreateConnection(modRunService.RenderStepped, function()
-            if self.ModAlertActive
-                and tonumber(self.ModAlertExpiresAt)
-                and self.ModAlertExpiresAt > 0
-                and os.clock() >= self.ModAlertExpiresAt then
-
-                self.ModAlertActive = false
-                self.ModAlertExpiresAt = 0
-                if self.ModAlertFrame then self.ModAlertFrame.Visible = false end
-                self:RefreshActive()
-                return
-            end
-
-            if not self.ModAlertActive or not self.ModAlertFrame or not self.ModAlertFrame.Parent then return end
-            local pulse = math.sin(os.clock() * 7) * 0.5 + 0.5
-            local dark = Color3.fromRGB(58, 5, 5)
-            local bright = Color3.fromRGB(120, 12, 12)
-            local textDark = Color3.fromRGB(220, 30, 30)
-            local textBright = Color3.fromRGB(255, 105, 105)
-            self.ModAlertFrame.BackgroundColor3 = dark:Lerp(bright, pulse)
-            if self.ModAlertLabel then self.ModAlertLabel.TextColor3 = textDark:Lerp(textBright, pulse) end
-            if self.ModAlertStroke then self.ModAlertStroke.Color = Color3.fromRGB(190, 20, 20):Lerp(Color3.fromRGB(255, 70, 70), pulse) end
         end)
         if type(MaskShard) == "table" and type(MaskShard.Connections) == "table" then
             MaskShard.Connections[#MaskShard.Connections + 1] = self.ModAlertFlashConnection
@@ -2642,8 +2152,7 @@ function BindManager:EnsureUI(window)
     clearButton.Size = UDim2.new(0.5, -10, 0, 28)
     clearButton.Font = Enum.Font.Code
     clearButton.TextSize = 9
-    clearButton.TextColor3 = Color3]==================],
-    [==================[.fromRGB(175, 175, 175)
+    clearButton.TextColor3 = Color3.fromRGB(175, 175, 175)
     clearButton.Text = "clear"
     clearButton.ZIndex = 50002
     clearButton.Parent = menu
@@ -3283,7 +2792,7 @@ function sections:CreateToggle(Properties)
             end)
             utility:CreateConnection(Content_BindValue.MouseButton1Click, function()
              ]==================],
-    [==================[   local manager = library and library.KeybindManager
+       local manager = library and library.KeybindManager
                 if manager then manager:BeginInlineCapture(Content) end
             end)
             utility:CreateConnection(Content_BindValue.MouseButton2Click, function()
@@ -3823,7 +3332,7 @@ function sections:CreateDropdown(Properties)
             AutoButtonColor = false,
             Active = true,
    ]==================],
-    [==================[         ZIndex = 30
+             ZIndex = 30
         })
 
         local popup = nil
@@ -4362,7 +3871,7 @@ function sections:CreateColorpicker(Properties)
             Color3.fromRGB(255,0,0),
             Color3.fromRGB(255,255,0),
 ]==================],
-    [==================[            Color3.fromRGB(0,255,0),
+                Color3.fromRGB(0,255,0),
             Color3.fromRGB(0,255,255),
             Color3.fromRGB(0,0,255),
             Color3.fromRGB(255,0,255),
@@ -4926,7 +4435,7 @@ local function ua_startExternalDetector()
                 if UA.CosmeticLibrary then
                     changed = changed
                         or (UA.ownsCosmeticWrapper and UA.CosmeticLibrary.OwnsCosmetic ~= UA.ownsCosmeticWrapp]==================],
-    [==================[er)
+    er)
                         or (UA.ownsNormallyWrapper and UA.CosmeticLibrary.OwnsCosmeticNormally ~= UA.ownsNormallyWrapper)
                         or (UA.ownsUniversalWrapper and UA.CosmeticLibrary.OwnsCosmeticUniversally ~= UA.ownsUniversalWrapper)
                         or (UA.ownsForWeaponWrapper and UA.CosmeticLibrary.OwnsCosmeticForWeapon ~= UA.ownsForWeaponWrapper)
@@ -5520,7 +5029,7 @@ local function ua_installEmoteController()
     -- It only augments the live table returned by whatever implementation is
     -- current after the protected script loads.
     if not UA.EmoteController then ret]==================],
-    [==================[urn end
+    urn end
     UA.emoteControllerInstalled = true
     ua_rebuildEmoteCatalog()
     ua_startEmoteSnapshotLoop()
@@ -6120,7 +5629,7 @@ streamerHudShowPing = true,
 streamerHudShowClock = true,
 streamerHudAccent = {175, 205, 75},
 streamerHudSecondary = {110, 165, 255]==================],
-    [==================[},
+    },
 streamerHudTextColor = {205, 205, 205},
 streamerHudBackgroundAlpha = 0.03,
 streamerHudScale = 1,
@@ -6699,7 +6208,7 @@ IsInfluencer=config.influencer==true,Influencer=config.influencer==true,
 IsRobloxEmployee=config.admin==true,IsAdmin=config.admin==true,Admin=config.admin==true
 }) do
 pcall(function() player:SetAttribute(attribute,val]==================],
-    [==================[ue) end)
+    ue) end)
 end
 end
 
@@ -7258,7 +6767,7 @@ do
     local environment=(type(getgenv)=="function" and getgenv()) or _G
     local previous=environment.__DevKageELOAutoLoadWatcher
    ]==================],
-    [==================[ if type(previous)=="table" and previous.Connection then
+     if type(previous)=="table" and previous.Connection then
         pcall(function() previous.Connection:Disconnect() end)
     end
 
@@ -7786,7 +7295,7 @@ function SpooferState.AvatarAssets.RepairAppearance(character, humanoid, templat
         object:SetAttribute("DevKageAvatarAsset", true)
     end
     if replaceClo]==================],
-    [==================[thing then
+    thing then
         for _, object in ipairs(originals) do if not kept[object] then object:Destroy() end end
     end
     local manifest = assets.Manifest(template)
@@ -8315,7 +7824,7 @@ local function installRecordingPrivacySpoof(player, data, config)
         elseif object:IsA("ViewportFrame") then
             task.defer(function()
                 if not privacy.Active or not object.Parent t]==================],
-    [==================[hen return end
+    hen return end
                 for _, child in ipairs(object:GetDescendants()) do
                     if child:IsA("Model") and isOriginalViewportModel(child) then
                         buildViewportProxy(child)
@@ -8808,7 +8317,7 @@ function SpooferState.ApplyAvatarIdOnly(userId)
     local function applyAvatarTick()
         if avatarToken ~= SpooferState.avatarOnlyToken then return end
         local cha]==================],
-    [==================[racter = LocalPlayer and LocalPlayer.Character
+    racter = LocalPlayer and LocalPlayer.Character
         local humanoid = character and character:FindFirstChildOfClass("Humanoid")
         if not character or not humanoid or humanoid.Health <= 0 or SpooferState.avatarApplyBusy then return end
         if tonumber(SpooferState.avatarOnlyUserId) ~= avatarUserId then return end
@@ -9469,7 +8978,7 @@ mod_detector_enabled          = false,
 hacker_detector_enabled       = false,
 hacker_speed_threshold        = 180,
 hacker_spe]==================],
-    [==================[ed_duration         = 0.75,
+    ed_duration         = 0.75,
 devkage_cursor_enabled             = true,
 devkage_cursor_profile             = "Custom",
 devkage_cursor_position_mode       = "Mouse",
@@ -10093,7 +9602,7 @@ function library.ExtraVisualRuntime:IsArmPart(part, model)
 
     local n = tostring(part.Name or ""):lower():gsub("[%s_%-]", "")
     for _, blocked in ipairs({"handguard"]==================],
-    [==================[,"handle","foregrip","charm","armor","hitbox","collision","trigger","proxy"}) do
+    ,"handle","foregrip","charm","armor","hitbox","collision","trigger","proxy"}) do
         if n:find(blocked, 1, true) then return false end
     end
 
@@ -10666,7 +10175,7 @@ end
 end
 
 VisualsState.skeletonRuntime = ]==================],
-    [==================[VisualsState.skeletonRuntime or {
+    VisualsState.skeletonRuntime or {
     Players = {},
     Supported = type(Drawing) == "table" and type(Drawing.new) == "function",
     Segments = {
@@ -11217,7 +10726,7 @@ function HighQualityESPRuntime:GetBounds(character,camera)
     for x=-1,1,2 do for y=-1,1,2 do for z=-1,1,2 do
         local world=cf:PointToWorldSpace(Vector3.new(half.X*x,half.Y*y,half.Z*z))
         local p=camera:Worl]==================],
-    [==================[dToViewportPoint(world)
+    dToViewportPoint(world)
         if p.Z>0.05 then
             count=count+1; minX=math.min(minX,p.X); maxX=math.max(maxX,p.X); minY=math.min(minY,p.Y); maxY=math.max(maxY,p.Y)
         end
@@ -11650,7 +11159,7 @@ object.labels.healthNumber.Visible = VisualsState.health_number
 object.labels.rank.Visible = VisualsState.rank
 object.labels.winstreak.Visible = VisualsState.winstreak
 object.l]==================],
-    [==================[abels.healthNumber.Text = VisualsState.health_number and string.format("%d HP", math.max(0, math.floor(humanoid.Health + 0.5))) or ""
+    abels.healthNumber.Text = VisualsState.health_number and string.format("%d HP", math.max(0, math.floor(humanoid.Health + 0.5))) or ""
 local rankText = VisualsState.rank and getRankText(player) or ""
 local streakText = VisualsState.winstreak and getWinstreakText(player) or ""
 object.labels.rank.Text = VisualsState.rank and (rankText ~= "" and ("Rank: " .. rankText) or "Rank: --") or ""
@@ -12151,7 +11660,7 @@ end
 ]======], "@DevKage/WorldAtmosphereRuntime"))()({
 LightingService=LightingService,
 Adva]==================],
-    [==================[ncedLighting=AdvancedLighting,
+    ncedLighting=AdvancedLighting,
 GetOrCreateEffect=getOrCreateEffect,
 })
 
@@ -12595,7 +12104,7 @@ return function(context)
             if roofCheck then cell.Blocked=occlusion and self:RoofAt(base,state) or false end
             local height=p.Profile.Height+(p.Profile.Rise and -1 or 1)*(cell.Layer-1)*6
             cell.Anchor.CFrame=CFrame.new(base+Vector3.]==================],
-    [==================[new(0,height,0))
+    new(0,height,0))
             cell.Emitter.Enabled=not cell.Blocked
             cell.Emitter.Rate=cell.Blocked and 0 or cell.BaseRate
             cell.Emitter.Acceleration=Vector3.new(p.Wind*0.14+gust*2,p.Profile.Acceleration,gust+p.Wind*0.025)
@@ -12933,7 +12442,7 @@ do
         lastRandom = nil, randomAngle = 0, lastDamageFlip = -math.huge,
         bindName = "DevKage_AntiAim_v3", bound = false, paused = false,
 ]==================],
-    [==================[    }
+        }
 end
 
 function AntiAimState.Number(key)
@@ -13388,7 +12897,7 @@ function AntiAimState.Step(dt)
     end
     dt = tonumber(dt) or 0
     if dt]==================],
-    [==================[ ~= dt or dt <= 0 or dt == math.huge then return end
+     ~= dt or dt <= 0 or dt == math.huge then return end
     dt = math.min(dt, 1)
     runtime.elapsed = runtime.elapsed + dt
     humanoid.AutoRotate = false
@@ -13924,7 +13433,7 @@ function AntiAimMovement:Cleanup()
     AntiAimState.flight_enabled = false
     if self.noclipConnection then pcall(function() self.noclipConnection:Disconnect() end); self.noclipConnection = nil end
     if self.flightConnection then pcall(function() self.flightConnection:Disconnect() end); self.flightConnection ]==================],
-    [==================[= nil end
+    = nil end
     self:RestoreCollisions()
     self:ClearFlightRig(true)
 end
@@ -14526,7 +14035,7 @@ math.clamp(tonumber(savedValue.g) or 255, 0, 255),
 math.clamp(tonumber(savedValue.b) or 255, 0, 255)
 )
 pcall(control.Set, control, color, tonumber(savedValue.alpha]==================],
-    [==================[), silent)
+    ), silent)
 elseif type(savedValue) == "boolean"
 or type(savedValue) == "number"
 or type(savedValue) == "string" then
@@ -14951,7 +14460,7 @@ task.spawn(function()
         local autoLoadEnabled = nil
         local settingsOk, rawSettings = pcall(readfile, SETTINGS_FILE)
         if settingsOk and type(rawSettings) == "string" and rawSettings ~=]==================],
-    [==================[ "" then
+     "" then
             local decodedOk, settings = pcall(HttpService.JSONDecode, HttpService, rawSettings)
             if decodedOk and type(settings) == "table" and settings.AutoLoad ~= nil then
                 autoLoadEnabled = settings.AutoLoad == true
@@ -15691,7 +15200,7 @@ light.Color = initialColor
 light.Brightness = tonumber(config.chinaHatBrightness) or 0
 light.Range = tonumber(config.chinaHatRange) or 12
 light.]==================],
-    [==================[Shadows = true
+    Shadows = true
 light.Parent = cone
 
 cone.Parent = character
@@ -16316,7 +15825,7 @@ RainbowAuraState.dynamics[#RainbowAuraState.dynamics+1]={Kind="Orbit",Part=orb,I
 end
 makeParticle(22,0.08,0.55,0.16,2.6,"rbxasset://textures/particles/sparkles_main.dds")
 makeHighlight(math.clamp(RainbowAuraS]==================],
-    [==================[tate.alpha+0.50,0.62,0.95),0.04)
+    tate.alpha+0.50,0.62,0.95),0.04)
 makeLight(1.35)
 elseif auraType == "Digital Rain" then
 makeParticle(72,3.5,7.5,0.14,1.4,"rbxasset://textures/particles/sparkles_main.dds")
@@ -16884,7 +16393,7 @@ runtimeEnv.__DevKageAvatarMods = (function()
             )
             shaft.Transparency = math.clamp(transparency() + 0.08,0,0.95)
             sh]==================],
-    [==================[aft.CanCollide = false
+    aft.CanCollide = false
             shaft.CanTouch = false
             shaft.CanQuery = false
             shaft.CastShadow = false
@@ -17771,7 +17280,7 @@ runtimeEnv.__DevKageAvatarMods = (function()
 
     function API:Destroy()
         state.refreshToken = state.ref]==================],
-    [==================[reshToken + 1
+    reshToken + 1
         clearVisuals()
         if state.characterConnection then
             pcall(function() state.characterConnection:Disconnect() end)
@@ -18075,65 +17584,53 @@ if avatarModsRuntime then avatarModsRuntime:Refresh() end
 end
 })
 
+avatarModsSection:CreateLabel({Text = "--- Cursor Customization ---"})
+avatarModsSection:CreateToggle({
+	Name = "Enable Custom Cursor",
+	State = CursorState.Enabled,
+	Callback = function(v) CursorState.Enabled = v end
+})
+avatarModsSection:CreateColorpicker({
+	Name = "Cursor Color",
+	State = CursorState.Color,
+	Callback = function(v) CursorState.Color = v end
+})
+avatarModsSection:CreateSlider({
+	Name = "Cursor Brightness",
+	State = CursorState.Brightness,
+	Min = 0, Max = 1, Decimals = 2,
+	Callback = function(v) CursorState.Brightness = v end
+})
+avatarModsSection:CreateSlider({
+	Name = "Line Thickness",
+	State = CursorState.LineThickness,
+	Min = 1, Max = 10, Decimals = 0,
+	Callback = function(v) CursorState.LineThickness = v end
+})
+avatarModsSection:CreateSlider({
+	Name = "Line Length",
+	State = CursorState.LineLength,
+	Min = 5, Max = 100, Decimals = 0,
+	Callback = function(v) CursorState.LineLength = v end
+})
+avatarModsSection:CreateSlider({
+	Name = "Rotation Speed",
+	State = CursorState.RotationSpeed,
+	Min = 0, Max = 5, Decimals = 2, Suffix = "x",
+	Callback = function(v) CursorState.RotationSpeed = v end
+})
+avatarModsSection:CreateSlider({
+	Name = "Pulse Speed",
+	State = CursorState.PulseSpeed,
+	Min = 0, Max = 10, Decimals = 2, Suffix = "x",
+	Callback = function(v) CursorState.PulseSpeed = v end
+})
+
 local avatarModsRebuildButton = avatarModsSection:CreateButton({
 	Name = "Rebuild Avatar Mod",
 	Callback = function()
 	if not avatarModsToggle:Get() then avatarModsToggle:Set(true) elseif avatarModsRuntime then avatarModsRuntime:Refresh() end
 	end
-	})
-
-	-- Cursor Settings (Integrated into Avatar Mods)
-	avatarModsSection:CreateLabel({Text = "--- Cursor Customization ---"})
-	avatarModsSection:CreateToggle({
-		Name = "Enable Custom Cursor",
-		State = CursorState.Enabled,
-		Callback = function(v) CursorState.Enabled = v end
-	})
-	avatarModsSection:CreateColorpicker({
-		Name = "Cursor Color",
-		State = CursorState.Color,
-		Callback = function(v) CursorState.Color = v end
-	})
-	avatarModsSection:CreateSlider({
-		Name = "Cursor Brightness",
-		State = CursorState.Brightness,
-		Min = 0, Max = 1, Decimals = 2,
-		Callback = function(v) CursorState.Brightness = v end
-	})
-	avatarModsSection:CreateSlider({
-		Name = "Line Thickness",
-		State = CursorState.LineThickness,
-		Min = 1, Max = 10, Decimals = 0,
-		Callback = function(v) CursorState.LineThickness = v end
-	})
-	avatarModsSection:CreateSlider({
-		Name = "Line Length",
-		State = CursorState.LineLength,
-		Min = 5, Max = 100, Decimals = 0,
-		Callback = function(v) CursorState.LineLength = v end
-	})
-	avatarModsSection:CreateSlider({
-		Name = "Rotation Speed",
-		State = CursorState.RotationSpeed,
-		Min = 0, Max = 5, Decimals = 2, Suffix = "x",
-		Callback = function(v) CursorState.RotationSpeed = v end
-	})
-	avatarModsSection:CreateSlider({
-		Name = "Pulse Speed",
-		State = CursorState.PulseSpeed,
-		Min = 0, Max = 10, Decimals = 2, Suffix = "x",
-		Callback = function(v) CursorState.PulseSpeed = v end
-	})
-
-	-- Temporary fix to keep the rest of the button
-	-- (The old button's closing brackets are already in the file)
-	-- This is tricky because I'm replacing only one line.
-	-- I will instead replace the whole button block again, but I'll be very careful.
-
-Name = "Rebuild Avatar Mod",
-Callback = function()
-if not avatarModsToggle:Get() then avatarModsToggle:Set(true) elseif avatarModsRuntime then avatarModsRuntime:Refresh() end
-end
 })
 
 local rainbowAuraSection = spooferPage:CreateSection({ Name = "Avatar Aura", Side = "Right", Size = 680 })
@@ -18404,7 +17901,7 @@ pcall(SpoofRankRuntime.InstallSeasonBridge)
 pcall(SpoofRankRuntime.RefreshSeasonCharms)
 pcall(SpooferState.RefreshLeaderboards)
 eloStatusLabel:SetText(]==================],
-    [==================["ELO applied • "..tostring(value).." • "..SpoofRankRuntime.Resolve(getgenv().__DevKageConfig).." • live sync "..(getgenv().__DevKageConfig.eloLiveSync~=false and "on" or "off"))
+    "ELO applied • "..tostring(value).." • "..SpoofRankRuntime.Resolve(getgenv().__DevKageConfig).." • live sync "..(getgenv().__DevKageConfig.eloLiveSync~=false and "on" or "off"))
 end
 spooferSection:CreateButton({Name="Apply ELO Now",Callback=applyConfiguredELO})
 
@@ -18793,7 +18290,7 @@ textLabel.Parent=root
 
 self.Gui=gui; self.Root=root; self.Text=textLabel; self.TopLine=topLine; self.TopLineHolder=topLineHolder; self.LineGradient=nil; self.Stroke=stroke; self.Corner=corner
 return tru]==================],
-    [==================[e
+    e
 end
 
 function StreamerHUDRuntime:ApplyLayout()
@@ -19107,7 +18604,7 @@ local function line(name,position,size,rotation,parentObject)
 local frame=Instance.new("Frame")
 frame.Name=name
 frame.A]==================],
-    [==================[nchorPoint=Vector2.new(0.5,0.5)
+    nchorPoint=Vector2.new(0.5,0.5)
 frame.BackgroundColor3=Color3.fromRGB(105,105,105)
 frame.BorderSizePixel=0
 frame.Position=position
@@ -19751,7 +19248,7 @@ self:ApplyLayout()
 local localRoot=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 if not localRoot then return end
 local range=math.max(10,tonumber(VisualsState.radar_range) ]==================],
-    [==================[or 350)
+    or 350)
 self.RangeLabel.Text=string.format("%.0f studs",range)
 self.LocalArrow.TextColor3=VisualsState.radar_local_color
 self.LocalArrow.Rotation=VisualsState.radar_rotate and 0 or -math.deg(math.atan2(localRoot.CFrame.LookVector.X,-localRoot.CFrame.LookVector.Z))
@@ -20268,7 +19765,7 @@ killRecentAttackAt = 0,
 killRecentTarget = nil,
 killRecentTargetAt = 0,
 killGl]==================],
-    [==================[obalLastAt = 0,
+    obalLastAt = 0,
 hitGlobalLastAt = 0,
 soundSerial = 0,
 soundFallbacks = 0,
@@ -20627,7 +20124,7 @@ if kind=="hit" then
 local presetName=tostring(VisualsState.hit_sound_preset or "Soft Tick")
 local preset=CombatSoundPresets[presetName] or CombatSoundPresets["Soft Tick"]
 local content=preset.Custom and normalizedCombatSoundContent(VisualsState.h]==================],
-    [==================[it_sound_id,PLAYER_ESP_HIT_SOUND_ID) or preset.Content
+    it_sound_id,PLAYER_ESP_HIT_SOUND_ID) or preset.Content
 return content,
 math.clamp(tonumber(VisualsState.hit_sound_volume) or 35,0,100)/100,
 VisualsState.hit_sound_enabled==true,
@@ -21254,7 +20751,7 @@ end
 })
 
 VisualControls.kill_sound_pitch=clientEffects:CreateSlider(]==================],
-    [==================[{
+    {
 Name="Kill Sound Pitch",
 State=VisualsState.kill_sound_pitch,
 Min=0.5,
@@ -21714,7 +21211,7 @@ function WorldMarkerRuntime:Update(dt)
             local humanoid=kind=="NPC" and object:FindFirstChildOfClass("Humanoid")
             if humanoid and VisualsState.world_object_esp_npc_health~=false then
                 detail=d]==================],
-    [==================[etail..string.format(" | %.0f HP",math.max(0,humanoid.Health))
+    etail..string.format(" | %.0f HP",math.max(0,humanoid.Health))
             end
             marker.Gui.AlwaysOnTop=through;marker.Gui.MaxDistance=distanceLimit
             marker.Gui.Enabled=visible and VisualsState.world_object_esp_labels==true
@@ -22210,7 +21707,7 @@ worldIntelSection:CreateLabel({Text="World ESP uses bounded local markers and au
 
 local waypointSection=visualsPage:CreateSection({Name="World Waypoint",Side="Left",Size=430})
 visualToggle(waypointSection,"world_waypoint_enabled","Enabl]==================],
-    [==================[ed",function(v)
+    ed",function(v)
 if v then
 if not WorldWaypointRuntime.Position then library:Notify({Message="Place the waypoint at your position or mouse target",Duration=3}) else WorldWaypointRuntime:Ensure() end
 elseif WorldWaypointRuntime.Folder then WorldWaypointRuntime.Folder.Parent=nil end
@@ -22555,7 +22052,7 @@ snowSection:CreateLabel({Text="Depth layers, soft fades, wind drift, and roof oc
 local weatherSection=visualsPage:CreateSection({Name="Weather",Side="Right",Size=720})
 local function weatherToggle(key,name,changed)
 LightingControls[key]=weatherSection:CreateToggle({Name=name,State=AdvancedLighting[key],Flag="li]==================],
-    [==================[ghting."..key,Callback=function(value) AdvancedLighting[key]=value; changed(value) end})
+    ghting."..key,Callback=function(value) AdvancedLighting[key]=value; changed(value) end})
 end
 local function weatherSlider(key,name,minimum,maximum,decimals,suffix,changed)
 LightingControls[key]=weatherSection:CreateSlider({Name=name,State=AdvancedLighting[key],Min=minimum,Max=maximum,Decimals=decimals,Suffix=suffix or "",Flag="lighting."..key,Callback=function(value) AdvancedLighting[key]=value; changed(value) end})
@@ -23034,7 +22531,7 @@ animStatus.ZIndex=7
 animStatus.Parent=animViewportContainer
 
 local AnimPreview={world=nil,model=nil,camera=nil,track=nil,liveTrack=nil,rotation=math.pi,token=]==================],
-    [==================[0,loading=false,liveAnimate=nil,liveAnimateDisabled=nil}
+    0,loading=false,liveAnimate=nil,liveAnimateDisabled=nil}
 local function animationSegmentBounds(track)
 local length=track and tonumber(track.Length) or 0
 if length<=0 then return nil,nil end
@@ -23556,7 +23053,7 @@ local function replaceProfileNumber(text, value)
     text = tostring(text or "")
     local replaced, count = text:gsub("%-?%d[%d,]*", tostring(value), 1)
 ]==================],
-    [==================[    if count == 0 then return text end
+        if count == 0 then return text end
     return replaced
 end
 
@@ -23873,7 +23370,7 @@ do
         AntiAimControls.yaw_base = section:CreateDropdown({Name="Yaw Base", Options={"Camera", "Movement", "Character", "At Target", "World"}, State=table.find({"Camera", "Movement", "Character", "At Target", "World"}, AntiAimState.yaw_base) or 1, Flag="antiAimV3.yaw_base", Callback=function(index) AntiAimState.SetValue("yaw_base", ({"Camera", "Movement", "Character", "At Target", "World"})[index] or "Camera") end})
         AntiAimControls.yaw_offset = section:CreateSlider({Name="Additional Yaw Offset", State=AntiAimState.yaw_offset, Min=-180, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.yaw_offset", Callback=function(value) AntiAimState.SetValue("yaw_offset", value) end})
         AntiAimControls.static_yaw_offset = section:CreateSlider({Name="Static Yaw]==================],
-    [==================[ Offset", State=AntiAimState.static_yaw_offset, Min=-180, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.static_yaw_offset", Callback=function(value) AntiAimState.SetValue("static_yaw_offset", value) end})
+     Offset", State=AntiAimState.static_yaw_offset, Min=-180, Max=180, Decimals=0, Suffix="°", Flag="antiAimV3.static_yaw_offset", Callback=function(value) AntiAimState.SetValue("static_yaw_offset", value) end})
         AntiAimControls.yaw_invert = section:CreateToggle({Name="Invert Yaw", State=AntiAimState.yaw_invert, Flag="antiAimV3.yaw_invert", Callback=function(value) AntiAimState.SetValue("yaw_invert", value) end})
         AntiAimControls.body_only_mode = section:CreateToggle({Name="Body Rotation Only", State=AntiAimState.body_only_mode, Flag="antiAimV3.body_only_mode", Callback=function(value) AntiAimState.SetValue("body_only_mode", value) end})
         section:CreateLabel({Text="Body mode tilts the root; off uses the neck."})
@@ -23968,7 +23465,7 @@ do
         AntiAimControls.yaw_cycle_key = section:CreateDropdown({Name="Cycle Yaw Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, AntiAimState.yaw_cycle_key) or 1, Flag="antiAimV3.yaw_cycle_key", Callback=function(index) AntiAimState.SetValue("yaw_cycle_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "Z") end})
         AntiAimControls.pitch_cycle_key = section:CreateDropdown({Name="Cycle Pitch Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, AntiAimState.pitch_cycle_key) or 1, Flag="antiAimV3.pitch_cycle_key", Callback=function(index) AntiAimState.SetValue("pitch_cycle_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "V") end})
         AntiAimControls.preset_cycle_key = section:CreateDropdown({Name="Cycle Preset Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt",]==================],
-    [==================[ "RightAlt", "LeftControl", "RightControl"}, AntiAimState.preset_cycle_key) or 1, Flag="antiAimV3.preset_cycle_key", Callback=function(index) AntiAimState.SetValue("preset_cycle_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "B") end})
+     "RightAlt", "LeftControl", "RightControl"}, AntiAimState.preset_cycle_key) or 1, Flag="antiAimV3.preset_cycle_key", Callback=function(index) AntiAimState.SetValue("preset_cycle_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "B") end})
         AntiAimControls.freestand_key = section:CreateDropdown({Name="Flip Freestanding Key", Options={"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, State=table.find({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"}, AntiAimState.freestand_key) or 1, Flag="antiAimV3.freestand_key", Callback=function(index) AntiAimState.SetValue("freestand_key", ({"None", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Insert", "Home", "End", "PageUp", "PageDown", "LeftAlt", "RightAlt", "LeftControl", "RightControl"})[index] or "G") end})
         section:CreateButton({Name="Cycle Yaw Mode", Callback=function() AntiAimState.core.Actions.CycleYaw() end})
         section:CreateButton({Name="Cycle Pitch Mode", Callback=function() AntiAimState.core.Actions.CyclePitch() end})
@@ -24244,7 +23741,7 @@ local function restoreAvatarProperties()
     for instance, properties in pairs(Runtime.OriginalProperties) do
         if instance and instance.Parent then
             for pro]==================],
-    [==================[perty, value in pairs(properties) do
+    perty, value in pairs(properties) do
                 pcall(function() instance[property] = value end)
             end
         end
@@ -24955,7 +24452,7 @@ end
 
 local function rapidFireGetEquippedTool()
     local character = LocalPlayer and LocalPlayer.Ch]==================],
-    [==================[aracter
+    aracter
     if not character then return nil end
     for _, object in ipairs(character:GetChildren()) do
         if object:IsA("Tool") then return object end
@@ -25726,7 +25223,7 @@ local function stepBunnyHop(dt)
     end
 
     if movement and movement:OwnsHorizontal() then retur]==================],
-    [==================[n end
+    n end
     local velocity = root.AssemblyLinearVelocity
     local horizontal = Vector3.new(velocity.X, 0, velocity.Z)
     local speed = horizontal.Magnitude
@@ -26323,7 +25820,7 @@ do
         if type(target) ~= "table" or type(target[key]) ~= "function" then return end
         self.Wrappers[#self.Wrappers + 1] = {
             Target = target, Key = key, Original = target[key], Replacement]==================],
-    [==================[ = replacement,
+     = replacement,
         }
         target[key] = replacement
     end
@@ -27123,7 +26620,7 @@ table.insert(library.CleanupCallbacks, function()
     if type(MaskShard) == "table"
         and type(MaskShard.Runtime) == "table"
         and MaskShard.Runtime.UniversalTools == UniversalTo]==================],
-    [==================[olsRuntime then
+    olsRuntime then
         MaskShard.Runtime.UniversalTools = nil
     end
 end)
@@ -27531,7 +27028,7 @@ local HackerDetectorRuntime = {
 local function hackerDetectorSetAlert(active,duration)
     local manager=library and library.KeybindManager
     if not manager or not manager.SetHackerAle]==================],
-    [==================[rt then return end
+    rt then return end
     manager:SetHackerAlert(active==true,library.Window,duration or 12)
 end
 
@@ -28062,7 +27559,7 @@ local cursorStateMap = {
     devkage_cursor_text_glow_strength="TextGlowStrength",
     devkage_cursor_main_text_size="MainTextSize",
     d]==================],
-    [==================[evkage_cursor_second_text_size="SecondTextSize",
+    evkage_cursor_second_text_size="SecondTextSize",
     devkage_cursor_pulse_speed="PulseSpeed",
     devkage_cursor_bounce="Bounce",
     devkage_cursor_bounce_amount="BounceAmount",
@@ -29264,7 +28761,7 @@ local function referenceApplyRadialLayout(
                     0.5,
                     1
          ]==================],
-    [==================[       )
+           )
 
             line.Frame.Size =
                 UDim2.fromOffset(
@@ -30422,7 +29919,7 @@ addSlider(textSection,"devkage_cursor_second_text_size","Second Text Size",8,40,
 local cursorProfileOptions={"Custom","Precision","Minimal Dot","Creator Glow","Neon RGB","Cinematic","Classic"}
 local cursorProfiles={
 Precision={devkage]==================],
-    [==================[_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(235,245,255),devkage_cursor_color_secondary=Color3.fromRGB(90,175,255),devkage_cursor_color_mode="Two Tone",devkage_cursor_rainbow=false,devkage_cursor_line_width=2,devkage_cursor_line_length=12,devkage_cursor_center_radius=3,devkage_cursor_arm_count=4,devkage_cursor_spin=false,devkage_cursor_line_glow=true,devkage_cursor_glow_thickness=5,devkage_cursor_glow_extra_length=2,devkage_cursor_glow_transparency=0.58,devkage_cursor_text_enabled=false},
+    _cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(235,245,255),devkage_cursor_color_secondary=Color3.fromRGB(90,175,255),devkage_cursor_color_mode="Two Tone",devkage_cursor_rainbow=false,devkage_cursor_line_width=2,devkage_cursor_line_length=12,devkage_cursor_center_radius=3,devkage_cursor_arm_count=4,devkage_cursor_spin=false,devkage_cursor_line_glow=true,devkage_cursor_glow_thickness=5,devkage_cursor_glow_extra_length=2,devkage_cursor_glow_transparency=0.58,devkage_cursor_text_enabled=false},
 ["Minimal Dot"]={devkage_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(255,255,255),devkage_cursor_color_secondary=Color3.fromRGB(255,255,255),devkage_cursor_color_mode="Solid",devkage_cursor_rainbow=false,devkage_cursor_line_width=2,devkage_cursor_line_length=3,devkage_cursor_center_radius=2,devkage_cursor_arm_count=4,devkage_cursor_spin=false,devkage_cursor_line_glow=false,devkage_cursor_text_enabled=false},
 ["Creator Glow"]={devkage_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(190,80,255),devkage_cursor_color_secondary=Color3.fromRGB(70,205,255),devkage_cursor_color_mode="Gradient",devkage_cursor_color_speed=1.25,devkage_cursor_color_spread=0.55,devkage_cursor_rainbow=false,devkage_cursor_line_width=3,devkage_cursor_line_length=22,devkage_cursor_center_radius=6,devkage_cursor_arm_count=4,devkage_cursor_spin=true,devkage_cursor_spin_style="Static",devkage_cursor_spin_direction="Clockwise",devkage_cursor_spin_speed=46,devkage_cursor_spin_range=360,devkage_cursor_smooth_spin=true,devkage_cursor_line_glow=true,devkage_cursor_glow_thickness=14,devkage_cursor_glow_extra_length=8,devkage_cursor_glow_transparency=0.42,devkage_cursor_text_enabled=true,devkage_cursor_main_text="DevKage",devkage_cursor_second_text="None",devkage_cursor_text_outline=true},
 ["Neon RGB"]={devkage_cursor_enabled=true,devkage_cursor_color=Color3.fromRGB(255,60,210),devkage_cursor_color_secondary=Color3.fromRGB(65,180,255),devkage_cursor_color_mode="RGB Wave",devkage_cursor_color_speed=2.1,devkage_cursor_color_spread=0.72,devkage_cursor_rainbow=true,devkage_cursor_rainbow_speed=5,devkage_cursor_line_width=3,devkage_cursor_line_length=19,devkage_cursor_center_radius=5,devkage_cursor_arm_count=6,devkage_cursor_spin=true,devkage_cursor_spin_style="Static",devkage_cursor_spin_direction="Clockwise",devkage_cursor_spin_speed=72,devkage_cursor_smooth_spin=true,devkage_cursor_line_glow=true,devkage_cursor_glow_thickness=17,devkage_cursor_glow_extra_length=9,devkage_cursor_glow_transparency=0.34,devkage_cursor_text_enabled=false},
@@ -30978,7 +30475,7 @@ local function syncSupplementalSpooferControls(controls,config)
 local extra=type(controls.extra)=="table" and controls.extra or {}
 local toggleBindings={
 {"spoofDeviceToggle","spoofDevice"},{"deviceSpamToggle"]==================],
-    [==================[,"deviceSpam"},
+    ,"deviceSpam"},
 {"influencerToggle","influencer"},{"adminToggle","admin"},
 {"spoofAvatarToggle","spoofAvatar"},{"anonymousToggle","anonymousMode"},
 {"displayNameToggle","displayNameOverrideEnabled"},{"usernameToggle","usernameOverrideEnabled"},
@@ -31309,7 +30806,7 @@ controls.streamerWidthSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.s
 controls.streamerHeightSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudHeight) or 36,22,100),true)
 controls.streamerTextSizeSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudTextSize) or 14,8,32),true)
 controls.streamerPaddingSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamer]==================],
-    [==================[HudPadding) or 25,0,80),true)
+    HudPadding) or 25,0,80),true)
 controls.streamerOffsetXSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudOffsetX) or 0,-1200,1200),true)
 controls.streamerOffsetYSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudOffsetY) or 12,-500,500),true)
 controls.streamerCornerSlider:Set(math.clamp(tonumber(getgenv().__DevKageConfig.streamerHudCornerRadius) or 7,0,24),true)
@@ -32676,7 +32173,7 @@ assert(function(alwaysOnMaskShards, environment, safeActivate, safeDeactivate)
 
         if environment.__DevKageMaskShardHealth == health then
             environment.__DevKageMaskShardHealt]==================],
-    [==================[h = nil
+    h = nil
         end
         environment.__DevKageMaskShardStatus = {
             Active = false,
