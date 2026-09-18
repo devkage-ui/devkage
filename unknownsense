@@ -1,11 +1,3 @@
-local __DEVKAGE_EMBEDDED_SOURCE = table.concat({
-    
-
-
-
-
-
-
 local maskShardShutdownKey = {}
 
 -- ============================================================
