@@ -1964,6 +1964,30 @@ local function createCursorGlow(parent, name, size, pos, color)
     return frame
 end
 
+local function createCursorLine(parent, name, size, pos, color)
+    local frame = Instance.new("Frame")
+    frame.Name = name
+    frame.Size = size
+    frame.Position = pos
+    frame.BackgroundColor3 = color
+    frame.BorderSizePixel = 0
+    frame.ZIndex = 5
+    frame.Parent = parent
+    return frame
+end
+
+local function createCursorGlow(parent, name, size, pos, color)
+    local frame = Instance.new("Frame")
+    frame.Name = name
+    frame.Size = size
+    frame.Position = pos
+    frame.BackgroundColor3 = color
+    frame.BorderSizePixel = 0
+    frame.ZIndex = 4
+    frame.Parent = parent
+    return frame
+end
+
 local function setupCursor()
     if cursorGui then cursorGui:Destroy() end
 
@@ -1974,21 +1998,29 @@ local function setupCursor()
 
     cursorContainer = Instance.new("Frame")
     cursorContainer.BackgroundTransparency = 1
-    cursorContainer.Size = UDim2.new(0, 25, 0, 25)
+    cursorContainer.Size = UDim2.new(0, 50, 0, 50)
     cursorContainer.AnchorPoint = Vector2.new(0.5, 0.5)
     cursorContainer.Parent = cursorGui
 
-    cursorLines.top = createCursorLine(cursorContainer, "Top", UDim2.new(0, CursorManager.LineThickness, 0, CursorManager.LineLength), UDim2.new(0.5, -CursorManager.LineThickness/2, 0, 0), CursorManager.Color)
-    cursorLines.bottom = createCursorLine(cursorContainer, "Bottom", UDim2.new(0, CursorManager.LineThickness, 0, CursorManager.LineLength), UDim2.new(0.5, -CursorManager.LineThickness/2, 1, -CursorManager.LineLength), CursorManager.Color)
-    cursorLines.left = createCursorLine(cursorContainer, "Left", UDim2.new(0, CursorManager.LineLength, 0, CursorManager.LineThickness), UDim2.new(0, 0, 0.5, -CursorManager.LineThickness/2), CursorManager.Color)
-    cursorLines.right = createCursorLine(cursorContainer, "Right", UDim2.new(0, CursorManager.LineLength, 0, CursorManager.LineThickness), UDim2.new(1, -CursorManager.LineLength, 0.5, -CursorManager.LineThickness/2), CursorManager.Color)
+    -- Main Cross Lines
+    cursorLines.top = createCursorLine(cursorContainer, "Top", UDim2.new(0, CursorManager.LineThickness, 0, CursorManager.LineLength), UDim2.new(0.5, -CursorManager.LineThickness/2, 0.5, -CursorManager.LineLength/2), CursorManager.Color)
+    cursorLines.bottom = createCursorLine(cursorContainer, "Bottom", UDim2.new(0, CursorManager.LineThickness, 0, CursorManager.LineLength), UDim2.new(0.5, -CursorManager.LineThickness/2, 0.5, CursorManager.LineLength/2), CursorManager.Color)
+    cursorLines.left = createCursorLine(cursorContainer, "Left", UDim2.new(0, CursorManager.LineLength, 0, CursorManager.LineThickness), UDim2.new(0.5, -CursorManager.LineLength/2, 0.5, -CursorManager.LineThickness/2), CursorManager.Color)
+    cursorLines.right = createCursorLine(cursorContainer, "Right", UDim2.new(0, CursorManager.LineLength, 0, CursorManager.LineThickness), UDim2.new(0.5, CursorManager.LineLength/2, 0.5, -CursorManager.LineThickness/2), CursorManager.Color)
 
-    cursorLines.topGlow = createCursorGlow(cursorContainer, "TopGlow", UDim2.new(0, 10, 0, 2), UDim2.new(0.5, -5, 0, -5), CursorManager.Color)
-    cursorLines.bottomGlow = createCursorGlow(cursorContainer, "BottomGlow", UDim2.new(0, 10, 0, 2), UDim2.new(0.5, -5, 1, 5), CursorManager.Color)
-    cursorLines.leftGlow1 = createCursorGlow(cursorContainer, "LeftGlow1", UDim2.new(0, 2, 0, 5), UDim2.new(0, -5, 0.2, 0), CursorManager.Color)
-    cursorLines.leftGlow2 = createCursorGlow(cursorContainer, "LeftGlow2", UDim2.new(0, 2, 0, 5), UDim2.new(0, -5, 0.8, -5), CursorManager.Color)
-    cursorLines.rightGlow1 = createCursorGlow(cursorContainer, "RightGlow1", UDim2.new(0, 2, 0, 5), UDim2.new(1, 5, 0.2, 0), CursorManager.Color)
-    cursorLines.rightGlow2 = createCursorGlow(cursorContainer, "RightGlow2", UDim2.new(0, 2, 0, 5), UDim2.new(1, 5, 0.8, -5), CursorManager.Color)
+    -- Tic-Tac-Toe End Caps (Glow)
+    -- Top Line Caps
+    cursorLines.topL = createCursorGlow(cursorContainer, "TopL", UDim2.new(0, 6, 0, 2), UDim2.new(0.5, -3 - CursorManager.LineThickness/2, 0.5, -CursorManager.LineLength/2 - 1), CursorManager.Color)
+    cursorLines.topR = createCursorGlow(cursorContainer, "TopR", UDim2.new(0, 6, 0, 2), UDim2.new(0.5, CursorManager.LineThickness/2, 0.5, -CursorManager.LineLength/2 - 1), CursorManager.Color)
+    -- Bottom Line Caps
+    cursorLines.bottomL = createCursorGlow(cursorContainer, "BottomL", UDim2.new(0, 6, 0, 2), UDim2.new(0.5, -3 - CursorManager.LineThickness/2, 0.5, CursorManager.LineLength/2 + 1), CursorManager.Color)
+    cursorLines.bottomR = createCursorGlow(cursorContainer, "BottomR", UDim2.new(0, 6, 0, 2), UDim2.new(0.5, CursorManager.LineThickness/2, 0.5, CursorManager.LineLength/2 + 1), CursorManager.Color)
+    -- Left Line Caps
+    cursorLines.leftT = createCursorGlow(cursorContainer, "LeftT", UDim2.new(0, 2, 0, 6), UDim2.new(0.5, -CursorManager.LineLength/2 - 1, 0.5, -3 - CursorManager.LineThickness/2), CursorManager.Color)
+    cursorLines.leftB = createCursorGlow(cursorContainer, "LeftB", UDim2.new(0, 2, 0, 6), UDim2.new(0.5, -CursorManager.LineLength/2 - 1, 0.5, CursorManager.LineThickness/2), CursorManager.Color)
+    -- Right Line Caps
+    cursorLines.rightT = createCursorGlow(cursorContainer, "RightT", UDim2.new(0, 2, 0, 6), UDim2.new(0.5, CursorManager.LineLength/2 + 1, 0.5, -3 - CursorManager.LineThickness/2), CursorManager.Color)
+    cursorLines.rightB = createCursorGlow(cursorContainer, "RightB", UDim2.new(0, 2, 0, 6), UDim2.new(0.5, CursorManager.LineLength/2 + 1, 0.5, CursorManager.LineThickness/2), CursorManager.Color)
 
     cursorText = Instance.new("TextLabel")
     cursorText.Text = CursorManager.Text
@@ -2019,25 +2051,38 @@ local function updateCursor(dt)
     local mouse = game:GetService("Players").LocalPlayer:GetMouse()
     cursorTime = cursorTime + dt
     cursorContainer.Position = UDim2.new(0, mouse.X, 0, mouse.Y)
-    cursorText.Position = UDim2.new(0, mouse.X - 70, 0, mouse.Y + 50)
+    cursorText.Position = UDim2.new(0, mouse.X - 70, 0, mouse.Y + 40)
 
     cursorRotationProgress = (cursorRotationProgress + CursorManager.RotationSpeed * dt) % 1
     local targetRotation = cursorRotationProgress * 360
-    cursorSmoothedRotation = cursorSmoothedRotation + (targetRotation - cursorSmoothedRotation) * 1
+    cursorSmoothedRotation = cursorSmoothedRotation + (targetRotation - cursorSmoothedRotation) * 0.1
     cursorContainer.Rotation = cursorSmoothedRotation
 
     local pulse = math.sin(cursorTime * CursorManager.PulseSpeed) * 0.5 + 0.5
-    local currentLength = -10 + (-30 - (-10)) * (pulse * pulse)
+    local currentLength = CursorManager.LineLength * (0.8 + pulse * 0.2)
 
+    -- Update Main Lines
     cursorLines.top.Size = UDim2.new(0, CursorManager.LineThickness, 0, currentLength)
-    cursorLines.bottom.Size = UDim2.new(0, CursorManager.LineThickness, 0, currentLength)
-    cursorLines.left.Size = UDim2.new(0, currentLength, 0, CursorManager.LineThickness)
-    cursorLines.right.Size = UDim2.new(0, currentLength, 0, CursorManager.LineThickness)
+    cursorLines.top.Position = UDim2.new(0.5, -CursorManager.LineThickness/2, 0.5, -currentLength/2)
 
-    cursorLines.top.Position = UDim2.new(0.5, -CursorManager.LineThickness/2, 0, 0)
-    cursorLines.bottom.Position = UDim2.new(0.5, -CursorManager.LineThickness/2, 1, -currentLength)
-    cursorLines.left.Position = UDim2.new(0, 0, 0.5, -CursorManager.LineThickness/2)
-    cursorLines.right.Position = UDim2.new(1, -currentLength, 0.5, -CursorManager.LineThickness/2)
+    cursorLines.bottom.Size = UDim2.new(0, CursorManager.LineThickness, 0, currentLength)
+    cursorLines.bottom.Position = UDim2.new(0.5, -CursorManager.LineThickness/2, 0.5, currentLength/2)
+
+    cursorLines.left.Size = UDim2.new(0, currentLength, 0, CursorManager.LineThickness)
+    cursorLines.left.Position = UDim2.new(0.5, -currentLength/2, 0.5, -CursorManager.LineThickness/2)
+
+    cursorLines.right.Size = UDim2.new(0, currentLength, 0, CursorManager.LineThickness)
+    cursorLines.right.Position = UDim2.new(0.5, currentLength/2, 0.5, -CursorManager.LineThickness/2)
+
+    -- Update Caps
+    cursorLines.topL.Position = UDim2.new(0.5, -3 - CursorManager.LineThickness/2, 0.5, -currentLength/2 - 1)
+    cursorLines.topR.Position = UDim2.new(0.5, CursorManager.LineThickness/2, 0.5, -currentLength/2 - 1)
+    cursorLines.bottomL.Position = UDim2.new(0.5, -3 - CursorManager.LineThickness/2, 0.5, currentLength/2 + 1)
+    cursorLines.bottomR.Position = UDim2.new(0.5, CursorManager.LineThickness/2, 0.5, currentLength/2 + 1)
+    cursorLines.leftT.Position = UDim2.new(0.5, -currentLength/2 - 1, 0.5, -3 - CursorManager.LineThickness/2)
+    cursorLines.leftB.Position = UDim2.new(0.5, -currentLength/2 - 1, 0.5, CursorManager.LineThickness/2)
+    cursorLines.rightT.Position = UDim2.new(0.5, currentLength/2 + 1, 0.5, -3 - CursorManager.LineThickness/2)
+    cursorLines.rightB.Position = UDim2.new(0.5, currentLength/2 + 1, 0.5, CursorManager.LineThickness/2)
 
     local rainbow = Color3.fromHSV((cursorTime * 0.1) % 1, 0.8, 1)
     local finalColor = rainbow:Lerp(CursorManager.Color, 0.5)
@@ -2107,7 +2152,7 @@ function pages:CreateSection(Properties)
             ZIndex              = 5,
             Font                = "Code",
             RichText            = true,
-            Text                = "📁 " .. Section.Name,
+            Text                = Section.Name,
             TextColor3          = Color3.fromRGB(205, 205, 205),
             TextSize            = 11,
             TextStrokeTransparency = 1,
@@ -2122,7 +2167,8 @@ function pages:CreateSection(Properties)
             Parent              = Section_Holder,
             Position            = UDim2.new(0, 1, 0, 16),
             Size                = UDim2.new(1, -2, 1, -17),
-            ZIndex              = 2
+            ZIndex              = 2,
+            Visible             = false
         })
 
         utility:CreateConnection(Section_Holder_Title.MouseButton1Click, function()
@@ -17866,7 +17912,7 @@ UI.HighQualityESPRuntime = ((type(getgenv)=="function" and getgenv()) or _G).__D
 
 assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
-local spooferPage = library.Window:CreatePage({ Icon = "rbxassetid://8547236654", Glyph = "R", Size = UDim2.new(0, 36, 0, 36) })
+local spooferPage = library.Window:CreatePage({ Size = UDim2.new(0, 36, 0, 36) })
 local spooferRightLayout=spooferPage.Right:FindFirstChildOfClass("UIListLayout")
 if spooferRightLayout then spooferRightLayout.SortOrder=Enum.SortOrder.LayoutOrder end
 
@@ -18994,7 +19040,7 @@ end)()
 
 assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
-local visualsPage = library.Window:CreatePage({ Icon = "rbxassetid://8547254518", Glyph = "V", Size = UDim2.new(0, 36, 0, 36) })
+local visualsPage = library.Window:CreatePage({ Size = UDim2.new(0, 36, 0, 36) })
 
 local VisualCategoryController = {Current="Enemy",Buttons={},Sections={}}
 do
@@ -20222,6 +20268,16 @@ end})
 UI.ApplyESPProfile=applyESPProfile
 
 local clientEffects = visualsPage:CreateSection({Name="Client Effects",Side="Left",Size=430})
+local viewmodelSection = visualsPage:CreateSection({Name="ViewModel & Arms",Side="Left",Size=680})
+visualToggle(viewmodelSection,"viewmodel_weapon_chams","Weapon Chams",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
+visualColor(viewmodelSection,"viewmodel_weapon_color",nil,"Weapon Color",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
+visualDropdown(viewmodelSection,"viewmodel_weapon_material","Weapon Material",{"Neon","Plastic","SmoothPlastic","Glass","ForceField"},function() library.ExtraVisualRuntime:RefreshViewmodel() end)
+visualSlider(viewmodelSection,"viewmodel_weapon_transparency","Weapon Transparency",0,1,0,"",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
+visualSlider(viewmodelSection,"viewmodel_weapon_glow","Weapon Glow",0,1,0.35,"",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
+visualToggle(viewmodelSection,"viewmodel_arm_chams","Arm Chams",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
+visualColor(viewmodelSection,"viewmodel_arm_color",nil,"Arm Color",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
+visualDropdown(viewmodelSection,"viewmodel_arm_material","Arm Material",{"Neon","Plastic","SmoothPlastic","Glass","ForceField"},function() library.ExtraVisualRuntime:RefreshViewmodel() end)
+visualSlider(viewmodelSection,"viewmodel_arm_transparency","Arm Transparency",0,1,0,"",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
 local PlayerESPUtilityRuntime = {
 sky = nil,
 skyMood = nil,
@@ -23298,6 +23354,7 @@ compactVisualSection(clientEffects,120)
 compactVisualSection(worldSection,120)
 compactVisualSection(worldIntelSection,120)
 compactVisualSection(waypointSection,120)
+compactVisualSection(viewmodelSection,120)
 compactVisualSection(creatorSection,120)
 compactVisualSection(lightingSection,140)
 compactVisualSection(snowSection,120)
@@ -23317,6 +23374,7 @@ makeVisualSectionFolder(clientEffects)
 makeVisualSectionFolder(worldSection)
 makeVisualSectionFolder(worldIntelSection)
 makeVisualSectionFolder(waypointSection)
+makeVisualSectionFolder(viewmodelSection)
 makeVisualSectionFolder(creatorSection)
 makeVisualSectionFolder(lightingSection)
 makeVisualSectionFolder(snowSection)
@@ -23326,9 +23384,9 @@ makeVisualSectionFolder(animationSection)
 
 VisualCategoryController.Sections={
 Enemy={playeresp,enemyModels,espOptions,espAppearance,espExtra,radarSection,threatCompassSection,espProfileSection},
-Models={enemyModels,espAppearance},
+Models={enemyModels,espAppearance,viewmodelSection},
 World={worldSection,worldIntelSection,waypointSection,lightingSection,snowSection,weatherSection,devkagePresetSection,PlayerESPUtilityRuntime.SkySection},
-Client={clientEffects,creatorSection,animationSection}
+Client={clientEffects,viewmodelSection,creatorSection,animationSection}
 }
 AdvancedLighting.ExtraVisuals=assert(loadstring([======[
 return function(context)
@@ -23730,7 +23788,7 @@ function utility:ResolveAntiAimIcon()
 end
 
 if __devkageMultiInjectAutoBoot then task.wait() end
-local antiAimPage = library.Window:CreatePage({ Icon = utility:ResolveAntiAimIcon(), Glyph = "◉", Size = UDim2.new(0, 36, 0, 36) })
+local antiAimPage = library.Window:CreatePage({ Size = UDim2.new(0, 36, 0, 36) })
 local AntiAimControls = {}
 local yawModes = AntiAimState.core.YawModes
 local pitchModes = AntiAimState.core.PitchModes
@@ -24855,7 +24913,7 @@ pcall(function()
 end)
 
 if __devkageMultiInjectAutoBoot then task.wait() end
-local ragePage = library.Window:CreatePage({Icon="rbxassetid://8547258459",Glyph="R",Size=UDim2.new(0,36,0,36)})
+local ragePage = library.Window:CreatePage({Size=UDim2.new(0,36,0,36)})
 
 
 
@@ -27998,7 +28056,7 @@ end)()
 
 assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
-local mouseLockPage = library.Window:CreatePage({Icon="rbxassetid://8547249956",Glyph="A",Size=UDim2.new(0,36,0,36)})
+local mouseLockPage = library.Window:CreatePage({Size=UDim2.new(0,36,0,36)})
 local crosshairSection = mouseLockPage:CreateSection({Name="Crosshair",Side="Left",Size=650})
 local textSection = mouseLockPage:CreateSection({Name="Crosshair Text",Side="Left",Size=360})
 local animationSection = mouseLockPage:CreateSection({Name="Crosshair Animation",Side="Right",Size=470})
@@ -30451,7 +30509,7 @@ end)()
 
 assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
-local settingPage = library.Window:CreatePage({ Icon = "rbxassetid://8547256547", Glyph = "L", Size = UDim2.new(0, 36, 0, 36) })
+local settingPage = library.Window:CreatePage({ Size = UDim2.new(0, 36, 0, 36) })
 UI.LuaPage = settingPage
 local luaSection = settingPage:CreateSection({ Name = "Lua Editor", Side = "Left", Size = 520 })
 local luaControls = settingPage:CreateSection({ Name = "Lua Controls", Side = "Right", Size = 300 })
@@ -30857,7 +30915,7 @@ end)()
 
 assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
-local configPage = library.Window:CreatePage({ Icon = "rbxassetid://8547269749", Glyph = "C", Size = UDim2.new(0, 36, 0, 36) })
+local configPage = library.Window:CreatePage({ Size = UDim2.new(0, 36, 0, 36) })
 
 local configSelected = nil
 local configListHolder
