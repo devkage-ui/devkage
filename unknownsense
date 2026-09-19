@@ -26017,6 +26017,692 @@ local function track(connection)
     return connection
 end
 
+-- PORTED FROM LUA X
+local orbitConfig = {
+    enabled = false, speed = 90, dist = 8, height = 0,
+    lerp = 0.3, mode = "Circle", predict = false, predStr = 0.2,
+    face = true, lockDist = 999999999, target = "Closest", axis = "XZ",
+    reverse = false, randRad = false, randMin = 5, randMax = 20,
+    yawOff = 0, pitchOff = 0, offX = 0, offZ = 0,
+    heightOscillate = false, heightOscAmp = 5, heightOscSpeed = 2,
+    speedRandom = false, speedRandMin = 20, speedRandMax = 200,
+    distPulse = false, distPulseAmp = 5, distPulseSpeed = 1,
+    zigzag = false, zigzagAmp = 3, zigzagFreq = 4,
+    snapBack = false, snapInterval = 0.5,
+    antiFling = true, velZero = true, phaseThrough = true,
+    networkOwn = true, noClip = true, massless = true,
+    autoDisable = false, autoDisableRange = 200, smartTarget = true,
+    smoothCatch = true, predictMult = 1.0, lookAhead = true,
+    hipHeight = 0, wallClip = true, ignoreCollide = true,
+    autoShoot = true, shootCooldown = 0.01, attackRange = 1e15,
+    autoAim = true, aimStrength = 1,
+    infiniteRange = true, expandedHitbox = true, hitboxSize = 500,
+    fastTp = true, fastTpCount = 20, fastTpInterval = 0.001,
+    stickToTarget = true, stickOffset = 2,
+    bypassAnticheat = true, antiKick = true,
+}
+
+local predConfig = {
+    enabled = false, radius = 120, dodgeDist = 80,
+    cooldown = 0.03, threshold = 300, mult = 1,
+    leadTime = 0.22, shootDetect = true, shootDot = 0.80,
+    shootDist = 100, bulletSpd = 200, reactTime = 0.06,
+    raycast = true, multiPoint = true, backstep = true,
+    reactionLadder = true, threatScore = true,
+    aimVector = true, cameraBone = true, animDetect = true,
+    remoteHook = true, predictiveAim = true, predictiveLead = 0.25,
+    infiniteRange = true, notifyAnywhere = true,
+    rivalsMode = true, rivalsHitboxExpand = true, rivalsHitboxSize = 150,
+    safeZone = true, safeZoneRadius = 500,
+    autoShoot = true, autoShootRange = 1e15,
+    noClip = true, massless = true,
+    bypassAnticheat = true, antiKick = true,
+    networkOwn = true, velZero = true,
+    autoAim = true, aimStrength = 1,
+    fastTp = true, fastTpCount = 20, fastTpInterval = 0.001,
+    stickToTarget = true, stickOffset = 2,
+    phaseThrough = true, ignoreCollide = true,
+}
+
+local antiBaitConfig = {
+    enabled = false, velSpikeEnabled = true, velThreshold = 200,
+    velDodgeDist = 100, flickerEnabled = true, flickerWindow = 0.3,
+    flickerMinTps = 2, flickerTpDist = 10, dodgeCooldown = 0.02,
+    dodgeMode = "Perpendicular", notifyOnDodge = true,
+    dodgeOnShoot = true, shootLookThresh = 0.85,
+    gunPredEnabled = true, gunPredDot = 0.80, gunPredVelMin = 30,
+    gunPredDodgeDist = 100, gunPredCooldown = 0.02, gunPredLead = 0.18,
+    baitEnabled = true, baitStallTime = 0.08, baitStallChance = 0.4,
+    baitFakeLock = true, baitFakeLockTime = 0.06,
+    baitHookActivate = true, baitReactionWindow = 0.18,
+    baitNotifyLabel = true, reScanInterval = 2,
+    infiniteRange = true, infiniteRadius = 5e12,
+    rivalsMode = true, rivalsRemoteScan = true,
+    rivalsToolScan = true, rivalsAnimScan = true,
+    antiBaitNoClip = true, antiBaitMassless = true,
+    antiBaitVelZero = true, antiBaitNetworkOwn = true,
+    antiBaitBypassAnticheat = true, antiBaitAntiKick = true,
+    antiBaitFastTp = true, antiBaitFastTpCount = 20, antiBaitFastTpInterval = 0.001,
+    antiBaitStickToTarget = true, antiBaitStickOffset = 2,
+    antiBaitPhaseThrough = true, antiBaitIgnoreCollide = true,
+    antiBaitAutoAim = true, antiBaitAimStrength = 1,
+    antiBaitAutoShoot = true, antiBaitAutoShootRange = 1e15,
+    antiBaitUniversalAim = true, antiBaitUniversalAnimation = true,
+    antiBaitUniversalVelocity = true,
+}
+
+-- Helper Functions
+local function getClosest()
+    local rootPart = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return nil end
+    local best, bestD = nil, math.huge
+    for _, p in ipairs(game:GetService("Players"):GetPlayers()) do
+        if p == LocalPlayer or not p.Character then continue end
+        local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+        if not hrp then continue end
+        local d = (rootPart.Position - hrp.Position).Magnitude
+        if d < bestD then bestD = d; best = p end
+    end
+    return best
+end
+
+local function getTarget(mode)
+    if mode == "Closest" then return getClosest() end
+    local list = {}
+    for _, p in ipairs(game:GetService("Players"):GetPlayers()) do
+        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            table.insert(list, p)
+        end
+    end
+    if #list == 0 then return nil end
+    if mode == "Random" then return list[math.random(1, #list)]
+    elseif mode == "Weakest" then
+        table.sort(list, function(a, b)
+            local ha = a.Character:FindFirstChildOfClass("Humanoid")
+            local hb = b.Character:FindFirstChildOfClass("Humanoid")
+            return (ha and ha.Health or 0) < (hb and hb.Health or 0)
+        end)
+        return list[1]
+    elseif mode == "Strongest" then
+        table.sort(list, function(a, b)
+            local ha = a.Character:FindFirstChildOfClass("Humanoid")
+            local hb = b.Character:FindFirstChildOfClass("Humanoid")
+            return (ha and ha.Health or 0) > (hb and hb.Health or 0)
+        end)
+        return list[1]
+    end
+    return list[1]
+end
+
+local function predictPos(hrp, lead)
+    if not hrp then return Vector3.zero end
+    local vel = hrp.AssemblyLinearVelocity
+    local grav = Vector3.new(0, -workspace.Gravity * 0.5, 0)
+    return hrp.Position + vel * lead + grav * (lead * lead * 0.5)
+end
+
+local function applyNoClip(character)
+    if not character then return end
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            pcall(function() part.CanCollide = false; part.Massless = true end)
+        end
+    end
+end
+
+local function aimAtTarget(myHrp, targetPos)
+    if not myHrp then return end
+    local dir = (targetPos - myHrp.Position)
+    if dir.Magnitude < 0.1 then return end
+    pcall(function()
+        myHrp.CFrame = CFrame.new(myHrp.Position, myHrp.Position + Vector3.new(dir.X, 0, dir.Z))
+    end)
+end
+
+local function fireTool()
+    local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+    if tool then
+        pcall(function() tool:Activate() end)
+        task.wait(0.02)
+        pcall(function() tool:Deactivate() end)
+    end
+end
+
+-- State Variables
+local orbitAngle, orbitLocalElapsed, orbitCurrentRadius = 0, 0, 0
+local orbitLastShot = 0
+local orbitSnapTimer = 0
+local lastDodgeTick = 0
+local predShootCD = {}
+local predLastShot = 0
+local predRungIndex = 0
+local hookedActivate = {}
+local hookedRemotes = {}
+
+-- Orbit Logic
+local function startOrbit()
+    local rootPart = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+
+    local orbitConn = RunService.Heartbeat:Connect(function(dt)
+        if not orbitConfig.enabled then return end
+        if not rootPart or not rootPart.Parent then return end
+
+        if orbitConfig.networkOwn then pcall(function() rootPart:SetNetworkOwner(LocalPlayer) end) end
+        if orbitConfig.noClip and LocalPlayer.Character then applyNoClip(LocalPlayer.Character) end
+
+        local target = getTarget(orbitConfig.target)
+        local targetPos = rootPart.Position
+        local tHrp = nil
+
+        if target and target.Character then
+            tHrp = target.Character:FindFirstChild("HumanoidRootPart")
+            if tHrp and (rootPart.Position - tHrp.Position).Magnitude <= orbitConfig.lockDist then
+                targetPos = tHrp.Position
+                if orbitConfig.predict then targetPos = targetPos + tHrp.AssemblyLinearVelocity * orbitConfig.predStr end
+            end
+        end
+
+        local speed = orbitConfig.reverse and -orbitConfig.speed or orbitConfig.speed
+        if orbitConfig.speedRandom then
+            speed = (orbitConfig.speedRandMin + math.random() * (orbitConfig.speedRandMax - orbitConfig.speedRandMin))
+            if orbitConfig.reverse then speed = -speed end
+        end
+
+        orbitAngle = (orbitAngle + math.rad(speed) * dt) % (2 * math.pi)
+        orbitLocalElapsed = orbitLocalElapsed + dt
+
+        local r = orbitConfig.randRad and math.random(orbitConfig.randMin, orbitConfig.randMax) or orbitConfig.dist
+        if orbitConfig.distPulse then r = r + math.sin(orbitLocalElapsed * orbitConfig.distPulseSpeed * 2 * math.pi) * orbitConfig.distPulseAmp end
+
+        local h = orbitConfig.height
+        if orbitConfig.heightOscillate then h = h + math.sin(orbitLocalElapsed * orbitConfig.heightOscSpeed * 2 * math.pi) * orbitConfig.heightOscAmp end
+
+        local x, y, z = 0, 0, 0
+        local ax = orbitConfig.axis
+        if orbitConfig.mode == "Circle" then
+            if ax == "XZ" then x = math.cos(orbitAngle)*r; z = math.sin(orbitAngle)*r; y = h
+            elseif ax == "XY" then x = math.cos(orbitAngle)*r; y = math.sin(orbitAngle)*r; z = h
+            elseif ax == "YZ" then y = math.cos(orbitAngle)*r; z = math.sin(orbitAngle)*r; x = h end
+        elseif orbitConfig.mode == "Figure 8" then
+            x = math.sin(orbitAngle)*r; z = math.sin(orbitAngle)*math.cos(orbitAngle)*r*0.7; y = h
+        elseif orbitConfig.mode == "Ellipse" then
+            x = math.cos(orbitAngle)*r; z = math.sin(orbitAngle)*r*0.6; y = h
+        elseif orbitConfig.mode == "Spiral In" then
+            orbitCurrentRadius = math.max(1, orbitCurrentRadius - dt * orbitConfig.dist * 0.2)
+            x = math.cos(orbitAngle)*orbitCurrentRadius; z = math.sin(orbitAngle)*orbitCurrentRadius; y = h
+        elseif orbitConfig.mode == "Spiral Out" then
+            orbitCurrentRadius = math.min(orbitConfig.dist*2, orbitCurrentRadius + dt * orbitConfig.dist * 0.2)
+            x = math.cos(orbitAngle)*orbitCurrentRadius; z = math.sin(orbitAngle)*orbitCurrentRadius; y = h
+        elseif orbitConfig.mode == "Bounce" then
+            x = math.cos(orbitAngle)*r; z = math.sin(orbitAngle)*r; y = h + math.sin(orbitLocalElapsed*3)*5
+        elseif orbitConfig.mode == "Lemniscate" then
+            local denom = 1 + math.sin(orbitAngle)^2
+            x = r*math.cos(orbitAngle)/denom; z = r*math.sin(orbitAngle)*math.cos(orbitAngle)/denom; y = h
+        elseif orbitConfig.mode == "Infinity" then
+            x = r*math.cos(orbitAngle); z = r*math.sin(2*orbitAngle)/2; y = h
+        elseif orbitConfig.mode == "RandomOrbit" then
+            local a = math.random()*2*math.pi; x = math.cos(a)*r; z = math.sin(a)*r; y = h
+        end
+
+        if orbitConfig.zigzag then x = x + math.sin(orbitLocalElapsed * orbitConfig.zigzagFreq * 2 * math.pi) * orbitConfig.zigzagAmp end
+        x = x + orbitConfig.offX; z = z + orbitConfig.offZ
+
+        local dst = targetPos + Vector3.new(x, y, z)
+        if orbitConfig.snapBack then
+            orbitSnapTimer = orbitSnapTimer + dt
+            if orbitSnapTimer >= orbitConfig.snapInterval then
+                orbitSnapTimer = 0
+                dst = targetPos + Vector3.new(orbitConfig.offX, h, orbitConfig.offZ)
+            end
+        end
+
+        local alpha = math.min(1, 1 - (1 - orbitConfig.lerp)^(dt * 60))
+        local smooth = rootPart.Position:Lerp(dst, alpha)
+
+        pcall(function()
+            if orbitConfig.face then
+                local cf = CFrame.new(smooth, Vector3.new(targetPos.X, smooth.Y, targetPos.Z))
+                cf = cf * CFrame.Angles(math.rad(orbitConfig.pitchOff), math.rad(orbitConfig.yawOff), 0)
+                rootPart.CFrame = cf
+            else
+                rootPart.CFrame = CFrame.new(smooth)
+            end
+            if orbitConfig.velZero then rootPart.AssemblyLinearVelocity = Vector3.zero; rootPart.AssemblyAngularVelocity = Vector3.zero end
+        end)
+
+        if orbitConfig.autoShoot and tHrp and target then
+            local now = tick()
+            if (rootPart.Position - tHrp.Position).Magnitude < orbitConfig.attackRange and now - orbitLastShot > orbitConfig.shootCooldown then
+                orbitLastShot = now
+                if orbitConfig.autoAim then aimAtTarget(rootPart, tHrp.Position) end
+                fireTool()
+            end
+        end
+    end)
+    return orbitConn
+end
+
+local orbitConnection = track(startOrbit())
+
+-- Prediction Logic
+local function startPrediction()
+    local rootPart = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+
+    local predConn = RunService.Heartbeat:Connect(function(dt)
+        if not predConfig.enabled then return end
+        if not rootPart or not rootPart.Parent then return end
+
+        if predConfig.networkOwn then pcall(function() rootPart:SetNetworkOwner(LocalPlayer) end) end
+        if predConfig.noClip and LocalPlayer.Character then applyNoClip(LocalPlayer.Character) end
+
+        local target = getTarget(orbitConfig.target)
+        if not target or not target.Character then return end
+        local tHrp = target.Character:FindFirstChild("HumanoidRootPart")
+        if not tHrp then return end
+
+        local dist = (rootPart.Position - tHrp.Position).Magnitude
+        if dist > predConfig.radius then return end
+
+        local moveVec = Vector3.zero
+        local threat = 0
+
+        -- Simple threat detection (velocity towards me)
+        local relativeVel = tHrp.AssemblyLinearVelocity
+        local toMe = (rootPart.Position - tHrp.Position).Unit
+        threat = relativeVel:Dot(toMe)
+
+        if threat > predConfig.threshold then
+            local dodgeDir = Vector3.new(0, 0, 1):Cross(tHrp.CFrame.UpVector).Unit
+            if math.random() < 0.5 then dodgeDir = -dodgeDir end
+            moveVec = dodgeDir * predConfig.dodgeDist
+        end
+
+        if moveVec.Magnitude > 0 then
+            pcall(function()
+                rootPart.CFrame = rootPart.CFrame + moveVec * dt * 60
+                if predConfig.velZero then
+                    rootPart.AssemblyLinearVelocity = Vector3.zero
+                end
+            end)
+        end
+    end)
+    return predConn
+end
+
+local predConnection = track(startPrediction())
+
+-- Anti-Bait Logic
+local function startAntiBait()
+    local rootPart = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+
+    local antiBaitConn = RunService.Heartbeat:Connect(function(dt)
+        if not antiBaitConfig.enabled then return end
+        if not rootPart or not rootPart.Parent then return end
+
+        if antiBaitConfig.antiBaitNetworkOwn then pcall(function() rootPart:SetNetworkOwner(LocalPlayer) end) end
+        if antiBaitConfig.antiBaitNoClip and LocalPlayer.Character then applyNoClip(LocalPlayer.Character) end
+
+        -- Simple velocity spike dodge
+        local vel = rootPart.AssemblyLinearVelocity
+        if antiBaitConfig.velSpikeEnabled and vel.Magnitude > antiBaitConfig.velThreshold then
+            local dodgeDir = Vector3.new(math.random()-0.5, 0, math.random()-0.5).Unit
+            pcall(function()
+                rootPart.CFrame = rootPart.CFrame + dodgeDir * antiBaitConfig.velDodgeDist
+                if antiBaitConfig.antiBaitVelZero then rootPart.AssemblyLinearVelocity = Vector3.zero end
+            end)
+        end
+    end)
+    return antiBaitConn
+end
+
+local antiBaitConnection = track(startAntiBait())
+
+-- PORTED FROM LUA X
+local orbitConfig = {
+    enabled = false, speed = 90, dist = 8, height = 0,
+    lerp = 0.3, mode = "Circle", predict = false, predStr = 0.2,
+    face = true, lockDist = 999999999, target = "Closest", axis = "XZ",
+    reverse = false, randRad = false, randMin = 5, randMax = 20,
+    yawOff = 0, pitchOff = 0, offX = 0, offZ = 0,
+    heightOscillate = false, heightOscAmp = 5, heightOscSpeed = 2,
+    speedRandom = false, speedRandMin = 20, speedRandMax = 200,
+    distPulse = false, distPulseAmp = 5, distPulseSpeed = 1,
+    zigzag = false, zigzagAmp = 3, zigzagFreq = 4,
+    snapBack = false, snapInterval = 0.5,
+    antiFling = true, velZero = true, phaseThrough = true,
+    networkOwn = true, noClip = true, massless = true,
+    autoDisable = false, autoDisableRange = 200, smartTarget = true,
+    smoothCatch = true, predictMult = 1.0, lookAhead = true,
+    hipHeight = 0, wallClip = true, ignoreCollide = true,
+    autoShoot = true, shootCooldown = 0.01, attackRange = 1e15,
+    autoAim = true, aimStrength = 1,
+    infiniteRange = true, expandedHitbox = true, hitboxSize = 500,
+    fastTp = true, fastTpCount = 20, fastTpInterval = 0.001,
+    stickToTarget = true, stickOffset = 2,
+    bypassAnticheat = true, antiKick = true,
+}
+
+local predConfig = {
+    enabled = false, radius = 120, dodgeDist = 80,
+    cooldown = 0.03, threshold = 300, mult = 1,
+    leadTime = 0.22, shootDetect = true, shootDot = 0.80,
+    shootDist = 100, bulletSpd = 200, reactTime = 0.06,
+    raycast = true, multiPoint = true, backstep = true,
+    reactionLadder = true, threatScore = true,
+    aimVector = true, cameraBone = true, animDetect = true,
+    remoteHook = true, predictiveAim = true, predictiveLead = 0.25,
+    infiniteRange = true, notifyAnywhere = true,
+    rivalsMode = true, rivalsHitboxExpand = true, rivalsHitboxSize = 150,
+    safeZone = true, safeZoneRadius = 500,
+    autoShoot = true, autoShootRange = 1e15,
+    noClip = true, massless = true,
+    bypassAnticheat = true, antiKick = true,
+    networkOwn = true, velZero = true,
+    autoAim = true, aimStrength = 1,
+    fastTp = true, fastTpCount = 20, fastTpInterval = 0.001,
+    stickToTarget = true, stickOffset = 2,
+    phaseThrough = true, ignoreCollide = true,
+}
+
+local antiBaitConfig = {
+    enabled = false, velSpikeEnabled = true, velThreshold = 200,
+    velDodgeDist = 100, flickerEnabled = true, flickerWindow = 0.3,
+    flickerMinTps = 2, flickerTpDist = 10, dodgeCooldown = 0.02,
+    dodgeMode = "Perpendicular", notifyOnDodge = true,
+    dodgeOnShoot = true, shootLookThresh = 0.85,
+    gunPredEnabled = true, gunPredDot = 0.80, gunPredVelMin = 30,
+    gunPredDodgeDist = 100, gunPredCooldown = 0.02, gunPredLead = 0.18,
+    baitEnabled = true, baitStallTime = 0.08, baitStallChance = 0.4,
+    baitFakeLock = true, baitFakeLockTime = 0.06,
+    baitHookActivate = true, baitReactionWindow = 0.18,
+    baitNotifyLabel = true, reScanInterval = 2,
+    infiniteRange = true, infiniteRadius = 5e12,
+    rivalsMode = true, rivalsRemoteScan = true,
+    rivalsToolScan = true, rivalsAnimScan = true,
+    antiBaitNoClip = true, antiBaitMassless = true,
+    antiBaitVelZero = true, antiBaitNetworkOwn = true,
+    antiBaitBypassAnticheat = true, antiBaitAntiKick = true,
+    antiBaitFastTp = true, antiBaitFastTpCount = 20, antiBaitFastTpInterval = 0.001,
+    antiBaitStickToTarget = true, antiBaitStickOffset = 2,
+    antiBaitPhaseThrough = true, antiBaitIgnoreCollide = true,
+    antiBaitAutoAim = true, antiBaitAimStrength = 1,
+    antiBaitAutoShoot = true, antiBaitAutoShootRange = 1e15,
+    antiBaitUniversalAim = true, antiBaitUniversalAnimation = true,
+    antiBaitUniversalVelocity = true,
+}
+
+-- Helper Functions
+local function getClosest()
+    local rootPart = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return nil end
+    local best, bestD = nil, math.huge
+    for _, p in ipairs(game:GetService("Players"):GetPlayers()) do
+        if p == LocalPlayer or not p.Character then continue end
+        local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+        if not hrp then continue end
+        local d = (rootPart.Position - hrp.Position).Magnitude
+        if d < bestD then bestD = d; best = p end
+    end
+    return best
+end
+
+local function getTarget(mode)
+    if mode == "Closest" then return getClosest() end
+    local list = {}
+    for _, p in ipairs(game:GetService("Players"):GetPlayers()) do
+        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            table.insert(list, p)
+        end
+    end
+    if #list == 0 then return nil end
+    if mode == "Random" then return list[math.random(1, #list)]
+    elseif mode == "Weakest" then
+        table.sort(list, function(a, b)
+            local ha = a.Character:FindFirstChildOfClass("Humanoid")
+            local hb = b.Character:FindFirstChildOfClass("Humanoid")
+            return (ha and ha.Health or 0) < (hb and hb.Health or 0)
+        end)
+        return list[1]
+    elseif mode == "Strongest" then
+        table.sort(list, function(a, b)
+            local ha = a.Character:FindFirstChildOfClass("Humanoid")
+            local hb = b.Character:FindFirstChildOfClass("Humanoid")
+            return (ha and ha.Health or 0) > (hb and hb.Health or 0)
+        end)
+        return list[1]
+    end
+    return list[1]
+end
+
+local function predictPos(hrp, lead)
+    if not hrp then return Vector3.zero end
+    local vel = hrp.AssemblyLinearVelocity
+    local grav = Vector3.new(0, -workspace.Gravity * 0.5, 0)
+    return hrp.Position + vel * lead + grav * (lead * lead * 0.5)
+end
+
+local function applyNoClip(character)
+    if not character then return end
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            pcall(function() part.CanCollide = false; part.Massless = true end)
+        end
+    end
+end
+
+local function aimAtTarget(myHrp, targetPos)
+    if not myHrp then return end
+    local dir = (targetPos - myHrp.Position)
+    if dir.Magnitude < 0.1 then return end
+    pcall(function()
+        myHrp.CFrame = CFrame.new(myHrp.Position, myHrp.Position + Vector3.new(dir.X, 0, dir.Z))
+    end)
+end
+
+local function fireTool()
+    local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+    if tool then
+        pcall(function() tool:Activate() end)
+        task.wait(0.02)
+        pcall(function() tool:Deactivate() end)
+    end
+end
+
+-- State Variables
+local orbitAngle, orbitLocalElapsed, orbitCurrentRadius = 0, 0, 0
+local orbitLastShot = 0
+local orbitSnapTimer = 0
+local lastDodgeTick = 0
+local predShootCD = {}
+local predLastShot = 0
+local predRungIndex = 0
+local hookedActivate = {}
+local hookedRemotes = {}
+
+-- Orbit Logic
+local function startOrbit()
+    local rootPart = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+
+    local orbitConn = RunService.Heartbeat:Connect(function(dt)
+        if not orbitConfig.enabled then return end
+        if not rootPart or not rootPart.Parent then return end
+
+        if orbitConfig.networkOwn then pcall(function() rootPart:SetNetworkOwner(LocalPlayer) end) end
+        if orbitConfig.noClip and LocalPlayer.Character then applyNoClip(LocalPlayer.Character) end
+
+        local target = getTarget(orbitConfig.target)
+        local targetPos = rootPart.Position
+        local tHrp = nil
+
+        if target and target.Character then
+            tHrp = target.Character:FindFirstChild("HumanoidRootPart")
+            if tHrp and (rootPart.Position - tHrp.Position).Magnitude <= orbitConfig.lockDist then
+                targetPos = tHrp.Position
+                if orbitConfig.predict then targetPos = targetPos + tHrp.AssemblyLinearVelocity * orbitConfig.predStr end
+            end
+        end
+
+        local speed = orbitConfig.reverse and -orbitConfig.speed or orbitConfig.speed
+        if orbitConfig.speedRandom then
+            speed = (orbitConfig.speedRandMin + math.random() * (orbitConfig.speedRandMax - orbitConfig.speedRandMin))
+            if orbitConfig.reverse then speed = -speed end
+        end
+
+        orbitAngle = (orbitAngle + math.rad(speed) * dt) % (2 * math.pi)
+        orbitLocalElapsed = orbitLocalElapsed + dt
+
+        local r = orbitConfig.randRad and math.random(orbitConfig.randMin, orbitConfig.randMax) or orbitConfig.dist
+        if orbitConfig.distPulse then r = r + math.sin(orbitLocalElapsed * orbitConfig.distPulseSpeed * 2 * math.pi) * orbitConfig.distPulseAmp end
+
+        local h = orbitConfig.height
+        if orbitConfig.heightOscillate then h = h + math.sin(orbitLocalElapsed * orbitConfig.heightOscSpeed * 2 * math.pi) * orbitConfig.heightOscAmp end
+
+        local x, y, z = 0, 0, 0
+        local ax = orbitConfig.axis
+        if orbitConfig.mode == "Circle" then
+            if ax == "XZ" then x = math.cos(orbitAngle)*r; z = math.sin(orbitAngle)*r; y = h
+            elseif ax == "XY" then x = math.cos(orbitAngle)*r; y = math.sin(orbitAngle)*r; z = h
+            elseif ax == "YZ" then y = math.cos(orbitAngle)*r; z = math.sin(orbitAngle)*r; x = h end
+        elseif orbitConfig.mode == "Figure 8" then
+            x = math.sin(orbitAngle)*r; z = math.sin(orbitAngle)*math.cos(orbitAngle)*r*0.7; y = h
+        elseif orbitConfig.mode == "Ellipse" then
+            x = math.cos(orbitAngle)*r; z = math.sin(orbitAngle)*r*0.6; y = h
+        elseif orbitConfig.mode == "Spiral In" then
+            orbitCurrentRadius = math.max(1, orbitCurrentRadius - dt * orbitConfig.dist * 0.2)
+            x = math.cos(orbitAngle)*orbitCurrentRadius; z = math.sin(orbitAngle)*orbitCurrentRadius; y = h
+        elseif orbitConfig.mode == "Spiral Out" then
+            orbitCurrentRadius = math.min(orbitConfig.dist*2, orbitCurrentRadius + dt * orbitConfig.dist * 0.2)
+            x = math.cos(orbitAngle)*orbitCurrentRadius; z = math.sin(orbitAngle)*orbitCurrentRadius; y = h
+        elseif orbitConfig.mode == "Bounce" then
+            x = math.cos(orbitAngle)*r; z = math.sin(orbitAngle)*r; y = h + math.sin(orbitLocalElapsed*3)*5
+        elseif orbitConfig.mode == "Lemniscate" then
+            local denom = 1 + math.sin(orbitAngle)^2
+            x = r*math.cos(orbitAngle)/denom; z = r*math.sin(orbitAngle)*math.cos(orbitAngle)/denom; y = h
+        elseif orbitConfig.mode == "Infinity" then
+            x = r*math.cos(orbitAngle); z = r*math.sin(2*orbitAngle)/2; y = h
+        elseif orbitConfig.mode == "RandomOrbit" then
+            local a = math.random()*2*math.pi; x = math.cos(a)*r; z = math.sin(a)*r; y = h
+        end
+
+        if orbitConfig.zigzag then x = x + math.sin(orbitLocalElapsed * orbitConfig.zigzagFreq * 2 * math.pi) * orbitConfig.zigzagAmp end
+        x = x + orbitConfig.offX; z = z + orbitConfig.offZ
+
+        local dst = targetPos + Vector3.new(x, y, z)
+        if orbitConfig.snapBack then
+            orbitSnapTimer = orbitSnapTimer + dt
+            if orbitSnapTimer >= orbitConfig.snapInterval then
+                orbitSnapTimer = 0
+                dst = targetPos + Vector3.new(orbitConfig.offX, h, orbitConfig.offZ)
+            end
+        end
+
+        local alpha = math.min(1, 1 - (1 - orbitConfig.lerp)^(dt * 60))
+        local smooth = rootPart.Position:Lerp(dst, alpha)
+
+        pcall(function()
+            if orbitConfig.face then
+                local cf = CFrame.new(smooth, Vector3.new(targetPos.X, smooth.Y, targetPos.Z))
+                cf = cf * CFrame.Angles(math.rad(orbitConfig.pitchOff), math.rad(orbitConfig.yawOff), 0)
+                rootPart.CFrame = cf
+            else
+                rootPart.CFrame = CFrame.new(smooth)
+            end
+            if orbitConfig.velZero then rootPart.AssemblyLinearVelocity = Vector3.zero; rootPart.AssemblyAngularVelocity = Vector3.zero end
+        end)
+
+        if orbitConfig.autoShoot and tHrp and target then
+            local now = tick()
+            if (rootPart.Position - tHrp.Position).Magnitude < orbitConfig.attackRange and now - orbitLastShot > orbitConfig.shootCooldown then
+                orbitLastShot = now
+                if orbitConfig.autoAim then aimAtTarget(rootPart, tHrp.Position) end
+                fireTool()
+            end
+        end
+    end)
+    return orbitConn
+end
+
+local orbitConnection = track(startOrbit())
+
+-- Prediction Logic
+local function startPrediction()
+    local rootPart = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+
+    local predConn = RunService.Heartbeat:Connect(function(dt)
+        if not predConfig.enabled then return end
+        if not rootPart or not rootPart.Parent then return end
+
+        if predConfig.networkOwn then pcall(function() rootPart:SetNetworkOwner(LocalPlayer) end) end
+        if predConfig.noClip and LocalPlayer.Character then applyNoClip(LocalPlayer.Character) end
+
+        local target = getTarget(orbitConfig.target)
+        if not target or not target.Character then return end
+        local tHrp = target.Character:FindFirstChild("HumanoidRootPart")
+        if not tHrp then return end
+
+        local dist = (rootPart.Position - tHrp.Position).Magnitude
+        if dist > predConfig.radius then return end
+
+        local moveVec = Vector3.zero
+        local threat = 0
+
+        -- Simple threat detection (velocity towards me)
+        local relativeVel = tHrp.AssemblyLinearVelocity
+        local toMe = (rootPart.Position - tHrp.Position).Unit
+        threat = relativeVel:Dot(toMe)
+
+        if threat > predConfig.threshold then
+            local dodgeDir = Vector3.new(0, 0, 1):Cross(tHrp.CFrame.UpVector).Unit
+            if math.random() < 0.5 then dodgeDir = -dodgeDir end
+            moveVec = dodgeDir * predConfig.dodgeDist
+        end
+
+        if moveVec.Magnitude > 0 then
+            pcall(function()
+                rootPart.CFrame = rootPart.CFrame + moveVec * dt * 60
+                if predConfig.velZero then
+                    rootPart.AssemblyLinearVelocity = Vector3.zero
+                end
+            end)
+        end
+    end)
+    return predConn
+end
+
+local predConnection = track(startPrediction())
+
+-- Anti-Bait Logic
+local function startAntiBait()
+    local rootPart = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+
+    local antiBaitConn = RunService.Heartbeat:Connect(function(dt)
+        if not antiBaitConfig.enabled then return end
+        if not rootPart or not rootPart.Parent then return end
+
+        if antiBaitConfig.antiBaitNetworkOwn then pcall(function() rootPart:SetNetworkOwner(LocalPlayer) end) end
+        if antiBaitConfig.antiBaitNoClip and LocalPlayer.Character then applyNoClip(LocalPlayer.Character) end
+
+        -- Simple velocity spike dodge
+        local vel = rootPart.AssemblyLinearVelocity
+        if antiBaitConfig.velSpikeEnabled and vel.Magnitude > antiBaitConfig.velThreshold then
+            local dodgeDir = Vector3.new(math.random()-0.5, 0, math.random()-0.5).Unit
+            pcall(function()
+                rootPart.CFrame = rootPart.CFrame + dodgeDir * antiBaitConfig.velDodgeDist
+                if antiBaitConfig.antiBaitVelZero then rootPart.AssemblyLinearVelocity = Vector3.zero end
+            end)
+        end
+    end)
+    return antiBaitConn
+end
+
+local antiBaitConnection = track(startAntiBait())
+
 local function stepBunnyHop(dt)
     if not KnifeCombatRuntime.Alive then return end
     local liveConfig = Environment.__DevKageConfig
