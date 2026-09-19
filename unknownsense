@@ -1915,7 +1915,101 @@ function library:CreatePage(Properties)
 end
 
 
+function pages:CreateFolder(Properties)
+    Properties = Properties or {}
+    local Folder = {
+        Name    = (Properties.name or Properties.Name or Properties.title or Properties.Title or "New Folder"),
+        Open    = true,
+        Side    = (Properties.side or Properties.Side or "Left"),
+        Sections = {},
+        Window   = self.Window,
+        Page    = self
+    }
+    do
+        local Folder_Holder = utility:RenderObject("Frame", {
+            BackgroundColor3    = Color3.fromRGB(30, 30, 30),
+            BackgroundTransparency = 0,
+            BorderColor3        = Color3.fromRGB(12, 12, 12),
+            BorderMode          = "Inset",
+            BorderSizePixel     = 1,
+            Parent              = Folder.Page[Folder.Side],
+            Size                = UDim2.new(1, 0, 0, 20),
+            ZIndex              = 2
+        })
+        local Folder_Header = utility:RenderObject("TextButton", {
+            BackgroundColor3    = Color3.fromRGB(30, 30, 30),
+            BackgroundTransparency = 0,
+            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderSizePixel     = 0,
+            Parent              = Folder_Holder,
+            Size                = UDim2.new(1, 0, 1, 0),
+            Text                = "",
+            ZIndex              = 3,
+            AutoButtonColor     = false
+        })
+        local Folder_Title = utility:RenderObject("TextLabel", {
+            AnchorPoint         = Vector2.new(0, 0.5),
+            BackgroundTransparency = 1,
+            Parent              = Folder_Header,
+            Position            = UDim2.new(0, 12, 0.5, 0),
+            Size                = UDim2.new(1, -26, 1, 0),
+            ZIndex              = 4,
+            Font                = "Code",
+            RichText            = true,
+            Text                = "<b style='color: rgb(205, 205, 205);'>" .. Folder.Name .. "</b>",
+            TextColor3          = Color3.fromRGB(205, 205, 205),
+            TextSize            = 11,
+            TextXAlignment      = "Left",
+            Visible             = true
+        })
+        local Folder_Arrow = utility:RenderObject("ImageLabel", {
+            AnchorPoint         = Vector2.new(0, 0.5),
+            BackgroundTransparency = 1,
+            Parent              = Folder_Header,
+            Position            = UDim2.new(0, 5, 0.5, 0),
+            Size                = UDim2.new(0, 10, 0, 10),
+            ZIndex              = 4,
+            Image               = "rbxassetid://8548723563",
+            ImageColor3         = Color3.fromRGB(205, 205, 205)
+        })
+        local Folder_Container = utility:RenderObject("Frame", {
+            BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+            BackgroundTransparency = 1,
+            BorderColor3        = Color3.fromRGB(0, 0, 0),
+            BorderSizePixel     = 0,
+            Parent              = Folder_Holder,
+            Position            = UDim2.new(0, 0, 0, 20),
+            Size                = UDim2.new(1, 0, 0, 0),
+            ZIndex              = 2,
+            Visible             = true,
+            AutomaticSize       = Enum.AutomaticSize.Y
+        })
+        utility:RenderObject("UIListLayout", {
+            Padding            = UDim.new(0, 2),
+            Parent             = Folder_Container,
+            FillDirection      = "Vertical",
+            HorizontalAlignment= "Left",
+            VerticalAlignment  = "Top"
+        })
+        utility:CreateConnection(Folder_Header.MouseButton1Click, function()
+            Folder.Open = not Folder.Open
+            Folder_Container.Visible = Folder.Open
+            Folder_Holder.Size = Folder.Open and UDim2.new(1, 0, 0, 20 + Folder_Container.AbsoluteSize.Y) or UDim2.new(1, 0, 0, 20)
+            Folder_Arrow.Rotation = Folder.Open and 0 or 180
+        end)
+    end
+    return setmetatable(Folder, {
+        AddSection = function(self, Section)
+            Section.Parent = self
+            Section.Page[Section.Side].Parent = self.Folder_Container
+            table.insert(self.Sections, Section)
+            return Section
+        end
+    })
+end
+
 function pages:CreateSection(Properties)
+
     Properties = Properties or {}
     local Section = {
         Name    = (Properties.name or Properties.Name or Properties.title or Properties.Title or "New Section"),
@@ -1932,7 +2026,7 @@ function pages:CreateSection(Properties)
             BorderColor3        = Color3.fromRGB(12, 12, 12),
             BorderMode          = "Inset",
             BorderSizePixel     = 1,
-            Parent              = Section.Page[Section.Side],
+            Parent              = Section.Parent and Section.Parent.Folder_Container or Section.Page[Section.Side],
             Size                = UDim2.new(1, 0, 0, Section.Size),
             ZIndex              = 2
         })
