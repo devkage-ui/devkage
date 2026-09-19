@@ -531,7 +531,7 @@ local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
 
 
 
-__devkageEnv.__DEVKAGE_RUNTIME_VERSION = "dual-script-autoload-v7-knife-movement-astra-smooth-ui-cursor-weather"
+__devkageEnv.__DEVKAGE_RUNTIME_VERSION = "dual-script-autoload-v8-currentbuild-ui-halo-wave-fps-20260913"
 local __devkageMultiInjectAutoBoot = __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT == true
 
 -- Autoexec coexistence boot mutex.
@@ -625,30 +625,12 @@ library.Theme = library.Theme or {
     TopBar = Color3.fromRGB(255, 255, 255),
     TopBarTransparency = 0,
     MenuAnimationSpeed = 1,
-    DPIScale = 1,
-
-    -- High-quality weather drawn strictly inside the menu glass.
-    UIRainEnabled = false,
-    UISnowEnabled = false,
-    UIRainColor = Color3.fromRGB(118, 196, 255),
-    UISnowColor = Color3.fromRGB(245, 248, 255),
-    UIRainDensity = 32,
-    UISnowDensity = 18,
-    UIRainSpeed = 1,
-    UISnowSpeed = 0.85
+    DPIScale = 1
 }
 if library.Theme.TopBar == nil then library.Theme.TopBar = Color3.fromRGB(255, 255, 255) end
 if library.Theme.TopBarTransparency == nil then library.Theme.TopBarTransparency = 0 end
 if library.Theme.MenuAnimationSpeed == nil then library.Theme.MenuAnimationSpeed = 1 end
 if library.Theme.DPIScale == nil then library.Theme.DPIScale = 1 end
-if library.Theme.UIRainEnabled == nil then library.Theme.UIRainEnabled = false end
-if library.Theme.UISnowEnabled == nil then library.Theme.UISnowEnabled = false end
-if typeof(library.Theme.UIRainColor) ~= "Color3" then library.Theme.UIRainColor = Color3.fromRGB(118,196,255) end
-if typeof(library.Theme.UISnowColor) ~= "Color3" then library.Theme.UISnowColor = Color3.fromRGB(245,248,255) end
-if library.Theme.UIRainDensity == nil then library.Theme.UIRainDensity = 32 end
-if library.Theme.UISnowDensity == nil then library.Theme.UISnowDensity = 18 end
-if library.Theme.UIRainSpeed == nil then library.Theme.UIRainSpeed = 1 end
-if library.Theme.UISnowSpeed == nil then library.Theme.UISnowSpeed = 0.85 end
 
 -- Keybind overlay/menu appearance is independent from the main window theme.
 -- Defaults are intentionally more compact than older DevKage builds.
@@ -790,6 +772,7 @@ function library:ApplyThemeObject(object)
 
     if object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox") then
         pcall(function()
+            object.Font = Enum.Font.Code
             object.TextColor3 = self.Theme.Text
             if object:IsA("TextBox") then object.PlaceholderColor3 = self.Theme.Text end
         end)
@@ -850,9 +833,7 @@ function library:ApplyTheme()
         else
             pcall(function()
                 frame.BackgroundColor3 = self.Theme.Toggle
-                if frame.Parent then
-                    frame.Parent.Visible = control.State == true
-                end
+                if frame.Parent then frame.Parent.Visible = control.State == true end
             end)
         end
     end
@@ -913,6 +894,10 @@ function utility:RenderObject(RenderType, RenderProperties, RenderHidden)
         end
     end
     local Render = Instance.new(RenderType)
+    -- GameSense-style typography: keep rendered UI text on the compact Code font.
+    if Render:IsA("TextLabel") or Render:IsA("TextButton") or Render:IsA("TextBox") then
+        pcall(function() Render.Font = Enum.Font.Code end)
+    end
     if RenderProperties and typeof(RenderProperties) == "table" then
         for Property, Value in pairs(RenderProperties) do
             if Property ~= "RenderTime" and Property ~= "ThemeRole" and Property ~= "ThemeIgnore" then
@@ -2878,6 +2863,10 @@ function BindManager:RefreshControl(control)
         control.BindValueLabel.TextColor3 = control.BindMode == "Always"
             and control.Window.Accent or Color3.fromRGB(125,125,125)
     end
+
+    if control.RefreshToggleIndicator then
+        control:RefreshToggleIndicator()
+    end
 end
 
 function BindManager:RefreshActive()
@@ -2892,7 +2881,8 @@ function BindManager:RefreshActive()
         local hasKey = configured and keyText ~= "-"
         local hudEligible = hasKey
             or (configured and (control.BindMode == "Always" or control.BindMode == "Hold"))
-        local active = hudEligible and control:Get() == true
+        local featureOn = control:Get() == true
+        local active = hudEligible and featureOn
         local record = self.ActiveRows[control]
         if active then
             count = count + 1
@@ -3179,7 +3169,7 @@ function sections:CreateToggle(Properties)
             TextColor3          = Color3.fromRGB(205, 205, 205),
             TextSize            = 9,
             TextStrokeTransparency = 1,
-            TextTransparency    = 1,
+            TextTransparency    = 0.5,
             TextXAlignment      = "Left"
         })
         local Content_BindValue = utility:RenderObject(Content.InlineBind and "TextButton" or "TextLabel", {
@@ -3268,10 +3258,24 @@ function sections:CreateToggle(Properties)
         function Content:Set(state, silent)
             if Content.BindMode == "Always" and state == false then state = true end
             Content.State = state == true
-            Content_Holder_Outline.Visible = Content.State
+            Content:RefreshToggleIndicator()
             Holder_Outline_Frame.BackgroundColor3 = library.Theme.Toggle
             if not silent then utility:SafeCallback(Content.Callback, Content:Get()) end
             if library.KeybindManager then library.KeybindManager:RefreshActive() end
+        end
+        function Content:RefreshToggleIndicator()
+            local show = Content.State == true or Content.BindConfigured == true
+            Content_Holder_Outline.Visible = show
+            Holder_Outline_Frame.Visible = show
+            -- Hide inline bind controls unless the feature is on or a keybind is configured
+            local showBind = Content.State == true or Content.BindConfigured == true
+            if Content.BindModeButton then
+                Content.BindModeButton.Visible = showBind
+            end
+            if Content.BindValueLabel and Content.InlineBind then
+                Content.BindValueLabel.Visible = showBind
+            end
+            return show
         end
         function Content:Get() return Content.State end
 
@@ -3321,6 +3325,7 @@ function sections:CreateToggle(Properties)
         end)
 
         Content:Set(Content.State, true)
+        Content:RefreshToggleIndicator()
         if library.KeybindManager then library.KeybindManager:Register(Content, Properties) end
     end
     return utility:RegisterControl(Content, Properties)
@@ -9419,19 +9424,28 @@ devkage_cursor_squash_x            = 1,
 devkage_cursor_squash_y            = 1,
 devkage_cursor_smooth_spin         = true,
 devkage_cursor_line_glow           = true,
-devkage_cursor_glow_thickness      = 14,
-devkage_cursor_glow_extra_length   = 6,
-devkage_cursor_glow_transparency   = 0.72,
+devkage_cursor_glow_thickness      = 12,
+devkage_cursor_glow_extra_length   = 5,
+devkage_cursor_glow_transparency   = 0.68,
 devkage_cursor_text_enabled        = true,
 devkage_cursor_main_text           = "devkage",
 devkage_cursor_second_text         = "None",
 devkage_cursor_text_outline        = true,
+devkage_cursor_text_glow           = true,
+devkage_cursor_text_glow_follow_color = true,
+devkage_cursor_text_glow_color     = Color3.fromRGB(205, 185, 255),
+devkage_cursor_text_glow_size      = 10,
+devkage_cursor_text_glow_strength  = 0.80,
 devkage_cursor_main_text_size      = 20,
 devkage_cursor_second_text_size    = 15,
 devkage_cursor_size           = 25,
 devkage_cursor_thickness      = 3,
 devkage_cursor_rotation_speed = 0.8,
 devkage_cursor_pulse_speed    = 2.9,
+devkage_cursor_bounce         = true,
+devkage_cursor_bounce_amount  = 0.18,
+devkage_cursor_bounce_stretch = 0.12,
+devkage_cursor_bounce_curve   = 0.72,
 devkage_cursor_text           = true,
 skybox_enabled           = false,
 skybox_preset            = "Cloudy Moon",
@@ -11770,6 +11784,8 @@ extraAutoExposure=false, extraIndoorExposure=0.35, extraOutdoorExposure=-0.05, e
 cinematicBlur=false, cinematicBlurSize=7,
 extraWater=false, extraWaterColor=Color3.fromRGB(32,115,140), extraWaterTransparency=0.3,
 extraWaterReflectance=0.65, extraWaterWaveSize=0.18, extraWaterWaveSpeed=12,
+fpsBooster=false,
+fpsBoosterDisableParticles=true, fpsBoosterDisablePostFX=true, fpsBoosterDisableTerrainDecoration=true,
 colorCorrectionEnabled=false, tintColor=Color3.fromRGB(255,255,255), brightness=0, contrast=0, saturation=0,
 bloomEnabled=false, bloomIntensity=1, bloomSize=24, bloomThreshold=1,
 sunRaysEnabled=false, sunIntensity=0.1, sunSpread=0.2,
@@ -14285,12 +14301,12 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_65.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_67.lua"
 local SCRIPT_STABLE_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_current.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOLOAD_ENABLED_FILE = CONFIG_FOLDER .. "/_devkage_autoload_enabled.flag"
 local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_AutoLoad_LAST.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.65-autoload-currentbuild-ui-toggle-20260912"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.67-autoload-currentbuild-ui-halo-wave-fps-font-fpsboost-20260913"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -15211,8 +15227,18 @@ end
 
 local function remove_stale_devkage_payloads()
     if type(delfile) ~= "function" then return end
+    -- Never allow an older payload filename to remain executable/available.
+    for _, staleCurrent in ipairs({
+        CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_65.lua",
+        CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_66.lua",
+    }) do
+        pcall(delfile, staleCurrent)
+    end
+    if type(delfile) ~= "function" then return end
     for _, legacyName in ipairs({
-        "_devkage_autoload_payload_v5_2_64.lua",
+        "_devkage_autoload_payload_v5_2_65.lua",
+        "_devkage_autoload_payload_v5_2_66.lua",
+    "_devkage_autoload_payload_v5_2_64.lua",
         "_devkage_autoload_payload_v5_2_63.lua",
         "_devkage_autoload_payload_v5_2_62.lua",
         "_devkage_autoload_payload_v5_2_61.lua",
@@ -15259,6 +15285,7 @@ if not enabled then
         for _, path in ipairs({
             SCRIPT_PAYLOAD_FILE,
             SCRIPT_STABLE_PAYLOAD_FILE,
+            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_66.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_64.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_63.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_62.lua",
@@ -15930,7 +15957,7 @@ gui.Parent = anchor
 local label = auraTrack(Instance.new("TextLabel"))
 label.BackgroundTransparency = 1
 label.Size = UDim2.fromScale(1, 1)
-label.Font = Enum.Font.GothamBold
+label.Font = Enum.Font.Code
 label.Text = symbol
 label.TextScaled = true
 label.TextColor3 = RainbowAuraState.color
@@ -16525,6 +16552,7 @@ runtimeEnv.__DevKageAvatarMods = (function()
         refreshToken = 0,
         assetCache = {},
         haloSurfaces = {},
+        haloWaves = {},
         wingHighlights = {},
     }
 
@@ -16660,6 +16688,7 @@ runtimeEnv.__DevKageAvatarMods = (function()
         state.emitters = {}
         state.trails = {}
         state.haloSurfaces = {}
+        state.haloWaves = {}
         state.wingHighlights = {}
         state.model = nil
         state.character = nil
@@ -16826,16 +16855,18 @@ runtimeEnv.__DevKageAvatarMods = (function()
         trail.Attachment0 = a0
         trail.Attachment1 = a1
         trail.FaceCamera = true
-        trail.Lifetime = 0.20
-        trail.MinLength = 0.05
-        trail.LightEmission = 0.9
+        trail.Lifetime = 0.32
+        trail.MinLength = 0.03
+        trail.LightEmission = 1.0
         trail.LightInfluence = 0
         trail.Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0,0.45),
+            NumberSequenceKeypoint.new(0,0.28),
+            NumberSequenceKeypoint.new(0.55,0.68),
             NumberSequenceKeypoint.new(1,1),
         })
         trail.WidthScale = NumberSequence.new({
-            NumberSequenceKeypoint.new(0,0.12),
+            NumberSequenceKeypoint.new(0,0.22),
+            NumberSequenceKeypoint.new(0.6,0.08),
             NumberSequenceKeypoint.new(1,0),
         })
         trail.Color = ColorSequence.new(primaryColor(),secondaryColor())
@@ -16981,9 +17012,9 @@ runtimeEnv.__DevKageAvatarMods = (function()
             end
         end
 
-        featherLayer(profile.primary,1.5,4.2,1.15,-1.8,0.9,2.4,0.48,2.5,4.7,"Primary")
-        featherLayer(profile.secondary,0.9,3.15,1.25,-0.65,0.72,1.75,0.58,1.8,3.25,"Secondary")
-        featherLayer(profile.covert,0.45,2.2,1.05,0.15,0.58,1.2,0.66,1.1,2.0,"Covert")
+        featherLayer(profile.primary,1.8,5.8,1.35,-2.2,1.1,3.2,0.44,3.2,5.8,"Primary")
+        featherLayer(profile.secondary,1.1,4.0,1.40,-0.80,0.88,2.25,0.54,2.2,4.0,"Secondary")
+        featherLayer(profile.covert,0.55,2.75,1.20,0.25,0.70,1.55,0.62,1.4,2.55,"Covert")
 
         addLight(rootBone,primaryColor(),side<0 and 1 or 2,0.72)
         addEmitter(rootBone,side<0 and 1 or 2,0.65)
@@ -17025,14 +17056,15 @@ runtimeEnv.__DevKageAvatarMods = (function()
             highlight.Adornee=handle
             highlight.DepthMode=Enum.HighlightDepthMode.Occluded
             highlight.FillColor=primaryColor()
-            highlight.FillTransparency=0.84
-            highlight.OutlineTransparency=1
+            highlight.FillTransparency=0.58
+            highlight.OutlineColor=primaryColor()
+            highlight.OutlineTransparency=0.78
             highlight.Parent=state.model
             remember(highlight)
             state.wingHighlights[#state.wingHighlights+1]=highlight
 
-            addLight(handle,primaryColor(),1,0.82)
-            addEmitter(handle,1,0.72)
+            addLight(handle,primaryColor(),1.8,0.65)
+            addEmitter(handle,1,0.58)
             return
         end
 
@@ -17055,73 +17087,121 @@ runtimeEnv.__DevKageAvatarMods = (function()
         gui.AlwaysOnTop=true
         gui.LightInfluence=0
         gui.SizingMode=Enum.SurfaceGuiSizingMode.PixelsPerStud
-        gui.PixelsPerStud=180
+        gui.PixelsPerStud=240
         gui.ClipsDescendants=false
         gui.Parent=plate
         remember(gui)
 
+        -- Far atmospheric diffusion ring (widest, most transparent)
+        local farFrame=Instance.new("Frame")
+        farFrame.Name="FarGlowRing"
+        farFrame.AnchorPoint=Vector2.new(0.5,0.5)
+        farFrame.Position=UDim2.fromScale(0.5,0.5)
+        farFrame.Size=UDim2.fromScale(0.94,0.94)
+        farFrame.BackgroundTransparency=1
+        farFrame.ZIndex=1
+        farFrame.Parent=gui
+        remember(farFrame)
+        local farCorner=Instance.new("UICorner")
+        farCorner.CornerRadius=UDim.new(1,0)
+        farCorner.Parent=farFrame
+        remember(farCorner)
+        local farStroke=Instance.new("UIStroke")
+        farStroke.Name="HaloFarGlow"
+        farStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
+        farStroke.LineJoinMode=Enum.LineJoinMode.Round
+        farStroke.Color=ringIndex==2 and secondaryColor() or primaryColor()
+        farStroke.Thickness=46
+        farStroke.Transparency=0.90
+        farStroke.Parent=farFrame
+        remember(farStroke)
+
+        -- Mid bloom ring
         local glowFrame=Instance.new("Frame")
         glowFrame.Name="GlowRing"
         glowFrame.AnchorPoint=Vector2.new(0.5,0.5)
         glowFrame.Position=UDim2.fromScale(0.5,0.5)
-        glowFrame.Size=UDim2.fromScale(0.80,0.80)
+        glowFrame.Size=UDim2.fromScale(0.84,0.84)
         glowFrame.BackgroundTransparency=1
-        glowFrame.ZIndex=1
+        glowFrame.ZIndex=2
         glowFrame.Parent=gui
         remember(glowFrame)
-
         local glowCorner=Instance.new("UICorner")
         glowCorner.CornerRadius=UDim.new(1,0)
         glowCorner.Parent=glowFrame
         remember(glowCorner)
-
         local glowStroke=Instance.new("UIStroke")
         glowStroke.Name="HaloGlow"
         glowStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
         glowStroke.LineJoinMode=Enum.LineJoinMode.Round
         glowStroke.Color=ringIndex==2 and secondaryColor() or primaryColor()
-        glowStroke.Thickness=26
-        glowStroke.Transparency=0.68
+        glowStroke.Thickness=28
+        glowStroke.Transparency=0.70
         glowStroke.Parent=glowFrame
         remember(glowStroke)
 
+        -- Hot core ring (sharpest, most opaque, brightest)
         local coreFrame=Instance.new("Frame")
         coreFrame.Name="CoreRing"
         coreFrame.AnchorPoint=Vector2.new(0.5,0.5)
         coreFrame.Position=UDim2.fromScale(0.5,0.5)
-        coreFrame.Size=UDim2.fromScale(0.80,0.80)
+        coreFrame.Size=UDim2.fromScale(0.76,0.76)
         coreFrame.BackgroundTransparency=1
-        coreFrame.ZIndex=2
+        coreFrame.ZIndex=3
         coreFrame.Parent=gui
         remember(coreFrame)
-
         local coreCorner=Instance.new("UICorner")
         coreCorner.CornerRadius=UDim.new(1,0)
         coreCorner.Parent=coreFrame
         remember(coreCorner)
-
         local coreStroke=Instance.new("UIStroke")
         coreStroke.Name="HaloCore"
         coreStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
         coreStroke.LineJoinMode=Enum.LineJoinMode.Round
         coreStroke.Color=ringIndex==2 and secondaryColor() or primaryColor()
-        coreStroke.Thickness=9
-        coreStroke.Transparency=transparency()
+        coreStroke.Thickness=10
+        coreStroke.Transparency=math.clamp(transparency()-0.08,0,0.86)
         coreStroke.Parent=coreFrame
         remember(coreStroke)
+
+        -- Specular highlight ring — thin bright inner edge like a real glowing tube
+        local specFrame=Instance.new("Frame")
+        specFrame.Name="SpecularRing"
+        specFrame.AnchorPoint=Vector2.new(0.5,0.5)
+        specFrame.Position=UDim2.fromScale(0.5,0.5)
+        specFrame.Size=UDim2.fromScale(0.68,0.68)
+        specFrame.BackgroundTransparency=1
+        specFrame.ZIndex=4
+        specFrame.Parent=gui
+        remember(specFrame)
+        local specCorner=Instance.new("UICorner")
+        specCorner.CornerRadius=UDim.new(1,0)
+        specCorner.Parent=specFrame
+        remember(specCorner)
+        local specStroke=Instance.new("UIStroke")
+        specStroke.Name="HaloSpecular"
+        specStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
+        specStroke.LineJoinMode=Enum.LineJoinMode.Round
+        specStroke.Color=Color3.new(1,1,1)
+        specStroke.Thickness=2.2
+        specStroke.Transparency=0.28
+        specStroke.Parent=specFrame
+        remember(specStroke)
 
         state.haloSurfaces[#state.haloSurfaces+1]={
             Gui=gui,
             Core=coreStroke,
             Glow=glowStroke,
+            FarGlow=farStroke,
+            Specular=specStroke,
             Ring=ringIndex,
         }
     end
 
     local function createHaloRig(attachmentPart,kind,yOffset,ringIndex,sizeMultiplier)
         local scale=modSize()*(sizeMultiplier or 1)
-        local radius=(kind=="Head" and 1.48 or 1.82)*scale
-        local diameter=radius*2.45
+        local radius=(kind=="Head" and 1.62 or 2.0)*scale
+        local diameter=radius*3.0
 
         -- A transparent physical plate carries two high-DPI SurfaceGuis.
         -- UICorner + UIStroke produces a mathematically perfect full circle,
@@ -17172,6 +17252,114 @@ runtimeEnv.__DevKageAvatarMods = (function()
         )
     end
 
+    local function createGroundHaloWaves(root,humanoid)
+        if not root then return end
+
+        local baseOffset = footOffset(root,humanoid) - 0.045
+        -- 5 staggered waves for a rich, layered ground ripple effect
+        local waveSpecs = {
+            {Diameter=4.1, Delay=0.00, Strength=0.96, Thickness=6.4, OuterThick=18},
+            {Diameter=4.1, Delay=0.18, Strength=0.82, Thickness=5.1, OuterThick=14},
+            {Diameter=4.1, Delay=0.36, Strength=0.68, Thickness=3.9, OuterThick=10.5},
+            {Diameter=4.1, Delay=0.54, Strength=0.54, Thickness=3.0, OuterThick=8},
+            {Diameter=4.1, Delay=0.72, Strength=0.40, Thickness=2.2, OuterThick=5.5},
+            {Diameter=4.1, Delay=0.90, Strength=0.28, Thickness=1.6, OuterThick=4},
+        }
+
+        for index,spec in ipairs(waveSpecs) do
+            local plate=Instance.new("Part")
+            plate.Name="GroundHaloWave_"..index
+            plate.Size=Vector3.new(0.028,spec.Diameter,spec.Diameter)
+            plate.Transparency=1
+            plate.Anchored=false
+            plate.CanCollide=false
+            plate.CanTouch=false
+            plate.CanQuery=false
+            plate.CastShadow=false
+            plate.Massless=true
+            plate.Parent=state.model
+            remember(plate)
+
+            local motor=makeMotor(
+                "GroundHaloWaveMotor_"..index,
+                root,
+                plate,
+                CFrame.new(0,baseOffset,0) * CFrame.Angles(0,0,math.rad(90))
+            )
+
+            -- Top surface gui (seen from above)
+            local function makeSurface(face)
+                local gui=Instance.new("SurfaceGui")
+                gui.Name="GroundHaloWaveSurface"
+                gui.Face=face
+                gui.AlwaysOnTop=true
+                gui.LightInfluence=0
+                gui.SizingMode=Enum.SurfaceGuiSizingMode.PixelsPerStud
+                gui.PixelsPerStud=220
+                gui.ClipsDescendants=false
+                gui.Parent=plate
+                remember(gui)
+
+                -- Outer atmospheric bloom ring
+                local outerFrame=Instance.new("Frame")
+                outerFrame.AnchorPoint=Vector2.new(0.5,0.5)
+                outerFrame.Position=UDim2.fromScale(0.5,0.5)
+                outerFrame.Size=UDim2.fromScale(0.96,0.96)
+                outerFrame.BackgroundTransparency=1
+                outerFrame.ZIndex=1
+                outerFrame.Parent=gui
+                remember(outerFrame)
+                local outerCorner=Instance.new("UICorner")
+                outerCorner.CornerRadius=UDim.new(1,0)
+                outerCorner.Parent=outerFrame
+                remember(outerCorner)
+                local outerGlow=Instance.new("UIStroke")
+                outerGlow.Name="WaveOuterGlow"
+                outerGlow.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
+                outerGlow.LineJoinMode=Enum.LineJoinMode.Round
+                outerGlow.Thickness=spec.OuterThick
+                outerGlow.Transparency=1
+                outerGlow.Parent=outerFrame
+                remember(outerGlow)
+
+                -- Hot core ring
+                local frame=Instance.new("Frame")
+                frame.AnchorPoint=Vector2.new(0.5,0.5)
+                frame.Position=UDim2.fromScale(0.5,0.5)
+                frame.Size=UDim2.fromScale(0.88,0.88)
+                frame.BackgroundTransparency=1
+                frame.ZIndex=2
+                frame.Parent=gui
+                remember(frame)
+                local corner=Instance.new("UICorner")
+                corner.CornerRadius=UDim.new(1,0)
+                corner.Parent=frame
+                remember(corner)
+                local glow=Instance.new("UIStroke")
+                glow.Name="WaveGlow"
+                glow.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
+                glow.LineJoinMode=Enum.LineJoinMode.Round
+                glow.Thickness=spec.Thickness
+                glow.Transparency=1
+                glow.Parent=frame
+                remember(glow)
+                return frame, glow, outerFrame, outerGlow
+            end
+
+            local frame, glow, outerFrame, outerGlow = makeSurface(Enum.NormalId.Top)
+            local frame2, glow2, outerFrame2, outerGlow2 = makeSurface(Enum.NormalId.Bottom)
+
+            state.haloWaves[#state.haloWaves+1]={
+                Plate=plate,Motor=motor,Frame=frame,Glow=glow,
+                OuterFrame=outerFrame,OuterGlow=outerGlow,
+                Frame2=frame2,Glow2=glow2,
+                OuterFrame2=outerFrame2,OuterGlow2=outerGlow2,
+                Index=index,BaseDiameter=spec.Diameter,Delay=spec.Delay,
+                Strength=spec.Strength,Thickness=spec.Thickness,OuterThick=spec.OuterThick
+            }
+        end
+    end
+
     local function createFeetHalo(root,humanoid)
         createHaloRig(
             root,
@@ -17180,6 +17368,9 @@ runtimeEnv.__DevKageAvatarMods = (function()
             2,
             1.22
         )
+        if cfg().avatarModsGroundWaves ~= false then
+            createGroundHaloWaves(root,humanoid)
+        end
     end
 
     local function build(character)
@@ -17287,9 +17478,63 @@ runtimeEnv.__DevKageAvatarMods = (function()
 
             for _,rig in ipairs(state.haloRigs) do
                 if rig.Motor and rig.Motor.Parent then
-                    local bob = math.sin(now * 1.45 * speed + rig.Ring * 0.9) * 0.035 * amplitude
-                    local spin = math.rad((now * 16 * speed * motionRate) % 360)
-                    rig.Motor.Transform = CFrame.new(0,bob,0) * CFrame.Angles(0,spin,0)
+                    -- Gentle floating bob with a slight tilt for organic feel
+                    local bob = math.sin(now * 1.35 * speed + rig.Ring * 1.1) * 0.048 * amplitude
+                    local tilt = math.sin(now * 0.72 * speed + rig.Ring * 0.55) * math.rad(2.4) * amplitude
+                    local haloPulse = 1 + (math.sin(now * 2.1 * speed + rig.Ring * 0.9) * 0.5 + 0.5) * pulse * 0.34
+                    local haloScale = modSize() * haloPulse
+                    -- Alternate spin direction per ring pair for a counter-rotating look
+                    local dir = (rig.Ring % 2 == 0) and -1 or 1
+                    local spinSpeed = 14 + (rig.Ring - 1) * 4
+                    local spin = math.rad((now * spinSpeed * speed * motionRate * dir) % 360)
+                    rig.Motor.Transform = CFrame.new(0,bob,0) * CFrame.Angles(tilt,spin,0)
+                end
+            end
+
+            for _,waveEntry in ipairs(state.haloWaves) do
+                if waveEntry.Plate and waveEntry.Plate.Parent and waveEntry.Motor and waveEntry.Motor.Parent then
+                    local cycle = (now * math.max(speed,0.35) * 0.58 - waveEntry.Delay) % 1
+                    local eased = 1 - math.pow(1 - cycle, 2.2)
+                    -- Waves start small, bloom outward, then fade as they reach max radius
+                    local diameterScale = 0.42 + eased * 1.92
+                    local diameter = waveEntry.BaseDiameter * diameterScale
+                    -- Fade: bright as it expands, fades toward edges
+                    local fadeIn = math.clamp(eased * 5.5, 0, 1)
+                    local fadeOut = 1 - math.clamp((eased - 0.52) * 2.5, 0, 1)
+                    local alpha = fadeIn * fadeOut
+                    waveEntry.Plate.Size = Vector3.new(0.028,diameter,diameter)
+                    -- Primary color is a warm/cool shift based on index for visual variety
+                    local waveColor = rainbowColor(now, waveEntry.Index * 11, primaryColor()):Lerp(Color3.new(1,1,1),0.28)
+                    local hotColor = waveColor:Lerp(Color3.new(1,1,1),0.55)
+                    -- Hot core ring
+                    local coreThick = math.max(1.2, waveEntry.Thickness * (1.12 - eased*0.22))
+                    local coreTrans = math.clamp(1 - alpha * waveEntry.Strength * 1.15, 0.08, 0.94)
+                    for _,g in ipairs({waveEntry.Glow, waveEntry.Glow2}) do
+                        if g and g.Parent then
+                            g.Color = hotColor
+                            g.Thickness = coreThick
+                            g.Transparency = coreTrans
+                        end
+                    end
+                    for _,f in ipairs({waveEntry.Frame, waveEntry.Frame2}) do
+                        if f and f.Parent then f.Size = UDim2.fromScale(0.88,0.88) end
+                    end
+                    -- Outer atmospheric bloom (larger, softer, more transparent)
+                    if waveEntry.OuterThick then
+                        local outerTrans = math.clamp(1 - alpha * waveEntry.Strength * 0.68, 0.30, 0.97)
+                        local outerThick = math.max(2, waveEntry.OuterThick * (1.08 - eased*0.14))
+                        for _,og in ipairs({waveEntry.OuterGlow, waveEntry.OuterGlow2}) do
+                            if og and og.Parent then
+                                og.Color = waveColor
+                                og.Thickness = outerThick
+                                og.Transparency = outerTrans
+                            end
+                        end
+                        for _,of in ipairs({waveEntry.OuterFrame, waveEntry.OuterFrame2}) do
+                            if of and of.Parent then of.Size = UDim2.fromScale(0.96,0.96) end
+                        end
+                    end
+                    waveEntry.Plate.Transparency = 1
                 end
             end
 
@@ -17324,26 +17569,50 @@ runtimeEnv.__DevKageAvatarMods = (function()
             for i,entry in ipairs(state.haloSurfaces) do
                 local base=entry.Ring==2 and secondaryColor() or primaryColor()
                 local color=rainbowColor(now,i+entry.Ring*19,base)
+                -- Pulsing hot glow: the halo ring breathes with living energy
+                local haloPulse=(math.sin(now*2.8*speed+i*0.55+entry.Ring*1.2)+1)*0.5
+                local glowPulseBoost=1+haloPulse*pulse*0.55
+                local hotColor=color:Lerp(Color3.new(1,1,1),0.58+haloPulse*0.12)
+                local coreBrightness=glowBrightness()*glowPulseBoost
                 if entry.Core and entry.Core.Parent then
-                    entry.Core.Color=color
-                    entry.Core.Transparency=alpha
-                    entry.Core.Thickness=math.clamp(7+glowBrightness()*0.8,7,16)
+                    entry.Core.Color=hotColor
+                    -- Core ring is the sharpest, most opaque element — give it real presence
+                    entry.Core.Transparency=math.clamp(alpha*0.82-0.04,0,0.84)
+                    entry.Core.Thickness=math.clamp(11+coreBrightness*1.6+haloPulse*3.5,11,28)
                 end
                 if entry.Glow and entry.Glow.Parent then
                     entry.Glow.Color=color
-                    entry.Glow.Thickness=math.clamp(18+glowSize()*0.65,18,50)
+                    entry.Glow.Thickness=math.clamp(28+glowSize()*0.90+haloPulse*8,28,72)
                     entry.Glow.Transparency=math.clamp(
-                        0.82-(glowBrightness()/18),
-                        0.28,
-                        0.82
+                        0.68-(coreBrightness/14)-(haloPulse*0.08),
+                        0.12,
+                        0.68
                     )
+                end
+                if entry.FarGlow and entry.FarGlow.Parent then
+                    entry.FarGlow.Color=color:Lerp(secondaryColor(),0.22)
+                    entry.FarGlow.Thickness=math.clamp(48+glowSize()*1.25+haloPulse*12,48,104)
+                    entry.FarGlow.Transparency=math.clamp(
+                        0.84-(coreBrightness/22)-(haloPulse*0.06),
+                        0.48,
+                        0.84
+                    )
+                end
+                if entry.Specular and entry.Specular.Parent then
+                    -- Specular highlight sweeps around the ring as the halo spins
+                    local specPulse=math.abs(math.sin(now*3.5*speed+i*0.8))*0.22+haloPulse*0.10
+                    entry.Specular.Transparency=math.clamp(0.28+specPulse,0.22,0.55)
+                    entry.Specular.Color=hotColor
                 end
             end
 
             for i,highlight in ipairs(state.wingHighlights) do
                 if highlight and highlight.Parent then
-                    highlight.FillColor=rainbowColor(now,i+31,primaryColor())
-                    highlight.FillTransparency=math.clamp(0.90-glowBrightness()*0.018,0.68,0.90)
+                    local hColor=rainbowColor(now,i+31,primaryColor())
+                    highlight.FillColor=hColor
+                    highlight.FillTransparency=math.clamp(0.74-glowBrightness()*0.024,0.44,0.74)
+                    highlight.OutlineColor=hColor
+                    highlight.OutlineTransparency=math.clamp(0.82-glowBrightness()*0.018,0.58,0.82)
                 end
             end
 
@@ -17694,6 +17963,15 @@ Name = "Feather & Crystal Trails",
 State = getgenv().__DevKageConfig.avatarModsTrails ~= false,
 Callback = function(v)
 getgenv().__DevKageConfig.avatarModsTrails=v
+if avatarModsRuntime then avatarModsRuntime:Refresh() end
+end
+})
+
+local avatarModsGroundWavesToggle = avatarModsSection:CreateToggle({
+Name = "Ground Halo Waves",
+State = getgenv().__DevKageConfig.avatarModsGroundWaves ~= false,
+Callback = function(v)
+getgenv().__DevKageConfig.avatarModsGroundWaves=v
 if avatarModsRuntime then avatarModsRuntime:Refresh() end
 end
 })
@@ -18553,7 +18831,7 @@ avatarModsMotionDrop=avatarModsMotionDrop, avatarModsSpeedSlider=avatarModsSpeed
 avatarModsSizeSlider=avatarModsSizeSlider, avatarModsBrightnessSlider=avatarModsBrightnessSlider,
 avatarModsGlowSizeSlider=avatarModsGlowSizeSlider,
 avatarModsTransparencySlider=avatarModsTransparencySlider, avatarModsPulseSlider=avatarModsPulseSlider,
-avatarModsParticlesToggle=avatarModsParticlesToggle, avatarModsTrailsToggle=avatarModsTrailsToggle,
+avatarModsParticlesToggle=avatarModsParticlesToggle, avatarModsTrailsToggle=avatarModsTrailsToggle, avatarModsGroundWavesToggle=avatarModsGroundWavesToggle,
 avatarModsRebuildButton=avatarModsRebuildButton, rainbowAuraToggle=rainbowAuraToggle,
 rainbowAuraModeDrop=rainbowAuraModeDrop, rainbowAuraColorPicker=rainbowAuraColorPicker,
 rainbowAuraSecondaryPicker=rainbowAuraSecondaryPicker, rainbowAuraPaletteDrop=rainbowAuraPaletteDrop,
@@ -22208,6 +22486,7 @@ config.avatarModsAlpha=avatar.Alpha
 config.avatarModsPulse=avatar.Pulse
 config.avatarModsParticles=true
 config.avatarModsTrails=true
+config.avatarModsGroundWaves=true
 local controls=UI.Spoofer
 if controls then
 controls.avatarModsToggle:Set(true,true)
@@ -22220,7 +22499,7 @@ controls.avatarModsQualityDrop:Set(library.OptionIndex(controls.avatarModsQualit
 controls.avatarModsMotionDrop:Set(library.OptionIndex(controls.avatarModsMotionDrop.Options,avatar.Motion),true)
 controls.avatarModsSizeSlider:Set(avatar.Size,true); controls.avatarModsBrightnessSlider:Set(avatar.Brightness,true)
 controls.avatarModsTransparencySlider:Set(math.floor(avatar.Alpha*100+0.5),true); controls.avatarModsPulseSlider:Set(math.floor(avatar.Pulse*100+0.5),true)
-controls.avatarModsParticlesToggle:Set(true,true); controls.avatarModsTrailsToggle:Set(true,true)
+controls.avatarModsParticlesToggle:Set(true,true); controls.avatarModsTrailsToggle:Set(true,true); controls.avatarModsGroundWavesToggle:Set(true,true)
 end
 local runtime=((type(getgenv)=="function" and getgenv()) or _G).__DevKageAvatarMods
 if runtime then runtime:SetEnabled(true); runtime:Refresh() end
@@ -22917,7 +23196,7 @@ AdvancedLighting.ExtraVisuals=assert(loadstring([======[
 return function(context)
     local settings,Lighting,Workspace=context.Settings,context.Lighting,context.Workspace
     local RunService,library=context.RunService,context.Library
-    local runtime={Alive=true,Saved={},Objects={},Sections={},CycleTime=nil,Exposure=nil,ProbeAt=0}
+    local runtime={Alive=true,Saved={},FPSSaved=setmetatable({}, {__mode="k"}),FPSApplied=false,Objects={},Sections={},CycleTime=nil,Exposure=nil,ProbeAt=0}
     local function n(value,default,minimum,maximum)
         value=tonumber(value)
         if not value or value~=value or math.abs(value)==math.huge then value=default end
@@ -22940,9 +23219,83 @@ return function(context)
         saved[key]=nil
         if next(saved)==nil then self.Saved[object]=nil end
     end
+    function runtime:ApplyFPSBooster(enabled)
+        if not enabled then
+            local restore={}
+            for object,properties in pairs(self.FPSSaved or {}) do
+                for key,entry in pairs(properties) do
+                    pcall(function()
+                        if object and object.Parent and object[key] == entry.Applied then
+                            object[key] = entry.Original
+                        end
+                    end)
+                    restore[#restore+1]={object,key}
+                end
+            end
+            for _,entry in ipairs(restore) do
+                local properties=self.FPSSaved[entry[1]]
+                if properties then properties[entry[2]]=nil end
+                if properties and next(properties)==nil then self.FPSSaved[entry[1]]=nil end
+            end
+            if self.FPSConnection then
+                pcall(function() self.FPSConnection:Disconnect() end)
+                self.FPSConnection=nil
+            end
+            self.FPSApplied=false
+            return
+        end
+        if self.FPSApplied then return end
+        self.FPSSaved=self.FPSSaved or setmetatable({}, {__mode="k"})
+        local function write(object,key,value)
+            if not object then return end
+            local saved=self.FPSSaved[object]
+            if not saved then saved={}; self.FPSSaved[object]=saved end
+            if not saved[key] then saved[key]={Original=object[key],Applied=value} end
+            pcall(function() object[key]=value end)
+        end
+        if settings.fpsBoosterDisablePostFX ~= false then
+            for _,object in ipairs(Lighting:GetChildren()) do
+                if object:IsA("BloomEffect") or object:IsA("BlurEffect") or object:IsA("ColorCorrectionEffect")
+                    or object:IsA("DepthOfFieldEffect") or object:IsA("SunRaysEffect") or object:IsA("Atmosphere") then
+                    write(object,"Enabled",false)
+                end
+            end
+            write(Lighting,"GlobalShadows",false)
+            pcall(function() write(Lighting,"EnvironmentDiffuseScale",0) end)
+            pcall(function() write(Lighting,"EnvironmentSpecularScale",0) end)
+        end
+        local terrain=Workspace:FindFirstChildOfClass("Terrain")
+        if terrain and settings.fpsBoosterDisableTerrainDecoration ~= false then
+            pcall(function() write(terrain,"Decoration",false) end)
+        end
+        if settings.fpsBoosterDisableParticles ~= false then
+            local scanned=0
+            for _,object in ipairs(Workspace:GetDescendants()) do
+                scanned=scanned+1
+                if scanned > 16000 then break end
+                if object:IsA("ParticleEmitter") then
+                    write(object,"Enabled",false)
+                elseif object:IsA("Trail") or object:IsA("Beam") then
+                    write(object,"Enabled",false)
+                end
+            end
+            if self.FPSConnection then pcall(function() self.FPSConnection:Disconnect() end) end
+            self.FPSConnection=Workspace.DescendantAdded:Connect(function(object)
+                if not self.FPSApplied or settings.fpsBoosterDisableParticles == false then return end
+                if object:IsA("ParticleEmitter") then
+                    write(object,"Enabled",false)
+                elseif object:IsA("Trail") or object:IsA("Beam") then
+                    write(object,"Enabled",false)
+                end
+            end)
+        end
+        self.FPSApplied=true
+    end
     function runtime:Step(dt)
         if not self.Alive then return end
         dt=n(dt,0,0,0.25)
+        if settings.fpsBooster and not self.FPSApplied then self:ApplyFPSBooster(true)
+        elseif not settings.fpsBooster and self.FPSApplied then self:ApplyFPSBooster(false) end
         if settings.extraDayCycle and self.CycleTime==nil and context.Sky then context.Sky:RestoreClock() end
         if settings.extraDayCycle then
             if not self.CycleTime then self.CycleTime=Lighting.ClockTime end
@@ -23023,6 +23376,8 @@ return function(context)
     function runtime:Destroy()
         if not self.Alive then return end
         self.Alive=false
+        if self.FPSConnection then pcall(function() self.FPSConnection:Disconnect() end); self.FPSConnection=nil end
+        if self.FPSApplied then pcall(function() self:ApplyFPSBooster(false) end) end
         pcall(function() RunService:UnbindFromRenderStep(self.BindName) end)
         local restore={}
         for object,properties in pairs(self.Saved) do for key in pairs(properties) do restore[#restore+1]={object,key} end end
@@ -23071,6 +23426,12 @@ return function(context)
     slider(water,"extraWaterWaveSize","Wave Height",0,1,0.18,2)
     slider(water,"extraWaterWaveSpeed","Wave Speed",0,100,12,0)
     water:CreateLabel({Text="Applies to native Terrain water when the map has it."})
+    local fps=section("FPS Booster","Left",170)
+    toggle(fps,"fpsBooster","FPS Booster")
+    toggle(fps,"fpsBoosterDisableParticles","Disable Particles / Trails")
+    toggle(fps,"fpsBoosterDisablePostFX","Disable Post FX / Shadows")
+    toggle(fps,"fpsBoosterDisableTerrainDecoration","Disable Terrain Decoration")
+    fps:CreateLabel({Text="Local visual optimization; reverses its changes when disabled."})
     runtime.BindName="DevKage_Extra_World_"..context.HttpService:GenerateGUID(false)
     RunService:BindToRenderStep(runtime.BindName,Enum.RenderPriority.Last.Value+750010,function(dt)
         local ok,err=pcall(runtime.Step,runtime,dt)
@@ -27561,10 +27922,19 @@ local cursorStateMap = {
     devkage_cursor_main_text="MainText",
     devkage_cursor_second_text="SecondText",
     devkage_cursor_text_outline="TextOutline",
+    devkage_cursor_text_glow="TextGlow",
+    devkage_cursor_text_glow_follow_color="TextGlowFollowColor",
+    devkage_cursor_text_glow_color="TextGlowColor",
+    devkage_cursor_text_glow_size="TextGlowSize",
+    devkage_cursor_text_glow_strength="TextGlowStrength",
     devkage_cursor_main_text_size="MainTextSize",
     d]==================],
     [==================[evkage_cursor_second_text_size="SecondTextSize",
     devkage_cursor_pulse_speed="PulseSpeed",
+    devkage_cursor_bounce="Bounce",
+    devkage_cursor_bounce_amount="BounceAmount",
+    devkage_cursor_bounce_stretch="BounceStretch",
+    devkage_cursor_bounce_curve="BounceCurve",
 }
 
 local cursorBridgeEnv=(type(getgenv)=="function" and getgenv()) or _G
@@ -27923,6 +28293,34 @@ local function referenceCursorReadSettings()
     target.TextOutline =
         source.TextOutline ~= false
 
+    target.TextGlow =
+        source.TextGlow ~= false
+
+    target.TextGlowFollowColor =
+        source.TextGlowFollowColor ~= false
+
+    target.TextGlowColor =
+        referenceCursorColor(
+            source.TextGlowColor,
+            Color3.fromRGB(205, 185, 255)
+        )
+
+    target.TextGlowSize =
+        referenceCursorNumber(
+            source.TextGlowSize,
+            10,
+            0,
+            30
+        )
+
+    target.TextGlowStrength =
+        referenceCursorNumber(
+            source.TextGlowStrength,
+            0.80,
+            0,
+            1
+        )
+
     target.MainTextSize =
         math.floor(
             referenceCursorNumber(
@@ -28005,12 +28403,13 @@ local function referenceSmoothRotation(currentRotation, targetRotation, smoothin
 end
 
 local function referenceSmoothPulse(t, speed)
-    local rawPulse =
-        math.sin(t * speed) * 0.5 + 0.5
-
-    return
-        rawPulse
-        * rawPulse
+    -- Restored cursor bounce: a rhythmic up/down spring instead of a flat
+    -- breathing pulse.  The absolute sine gives each beat a clean return to
+    -- the resting size, while the easing keeps the motion soft rather than
+    -- snapping at the top or bottom.
+    local phase = math.abs(math.sin(t * speed))
+    local eased = 1 - ((1 - phase) * (1 - phase) * (1 - phase))
+    return math.clamp(eased, 0, 1)
 end
 
 
@@ -28270,7 +28669,10 @@ local function referenceDestroyCursorGui()
 end
 
 local function referenceCreateLine(parent, name)
-    local function makeGlowLayer(suffix, zIndex, transparency)
+    -- High-quality code-only LED line.  The glow is built from several
+    -- progressively softer layers so it stays crisp instead of looking
+    -- like one oversized translucent rectangle.
+    local function makeGlowLayer(suffix, zIndex, transparency, edgeFade)
         local glow = Instance.new("Frame")
         glow.Name = name .. suffix
         glow.BackgroundColor3 = Color3.new(1, 1, 1)
@@ -28285,12 +28687,26 @@ local function referenceCreateLine(parent, name)
         local glowCorner = Instance.new("UICorner")
         glowCorner.CornerRadius = UDim.new(1, 0)
         glowCorner.Parent = glow
+
+        local gradient = Instance.new("UIGradient")
+        gradient.Name = "SoftFade"
+        gradient.Rotation = 90
+        gradient.Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0.00, math.clamp(edgeFade or 0.35, 0, 1)),
+            NumberSequenceKeypoint.new(0.16, 0.08),
+            NumberSequenceKeypoint.new(0.50, 0.00),
+            NumberSequenceKeypoint.new(0.84, 0.08),
+            NumberSequenceKeypoint.new(1.00, math.clamp(edgeFade or 0.35, 0, 1)),
+        })
+        gradient.Parent = glow
+
         return glow
     end
 
-    local outerGlow = makeGlowLayer("_OuterGlow", 99996, 0.90)
-    local midGlow = makeGlowLayer("_Glow", 99997, 0.82)
-    local innerGlow = makeGlowLayer("_InnerGlow", 99998, 0.68)
+    local farGlow   = makeGlowLayer("_FarGlow",   99995, 0.955, 0.72)
+    local outerGlow = makeGlowLayer("_OuterGlow", 99996, 0.920, 0.56)
+    local midGlow   = makeGlowLayer("_Glow",      99997, 0.835, 0.36)
+    local innerGlow = makeGlowLayer("_InnerGlow", 99998, 0.660, 0.20)
 
     local frame = Instance.new("Frame")
     frame.Name = name
@@ -28308,20 +28724,45 @@ local function referenceCreateLine(parent, name)
     corner.CornerRadius = UDim.new(1, 0)
     corner.Parent = frame
 
-    local stroke = Instance.new("UIStroke")
-    stroke.Name = "Outline"
-    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    stroke.Color = Color3.fromRGB(20, 18, 30)
-    stroke.Thickness = 1
-    stroke.Transparency = 0.18
-    stroke.Parent = frame
+    local coreGradient = Instance.new("UIGradient")
+    coreGradient.Name = "LEDCoreGradient"
+    coreGradient.Rotation = 90
+    coreGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0.00, Color3.fromRGB(210, 205, 225)),
+        ColorSequenceKeypoint.new(0.18, Color3.fromRGB(255, 255, 255)),
+        ColorSequenceKeypoint.new(0.52, Color3.fromRGB(255, 255, 255)),
+        ColorSequenceKeypoint.new(0.84, Color3.fromRGB(238, 232, 255)),
+        ColorSequenceKeypoint.new(1.00, Color3.fromRGB(185, 175, 210)),
+    })
+    coreGradient.Parent = frame
+
+    local outline = Instance.new("UIStroke")
+    outline.Name = "Outline"
+    outline.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    outline.Color = Color3.fromRGB(16, 14, 24)
+    outline.Thickness = 1.15
+    outline.Transparency = 0.08
+    outline.LineJoinMode = Enum.LineJoinMode.Round
+    outline.Parent = frame
+
+    local highlight = Instance.new("UIStroke")
+    highlight.Name = "LEDHighlight"
+    highlight.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    highlight.Color = Color3.fromRGB(255, 250, 255)
+    highlight.Thickness = 0.55
+    highlight.Transparency = 0.28
+    highlight.LineJoinMode = Enum.LineJoinMode.Round
+    highlight.Parent = frame
 
     return {
         Frame = frame,
-        Stroke = stroke,
+        Stroke = outline,
+        HighlightStroke = highlight,
+        CoreGradient = coreGradient,
         Glow = midGlow,
         GlowInner = innerGlow,
         GlowOuter = outerGlow,
+        GlowFar = farGlow,
     }
 end
 
@@ -28334,7 +28775,7 @@ local function referenceCreateTextLabel(parent, name)
         glow.Size = UDim2.fromOffset(150, 23)
         glow.BackgroundTransparency = 1
         glow.BorderSizePixel = 0
-        glow.Font = Enum.Font.Arcade
+        glow.Font = Enum.Font.Code
         glow.TextScaled = true
         glow.TextColor3 = Color3.new(1, 1, 1)
         glow.TextTransparency = textTransparency
@@ -28354,15 +28795,15 @@ local function referenceCreateTextLabel(parent, name)
         return glow
     end
 
-    local outerGlow = makeGlowLayer("_OuterGlow", 99998, 0.88, 5.0, 0.78)
-    local innerGlow = makeGlowLayer("_InnerGlow", 100000, 0.62, 2.5, 0.48)
+    local outerGlow = makeGlowLayer("_OuterGlow", 99998, 0.72, 7.5, 0.52)
+    local innerGlow = makeGlowLayer("_InnerGlow", 100000, 0.38, 3.8, 0.28)
 
     local label = Instance.new("TextLabel")
     label.Name = name
     label.Text = name == "MainText" and "devkage" or ""
     label.Position = UDim2.fromOffset(0, 0)
     label.TextColor3 = Color3.new(1, 1, 1)
-    label.Font = Enum.Font.Arcade
+    label.Font = Enum.Font.Code
     label.TextScaled = true
     label.BackgroundTransparency = 1
     label.Active = false
@@ -28739,11 +29180,13 @@ local function referenceApplyGlow(
     local mid = line.Glow
     local inner = line.GlowInner
     local outer = line.GlowOuter
+    local far = line.GlowFar
 
     local function setVisible(value)
         if mid then mid.Visible = value end
         if inner then inner.Visible = value end
         if outer then outer.Visible = value end
+        if far then far.Visible = value end
     end
 
     if settings.LineGlow ~= true or not line.Frame.Visible then
@@ -28774,24 +29217,53 @@ local function referenceApplyGlow(
         end
     end
 
-    fit(inner, math.max(2, glowThickness * 0.24), math.max(1, glowExtraLength * 0.35))
-    fit(mid,   math.max(4, glowThickness * 0.52), math.max(2, glowExtraLength * 0.70))
-    fit(outer, math.max(7, glowThickness),        math.max(3, glowExtraLength))
+    -- Tighter hot core, wider atmospheric bloom
+    fit(inner, math.max(3, glowThickness * 0.28), math.max(2, glowExtraLength * 0.22))
+    fit(mid,   math.max(6, glowThickness * 0.58), math.max(3, glowExtraLength * 0.50))
+    fit(outer, math.max(11, glowThickness * 0.96), math.max(5, glowExtraLength * 0.82))
+    fit(far,   math.max(16, glowThickness * 1.48), math.max(7, glowExtraLength * 1.30))
 
-    local whiteHot = color:Lerp(Color3.new(1, 1, 1), 0.72)
-    local soft = color:Lerp(Color3.new(1, 1, 1), 0.28)
+    local whiteHot  = color:Lerp(Color3.new(1, 1, 1), 0.92)
+    local hotCore   = color:Lerp(Color3.new(1, 1, 1), 0.70)
+    local midBloom  = color:Lerp(Color3.new(1, 1, 1), 0.38)
+    local farBloom  = color:Lerp(Color3.new(1, 1, 1), 0.14)
 
     if inner then
         inner.BackgroundColor3 = whiteHot
-        inner.BackgroundTransparency = math.clamp(baseTransparency - 0.18, 0.42, 0.82)
+        inner.BackgroundTransparency = math.clamp(baseTransparency - 0.36, 0.12, 0.68)
     end
     if mid then
-        mid.BackgroundColor3 = soft
-        mid.BackgroundTransparency = math.clamp(baseTransparency + 0.04, 0.58, 0.90)
+        mid.BackgroundColor3 = hotCore
+        mid.BackgroundTransparency = math.clamp(baseTransparency - 0.12, 0.42, 0.84)
     end
     if outer then
-        outer.BackgroundColor3 = color
-        outer.BackgroundTransparency = math.clamp(baseTransparency + 0.17, 0.76, 0.96)
+        outer.BackgroundColor3 = midBloom
+        outer.BackgroundTransparency = math.clamp(baseTransparency + 0.08, 0.66, 0.946)
+    end
+    if far then
+        far.BackgroundColor3 = farBloom
+        far.BackgroundTransparency = math.clamp(baseTransparency + 0.18, 0.78, 0.978)
+    end
+
+    if line.HighlightStroke then
+        line.HighlightStroke.Color = whiteHot
+        line.HighlightStroke.Transparency = math.clamp(baseTransparency * 0.28, 0.08, 0.38)
+    end
+    if line.Stroke then
+        line.Stroke.Color = Color3.fromRGB(10, 8, 18)
+        line.Stroke.Transparency = 0.04
+    end
+
+    if line.CoreGradient then
+        local edge = color:Lerp(Color3.fromRGB(30, 22, 50), 0.62)
+        line.CoreGradient.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0.00, edge),
+            ColorSequenceKeypoint.new(0.10, color:Lerp(Color3.new(1,1,1), 0.55)),
+            ColorSequenceKeypoint.new(0.35, whiteHot),
+            ColorSequenceKeypoint.new(0.65, whiteHot),
+            ColorSequenceKeypoint.new(0.90, color:Lerp(Color3.new(1,1,1), 0.55)),
+            ColorSequenceKeypoint.new(1.00, edge),
+        })
     end
 
     setVisible(true)
@@ -28856,10 +29328,10 @@ local function referenceApplyText(
 
 
     main.Font =
-        Enum.Font.Arcade
+        Enum.Font.Code
 
     second.Font =
-        Enum.Font.Arcade
+        Enum.Font.Code
 
 
     main.TextScaled = true
@@ -28961,7 +29433,19 @@ local function referenceApplyText(
 
     local function syncTextGlow(label, outerGlow, innerGlow)
         if not label then return end
-        local visible = label.Visible == true
+
+        local glowEnabled = settings.TextGlow ~= false
+        local visible = label.Visible == true and glowEnabled
+        local glowSize = referenceCursorNumber(settings.TextGlowSize, 10, 0, 30)
+        local glowStrength = referenceCursorNumber(settings.TextGlowStrength, 0.80, 0, 1)
+        local glowColor = color
+
+        if settings.TextGlowFollowColor == false then
+            glowColor = referenceCursorColor(
+                settings.TextGlowColor,
+                Color3.fromRGB(205, 185, 255)
+            )
+        end
 
         for _, glow in ipairs({outerGlow, innerGlow}) do
             if glow then
@@ -28969,43 +29453,48 @@ local function referenceApplyText(
                 glow.Text = label.Text
                 glow.Font = label.Font
                 glow.TextScaled = true
-                glow.TextColor3 = color
+                glow.TextColor3 = glowColor
             end
         end
 
         if outerGlow then
+            local outerX = glowSize * 1.10
+            local outerY = glowSize * 0.90
             outerGlow.Size = UDim2.new(
-                label.Size.X.Scale, label.Size.X.Offset + 10,
-                label.Size.Y.Scale, label.Size.Y.Offset + 8
+                label.Size.X.Scale, label.Size.X.Offset + outerX,
+                label.Size.Y.Scale, label.Size.Y.Offset + outerY
             )
             outerGlow.Position = UDim2.new(
-                label.Position.X.Scale, label.Position.X.Offset - 5,
-                label.Position.Y.Scale, label.Position.Y.Offset - 4
+                label.Position.X.Scale, label.Position.X.Offset - outerX * 0.5,
+                label.Position.Y.Scale, label.Position.Y.Offset - outerY * 0.5
             )
-            outerGlow.TextTransparency = 0.88
+            -- Boosted visibility: outer bloom is the atmospheric halo
+            outerGlow.TextTransparency = math.clamp(1 - (0.48 * glowStrength), 0.20, 0.88)
             local s = outerGlow:FindFirstChild("NeonStroke")
             if s then
-                s.Color = color
-                s.Thickness = 5
-                s.Transparency = 0.78
+                s.Color = glowColor
+                s.Thickness = math.clamp(glowSize * 0.62, 1.5, 18)
+                s.Transparency = math.clamp(1 - (0.55 * glowStrength), 0.18, 0.72)
             end
         end
 
         if innerGlow then
+            local innerSize = glowSize * 0.42
             innerGlow.Size = UDim2.new(
-                label.Size.X.Scale, label.Size.X.Offset + 4,
-                label.Size.Y.Scale, label.Size.Y.Offset + 4
+                label.Size.X.Scale, label.Size.X.Offset + innerSize,
+                label.Size.Y.Scale, label.Size.Y.Offset + innerSize
             )
             innerGlow.Position = UDim2.new(
-                label.Position.X.Scale, label.Position.X.Offset - 2,
-                label.Position.Y.Scale, label.Position.Y.Offset - 2
+                label.Position.X.Scale, label.Position.X.Offset - innerSize * 0.5,
+                label.Position.Y.Scale, label.Position.Y.Offset - innerSize * 0.5
             )
-            innerGlow.TextTransparency = 0.62
+            -- Inner glow is the hot neon core — crisp and bright
+            innerGlow.TextTransparency = math.clamp(1 - (0.78 * glowStrength), 0.04, 0.55)
             local s = innerGlow:FindFirstChild("NeonStroke")
             if s then
-                s.Color = color:Lerp(Color3.new(1,1,1), 0.45)
-                s.Thickness = 2.5
-                s.Transparency = 0.48
+                s.Color = glowColor:Lerp(Color3.new(1,1,1), 0.72)
+                s.Thickness = math.clamp(glowSize * 0.32, 1.2, 10)
+                s.Transparency = math.clamp(1 - (0.88 * glowStrength), 0.06, 0.42)
             end
         end
     end
@@ -29437,14 +29926,25 @@ local function referenceCursorRender(deltaTime)
 
 
 
-    -- Classic pulse animation: keep the cursor compact while the whole
-    -- four-piece reticle softly breathes and spins.
-    local minLength = lineLength * 0.92
-    local maxLength = lineLength * 1.05
-    local currentLength = minLength + (maxLength - minLength) * pulse
+    -- Adjustable bounce.  The curve keeps the reticle crisp at both ends
+    -- instead of continuously stretching it like a soft breathing animation.
+    local bounceEnabled = settings.Bounce ~= false and pulseSpeed > 0
+    local bounceAmount = referenceCursorNumber(settings.BounceAmount, 0.18, 0, 0.55)
+    local bounceStretch = referenceCursorNumber(settings.BounceStretch, 0.12, 0, 0.50)
+    local bounceCurve = referenceCursorNumber(settings.BounceCurve, 0.72, 0.10, 1)
+
+    local bounceWave = 0
+    if bounceEnabled then
+        local raw = math.clamp(pulse, 0, 1)
+        -- Ease toward the peak and settle naturally.
+        bounceWave = 1 - math.pow(1 - raw, 1 + (bounceCurve * 3.2))
+        bounceWave = math.sin(bounceWave * math.pi * 0.5)
+    end
+
+    local currentLength = lineLength * (1 + bounceStretch * bounceWave)
 
     if runtime.AimScale then
-        runtime.AimScale.Scale = 0.94 + (0.12 * pulse)
+        runtime.AimScale.Scale = 1 + (bounceAmount * bounceWave)
     end
 
     local armCount =
@@ -29484,7 +29984,9 @@ local function referenceCursorRender(deltaTime)
 
         if visible then
             local color =
-                referenceResolveColor(
+                armCount == 4
+                and firstColor
+                or referenceResolveColor(
                     settings,
                     runtime.time,
                     index,
@@ -29493,6 +29995,25 @@ local function referenceCursorRender(deltaTime)
 
             line.Frame.BackgroundColor3 =
                 color
+
+            -- Always sync the core gradient so all lines match at any glow setting
+            if line.CoreGradient then
+                local edge = color:Lerp(Color3.fromRGB(30, 22, 50), 0.52)
+                local hot = color:Lerp(Color3.new(1,1,1), 0.72)
+                line.CoreGradient.Color = ColorSequence.new({
+                    ColorSequenceKeypoint.new(0.00, edge),
+                    ColorSequenceKeypoint.new(0.18, hot),
+                    ColorSequenceKeypoint.new(0.52, Color3.new(1,1,1)),
+                    ColorSequenceKeypoint.new(0.84, hot),
+                    ColorSequenceKeypoint.new(1.00, edge),
+                })
+            end
+            if line.HighlightStroke then
+                line.HighlightStroke.Color = color:Lerp(Color3.new(1,1,1), 0.88)
+            end
+            if line.Stroke then
+                line.Stroke.Color = Color3.fromRGB(14, 12, 22)
+            end
 
             referenceApplyGlow(
                 settings,
@@ -29504,6 +30025,7 @@ local function referenceCursorRender(deltaTime)
             if line.Glow then line.Glow.Visible = false end
             if line.GlowInner then line.GlowInner.Visible = false end
             if line.GlowOuter then line.GlowOuter.Visible = false end
+            if line.GlowFar then line.GlowFar.Visible = false end
         end
     end
 
@@ -29673,7 +30195,7 @@ ReferenceCursorRuntime.ReferenceVisual = {
     RainbowBluePhase = 4,
 
     Text = "devkage",
-    TextFont = Enum.Font.Arcade,
+    TextFont = Enum.Font.Code,
     TextScaled = true,
 
     TextWidth = 150,
@@ -29746,7 +30268,11 @@ addSlider(animationSection,"devkage_cursor_spin_range","Spin Range",1,360,0,"°"
 addSlider(animationSection,"devkage_cursor_squash_x","Squash X",0.25,2,2,"x")
 addSlider(animationSection,"devkage_cursor_squash_y","Squash Y",0.25,2,2,"x")
 addToggle(animationSection,"devkage_cursor_smooth_spin","Smooth Spin")
-addSlider(animationSection,"devkage_cursor_pulse_speed","Pulse Speed",0,8,2,"x")
+addToggle(animationSection,"devkage_cursor_bounce","Bounce")
+addSlider(animationSection,"devkage_cursor_pulse_speed","Bounce Speed",0,8,2,"x")
+addSlider(animationSection,"devkage_cursor_bounce_amount","Bounce Amount",0,0.55,2,"x")
+addSlider(animationSection,"devkage_cursor_bounce_stretch","Arm Bounce",0,0.50,2,"x")
+addSlider(animationSection,"devkage_cursor_bounce_curve","Bounce Sharpness",0.10,1,2,"")
 
 addToggle(advancedSection,"devkage_cursor_line_glow","Line Glow")
 addSlider(advancedSection,"devkage_cursor_glow_thickness","Glow Thickness",0,50,0,"")
@@ -29757,6 +30283,11 @@ addToggle(textSection,"devkage_cursor_text_enabled","Text Enabled")
 addDropdown(textSection,"devkage_cursor_main_text","Main Text",{"devkage","Vortex.exe","DevKage","Crosshair"})
 addDropdown(textSection,"devkage_cursor_second_text","Second Text",{"None","devkage","DevKage","Vortex.exe","Crosshair"})
 addToggle(textSection,"devkage_cursor_text_outline","Text Outline")
+addToggle(textSection,"devkage_cursor_text_glow","Text Glow")
+addToggle(textSection,"devkage_cursor_text_glow_follow_color","Text Glow Follows Cursor Color")
+addColor(textSection,"devkage_cursor_text_glow_color","Text Glow Color")
+addSlider(textSection,"devkage_cursor_text_glow_size","Text Glow Size",0,30,1," px")
+addSlider(textSection,"devkage_cursor_text_glow_strength","Text Glow Strength",0,1,2,"")
 addSlider(textSection,"devkage_cursor_main_text_size","Main Text Size",8,40,0,"")
 addSlider(textSection,"devkage_cursor_second_text_size","Second Text Size",8,40,0,"")
 
@@ -30001,478 +30532,6 @@ UI.ThemeDPIScale = UI.ThemeSection:CreateDropdown({
     end
 })
 library:ApplyTheme()
-
--- ============================================================
--- ASTRA PREMIUM UI WEATHER
--- Rendered as an inset, clipped glass layer INSIDE MainFrame.
--- No particles can escape the menu rectangle.
--- ============================================================
-UI.UIWeatherSection = settingPage:CreateSection({Name="UI Weather FX",Side="Right",Size=430})
-
-local UIWeatherRuntime = {
-    Layer = nil,
-    RainActive = {},
-    RainPool = {},
-    SnowActive = {},
-    SnowPool = {},
-    RainClock = 0,
-    SnowClock = 0,
-    Random = Random.new(),
-    Time = 0,
-    Alive = true,
-}
-
-local function ensurePremiumUIWeatherLayer()
-    if UIWeatherRuntime.Layer and UIWeatherRuntime.Layer.Parent then
-        return UIWeatherRuntime.Layer
-    end
-
-    local main = library.Window and library.Window.MainFrame
-    if not main then return nil end
-
-    local layer = Instance.new("Frame")
-    layer.Name = "DevKage_PremiumUIWeather"
-    layer.BackgroundTransparency = 1
-    layer.BorderSizePixel = 0
-    layer.Position = UDim2.fromOffset(5, 5)
-    layer.Size = UDim2.new(1, -10, 1, -10)
-    layer.ClipsDescendants = true
-    layer.Active = false
-    layer.Selectable = false
-    layer.ZIndex = 28000
-    layer.Parent = main
-
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 2)
-    corner.Parent = layer
-
-    -- Nearly invisible glass sheen makes particles read as if they are
-    -- behind/inside the menu surface instead of floating outside it.
-    local sheen = Instance.new("Frame")
-    sheen.Name = "GlassSheen"
-    sheen.BackgroundColor3 = Color3.fromRGB(210, 225, 255)
-    sheen.BackgroundTransparency = 0.985
-    sheen.BorderSizePixel = 0
-    sheen.Size = UDim2.fromScale(1, 1)
-    sheen.Active = false
-    sheen.ZIndex = 28000
-    sheen.Parent = layer
-
-    local sheenGradient = Instance.new("UIGradient")
-    sheenGradient.Rotation = 25
-    sheenGradient.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 0.98),
-        NumberSequenceKeypoint.new(0.45, 0.90),
-        NumberSequenceKeypoint.new(1, 0.995),
-    })
-    sheenGradient.Parent = sheen
-
-    UIWeatherRuntime.Layer = layer
-    return layer
-end
-
-local function createRainVisual()
-    local layer = ensurePremiumUIWeatherLayer()
-    if not layer then return nil end
-
-    local holder = Instance.new("Frame")
-    holder.Name = "GlassRainDrop"
-    holder.BackgroundTransparency = 1
-    holder.BorderSizePixel = 0
-    holder.AnchorPoint = Vector2.new(0.5, 0.5)
-    holder.Size = UDim2.fromOffset(8, 40)
-    holder.Active = false
-    holder.Selectable = false
-    holder.ZIndex = 28003
-    holder.Parent = layer
-
-    local outer = Instance.new("Frame")
-    outer.Name = "OuterGlow"
-    outer.AnchorPoint = Vector2.new(0.5, 0.5)
-    outer.Position = UDim2.fromScale(0.5, 0.5)
-    outer.Size = UDim2.new(0, 6, 1, 5)
-    outer.BackgroundTransparency = 0.90
-    outer.BorderSizePixel = 0
-    outer.ZIndex = 28001
-    outer.Parent = holder
-    local oc = Instance.new("UICorner"); oc.CornerRadius = UDim.new(1,0); oc.Parent = outer
-
-    local glow = Instance.new("Frame")
-    glow.Name = "Glow"
-    glow.AnchorPoint = Vector2.new(0.5, 0.5)
-    glow.Position = UDim2.fromScale(0.5, 0.5)
-    glow.Size = UDim2.new(0, 4, 1, 2)
-    glow.BackgroundTransparency = 0.76
-    glow.BorderSizePixel = 0
-    glow.ZIndex = 28002
-    glow.Parent = holder
-    local gc = Instance.new("UICorner"); gc.CornerRadius = UDim.new(1,0); gc.Parent = glow
-
-    local core = Instance.new("Frame")
-    core.Name = "Core"
-    core.AnchorPoint = Vector2.new(0.5, 0.5)
-    core.Position = UDim2.fromScale(0.5, 0.5)
-    core.Size = UDim2.new(0, 2, 1, 0)
-    core.BackgroundTransparency = 0.18
-    core.BorderSizePixel = 0
-    core.ZIndex = 28004
-    core.Parent = holder
-    local cc = Instance.new("UICorner"); cc.CornerRadius = UDim.new(1,0); cc.Parent = core
-
-    local gradient = Instance.new("UIGradient")
-    gradient.Rotation = 90
-    gradient.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 0.96),
-        NumberSequenceKeypoint.new(0.15, 0.28),
-        NumberSequenceKeypoint.new(0.62, 0.04),
-        NumberSequenceKeypoint.new(1, 0.74),
-    })
-    gradient.Parent = core
-
-    local tip = Instance.new("Frame")
-    tip.Name = "Tip"
-    tip.AnchorPoint = Vector2.new(0.5, 0.5)
-    tip.Position = UDim2.new(0.5, 0, 1, -1)
-    tip.Size = UDim2.fromOffset(3, 3)
-    tip.BackgroundTransparency = 0.18
-    tip.BorderSizePixel = 0
-    tip.ZIndex = 28005
-    tip.Parent = holder
-    local tc = Instance.new("UICorner"); tc.CornerRadius = UDim.new(1,0); tc.Parent = tip
-
-    holder.Visible = false
-    return {Holder=holder, Core=core, Glow=glow, Outer=outer, Tip=tip}
-end
-
-local function acquireRainVisual()
-    local item = table.remove(UIWeatherRuntime.RainPool)
-    if not item or not item.Holder or not item.Holder.Parent then
-        item = createRainVisual()
-    end
-    if item then item.Holder.Visible = true end
-    return item
-end
-
-local function releaseRainVisual(index)
-    local item = UIWeatherRuntime.RainActive[index]
-    if not item then return end
-    item.Holder.Visible = false
-    item.Holder.Position = UDim2.fromOffset(-200, -200)
-    table.remove(UIWeatherRuntime.RainActive, index)
-    UIWeatherRuntime.RainPool[#UIWeatherRuntime.RainPool+1] = item
-end
-
-local function createSnowVisual()
-    local layer = ensurePremiumUIWeatherLayer()
-    if not layer then return nil end
-
-    local holder = Instance.new("Frame")
-    holder.Name = "GlassSnowFlake"
-    holder.BackgroundTransparency = 1
-    holder.BorderSizePixel = 0
-    holder.AnchorPoint = Vector2.new(0.5, 0.5)
-    holder.Size = UDim2.fromOffset(14, 14)
-    holder.Active = false
-    holder.Selectable = false
-    holder.ZIndex = 28003
-    holder.Parent = layer
-
-    local outer = Instance.new("TextLabel")
-    outer.Name = "OuterGlow"
-    outer.BackgroundTransparency = 1
-    outer.Size = UDim2.new(1, 8, 1, 8)
-    outer.Position = UDim2.fromOffset(-4, -4)
-    outer.Font = Enum.Font.GothamBold
-    outer.Text = "✦"
-    outer.TextScaled = true
-    outer.TextTransparency = 0.82
-    outer.TextStrokeTransparency = 0.70
-    outer.ZIndex = 28001
-    outer.Parent = holder
-
-    local inner = Instance.new("TextLabel")
-    inner.Name = "InnerGlow"
-    inner.BackgroundTransparency = 1
-    inner.Size = UDim2.new(1, 3, 1, 3)
-    inner.Position = UDim2.fromOffset(-1.5, -1.5)
-    inner.Font = Enum.Font.GothamBold
-    inner.Text = "✦"
-    inner.TextScaled = true
-    inner.TextTransparency = 0.48
-    inner.TextStrokeTransparency = 0.50
-    inner.ZIndex = 28002
-    inner.Parent = holder
-
-    local core = Instance.new("TextLabel")
-    core.Name = "Core"
-    core.BackgroundTransparency = 1
-    core.Size = UDim2.fromScale(1, 1)
-    core.Font = Enum.Font.GothamBold
-    core.Text = "✦"
-    core.TextScaled = true
-    core.TextTransparency = 0.04
-    core.TextStrokeTransparency = 0.36
-    core.ZIndex = 28004
-    core.Parent = holder
-
-    holder.Visible = false
-    return {Holder=holder, Core=core, Inner=inner, Outer=outer}
-end
-
-local function acquireSnowVisual()
-    local item = table.remove(UIWeatherRuntime.SnowPool)
-    if not item or not item.Holder or not item.Holder.Parent then
-        item = createSnowVisual()
-    end
-    if item then item.Holder.Visible = true end
-    return item
-end
-
-local function releaseSnowVisual(index)
-    local item = UIWeatherRuntime.SnowActive[index]
-    if not item then return end
-    item.Holder.Visible = false
-    item.Holder.Position = UDim2.fromOffset(-200, -200)
-    table.remove(UIWeatherRuntime.SnowActive, index)
-    UIWeatherRuntime.SnowPool[#UIWeatherRuntime.SnowPool+1] = item
-end
-
-local function clearUIWeather()
-    for i=#UIWeatherRuntime.RainActive,1,-1 do releaseRainVisual(i) end
-    for i=#UIWeatherRuntime.SnowActive,1,-1 do releaseSnowVisual(i) end
-    UIWeatherRuntime.RainClock = 0
-    UIWeatherRuntime.SnowClock = 0
-end
-
-local function spawnPremiumRain(size)
-    local rng = UIWeatherRuntime.Random
-    local item = acquireRainVisual()
-    if not item then return end
-
-    local depth = rng:NextNumber(0.65, 1.18)
-    local length = rng:NextNumber(20, 48) * depth
-    local width = rng:NextNumber(1.1, 2.1) * depth
-    local x = rng:NextNumber(1, math.max(2, size.X - 1))
-    local y = -length - rng:NextNumber(0, 75)
-    local color = library.Theme.UIRainColor or Color3.fromRGB(118,196,255)
-
-    item.X = x
-    item.Y = y
-    item.Speed = rng:NextNumber(250, 470) * math.clamp(tonumber(library.Theme.UIRainSpeed) or 1, 0.25, 2.5) * depth
-    item.Drift = rng:NextNumber(-16, 10)
-    item.Length = length
-    item.Width = width
-    item.Rotation = rng:NextNumber(-5, 4)
-    item.Holder.Size = UDim2.fromOffset(math.max(7, width + 6), length)
-    item.Holder.Position = UDim2.fromOffset(x, y)
-    item.Holder.Rotation = item.Rotation
-
-    item.Core.Size = UDim2.new(0, width, 1, 0)
-    item.Glow.Size = UDim2.new(0, width + 2.6, 1, 3)
-    item.Outer.Size = UDim2.new(0, width + 5.5, 1, 7)
-
-    item.Core.BackgroundColor3 = color:Lerp(Color3.new(1,1,1), 0.52)
-    item.Glow.BackgroundColor3 = color:Lerp(Color3.new(1,1,1), 0.18)
-    item.Outer.BackgroundColor3 = color
-    item.Tip.BackgroundColor3 = color:Lerp(Color3.new(1,1,1), 0.68)
-
-    UIWeatherRuntime.RainActive[#UIWeatherRuntime.RainActive+1] = item
-end
-
-local function spawnPremiumSnow(size)
-    local rng = UIWeatherRuntime.Random
-    local item = acquireSnowVisual()
-    if not item then return end
-
-    local depth = rng:NextNumber(0.58, 1.25)
-    local px = rng:NextNumber(7, 16) * depth
-    local x = rng:NextNumber(2, math.max(3, size.X - 2))
-    local y = -px - rng:NextNumber(0, 55)
-    local color = library.Theme.UISnowColor or Color3.fromRGB(245,248,255)
-
-    item.BaseX = x
-    item.X = x
-    item.Y = y
-    item.Speed = rng:NextNumber(20, 48) * math.clamp(tonumber(library.Theme.UISnowSpeed) or 0.85, 0.25, 2)
-    item.Sway = rng:NextNumber(6, 24) * depth
-    item.SwaySpeed = rng:NextNumber(0.8, 1.8)
-    item.Phase = rng:NextNumber(0, math.pi * 2)
-    item.Rotation = rng:NextNumber(0, 360)
-    item.RotationSpeed = rng:NextNumber(-38, 38)
-    item.Holder.Size = UDim2.fromOffset(px, px)
-    item.Holder.Position = UDim2.fromOffset(x, y)
-
-    local bright = color:Lerp(Color3.new(1,1,1), 0.45)
-    item.Core.TextColor3 = bright
-    item.Core.TextStrokeColor3 = color
-    item.Inner.TextColor3 = color
-    item.Inner.TextStrokeColor3 = bright
-    item.Outer.TextColor3 = color
-    item.Outer.TextStrokeColor3 = color
-
-    UIWeatherRuntime.SnowActive[#UIWeatherRuntime.SnowActive+1] = item
-end
-
-local uiWeatherConnection = utility:CreateConnection(
-    game:GetService("RunService").RenderStepped,
-    function(dt)
-        if not UIWeatherRuntime.Alive then return end
-
-        local layer = ensurePremiumUIWeatherLayer()
-        if not layer then return end
-
-        local screenGui = library.Window and library.Window.ScreenGui
-        local menuRendering = screenGui and screenGui.Enabled == true
-        local rainEnabled = library.Theme.UIRainEnabled == true
-        local snowEnabled = library.Theme.UISnowEnabled == true
-
-        layer.Visible = menuRendering and (rainEnabled or snowEnabled)
-
-        if not menuRendering then
-            if #UIWeatherRuntime.RainActive > 0 or #UIWeatherRuntime.SnowActive > 0 then
-                clearUIWeather()
-            end
-            return
-        end
-
-        local size = layer.AbsoluteSize
-        if size.X < 20 or size.Y < 20 then return end
-
-        dt = math.min(math.max(tonumber(dt) or 0, 0), 0.05)
-        UIWeatherRuntime.Time = UIWeatherRuntime.Time + dt
-
-        if rainEnabled then
-            UIWeatherRuntime.RainClock = UIWeatherRuntime.RainClock
-                + dt * math.clamp(tonumber(library.Theme.UIRainDensity) or 32, 1, 70)
-            while UIWeatherRuntime.RainClock >= 1 do
-                UIWeatherRuntime.RainClock = UIWeatherRuntime.RainClock - 1
-                spawnPremiumRain(size)
-            end
-        else
-            UIWeatherRuntime.RainClock = 0
-            for i=#UIWeatherRuntime.RainActive,1,-1 do releaseRainVisual(i) end
-        end
-
-        if snowEnabled then
-            UIWeatherRuntime.SnowClock = UIWeatherRuntime.SnowClock
-                + dt * math.clamp(tonumber(library.Theme.UISnowDensity) or 18, 1, 50) * 0.55
-            while UIWeatherRuntime.SnowClock >= 1 do
-                UIWeatherRuntime.SnowClock = UIWeatherRuntime.SnowClock - 1
-                spawnPremiumSnow(size)
-            end
-        else
-            UIWeatherRuntime.SnowClock = 0
-            for i=#UIWeatherRuntime.SnowActive,1,-1 do releaseSnowVisual(i) end
-        end
-
-        local rainColor = library.Theme.UIRainColor or Color3.fromRGB(118,196,255)
-        for i=#UIWeatherRuntime.RainActive,1,-1 do
-            local item = UIWeatherRuntime.RainActive[i]
-            item.Y = item.Y + item.Speed * dt
-            item.X = item.X + item.Drift * dt
-            item.Holder.Position = UDim2.fromOffset(item.X, item.Y)
-
-            item.Core.BackgroundColor3 = rainColor:Lerp(Color3.new(1,1,1), 0.52)
-            item.Glow.BackgroundColor3 = rainColor:Lerp(Color3.new(1,1,1), 0.18)
-            item.Outer.BackgroundColor3 = rainColor
-            item.Tip.BackgroundColor3 = rainColor:Lerp(Color3.new(1,1,1), 0.68)
-
-            if item.Y > size.Y + item.Length + 12
-                or item.X < -25
-                or item.X > size.X + 25 then
-                releaseRainVisual(i)
-            end
-        end
-
-        local snowColor = library.Theme.UISnowColor or Color3.fromRGB(245,248,255)
-        for i=#UIWeatherRuntime.SnowActive,1,-1 do
-            local item = UIWeatherRuntime.SnowActive[i]
-            item.Y = item.Y + item.Speed * dt
-            item.X = item.BaseX + math.sin(UIWeatherRuntime.Time * item.SwaySpeed + item.Phase) * item.Sway
-            item.Rotation = item.Rotation + item.RotationSpeed * dt
-            item.Holder.Position = UDim2.fromOffset(item.X, item.Y)
-            item.Holder.Rotation = item.Rotation
-
-            local bright = snowColor:Lerp(Color3.new(1,1,1), 0.45)
-            item.Core.TextColor3 = bright
-            item.Core.TextStrokeColor3 = snowColor
-            item.Inner.TextColor3 = snowColor
-            item.Inner.TextStrokeColor3 = bright
-            item.Outer.TextColor3 = snowColor
-            item.Outer.TextStrokeColor3 = snowColor
-
-            if item.Y > size.Y + 24 then
-                releaseSnowVisual(i)
-            end
-        end
-    end
-)
-
-table.insert(library.CleanupCallbacks, function()
-    UIWeatherRuntime.Alive = false
-    pcall(function() uiWeatherConnection:Disconnect() end)
-    clearUIWeather()
-    if UIWeatherRuntime.Layer then
-        pcall(function() UIWeatherRuntime.Layer:Destroy() end)
-        UIWeatherRuntime.Layer = nil
-    end
-end)
-
-UI.UIRainToggle = UI.UIWeatherSection:CreateToggle({
-    Name="Rain Behind UI Glass",
-    State=library.Theme.UIRainEnabled==true,
-    Flag="theme.ui_rain",
-    Callback=function(v)
-        library.Theme.UIRainEnabled = v == true
-        if v then
-            local layer=ensurePremiumUIWeatherLayer()
-            if layer and layer.AbsoluteSize.X > 20 then
-                for _=1,8 do spawnPremiumRain(layer.AbsoluteSize) end
-            end
-        end
-    end
-})
-UI.UIRainColor = UI.UIWeatherSection:CreateColorpicker({
-    Name="Rain LED Color", State=library.Theme.UIRainColor, Flag="theme.ui_rain_color",
-    Callback=function(v) library.Theme.UIRainColor=v end
-})
-UI.UIRainDensity = UI.UIWeatherSection:CreateSlider({
-    Name="Rain Density", State=library.Theme.UIRainDensity, Min=1, Max=70, Decimals=0, Suffix="",
-    Flag="theme.ui_rain_density", Callback=function(v) library.Theme.UIRainDensity=v end
-})
-UI.UIRainSpeed = UI.UIWeatherSection:CreateSlider({
-    Name="Rain Speed", State=library.Theme.UIRainSpeed, Min=0.25, Max=2.5, Decimals=2, Suffix="x",
-    Flag="theme.ui_rain_speed", Callback=function(v) library.Theme.UIRainSpeed=v end
-})
-UI.UISnowToggle = UI.UIWeatherSection:CreateToggle({
-    Name="Snow Behind UI Glass",
-    State=library.Theme.UISnowEnabled==true,
-    Flag="theme.ui_snow",
-    Callback=function(v)
-        library.Theme.UISnowEnabled = v == true
-        if v then
-            local layer=ensurePremiumUIWeatherLayer()
-            if layer and layer.AbsoluteSize.X > 20 then
-                for _=1,6 do spawnPremiumSnow(layer.AbsoluteSize) end
-            end
-        end
-    end
-})
-UI.UISnowColor = UI.UIWeatherSection:CreateColorpicker({
-    Name="Snow LED Color", State=library.Theme.UISnowColor, Flag="theme.ui_snow_color",
-    Callback=function(v) library.Theme.UISnowColor=v end
-})
-UI.UISnowDensity = UI.UIWeatherSection:CreateSlider({
-    Name="Snow Density", State=library.Theme.UISnowDensity, Min=1, Max=50, Decimals=0, Suffix="",
-    Flag="theme.ui_snow_density", Callback=function(v) library.Theme.UISnowDensity=v end
-})
-UI.UISnowSpeed = UI.UIWeatherSection:CreateSlider({
-    Name="Snow Speed", State=library.Theme.UISnowSpeed, Min=0.25, Max=2, Decimals=2, Suffix="x",
-    Flag="theme.ui_snow_speed", Callback=function(v) library.Theme.UISnowSpeed=v end
-})
-UI.UIWeatherSection:CreateLabel({
-    Text="Weather is clipped 5 px inside the menu and rendered behind the glass edge."
-})
 
 local premiumThemeSection=settingPage:CreateSection({Name="Premium Themes",Side="Right",Size=290})
 local premiumThemeOptions={"Classic Olive","Midnight Purple","Cyan Circuit","Rose Gold","Crimson Noir","Arctic Blue","YouTube Red","Emerald Luxe"}
@@ -31077,6 +31136,7 @@ controls.avatarModsTransparencySlider:Set(math.floor(math.clamp(tonumber(getgenv
 controls.avatarModsPulseSlider:Set(math.floor(math.clamp(tonumber(getgenv().__DevKageConfig.avatarModsPulse) or 0.18,0,0.75)*100+0.5),true)
 controls.avatarModsParticlesToggle:Set(getgenv().__DevKageConfig.avatarModsParticles~=false,true)
 controls.avatarModsTrailsToggle:Set(getgenv().__DevKageConfig.avatarModsTrails~=false,true)
+controls.avatarModsGroundWavesToggle:Set(getgenv().__DevKageConfig.avatarModsGroundWaves~=false,true)
 
 local auraModes={"Rainbow","Plain Color"}
 controls.rainbowAuraModeDrop:Set(library.OptionIndex(auraModes,getgenv().__DevKageConfig.rainbowAuraMode),true)
@@ -32354,9 +32414,17 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
 })
 
 local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
-__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.65-autoload-currentbuild-ui-toggle-20260912"
+local __devkageCurrentBuild = "DevKage-v5.2.67-autoload-currentbuild-ui-halo-wave-fps-font-fpsboost-20260913"
+local __devkageCurrentBuildNumber = tonumber(((__devkageCurrentBuild:match("v([%d%.]+)") or "0"):gsub("%.", ""))) or 0
+local __devkageLoadedBuild = tostring(rawget(__devkageEnv,"__DEVKAGE_PACKAGE_BUILD") or "")
+local __devkageLoadedNumber = tonumber(((__devkageLoadedBuild:match("v([%d%.]+)") or "0"):gsub("%.", ""))) or 0
+if __devkageLoadedNumber > __devkageCurrentBuildNumber then
+    warn("[DevKage] newer build already loaded; refusing older package")
+    return nil
+end
+__devkageEnv.__DEVKAGE_PACKAGE_BUILD = __devkageCurrentBuild
 __devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
-__devkageEnv.__DEVKAGE_PACKAGE_SOURCE_BUILD = "DevKage-v5.2.65-autoload-currentbuild-ui-toggle-20260912"
+__devkageEnv.__DEVKAGE_PACKAGE_SOURCE_BUILD = __devkageCurrentBuild
 __devkageEnv.__DEVKAGE_PACKAGE_SOURCE_CURRENT = __DEVKAGE_EMBEDDED_SOURCE
 
 -- CURRENT LATE-BOOT AUTOEXEC OWNERSHIP (v5.2.55)
