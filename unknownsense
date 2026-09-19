@@ -31722,7 +31722,41 @@ end
 local selectPlayerButton=makePlayerActionButton("Blacklist",463)
 local clearPlayerButton=makePlayerActionButton("Whitelist",507)
 
+local blacklistListFrame = Instance.new("ScrollingFrame")
+blacklistListFrame.Name = "BlacklistList"
+blacklistListFrame.BackgroundColor3 = Color3.fromRGB(12,12,12)
+blacklistListFrame.BorderColor3 = Color3.fromRGB(0,0,0)
+blacklistListFrame.BorderSizePixel = 1
+blacklistListFrame.ScrollBarThickness = 4
+blacklistListFrame.CanvasSize = UDim2.new(0,0,0,0)
+blacklistListFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+blacklistListFrame.Size = UDim2.new(1,-20,0,120)
+blacklistListFrame.Position = UDim2.new(0,10,0,550)
+blacklistListFrame.ZIndex = 10
+blacklistListFrame.Parent = playerPhotoRoot
 
+local blacklistListLayout = Instance.new("UIListLayout")
+blacklistListLayout.Padding = UDim.new(0,1)
+blacklistListLayout.Parent = blacklistListFrame
+
+local function rebuildBlacklistList()
+    if not blacklistListFrame then return end
+    for _, child in ipairs(blacklistListFrame:GetChildren()) do
+        if child:IsA("TextLabel") then child:Destroy() end
+    end
+    for id, entry in pairs(PlayerBlacklist) do
+        local label = Instance.new("TextLabel")
+        label.BackgroundTransparency = 1
+        label.Size = UDim2.new(1,-8,0,20)
+        label.Font = Enum.Font.Code
+        label.TextSize = 9
+        label.TextColor3 = Color3.fromRGB(180,180,180)
+        label.Text = string.format("%s (ID: %s) - %s", entry.name or "Unknown", id, entry.reason or "No reason")
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.ZIndex = 11
+        label.Parent = blacklistListFrame
+    end
+end
 
 local blacklistFlashToken=0
 local blacklistFlashFrame=Instance.new("Frame")
@@ -31762,27 +31796,7 @@ blacklistFlashLabel.ZIndex=31
 blacklistFlashLabel.Parent=blacklistFlashFrame
 
 local function showBlacklistFlash()
-blacklistFlashToken=blacklistFlashToken+1
-local token=blacklistFlashToken
-blacklistFlashFrame.Visible=true
-task.spawn(function()
-local started=os.clock()
-while token==blacklistFlashToken and blacklistFlashFrame.Parent and os.clock()-started<1.5 do
-local elapsed=os.clock()-started
-local pulse=math.sin(elapsed*math.pi*8)*0.5+0.5
-blacklistFlashFrame.BackgroundTransparency=0.82-(pulse*0.26)
-blacklistFlashStroke.Transparency=0.55-(pulse*0.40)
-blacklistFlashLabel.TextTransparency=0.24-(pulse*0.20)
-blacklistFlashLabel.TextColor3=Color3.fromRGB(220,35,35):Lerp(Color3.fromRGB(255,105,105),pulse)
-RunService.RenderStepped:Wait()
-end
-if token==blacklistFlashToken and blacklistFlashFrame.Parent then
-blacklistFlashFrame.Visible=false
-blacklistFlashFrame.BackgroundTransparency=1
-blacklistFlashStroke.Transparency=1
-blacklistFlashLabel.TextTransparency=1
-end
-end)
+    -- Removed for silent blacklisting
 end
 
 selectPlayerButton.MouseButton1Click:Connect(function()
@@ -31794,7 +31808,7 @@ local saved,err=setPlayerBlacklisted(selectedServerPlayer,true,playerReasonBox.T
 if saved then
 playerSelectionLabel.Text="Selected: "..tostring(selectedServerPlayer.Name)
 rebuildServerPlayerList()
-showBlacklistFlash()
+rebuildBlacklistList()
 else
 library:Notify({Message="Blacklist failed: "..tostring(err),Duration=4})
 end
@@ -31811,6 +31825,7 @@ if saved then
 playerReasonBox.Text=""
 playerSelectionLabel.Text="Selected: "..tostring(selectedServerPlayer.Name)
 rebuildServerPlayerList()
+rebuildBlacklistList()
 else
 library:Notify({Message="Whitelist failed: "..tostring(err),Duration=4})
 end
