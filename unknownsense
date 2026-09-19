@@ -531,7 +531,7 @@ local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
 
 
 
-__devkageEnv.__DEVKAGE_RUNTIME_VERSION = "dual-script-autoload-v8-currentbuild-ui-halo-wave-fps-20260913"
+__devkageEnv.__DEVKAGE_RUNTIME_VERSION = "dual-script-autoload-v7-knife-movement-astra-smooth-ui-cursor-weather"
 local __devkageMultiInjectAutoBoot = __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT == true
 
 -- Autoexec coexistence boot mutex.
@@ -772,7 +772,6 @@ function library:ApplyThemeObject(object)
 
     if object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox") then
         pcall(function()
-            object.Font = Enum.Font.Code
             object.TextColor3 = self.Theme.Text
             if object:IsA("TextBox") then object.PlaceholderColor3 = self.Theme.Text end
         end)
@@ -894,10 +893,6 @@ function utility:RenderObject(RenderType, RenderProperties, RenderHidden)
         end
     end
     local Render = Instance.new(RenderType)
-    -- GameSense-style typography: keep rendered UI text on the compact Code font.
-    if Render:IsA("TextLabel") or Render:IsA("TextButton") or Render:IsA("TextBox") then
-        pcall(function() Render.Font = Enum.Font.Code end)
-    end
     if RenderProperties and typeof(RenderProperties) == "table" then
         for Property, Value in pairs(RenderProperties) do
             if Property ~= "RenderTime" and Property ~= "ThemeRole" and Property ~= "ThemeIgnore" then
@@ -11784,8 +11779,6 @@ extraAutoExposure=false, extraIndoorExposure=0.35, extraOutdoorExposure=-0.05, e
 cinematicBlur=false, cinematicBlurSize=7,
 extraWater=false, extraWaterColor=Color3.fromRGB(32,115,140), extraWaterTransparency=0.3,
 extraWaterReflectance=0.65, extraWaterWaveSize=0.18, extraWaterWaveSpeed=12,
-fpsBooster=false,
-fpsBoosterDisableParticles=true, fpsBoosterDisablePostFX=true, fpsBoosterDisableTerrainDecoration=true,
 colorCorrectionEnabled=false, tintColor=Color3.fromRGB(255,255,255), brightness=0, contrast=0, saturation=0,
 bloomEnabled=false, bloomIntensity=1, bloomSize=24, bloomThreshold=1,
 sunRaysEnabled=false, sunIntensity=0.1, sunSpread=0.2,
@@ -14301,12 +14294,12 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_67.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_68.lua"
 local SCRIPT_STABLE_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_current.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOLOAD_ENABLED_FILE = CONFIG_FOLDER .. "/_devkage_autoload_enabled.flag"
 local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_AutoLoad_LAST.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.67-autoload-currentbuild-ui-halo-wave-fps-font-fpsboost-20260913"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.68-autoload-currentbuild-ui-halo-wave-fps-font-fpsboost-20260913"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -15227,18 +15220,8 @@ end
 
 local function remove_stale_devkage_payloads()
     if type(delfile) ~= "function" then return end
-    -- Never allow an older payload filename to remain executable/available.
-    for _, staleCurrent in ipairs({
-        CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_65.lua",
-        CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_66.lua",
-    }) do
-        pcall(delfile, staleCurrent)
-    end
-    if type(delfile) ~= "function" then return end
     for _, legacyName in ipairs({
-        "_devkage_autoload_payload_v5_2_65.lua",
-        "_devkage_autoload_payload_v5_2_66.lua",
-    "_devkage_autoload_payload_v5_2_64.lua",
+        "_devkage_autoload_payload_v5_2_64.lua",
         "_devkage_autoload_payload_v5_2_63.lua",
         "_devkage_autoload_payload_v5_2_62.lua",
         "_devkage_autoload_payload_v5_2_61.lua",
@@ -15285,7 +15268,6 @@ if not enabled then
         for _, path in ipairs({
             SCRIPT_PAYLOAD_FILE,
             SCRIPT_STABLE_PAYLOAD_FILE,
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_66.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_64.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_63.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_62.lua",
@@ -15957,7 +15939,7 @@ gui.Parent = anchor
 local label = auraTrack(Instance.new("TextLabel"))
 label.BackgroundTransparency = 1
 label.Size = UDim2.fromScale(1, 1)
-label.Font = Enum.Font.Code
+label.Font = Enum.Font.GothamBold
 label.Text = symbol
 label.TextScaled = true
 label.TextColor3 = RainbowAuraState.color
@@ -17258,12 +17240,11 @@ runtimeEnv.__DevKageAvatarMods = (function()
         local baseOffset = footOffset(root,humanoid) - 0.045
         -- 5 staggered waves for a rich, layered ground ripple effect
         local waveSpecs = {
-            {Diameter=4.1, Delay=0.00, Strength=0.96, Thickness=6.4, OuterThick=18},
-            {Diameter=4.1, Delay=0.18, Strength=0.82, Thickness=5.1, OuterThick=14},
-            {Diameter=4.1, Delay=0.36, Strength=0.68, Thickness=3.9, OuterThick=10.5},
-            {Diameter=4.1, Delay=0.54, Strength=0.54, Thickness=3.0, OuterThick=8},
-            {Diameter=4.1, Delay=0.72, Strength=0.40, Thickness=2.2, OuterThick=5.5},
-            {Diameter=4.1, Delay=0.90, Strength=0.28, Thickness=1.6, OuterThick=4},
+            {Diameter=3.8, Delay=0.00, Strength=0.88, Thickness=5.5, OuterThick=14},
+            {Diameter=3.8, Delay=0.20, Strength=0.74, Thickness=4.2, OuterThick=11},
+            {Diameter=3.8, Delay=0.40, Strength=0.60, Thickness=3.2, OuterThick=8.5},
+            {Diameter=3.8, Delay=0.60, Strength=0.46, Thickness=2.5, OuterThick=6.5},
+            {Diameter=3.8, Delay=0.80, Strength=0.32, Thickness=1.8, OuterThick=4.5},
         }
 
         for index,spec in ipairs(waveSpecs) do
@@ -17480,9 +17461,7 @@ runtimeEnv.__DevKageAvatarMods = (function()
                 if rig.Motor and rig.Motor.Parent then
                     -- Gentle floating bob with a slight tilt for organic feel
                     local bob = math.sin(now * 1.35 * speed + rig.Ring * 1.1) * 0.048 * amplitude
-                    local tilt = math.sin(now * 0.72 * speed + rig.Ring * 0.55) * math.rad(2.4) * amplitude
-                    local haloPulse = 1 + (math.sin(now * 2.1 * speed + rig.Ring * 0.9) * 0.5 + 0.5) * pulse * 0.34
-                    local haloScale = modSize() * haloPulse
+                    local tilt = math.sin(now * 0.72 * speed + rig.Ring * 0.55) * math.rad(1.8) * amplitude
                     -- Alternate spin direction per ring pair for a counter-rotating look
                     local dir = (rig.Ring % 2 == 0) and -1 or 1
                     local spinSpeed = 14 + (rig.Ring - 1) * 4
@@ -17493,14 +17472,14 @@ runtimeEnv.__DevKageAvatarMods = (function()
 
             for _,waveEntry in ipairs(state.haloWaves) do
                 if waveEntry.Plate and waveEntry.Plate.Parent and waveEntry.Motor and waveEntry.Motor.Parent then
-                    local cycle = (now * math.max(speed,0.35) * 0.58 - waveEntry.Delay) % 1
+                    local cycle = (now * math.max(speed,0.35) * 0.68 - waveEntry.Delay) % 1
                     local eased = 1 - math.pow(1 - cycle, 2.2)
                     -- Waves start small, bloom outward, then fade as they reach max radius
-                    local diameterScale = 0.42 + eased * 1.92
+                    local diameterScale = 0.55 + eased * 1.68
                     local diameter = waveEntry.BaseDiameter * diameterScale
                     -- Fade: bright as it expands, fades toward edges
-                    local fadeIn = math.clamp(eased * 5.5, 0, 1)
-                    local fadeOut = 1 - math.clamp((eased - 0.52) * 2.5, 0, 1)
+                    local fadeIn = math.clamp(eased * 4.5, 0, 1)
+                    local fadeOut = 1 - math.clamp((eased - 0.55) * 2.3, 0, 1)
                     local alpha = fadeIn * fadeOut
                     waveEntry.Plate.Size = Vector3.new(0.028,diameter,diameter)
                     -- Primary color is a warm/cool shift based on index for visual variety
@@ -23196,7 +23175,7 @@ AdvancedLighting.ExtraVisuals=assert(loadstring([======[
 return function(context)
     local settings,Lighting,Workspace=context.Settings,context.Lighting,context.Workspace
     local RunService,library=context.RunService,context.Library
-    local runtime={Alive=true,Saved={},FPSSaved=setmetatable({}, {__mode="k"}),FPSApplied=false,Objects={},Sections={},CycleTime=nil,Exposure=nil,ProbeAt=0}
+    local runtime={Alive=true,Saved={},Objects={},Sections={},CycleTime=nil,Exposure=nil,ProbeAt=0}
     local function n(value,default,minimum,maximum)
         value=tonumber(value)
         if not value or value~=value or math.abs(value)==math.huge then value=default end
@@ -23219,83 +23198,9 @@ return function(context)
         saved[key]=nil
         if next(saved)==nil then self.Saved[object]=nil end
     end
-    function runtime:ApplyFPSBooster(enabled)
-        if not enabled then
-            local restore={}
-            for object,properties in pairs(self.FPSSaved or {}) do
-                for key,entry in pairs(properties) do
-                    pcall(function()
-                        if object and object.Parent and object[key] == entry.Applied then
-                            object[key] = entry.Original
-                        end
-                    end)
-                    restore[#restore+1]={object,key}
-                end
-            end
-            for _,entry in ipairs(restore) do
-                local properties=self.FPSSaved[entry[1]]
-                if properties then properties[entry[2]]=nil end
-                if properties and next(properties)==nil then self.FPSSaved[entry[1]]=nil end
-            end
-            if self.FPSConnection then
-                pcall(function() self.FPSConnection:Disconnect() end)
-                self.FPSConnection=nil
-            end
-            self.FPSApplied=false
-            return
-        end
-        if self.FPSApplied then return end
-        self.FPSSaved=self.FPSSaved or setmetatable({}, {__mode="k"})
-        local function write(object,key,value)
-            if not object then return end
-            local saved=self.FPSSaved[object]
-            if not saved then saved={}; self.FPSSaved[object]=saved end
-            if not saved[key] then saved[key]={Original=object[key],Applied=value} end
-            pcall(function() object[key]=value end)
-        end
-        if settings.fpsBoosterDisablePostFX ~= false then
-            for _,object in ipairs(Lighting:GetChildren()) do
-                if object:IsA("BloomEffect") or object:IsA("BlurEffect") or object:IsA("ColorCorrectionEffect")
-                    or object:IsA("DepthOfFieldEffect") or object:IsA("SunRaysEffect") or object:IsA("Atmosphere") then
-                    write(object,"Enabled",false)
-                end
-            end
-            write(Lighting,"GlobalShadows",false)
-            pcall(function() write(Lighting,"EnvironmentDiffuseScale",0) end)
-            pcall(function() write(Lighting,"EnvironmentSpecularScale",0) end)
-        end
-        local terrain=Workspace:FindFirstChildOfClass("Terrain")
-        if terrain and settings.fpsBoosterDisableTerrainDecoration ~= false then
-            pcall(function() write(terrain,"Decoration",false) end)
-        end
-        if settings.fpsBoosterDisableParticles ~= false then
-            local scanned=0
-            for _,object in ipairs(Workspace:GetDescendants()) do
-                scanned=scanned+1
-                if scanned > 16000 then break end
-                if object:IsA("ParticleEmitter") then
-                    write(object,"Enabled",false)
-                elseif object:IsA("Trail") or object:IsA("Beam") then
-                    write(object,"Enabled",false)
-                end
-            end
-            if self.FPSConnection then pcall(function() self.FPSConnection:Disconnect() end) end
-            self.FPSConnection=Workspace.DescendantAdded:Connect(function(object)
-                if not self.FPSApplied or settings.fpsBoosterDisableParticles == false then return end
-                if object:IsA("ParticleEmitter") then
-                    write(object,"Enabled",false)
-                elseif object:IsA("Trail") or object:IsA("Beam") then
-                    write(object,"Enabled",false)
-                end
-            end)
-        end
-        self.FPSApplied=true
-    end
     function runtime:Step(dt)
         if not self.Alive then return end
         dt=n(dt,0,0,0.25)
-        if settings.fpsBooster and not self.FPSApplied then self:ApplyFPSBooster(true)
-        elseif not settings.fpsBooster and self.FPSApplied then self:ApplyFPSBooster(false) end
         if settings.extraDayCycle and self.CycleTime==nil and context.Sky then context.Sky:RestoreClock() end
         if settings.extraDayCycle then
             if not self.CycleTime then self.CycleTime=Lighting.ClockTime end
@@ -23376,8 +23281,6 @@ return function(context)
     function runtime:Destroy()
         if not self.Alive then return end
         self.Alive=false
-        if self.FPSConnection then pcall(function() self.FPSConnection:Disconnect() end); self.FPSConnection=nil end
-        if self.FPSApplied then pcall(function() self:ApplyFPSBooster(false) end) end
         pcall(function() RunService:UnbindFromRenderStep(self.BindName) end)
         local restore={}
         for object,properties in pairs(self.Saved) do for key in pairs(properties) do restore[#restore+1]={object,key} end end
@@ -23426,12 +23329,6 @@ return function(context)
     slider(water,"extraWaterWaveSize","Wave Height",0,1,0.18,2)
     slider(water,"extraWaterWaveSpeed","Wave Speed",0,100,12,0)
     water:CreateLabel({Text="Applies to native Terrain water when the map has it."})
-    local fps=section("FPS Booster","Left",170)
-    toggle(fps,"fpsBooster","FPS Booster")
-    toggle(fps,"fpsBoosterDisableParticles","Disable Particles / Trails")
-    toggle(fps,"fpsBoosterDisablePostFX","Disable Post FX / Shadows")
-    toggle(fps,"fpsBoosterDisableTerrainDecoration","Disable Terrain Decoration")
-    fps:CreateLabel({Text="Local visual optimization; reverses its changes when disabled."})
     runtime.BindName="DevKage_Extra_World_"..context.HttpService:GenerateGUID(false)
     RunService:BindToRenderStep(runtime.BindName,Enum.RenderPriority.Last.Value+750010,function(dt)
         local ok,err=pcall(runtime.Step,runtime,dt)
@@ -28775,7 +28672,7 @@ local function referenceCreateTextLabel(parent, name)
         glow.Size = UDim2.fromOffset(150, 23)
         glow.BackgroundTransparency = 1
         glow.BorderSizePixel = 0
-        glow.Font = Enum.Font.Code
+        glow.Font = Enum.Font.Arcade
         glow.TextScaled = true
         glow.TextColor3 = Color3.new(1, 1, 1)
         glow.TextTransparency = textTransparency
@@ -28803,7 +28700,7 @@ local function referenceCreateTextLabel(parent, name)
     label.Text = name == "MainText" and "devkage" or ""
     label.Position = UDim2.fromOffset(0, 0)
     label.TextColor3 = Color3.new(1, 1, 1)
-    label.Font = Enum.Font.Code
+    label.Font = Enum.Font.Arcade
     label.TextScaled = true
     label.BackgroundTransparency = 1
     label.Active = false
@@ -29328,10 +29225,10 @@ local function referenceApplyText(
 
 
     main.Font =
-        Enum.Font.Code
+        Enum.Font.Arcade
 
     second.Font =
-        Enum.Font.Code
+        Enum.Font.Arcade
 
 
     main.TextScaled = true
@@ -29998,15 +29895,10 @@ local function referenceCursorRender(deltaTime)
 
             -- Always sync the core gradient so all lines match at any glow setting
             if line.CoreGradient then
-                local edge = color:Lerp(Color3.fromRGB(30, 22, 50), 0.52)
-                local hot = color:Lerp(Color3.new(1,1,1), 0.72)
-                line.CoreGradient.Color = ColorSequence.new({
-                    ColorSequenceKeypoint.new(0.00, edge),
-                    ColorSequenceKeypoint.new(0.18, hot),
-                    ColorSequenceKeypoint.new(0.52, Color3.new(1,1,1)),
-                    ColorSequenceKeypoint.new(0.84, hot),
-                    ColorSequenceKeypoint.new(1.00, edge),
-                })
+                -- Keep every cursor arm on the same core color.
+                -- The previous directional edge gradient made one rotated arm
+                -- appear darker than the others.
+                line.CoreGradient.Color = ColorSequence.new(color)
             end
             if line.HighlightStroke then
                 line.HighlightStroke.Color = color:Lerp(Color3.new(1,1,1), 0.88)
@@ -30195,7 +30087,7 @@ ReferenceCursorRuntime.ReferenceVisual = {
     RainbowBluePhase = 4,
 
     Text = "devkage",
-    TextFont = Enum.Font.Code,
+    TextFont = Enum.Font.Arcade,
     TextScaled = true,
 
     TextWidth = 150,
@@ -32414,17 +32306,9 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
 })
 
 local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
-local __devkageCurrentBuild = "DevKage-v5.2.67-autoload-currentbuild-ui-halo-wave-fps-font-fpsboost-20260913"
-local __devkageCurrentBuildNumber = tonumber(((__devkageCurrentBuild:match("v([%d%.]+)") or "0"):gsub("%.", ""))) or 0
-local __devkageLoadedBuild = tostring(rawget(__devkageEnv,"__DEVKAGE_PACKAGE_BUILD") or "")
-local __devkageLoadedNumber = tonumber(((__devkageLoadedBuild:match("v([%d%.]+)") or "0"):gsub("%.", ""))) or 0
-if __devkageLoadedNumber > __devkageCurrentBuildNumber then
-    warn("[DevKage] newer build already loaded; refusing older package")
-    return nil
-end
-__devkageEnv.__DEVKAGE_PACKAGE_BUILD = __devkageCurrentBuild
+__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.68-autoload-currentbuild-ui-halo-wave-fps-font-fpsboost-20260913"
 __devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
-__devkageEnv.__DEVKAGE_PACKAGE_SOURCE_BUILD = __devkageCurrentBuild
+__devkageEnv.__DEVKAGE_PACKAGE_SOURCE_BUILD = "DevKage-v5.2.68-autoload-currentbuild-ui-halo-wave-fps-font-fpsboost-20260913"
 __devkageEnv.__DEVKAGE_PACKAGE_SOURCE_CURRENT = __DEVKAGE_EMBEDDED_SOURCE
 
 -- CURRENT LATE-BOOT AUTOEXEC OWNERSHIP (v5.2.55)
