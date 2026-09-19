@@ -531,7 +531,7 @@ local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
 
 
 
-__devkageEnv.__DEVKAGE_RUNTIME_VERSION = "dual-script-autoload-v7-knife-movement-astra-smooth-ui-cursor-weather"
+__devkageEnv.__DEVKAGE_RUNTIME_VERSION = "dual-script-autoload-v7-knife-movement"
 local __devkageMultiInjectAutoBoot = __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT == true
 
 -- Autoexec coexistence boot mutex.
@@ -631,17 +631,6 @@ if library.Theme.TopBar == nil then library.Theme.TopBar = Color3.fromRGB(255, 2
 if library.Theme.TopBarTransparency == nil then library.Theme.TopBarTransparency = 0 end
 if library.Theme.MenuAnimationSpeed == nil then library.Theme.MenuAnimationSpeed = 1 end
 if library.Theme.DPIScale == nil then library.Theme.DPIScale = 1 end
-
--- Keybind overlay/menu appearance is independent from the main window theme.
--- Defaults are intentionally more compact than older DevKage builds.
-if library.Theme.KeybindScale == nil then library.Theme.KeybindScale = 0.85 end
-if library.Theme.KeybindWidth == nil then library.Theme.KeybindWidth = 220 end
-if library.Theme.KeybindTransparency == nil then library.Theme.KeybindTransparency = 0.12 end
-if library.Theme.KeybindColor == nil then library.Theme.KeybindColor = Color3.fromRGB(18, 18, 18) end
-if library.Theme.KeybindTopBar == nil then library.Theme.KeybindTopBar = library.Theme.TopBar end
-if library.Theme.KeybindTopBarTransparency == nil then
-    library.Theme.KeybindTopBarTransparency = library.Theme.TopBarTransparency
-end
 library.ThemeUIObjects = library.ThemeUIObjects or {}
 library.ThemeToggleControls = library.ThemeToggleControls or {}
 library.ThemeSliderFrames = library.ThemeSliderFrames or {}
@@ -685,50 +674,6 @@ function library:SetDPIScale(value)
     local scaleObject = self.ThemeScaleObject
     if scaleObject and scaleObject.Parent then
         pcall(function() scaleObject.Scale = self.Theme.DPIScale end)
-    end
-end
-
-function library:SetKeybindScale(value)
-    self.Theme.KeybindScale = math.clamp(tonumber(value) or 0.85, 0.60, 1.30)
-    if self.KeybindManager and self.KeybindManager.ApplyAppearance then
-        self.KeybindManager:ApplyAppearance()
-    end
-end
-
-function library:SetKeybindWidth(value)
-    self.Theme.KeybindWidth = math.clamp(math.floor((tonumber(value) or 220) + 0.5), 150, 340)
-    if self.KeybindManager and self.KeybindManager.ApplyAppearance then
-        self.KeybindManager:ApplyAppearance()
-    end
-end
-
-function library:SetKeybindTransparency(value)
-    self.Theme.KeybindTransparency = math.clamp(tonumber(value) or 0.12, 0, 0.95)
-    if self.KeybindManager and self.KeybindManager.ApplyAppearance then
-        self.KeybindManager:ApplyAppearance(true)
-    end
-end
-
-function library:SetKeybindColor(color)
-    if typeof(color) ~= "Color3" then return end
-    self.Theme.KeybindColor = color
-    if self.KeybindManager and self.KeybindManager.ApplyAppearance then
-        self.KeybindManager:ApplyAppearance(true)
-    end
-end
-
-function library:SetKeybindTopBarColor(color)
-    if typeof(color) ~= "Color3" then return end
-    self.Theme.KeybindTopBar = color
-    if self.KeybindManager and self.KeybindManager.ApplyAppearance then
-        self.KeybindManager:ApplyAppearance(true)
-    end
-end
-
-function library:SetKeybindTopBarTransparency(value)
-    self.Theme.KeybindTopBarTransparency = math.clamp(tonumber(value) or 0, 0, 1)
-    if self.KeybindManager and self.KeybindManager.ApplyAppearance then
-        self.KeybindManager:ApplyAppearance(true)
     end
 end
 
@@ -831,14 +776,7 @@ function library:ApplyTheme()
             table.remove(self.ThemeToggleControls, index)
         else
             pcall(function()
-                if type(control.RefreshToggleVisual) == "function" then
-                    control:RefreshToggleVisual()
-                else
-                    frame.BackgroundColor3 = control.State == true
-                        and self.Theme.Toggle
-                        or Color3.fromRGB(77, 77, 77)
-                    if frame.Parent then frame.Parent.Visible = control.State == true end
-                end
+                frame.BackgroundColor3 = control.State and self.Theme.Toggle or Color3.fromRGB(77, 77, 77)
             end)
         end
     end
@@ -874,12 +812,7 @@ function library:ApplyTheme()
     end
 
     applyRoot(self.ThemeRoot)
-    if self.KeybindManager then
-        applyRoot(self.KeybindManager.Overlay)
-        if self.KeybindManager.ApplyAppearance then
-            self.KeybindManager:ApplyAppearance(true)
-        end
-    end
+    if self.KeybindManager then applyRoot(self.KeybindManager.Overlay) end
 end
 
 function library:SetThemeColor(kind, color)
@@ -1063,9 +996,10 @@ function library:CreateWindow(Properties)
                 end
             end)
 
-            -- If the integrated custom cursor is alive, keep the native arrow hidden
-            -- so the neon cursor remains the only pointer over the menu.
-            local wantedIcon = not externalCursorAlive()
+            -- Always show the native cursor while the DevKage menu is open.
+            -- A custom cursor can be a few pixels off on some executors/inset modes,
+            -- which makes small keybind controls feel impossible to click.
+            local wantedIcon = true
             pcall(function()
                 if uis.MouseIconEnabled ~= wantedIcon then
                     uis.MouseIconEnabled = wantedIcon
@@ -1143,18 +1077,16 @@ function library:CreateWindow(Properties)
         end
 
         function Window:SetCursorControlMode(mode)
+
+
+
+
             local previousMode = Window.CursorControlMode
-            mode = tostring(mode or "Mouse")
-            if mode ~= "Cursor Lock" then
-                mode = "Mouse"
-            end
+            mode = "Mouse"
             Window.CursorControlMode = mode
 
             if Window.Enabled then
                 applyMenuMouseState()
-            elseif mode == "Cursor Lock" then
-                captureGameplayMouseState()
-                applyGameplayMouseState()
             elseif previousMode == "Cursor Lock" then
                 restoreSavedMouseState()
             end
@@ -1213,28 +1145,6 @@ function library:CreateWindow(Properties)
             Size                = UDim2.new(0, 660, 0, 560)
         })
         Window.MainFrame = ScreenGui_MainFrame
-
-        -- One composite animation layer makes open/close smooth and prevents
-        -- individual controls from finishing at different times.
-        local MenuAnimationGroup = Instance.new("CanvasGroup")
-        MenuAnimationGroup.Name = "DevKage_MenuAnimationGroup"
-        MenuAnimationGroup.AnchorPoint = Vector2.new(0.5, 0.5)
-        MenuAnimationGroup.Position = UDim2.fromScale(0.5, 0.5)
-        MenuAnimationGroup.Size = UDim2.fromScale(1, 1)
-        MenuAnimationGroup.BackgroundTransparency = 1
-        MenuAnimationGroup.BorderSizePixel = 0
-        MenuAnimationGroup.GroupTransparency = Window.Enabled and 0 or 1
-        MenuAnimationGroup.Parent = ScreenGui
-
-        local MenuAnimationScale = Instance.new("UIScale")
-        MenuAnimationScale.Name = "DevKage_MenuAnimationScale"
-        MenuAnimationScale.Scale = Window.Enabled and 1 or 0.965
-        MenuAnimationScale.Parent = MenuAnimationGroup
-
-        ScreenGui_MainFrame.Parent = MenuAnimationGroup
-        Window.MenuAnimationGroup = MenuAnimationGroup
-        Window.MenuAnimationScale = MenuAnimationScale
-
         local ScreenGui_MainFrame_InnerBorder = utility:RenderObject("Frame", {
             BackgroundColor3    = Color3.fromRGB(40, 40, 40),
             BackgroundTransparency = 0,
@@ -1360,66 +1270,63 @@ function library:CreateWindow(Properties)
             function Window:Fade(state)
                 Window.FadeToken = Window.FadeToken + 1
                 local fadeToken = Window.FadeToken
-                local animationSpeed = math.clamp(tonumber(library.Theme.MenuAnimationSpeed) or 1, 0.25, 3)
-                local duration = (state and 0.22 or 0.18) / animationSpeed
-
-                if Window._MenuFadeTween then
-                    pcall(function() Window._MenuFadeTween:Cancel() end)
-                    Window._MenuFadeTween = nil
-                end
-                if Window._MenuScaleTween then
-                    pcall(function() Window._MenuScaleTween:Cancel() end)
-                    Window._MenuScaleTween = nil
-                end
-
-                local wasDisabled = ScreenGui and ScreenGui.Enabled == false
                 if ScreenGui then
                     ScreenGui.Enabled = true
                 end
 
-                if MenuAnimationGroup then
-                    if state and wasDisabled then
-                        MenuAnimationGroup.GroupTransparency = 1
-                    end
+                for index, render in pairs(library.Renders) do
+                    if not render[3] then
+                        local obj   = render[1]
+                        local props = render[2]
+                        local baseDur = render[4] or 0.25
+                        local animationSpeed = math.clamp(tonumber(library.Theme.MenuAnimationSpeed) or 1, 0.25, 3)
+                        local dur = baseDur / animationSpeed
+                        local ti    = TweenInfo.new(dur, Enum.EasingStyle.Linear,
+                            state and Enum.EasingDirection.Out or Enum.EasingDirection.In)
+                        local cls   = obj.ClassName
 
-                    local fadeInfo = TweenInfo.new(
-                        duration,
-                        Enum.EasingStyle.Quint,
-                        state and Enum.EasingDirection.Out or Enum.EasingDirection.In
-                    )
-                    Window._MenuFadeTween = tws:Create(
-                        MenuAnimationGroup,
-                        fadeInfo,
-                        {GroupTransparency = state and 0 or 1}
-                    )
-                    Window._MenuFadeTween:Play()
+                        if cls == "Frame" then
+                            local bt = props["BackgroundTransparency"] or 0
+                            if bt ~= 1 then
+                                tws:Create(obj, ti, {BackgroundTransparency = state and bt or 1}):Play()
+                            end
+                        elseif cls == "ImageLabel" then
+                            local bt = props["BackgroundTransparency"] or 0
+                            if bt ~= 1 then
+                                tws:Create(obj, ti, {BackgroundTransparency = state and bt or 1}):Play()
+                            end
+                            local it = props["ImageTransparency"] or 0
+                            if it ~= 1 then
+                                tws:Create(obj, ti, {ImageTransparency = state and it or 1}):Play()
+                            end
+                        elseif cls == "TextLabel" or cls == "TextButton" or cls == "TextBox" then
+                            local bt = props["BackgroundTransparency"] or 0
+                            if bt ~= 1 then
+                                tws:Create(obj, ti, {BackgroundTransparency = state and bt or 1}):Play()
+                            end
+                            local tt = props["TextTransparency"] or 0
+                            if tt ~= 1 then
+                                tws:Create(obj, ti, {TextTransparency = state and tt or 1}):Play()
+                            end
+                        elseif cls == "ScrollingFrame" then
+                            local bt = props["BackgroundTra]==================],
+    [==================[nsparency"] or 0
+                            if bt ~= 1 then
+                                tws:Create(obj, ti, {BackgroundTransparency = state and bt or 1}):Play()
+                            end
+                            local st = props["ScrollBarImageTransparency"] or 0
+                            if st ~= 1 then
+                                tws:Create(obj, ti, {ScrollBarImageTransparency = state and st or 1}):Play()
+                            end
+                        end
+                    end
                 end
 
-                if MenuAnimationScale then
-                    if state and wasDisabled then
-                        MenuAnimationScale.Scale = 0.965
-                    end
-
-                    local scaleInfo = TweenInfo.new(
-                        duration,
-                        state and Enum.EasingStyle.Back or Enum.EasingStyle.Quint,
-                        state and Enum.EasingDirection.Out or Enum.EasingDirection.In
-                    )
-                    Window._MenuScaleTween = tws:Create(
-                        MenuAnimationScale,
-                        scaleInfo,
-                        {Scale = state and 1 or 0.972}
-                    )
-                    Window._MenuScaleTween:Play()
-                end
-
-                task.delay(duration + 0.025, function()
+                task.delay(0.26, function()
                     if fadeToken ~= Window.FadeToken then return end
                     if ScreenGui and ScreenGui.Parent then
                         if state then
                             ScreenGui.Enabled = true
-                            if MenuAnimationGroup then MenuAnimationGroup.GroupTransparency = 0 end
-                            if MenuAnimationScale then MenuAnimationScale.Scale = 1 end
                         else
                             ScreenGui.Enabled = false
                         end
@@ -1586,28 +1493,19 @@ function library:CreateWindow(Properties)
                     MenuContextActionService:UnbindAction(MenuToggleActionName)
                 end)
             end
+        else
+
+
+            utility:CreateConnection(uis.InputBegan, function(Input)
+                if not Input.KeyCode or Input.KeyCode ~= Window.Key then return end
+                local env = (type(getgenv) == "function" and getgenv()) or _G
+                if env.__DevKageWindow ~= Window then return end
+                local now = os.clock()
+                if now - MenuLastToggleAt < 0.12 then return end
+                MenuLastToggleAt = now
+                Window:Toggle()
+            end)
         end
-
-        -- Always keep a direct input fallback. Some executor/game combinations
-        -- accept the ContextAction binding but never dispatch it. The shared
-        -- debounce means CAS + InputBegan cannot toggle twice from one press.
-        utility:CreateConnection(uis.InputBegan, function(Input)
-            if uis:GetFocusedTextBox() then return end
-            if not Input.KeyCode or Input.KeyCode ~= Window.Key then return end
-
-            local env = (type(getgenv) == "function" and getgenv()) or _G
-            if env.__DevKageWindow ~= Window then return end
-
-            local manager = library and library.KeybindManager
-            if manager and manager.CaptureControl and manager.Menu and manager.Menu.Visible == true then
-                return
-            end
-
-            local now = os.clock()
-            if now - MenuLastToggleAt < 0.12 then return end
-            MenuLastToggleAt = now
-            Window:Toggle()
-        end)
     end
     return setmetatable(Window, library)
 end
@@ -2198,7 +2096,6 @@ library.KeybindManager = library.KeybindManager or {
     HackerAlertExpiresAt = 0,
     StartupBatch = true,
     RefreshPending = false,
-    RainbowBars = {},
 }
 
 local BindManager = library.KeybindManager
@@ -2228,18 +2125,11 @@ local function bindRainbowBar(parent, zindex)
     bar.Position = UDim2.new(0, 1, 0, 1)
     bar.Size = UDim2.new(1, -2, 1, -2)
     bar.Image = "rbxassetid://8508019876"
-    bar.ImageColor3 = library.Theme.KeybindTopBar or library.Theme.TopBar
-    bar.ImageTransparency = math.clamp(
-        tonumber(library.Theme.KeybindTopBarTransparency)
-            or tonumber(library.Theme.TopBarTransparency)
-            or 0,
-        0,
-        1
-    )
+    bar.ImageColor3 = library.Theme.TopBar
+    bar.ImageTransparency = math.clamp(tonumber(library.Theme.TopBarTransparency) or 0, 0, 1)
     bar.ZIndex = zindex
     bar.Parent = holder
-    BindManager.RainbowBars = BindManager.RainbowBars or {}
-    BindManager.RainbowBars[#BindManager.RainbowBars + 1] = bar
+    library:RegisterThemeTopBar(bar)
     return bar
 end
 
@@ -2287,10 +2177,9 @@ function BindManager:EnsureUI(window)
     active.Name = "ActiveKeybinds"
     active.AnchorPoint = Vector2.new(0, 0.5)
     active.Position = UDim2.new(0, 14, 0.5, 0)
-    active.Size = UDim2.new(0, math.clamp(tonumber(library.Theme.KeybindWidth) or 220, 150, 340), 0, 31)
+    active.Size = UDim2.new(0, 260, 0, 31)
     active.AutomaticSize = Enum.AutomaticSize.None
-    active.BackgroundColor3 = library.Theme.KeybindColor or Color3.fromRGB(18, 18, 18)
-    active.BackgroundTransparency = math.clamp(tonumber(library.Theme.KeybindTransparency) or 0.12, 0, 0.95)
+    active.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
     active.BorderColor3 = Color3.fromRGB(5, 5, 5)
     active.BorderSizePixel = 1
     active.Visible = false
@@ -2472,8 +2361,7 @@ function BindManager:EnsureUI(window)
 
     local menu = Instance.new("Frame")
     menu.Name = "BindMenu"
-    menu.BackgroundColor3 = library.Theme.KeybindColor or Color3.fromRGB(18, 18, 18)
-    menu.BackgroundTransparency = math.clamp(tonumber(library.Theme.KeybindTransparency) or 0.12, 0, 0.95)
+    menu.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
     menu.BorderColor3 = Color3.fromRGB(5, 5, 5)
     menu.BorderSizePixel = 1
     menu.Size = UDim2.fromOffset(204, 194)
@@ -2650,20 +2538,10 @@ function BindManager:EnsureUI(window)
             end
 
             if uis:GetFocusedTextBox() then return end
-
-            local inputType = input.UserInputType
-            local processedMouse =
-                gameProcessed == true
-                and (
-                    inputType == Enum.UserInputType.MouseButton1
-                    or inputType == Enum.UserInputType.MouseButton2
-                    or inputType == Enum.UserInputType.MouseButton3
-                )
-
             for _, control in ipairs(self.Order) do
                 if control.BindConfigured == true
                     and self:Matches(control.BindKey, input)
-                    and not processedMouse then
+                    and not (control.InlineBind and gameProcessed) then
                     if control.BindMode == "Hold" then
                         control:Set(true)
                     elseif control.BindMode == "Toggle" then
@@ -2692,8 +2570,6 @@ function BindManager:EnsureUI(window)
         end)
     end
 
-    self:ApplyAppearance(true)
-
     if not self.CleanupReady then
         self.CleanupReady = true
         table.insert(library.CleanupCallbacks, function()
@@ -2711,77 +2587,7 @@ function BindManager:EnsureUI(window)
             self.HackerAlertActive = false
             self.HackerAlertExpiresAt = 0
             self.HackerAlertFlashConnection = nil
-            self.RainbowBars = {}
         end)
-    end
-end
-
-function BindManager:ApplyAppearance(skipRefresh)
-    local theme = library.Theme or {}
-    local scaleValue = math.clamp(tonumber(theme.KeybindScale) or 0.85, 0.60, 1.30)
-    local widthValue = math.clamp(math.floor((tonumber(theme.KeybindWidth) or 220) + 0.5), 150, 340)
-    local transparency = math.clamp(tonumber(theme.KeybindTransparency) or 0.12, 0, 0.95)
-    local panelColor = typeof(theme.KeybindColor) == "Color3"
-        and theme.KeybindColor
-        or Color3.fromRGB(18,18,18)
-    local topColor = typeof(theme.KeybindTopBar) == "Color3"
-        and theme.KeybindTopBar
-        or theme.TopBar
-        or Color3.fromRGB(255,255,255)
-    local topTransparency = math.clamp(
-        tonumber(theme.KeybindTopBarTransparency)
-            or tonumber(theme.TopBarTransparency)
-            or 0,
-        0,
-        1
-    )
-
-    if self.ActiveFrame and self.ActiveFrame.Parent then
-        self.ActiveFrame.BackgroundColor3 = panelColor
-        self.ActiveFrame.BackgroundTransparency = transparency
-
-        local activeScale = self.ActiveFrame:FindFirstChild("DevKageKeybindScale")
-        if not activeScale then
-            activeScale = Instance.new("UIScale")
-            activeScale.Name = "DevKageKeybindScale"
-            activeScale.Parent = self.ActiveFrame
-        end
-        activeScale.Scale = scaleValue
-
-        self.ActiveFrame.Size = UDim2.new(
-            0,
-            widthValue,
-            0,
-            math.max(31, self.ActiveFrame.Size.Y.Offset)
-        )
-    end
-
-    if self.Menu and self.Menu.Parent then
-        self.Menu.BackgroundColor3 = panelColor
-        self.Menu.BackgroundTransparency = transparency
-
-        local menuScale = self.Menu:FindFirstChild("DevKageBindMenuScale")
-        if not menuScale then
-            menuScale = Instance.new("UIScale")
-            menuScale.Name = "DevKageBindMenuScale"
-            menuScale.Parent = self.Menu
-        end
-        menuScale.Scale = scaleValue
-    end
-
-    self.RainbowBars = self.RainbowBars or {}
-    for index = #self.RainbowBars, 1, -1 do
-        local bar = self.RainbowBars[index]
-        if not bar or not bar.Parent then
-            table.remove(self.RainbowBars, index)
-        else
-            bar.ImageColor3 = topColor
-            bar.ImageTransparency = topTransparency
-        end
-    end
-
-    if not skipRefresh then
-        self:RefreshActive()
     end
 end
 
@@ -2838,10 +2644,6 @@ function BindManager:RefreshControl(control)
     local key = configured and self:KeyText(control.BindKey) or "-"
     local hasKey = configured and key ~= "-"
 
-    if type(control.RefreshToggleVisual) == "function" then
-        control:RefreshToggleVisual()
-    end
-
     if control.InlineBind then
         if control.BindModeButton then
             local modeText = "bind"
@@ -2878,11 +2680,7 @@ function BindManager:RefreshActive()
     local count = 0
     for index, control in ipairs(self.Order) do
         local configured = control.BindConfigured == true
-        local keyText = configured and self:KeyText(control.BindKey) or "-"
-        local hasKey = configured and keyText ~= "-"
-        local hudEligible = hasKey
-            or (configured and (control.BindMode == "Always" or control.BindMode == "Hold"))
-        local active = hudEligible and control:Get() == true
+        local active = configured and control:Get() == true
         local record = self.ActiveRows[control]
         if active then
             count = count + 1
@@ -2904,7 +2702,8 @@ function BindManager:RefreshActive()
             record.Row.Visible = true; record.Row.LayoutOrder = index
             record.Name.Text = tostring(control.Name)
             local modeText = control.BindMode == "Always" and "always on" or string.lower(tostring(control.BindMode or "Toggle"))
-            record.State.Text = "[" .. modeText .. "]" .. (hasKey and (" [" .. keyText .. "]") or "")
+            local keyText = self:KeyText(control.BindKey)
+            record.State.Text = "[" .. modeText .. "]" .. (keyText ~= "-" and (" [" .. keyText .. "]") or "")
             record.State.TextColor3 = control.Window and control.Window.Accent or Color3.fromRGB(175,205,75)
         elseif record then
             record.Row.Visible = false
@@ -2915,12 +2714,7 @@ function BindManager:RefreshActive()
     local alerts = (self.ModAlertActive and 19 or 0) + (self.HackerAlertActive and 19 or 0)
     local listHeight = math.min(count * 19 + alerts + 6, math.max(80, math.floor(height * 0.5)))
     self.ActiveList.Size = UDim2.new(1, -12, 0, listHeight)
-    self.ActiveFrame.Size = UDim2.new(
-        0,
-        math.clamp(math.floor((tonumber(library.Theme.KeybindWidth) or 220) + 0.5), 150, 340),
-        0,
-        listHeight + 31
-    )
+    self.ActiveFrame.Size = UDim2.new(0, 260, 0, listHeight + 31)
     self.ActiveFrame.Visible = count > 0 or alerts > 0
 end
 
@@ -3003,11 +2797,8 @@ function BindManager:ShowMenu(control)
     self:RefreshMenu()
     local mouse = uis:GetMouseLocation()
     local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
-    local scaleValue = math.clamp(tonumber(library.Theme.KeybindScale) or 0.85, 0.60, 1.30)
-    local menuWidth = 204 * scaleValue
-    local menuHeight = 194 * scaleValue
-    local x = math.clamp(mouse.X + 8, 4, math.max(4, viewport.X - menuWidth - 4))
-    local y = math.clamp(mouse.Y + 8, 4, math.max(4, viewport.Y - menuHeight - 4))
+    local x = math.clamp(mouse.X + 8, 4, math.max(4, viewport.X - 190))
+    local y = math.clamp(mouse.Y + 8, 4, math.max(4, viewport.Y - 182))
     self.Menu.Position = UDim2.fromOffset(x, y)
     self.Menu.Visible = true
 end
@@ -3169,7 +2960,7 @@ function sections:CreateToggle(Properties)
             TextColor3          = Color3.fromRGB(205, 205, 205),
             TextSize            = 9,
             TextStrokeTransparency = 1,
-            TextTransparency    = 0.5,
+            TextTransparency    = 1,
             TextXAlignment      = "Left"
         })
         local Content_BindValue = utility:RenderObject(Content.InlineBind and "TextButton" or "TextLabel", {
@@ -3246,8 +3037,6 @@ function sections:CreateToggle(Properties)
             ThemeIgnore         = true
         })
         Content.ThemeToggleFrame = Holder_Outline_Frame
-        Content.ThemeToggleOutline = Content_Holder_Outline
-        Content_Holder_Outline.Visible = false
         library.ThemeToggleControls[#library.ThemeToggleControls + 1] = Content
         local Outline_Frame_Gradient = utility:RenderObject("UIGradient", {
             Color   = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(140, 140, 140)),
@@ -3256,26 +3045,10 @@ function sections:CreateToggle(Properties)
             Parent  = Holder_Outline_Frame
         })
 
-        function Content:HasAssignedKeybind()
-            if Content.BindConfigured ~= true then return false end
-            if Content.BindMode == "Always" then return true end
-            return type(Content.BindKey) == "table"
-                and type(Content.BindKey[1]) == "string"
-                and type(Content.BindKey[2]) == "string"
-        end
-
-        function Content:RefreshToggleVisual()
-            local showToggle = Content.State == true or Content:HasAssignedKeybind()
-            Content_Holder_Outline.Visible = showToggle
-            Holder_Outline_Frame.BackgroundColor3 = Content.State == true
-                and library.Theme.Toggle
-                or Color3.fromRGB(77, 77, 77)
-        end
-
         function Content:Set(state, silent)
             if Content.BindMode == "Always" and state == false then state = true end
             Content.State = state == true
-            Content:RefreshToggleVisual()
+            Holder_Outline_Frame.BackgroundColor3 = Content.State and library.Theme.Toggle or Color3.fromRGB(77, 77, 77)
             if not silent then utility:SafeCallback(Content.Callback, Content:Get()) end
             if library.KeybindManager then library.KeybindManager:RefreshActive() end
         end
@@ -9412,37 +9185,32 @@ devkage_cursor_color_spread        = 0.18,
 devkage_cursor_rainbow             = true,
 devkage_cursor_rainbow_speed       = 7.2,
 devkage_cursor_line_width          = 3,
-devkage_cursor_line_length         = 18,
-devkage_cursor_center_radius       = 12,
+devkage_cursor_line_length         = 25,
+devkage_cursor_center_radius       = 12.5,
 devkage_cursor_arm_count           = 4,
 devkage_cursor_angle_offset        = 0,
 devkage_cursor_spin                = true,
 devkage_cursor_spin_style          = "Static",
 devkage_cursor_spin_direction      = "Clockwise",
-devkage_cursor_spin_speed          = 205,
+devkage_cursor_spin_speed          = 288,
 devkage_cursor_spin_range          = 360,
 devkage_cursor_squash_x            = 1,
 devkage_cursor_squash_y            = 1,
-devkage_cursor_smooth_spin         = true,
-devkage_cursor_line_glow           = true,
-devkage_cursor_glow_thickness      = 14,
-devkage_cursor_glow_extra_length   = 6,
-devkage_cursor_glow_transparency   = 0.72,
+devkage_cursor_smooth_spin         = false,
+devkage_cursor_line_glow           = false,
+devkage_cursor_glow_thickness      = 30,
+devkage_cursor_glow_extra_length   = 15,
+devkage_cursor_glow_transparency   = 0.43,
 devkage_cursor_text_enabled        = true,
 devkage_cursor_main_text           = "devkage",
 devkage_cursor_second_text         = "None",
 devkage_cursor_text_outline        = true,
-devkage_cursor_text_glow           = true,
-devkage_cursor_text_glow_follow_color = true,
-devkage_cursor_text_glow_color     = Color3.fromRGB(205, 185, 255),
-devkage_cursor_text_glow_size      = 10,
-devkage_cursor_text_glow_strength  = 0.80,
 devkage_cursor_main_text_size      = 20,
 devkage_cursor_second_text_size    = 15,
 devkage_cursor_size           = 25,
 devkage_cursor_thickness      = 3,
 devkage_cursor_rotation_speed = 0.8,
-devkage_cursor_pulse_speed    = 2.9,
+devkage_cursor_pulse_speed    = 2.5,
 devkage_cursor_text           = true,
 skybox_enabled           = false,
 skybox_preset            = "Cloudy Moon",
@@ -14296,12 +14064,12 @@ end
 local CONFIG_FOLDER   = "DevKage_Configs"
 local AUTO_LOAD_FILE  = CONFIG_FOLDER .. "/_autoload.txt"
 local SCRIPT_SETTINGS_FILE = CONFIG_FOLDER .. "/_script_settings.json"
-local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_65.lua"
+local SCRIPT_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_62.lua"
 local SCRIPT_STABLE_PAYLOAD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_current.lua"
 local SCRIPT_BUILD_FILE = CONFIG_FOLDER .. "/_devkage_autoload_build.txt"
 local SCRIPT_AUTOLOAD_ENABLED_FILE = CONFIG_FOLDER .. "/_devkage_autoload_enabled.flag"
 local SCRIPT_AUTOEXEC_NAME = "zzzz_DevKage_AutoLoad_LAST.lua"
-local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.65-autoload-currentbuild-ui-toggle-20260912"
+local SCRIPT_AUTOLOAD_BUILD = "DevKage-v5.2.62-world-visuals-keybind-polish-20260912"
 local CONFIG_SCHEMA_VERSION = 3
 
 local function ensure_folder()
@@ -15024,8 +14792,6 @@ task.spawn(function()
         env.__DEVKAGE_AUTO_STARTED = true
         env.__DEVKAGE_EMBEDDED_SOURCE = embeddedSource
         env.__DEVKAGE_PACKAGE_BUILD = BUILD_LABEL
-        env.__DEVKAGE_PACKAGE_SOURCE_BUILD = BUILD_LABEL
-        env.__DEVKAGE_PACKAGE_SOURCE_CURRENT = embeddedSource
         env.__DEVKAGE_MULTI_INJECT_BOOT = true
 
         local compiler = loadstring or load
@@ -15142,10 +14908,9 @@ end
 end
 
 for _, folder in ipairs(existing_autoexec_folders()) do
-    -- Rewrite every executor-exposed folder that already exists. The guarded
-    -- loader is identical in each location and the same-build mutex prevents
-    -- duplicate runtime construction. This also replaces stale DevKage loaders.
     tryWrite(folder)
+    -- One real executor Auto Execute folder is enough and avoids duplicate runs.
+    if #installed > 0 then break end
 end
 
 return #installed > 0, installed
@@ -15197,40 +14962,20 @@ local function rollback_manual_enable()
 end
 
 local function current_payload_is_installed()
-    if type(readfile) ~= "function" then return false end
-
     if type(isfile) == "function" then
         local payloadChecked, payloadExists = pcall(isfile, SCRIPT_PAYLOAD_FILE)
         if payloadChecked and payloadExists ~= true then return false end
-
         local buildChecked, buildExists = pcall(isfile, SCRIPT_BUILD_FILE)
         if buildChecked and buildExists ~= true then return false end
     end
-
+    if type(readfile) ~= "function" then return false end
     local okBuild, installedBuild = pcall(readfile, SCRIPT_BUILD_FILE)
-    if not okBuild or tostring(installedBuild or "") ~= SCRIPT_AUTOLOAD_BUILD then
-        return false
-    end
-
-    local okPayload, installedPayload = pcall(readfile, SCRIPT_PAYLOAD_FILE)
-    if not okPayload or script_autoload_payload_build(installedPayload) ~= SCRIPT_AUTOLOAD_BUILD then
-        return false
-    end
-
-    return true
+    return okBuild and tostring(installedBuild or "") == SCRIPT_AUTOLOAD_BUILD
 end
 
 local function remove_stale_devkage_payloads()
     if type(delfile) ~= "function" then return end
     for _, legacyName in ipairs({
-        "_devkage_autoload_payload_v5_2_64.lua",
-        "_devkage_autoload_payload_v5_2_63.lua",
-        "_devkage_autoload_payload_v5_2_62.lua",
-        "_devkage_autoload_payload_v5_2_61.lua",
-        "_devkage_autoload_payload_v5_2_60.lua",
-        "_devkage_autoload_payload_v5_2_59.lua",
-        "_devkage_autoload_payload_v5_2_58.lua",
-        "_devkage_autoload_payload_v5_2_57.lua",
         "_devkage_autoload_payload_v5_2_56.lua",
         "_devkage_autoload_payload_v5_2_55.lua",
         "_devkage_autoload_payload_v5_2_54.lua",
@@ -15270,14 +15015,6 @@ if not enabled then
         for _, path in ipairs({
             SCRIPT_PAYLOAD_FILE,
             SCRIPT_STABLE_PAYLOAD_FILE,
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_64.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_63.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_62.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_61.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_60.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_59.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_58.lua",
-            CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_57.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_56.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_55.lua",
             CONFIG_FOLDER .. "/_devkage_autoload_payload_v5_2_54.lua",
@@ -15321,15 +15058,11 @@ if not enabled then
 end
 
 local env = (type(getgenv) == "function" and getgenv()) or _G
-local source = nil
+local source = normalize_script_autoload_source(env.__DEVKAGE_EMBEDDED_SOURCE)
 
-if tostring(rawget(env, "__DEVKAGE_PACKAGE_SOURCE_BUILD") or "") == SCRIPT_AUTOLOAD_BUILD then
-    source = normalize_script_autoload_source(rawget(env, "__DEVKAGE_PACKAGE_SOURCE_CURRENT"))
-end
 
-if not source and tostring(rawget(env, "__DEVKAGE_PACKAGE_BUILD") or "") == SCRIPT_AUTOLOAD_BUILD then
-    source = normalize_script_autoload_source(rawget(env, "__DEVKAGE_EMBEDDED_SOURCE"))
-end
+
+
 
 if not source and type(readfile) == "function" then
     if type(isfile) ~= "function" then
@@ -17454,7 +17187,6 @@ getgenv().__DevKageWindow = library.Window
 do
 local environment=(type(getgenv)=="function" and getgenv()) or _G
 environment.__DEVKAGE_RUNTIME_WINDOW=library.Window
-library.Window.DevKageBuild=tostring(environment.__DEVKAGE_PACKAGE_BUILD or "")
 environment.__DEVKAGE_RUNTIME_BOOT_JOB=tostring(game.PlaceId)..":"..tostring(game.JobId)
 environment.__DEVKAGE_RUNTIME_BOOT_BUILD=tostring(environment.__DEVKAGE_PACKAGE_BUILD or "")
 environment.__DEVKAGE_RUNTIME_BOOT_STATE="active"
@@ -20261,7 +19993,7 @@ PlayerESPUtilityRuntime.combatSoundInstances[sound]=true
 if kind=="hit" then PlayerESPUtilityRuntime.hitSound=sound else PlayerESPUtilityRuntime.killSound=sound end
 
 local completed=false
-local playbackRequested=false
+local playAttempts=0
 local endedConnection
 local loadedConnection
 local playedConnection
@@ -20291,15 +20023,11 @@ if completed or not sound.Parent then return end
 if sound.IsPlaying and (sound.IsLoaded or sound.TimeLength>0) then markPlayed() end
 end
 local function requestPlayback()
-if completed or playbackRequested or not sound.Parent or sound:GetAttribute("DevKageCancelled")==true then return false end
-playbackRequested=true
+if completed or not sound.Parent or sound:GetAttribute("DevKageCancelled")==true or playAttempts>=2 then return false end
+playAttempts=playAttempts+1
 local requested=startCombatSound(sound)
-if not requested then
-playbackRequested=false
-return false
-end
-task.delay(0.06,confirmPlayback)
-return true
+if requested then task.delay(0.06,confirmPlayback) end
+return requested
 end
 local function playWhenReady()
 if not sound.Parent or sound:GetAttribute("DevKageCancelled")==true then return end
@@ -20320,20 +20048,21 @@ if sound.IsLoaded or sound.TimeLength>0 then markPlayed() else task.delay(0.06,c
 end)
 registerPlayerESPCombatConnection(playedConnection)
 
-if sound.IsLoaded or sound.TimeLength>0 then
+if sound.IsLoaded then
 playWhenReady()
 else
 setCombatSoundStatus("Loading "..((kind=="hit") and "hit" or "kill").." sound…")
+
+
+
+requestPlayback()
 task.spawn(function()
 pcall(function() PlayerESPContentProvider:PreloadAsync({sound}) end)
-if not completed and sound.Parent then
-requestPlayback()
-confirmPlayback()
-end
+if not completed and not sound.IsPlaying then requestPlayback() else confirmPlayback() end
 end)
 end
 
-task.delay(3,function()
+task.delay(1.35,function()
 if completed or not sound.Parent then return end
 if sound.IsPlaying and (sound.IsLoaded or sound.TimeLength>0) then markPlayed(); return end
 sound:SetAttribute("DevKageCancelled",true)
@@ -20381,7 +20110,7 @@ if not force and not enabled then return false end
 
 local now=tick()
 local stampKey=(kind=="hit") and "hitGlobalLastAt" or "killGlobalLastAt"
-local minGap=(kind=="hit") and 0.045 or 0.35
+local minGap=(kind=="hit") and 0.045 or 0.12
 if not force and now-(tonumber(PlayerESPUtilityRuntime[stampKey]) or 0)<minGap then return false end
 PlayerESPUtilityRuntime[stampKey]=now
 local maxLength=0
@@ -20450,6 +20179,8 @@ newHp=tonumber(newHp) or 0
 if lastHp<=0 or newHp>0 then return end
 
 local credited=playerESPCombatCreditedToLocal(plr,humanoid)
+if not credited then credited=recentlyAttackedPlayer(plr,8) end
+if not credited and tick()-(tonumber(PlayerESPUtilityRuntime.killRecentAttackAt) or 0)<=4 then credited=true end
 if not credited then return end
 
 local now=tick()
@@ -20673,12 +20404,15 @@ local function combatRemoteName(name)
 local lower=tostring(name or ""):lower()
 return lower:find("kill",1,true)~=nil
 or lower:find("elim",1,true)~=nil
+or lower:find("combat",1,true)~=nil
+or lower:find("death",1,true)~=nil
 or lower:find("frag",1,true)~=nil
+or lower:find("feed",1,true)~=nil
 end
 
 local function combatPayloadCreditsLocal(...)
 local packed=table.pack(...)
-local state={credited=false,visited=setmetatable({}, {__mode="k"})}
+local state={credited=false,localPosition=nil,otherPlayerPosition=nil,visited=setmetatable({}, {__mode="k"})}
 local creditKeys={killer=true,attacker=true,creator=true,source=true,owner=true,winner=true,eliminator=true,lastHitBy=true,last_hit_by=true}
 local function isLocalValue(value)
 if typeof(value)=="Instance" then
@@ -20697,6 +20431,8 @@ local function scan(value,key,depth,position)
 if state.credited or depth>3 then return end
 local valueType=typeof(value)
 if creditKeys[tostring(key or "")] and isLocalValue(value) then state.credited=true; return end
+if isLocalValue(value) and not state.localPosition then state.localPosition=position end
+if valueType=="Instance" and value:IsA("Player") and value~=LocalPlayer and not state.otherPlayerPosition then state.otherPlayerPosition=position end
 if type(value)=="string" and combatTextCreditsLocal(value) then state.credited=true; return end
 if type(value)=="table" and not state.visited[value] then
 state.visited[value]=true
@@ -20704,6 +20440,9 @@ for childKey,childValue in pairs(value) do scan(childValue,childKey,depth+1,posi
 end
 end
 for index=1,packed.n do scan(packed[index],nil,0,index) end
+if not state.credited and state.localPosition and state.otherPlayerPosition and state.localPosition<state.otherPlayerPosition then
+state.credited=true
+end
 return state.credited
 end
 
@@ -27572,11 +27311,6 @@ local cursorStateMap = {
     devkage_cursor_main_text="MainText",
     devkage_cursor_second_text="SecondText",
     devkage_cursor_text_outline="TextOutline",
-    devkage_cursor_text_glow="TextGlow",
-    devkage_cursor_text_glow_follow_color="TextGlowFollowColor",
-    devkage_cursor_text_glow_color="TextGlowColor",
-    devkage_cursor_text_glow_size="TextGlowSize",
-    devkage_cursor_text_glow_strength="TextGlowStrength",
     devkage_cursor_main_text_size="MainTextSize",
     d]==================],
     [==================[evkage_cursor_second_text_size="SecondTextSize",
@@ -27678,17 +27412,12 @@ local ReferenceCursorRuntime = {
 
     ScreenGui = nil,
     AimContainer = nil,
-    AimScale = nil,
 
     Lines = {},
     MainText = nil,
     MainTextStroke = nil,
-    MainTextGlowOuter = nil,
-    MainTextGlowInner = nil,
     SecondText = nil,
     SecondTextStroke = nil,
-    SecondTextGlowOuter = nil,
-    SecondTextGlowInner = nil,
 
     Settings = {},
     Revision = -1,
@@ -27939,34 +27668,6 @@ local function referenceCursorReadSettings()
     target.TextOutline =
         source.TextOutline ~= false
 
-    target.TextGlow =
-        source.TextGlow ~= false
-
-    target.TextGlowFollowColor =
-        source.TextGlowFollowColor ~= false
-
-    target.TextGlowColor =
-        referenceCursorColor(
-            source.TextGlowColor,
-            Color3.fromRGB(205, 185, 255)
-        )
-
-    target.TextGlowSize =
-        referenceCursorNumber(
-            source.TextGlowSize,
-            10,
-            0,
-            30
-        )
-
-    target.TextGlowStrength =
-        referenceCursorNumber(
-            source.TextGlowStrength,
-            0.80,
-            0,
-            1
-        )
-
     target.MainTextSize =
         math.floor(
             referenceCursorNumber(
@@ -28049,13 +27750,12 @@ local function referenceSmoothRotation(currentRotation, targetRotation, smoothin
 end
 
 local function referenceSmoothPulse(t, speed)
-    -- Restored cursor bounce: a rhythmic up/down spring instead of a flat
-    -- breathing pulse.  The absolute sine gives each beat a clean return to
-    -- the resting size, while the easing keeps the motion soft rather than
-    -- snapping at the top or bottom.
-    local phase = math.abs(math.sin(t * speed))
-    local eased = 1 - ((1 - phase) * (1 - phase) * (1 - phase))
-    return math.clamp(eased, 0, 1)
+    local rawPulse =
+        math.sin(t * speed) * 0.5 + 0.5
+
+    return
+        rawPulse
+        * rawPulse
 end
 
 
@@ -28301,131 +28001,178 @@ local function referenceDestroyCursorGui()
 
     runtime.ScreenGui = nil
     runtime.AimContainer = nil
-    runtime.AimScale = nil
     runtime.Lines = {}
     runtime.MainText = nil
     runtime.MainTextStroke = nil
-    runtime.MainTextGlowOuter = nil
-    runtime.MainTextGlowInner = nil
     runtime.SecondText = nil
     runtime.SecondTextStroke = nil
-    runtime.SecondTextGlowOuter = nil
-    runtime.SecondTextGlowInner = nil
     runtime.Host = nil
 end
 
 local function referenceCreateLine(parent, name)
-    local function makeGlowLayer(suffix, zIndex, transparency)
-        local glow = Instance.new("Frame")
-        glow.Name = name .. suffix
-        glow.BackgroundColor3 = Color3.new(1, 1, 1)
-        glow.BackgroundTransparency = transparency
-        glow.BorderSizePixel = 0
-        glow.Active = false
-        glow.Selectable = false
-        glow.ZIndex = zIndex
-        glow.Visible = false
-        glow.Parent = parent
-
-        local glowCorner = Instance.new("UICorner")
-        glowCorner.CornerRadius = UDim.new(1, 0)
-        glowCorner.Parent = glow
-        return glow
-    end
-
-    local outerGlow = makeGlowLayer("_OuterGlow", 99996, 0.90)
-    local midGlow = makeGlowLayer("_Glow", 99997, 0.82)
-    local innerGlow = makeGlowLayer("_InnerGlow", 99998, 0.68)
-
     local frame = Instance.new("Frame")
+
     frame.Name = name
-    frame.Size = UDim2.fromOffset(3, 18)
-    frame.Position = UDim2.fromScale(0.5, 0.5)
-    frame.AnchorPoint = Vector2.new(0.5, 0.5)
-    frame.BackgroundColor3 = Color3.new(1, 1, 1)
+
+
+    frame.Size =
+        UDim2.new(
+            0,
+            3,
+            0,
+            25
+        )
+
+    frame.Position =
+        UDim2.new(
+            0.5,
+            -1.5,
+            0,
+            0
+        )
+
+    frame.BackgroundColor3 =
+        Color3.new(
+            1,
+            1,
+            1
+        )
+
     frame.BorderSizePixel = 0
     frame.Active = false
     frame.Selectable = false
     frame.ZIndex = 100000
     frame.Parent = parent
 
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(1, 0)
-    corner.Parent = frame
+    local stroke =
+        Instance.new("UIStroke")
 
-    local stroke = Instance.new("UIStroke")
     stroke.Name = "Outline"
-    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    stroke.Color = Color3.fromRGB(20, 18, 30)
+    stroke.ApplyStrokeMode =
+        Enum.ApplyStrokeMode.Border
+
+    stroke.Color =
+        Color3.new(
+            0,
+            0,
+            0
+        )
+
     stroke.Thickness = 1
-    stroke.Transparency = 0.18
     stroke.Parent = frame
+
+    local glow =
+        Instance.new("Frame")
+
+    glow.Name =
+        name
+        .. "_Glow"
+
+    glow.BackgroundColor3 =
+        Color3.new(
+            1,
+            1,
+            1
+        )
+
+    glow.BackgroundTransparency = 1
+    glow.BorderSizePixel = 0
+    glow.Active = false
+    glow.Selectable = false
+    glow.ZIndex = 99999
+    glow.Visible = false
+    glow.Parent = parent
+
+    local glowCorner =
+        Instance.new("UICorner")
+
+    glowCorner.CornerRadius =
+        UDim.new(
+            1,
+            0
+        )
+
+    glowCorner.Parent = glow
 
     return {
         Frame = frame,
         Stroke = stroke,
-        Glow = midGlow,
-        GlowInner = innerGlow,
-        GlowOuter = outerGlow,
+        Glow = glow,
     }
 end
 
 local function referenceCreateTextLabel(parent, name)
-    local function makeGlowLayer(suffix, zIndex, textTransparency, strokeThickness, strokeTransparency)
-        local glow = Instance.new("TextLabel")
-        glow.Name = name .. suffix
-        glow.Text = name == "MainText" and "devkage" or ""
-        glow.Position = UDim2.fromOffset(0, 0)
-        glow.Size = UDim2.fromOffset(150, 23)
-        glow.BackgroundTransparency = 1
-        glow.BorderSizePixel = 0
-        glow.Font = Enum.Font.Arcade
-        glow.TextScaled = true
-        glow.TextColor3 = Color3.new(1, 1, 1)
-        glow.TextTransparency = textTransparency
-        glow.Active = false
-        glow.Selectable = false
-        glow.ZIndex = zIndex
-        glow.Parent = parent
+    local label =
+        Instance.new("TextLabel")
 
-        local glowStroke = Instance.new("UIStroke")
-        glowStroke.Name = "NeonStroke"
-        glowStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-        glowStroke.Color = Color3.new(1, 1, 1)
-        glowStroke.Thickness = strokeThickness
-        glowStroke.Transparency = strokeTransparency
-        glowStroke.LineJoinMode = Enum.LineJoinMode.Round
-        glowStroke.Parent = glow
-        return glow
-    end
-
-    local outerGlow = makeGlowLayer("_OuterGlow", 99998, 0.88, 5.0, 0.78)
-    local innerGlow = makeGlowLayer("_InnerGlow", 100000, 0.62, 2.5, 0.48)
-
-    local label = Instance.new("TextLabel")
     label.Name = name
-    label.Text = name == "MainText" and "devkage" or ""
-    label.Position = UDim2.fromOffset(0, 0)
-    label.TextColor3 = Color3.new(1, 1, 1)
-    label.Font = Enum.Font.Arcade
+
+    label.Text =
+        name == "MainText"
+        and "devkage"
+        or ""
+
+    label.Position =
+        UDim2.new(
+            0,
+            0,
+            0,
+            0
+        )
+
+    label.TextColor3 =
+        Color3.new(
+            1,
+            1,
+            1
+        )
+
+
+    label.Font =
+        Enum.Font.Arcade
+
+
     label.TextScaled = true
+
     label.BackgroundTransparency = 1
     label.Active = false
     label.Selectable = false
-    label.Size = UDim2.fromOffset(150, 23)
+
+
+    label.Size =
+        UDim2.new(
+            0,
+            150,
+            0,
+            23
+        )
+
     label.ZIndex = 100001
     label.Parent = parent
 
-    local stroke = Instance.new("UIStroke")
+    local stroke =
+        Instance.new("UIStroke")
+
     stroke.Name = "TextOutline"
-    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-    stroke.Color = Color3.fromRGB(18, 16, 28)
+
+    stroke.ApplyStrokeMode =
+        Enum.ApplyStrokeMode.Contextual
+
+    stroke.Color =
+        Color3.new(
+            0,
+            0,
+            0
+        )
+
     stroke.Thickness = 1
-    stroke.Transparency = 0.08
-    stroke.LineJoinMode = Enum.LineJoinMode.Round
+
+    stroke.LineJoinMode =
+        Enum.LineJoinMode.Round
+
     stroke.Parent = label
 
-    return label, stroke, outerGlow, innerGlow
+    return label, stroke
 end
 
 local function referenceResolveGuiHost()
@@ -28541,14 +28288,8 @@ local function referenceCreateCursorGui()
     aimContainer.ZIndex = 100000
     aimContainer.Parent = screenGui
 
-    local aimScale = Instance.new("UIScale")
-    aimScale.Name = "NeonCursorPulse"
-    aimScale.Scale = 1
-    aimScale.Parent = aimContainer
-
     runtime.ScreenGui = screenGui
     runtime.AimContainer = aimContainer
-    runtime.AimScale = aimScale
     runtime.Host = host
 
     runtime.Lines = {
@@ -28571,18 +28312,14 @@ local function referenceCreateCursorGui()
     }
 
     runtime.MainText,
-    runtime.MainTextStroke,
-    runtime.MainTextGlowOuter,
-    runtime.MainTextGlowInner =
+    runtime.MainTextStroke =
         referenceCreateTextLabel(
             screenGui,
             "MainText"
         )
 
     runtime.SecondText,
-    runtime.SecondTextStroke,
-    runtime.SecondTextGlowOuter,
-    runtime.SecondTextGlowInner =
+    runtime.SecondTextStroke =
         referenceCreateTextLabel(
             screenGui,
             "SecondText"
@@ -28602,40 +28339,123 @@ local function referenceApplyFourArmLayout(
     currentLength,
     lineThickness
 )
-    local runtime = ReferenceCursorRuntime
-    local lines = runtime.Lines
+    local runtime =
+        ReferenceCursorRuntime
+
+    local lines =
+        runtime.Lines
+
     if #lines < 4 then return end
 
-    local centerRadius = referenceCursorNumber(settings.CenterRadius, 12, 0, 60)
-    local squashX = referenceCursorNumber(settings.SquashX, 1, 0.25, 2)
-    local squashY = referenceCursorNumber(settings.SquashY, 1, 0.25, 2)
-    local spreadX = centerRadius * 0.72 * squashX
-    local spreadY = centerRadius * 0.72 * squashY
-    local length = math.max(2, math.abs(currentLength))
+    local top =
+        lines[1].Frame
 
-    local positions = {
-        Vector2.new(-spreadX, -spreadY),
-        Vector2.new( spreadX, -spreadY),
-        Vector2.new(-spreadX,  spreadY),
-        Vector2.new( spreadX,  spreadY),
-    }
-    -- Short diagonal LED bars exactly like the classic four-piece cursor.
-    local rotations = {-45, 45, 45, -45}
+    local bottom =
+        lines[2].Frame
+
+    local left =
+        lines[3].Frame
+
+    local right =
+        lines[4].Frame
 
     for index = 1, 4 do
-        local line = lines[index]
-        local frame = line.Frame
-        frame.Visible = true
-        frame.AnchorPoint = Vector2.new(0.5, 0.5)
-        frame.Size = UDim2.fromOffset(lineThickness, length)
-        frame.Position = UDim2.new(0.5, positions[index].X, 0.5, positions[index].Y)
-        frame.Rotation = rotations[index]
+        local line =
+            lines[index]
+
+        line.Frame.Visible = true
+
+        line.Frame.AnchorPoint =
+            Vector2.new(
+                0,
+                0
+            )
+
+        line.Frame.Rotation = 0
+
         line.Stroke.Enabled = true
         line.Stroke.Thickness = 1
-        line.Stroke.Color = Color3.fromRGB(20, 18, 30)
-        line.Stroke.Transparency = 0.18
+        line.Stroke.Color =
+            Color3.new(
+                0,
+                0,
+                0
+            )
     end
+
+
+    top.Size =
+        UDim2.new(
+            0,
+            lineThickness,
+            0,
+            currentLength
+        )
+
+    bottom.Size =
+        UDim2.new(
+            0,
+            lineThickness,
+            0,
+            currentLength
+        )
+
+    left.Size =
+        UDim2.new(
+            0,
+            currentLength,
+            0,
+            lineThickness
+        )
+
+    right.Size =
+        UDim2.new(
+            0,
+            currentLength,
+            0,
+            lineThickness
+        )
+
+    top.Position =
+        UDim2.new(
+            0.5,
+            -lineThickness / 2,
+            0,
+            0
+        )
+
+    bottom.Position =
+        UDim2.new(
+            0.5,
+            -lineThickness / 2,
+            1,
+            -currentLength
+        )
+
+    left.Position =
+        UDim2.new(
+            0,
+            0,
+            0.5,
+            -lineThickness / 2
+        )
+
+    right.Position =
+        UDim2.new(
+            1,
+            -currentLength,
+            0.5,
+            -lineThickness / 2
+        )
 end
+
+
+
+
+
+
+
+
 
 local function referenceEnsureExtraArmCount(count)
     local runtime =
@@ -28781,66 +28601,89 @@ local function referenceApplyGlow(
     color,
     isHorizontalOrVerticalReference
 )
-    local mid = line.Glow
-    local inner = line.GlowInner
-    local outer = line.GlowOuter
+    local glow =
+        line.Glow
 
-    local function setVisible(value)
-        if mid then mid.Visible = value end
-        if inner then inner.Visible = value end
-        if outer then outer.Visible = value end
-    end
+    if settings.LineGlow ~= true
+        or not line.Frame.Visible then
 
-    if settings.LineGlow ~= true or not line.Frame.Visible then
-        setVisible(false)
+        glow.Visible = false
         return
     end
 
-    local glowThickness = referenceCursorNumber(settings.GlowThickness, 14, 0, 50)
-    local glowExtraLength = referenceCursorNumber(settings.GlowExtraLength, 6, 0, 50)
-    local baseTransparency = referenceCursorNumber(settings.GlowTransparency, 0.72, 0, 1)
+    local glowThickness =
+        referenceCursorNumber(
+            settings.GlowThickness,
+            30,
+            0,
+            50
+        )
 
-    local sourceSize = line.Frame.AbsoluteSize
-    local horizontal = sourceSize.X >= sourceSize.Y
+    local glowExtraLength =
+        referenceCursorNumber(
+            settings.GlowExtraLength,
+            15,
+            0,
+            50
+        )
 
-    local function fit(target, shortPad, longPad)
-        if not target then return end
-        referenceCopyFrameGeometry(line.Frame, target)
-        if horizontal then
-            target.Size = UDim2.fromOffset(
-                math.max(1, sourceSize.X + longPad),
-                math.max(1, sourceSize.Y + shortPad)
+    local glowTransparency =
+        referenceCursorNumber(
+            settings.GlowTransparency,
+            0.43,
+            0,
+            1
+        )
+
+    referenceCopyFrameGeometry(
+        line.Frame,
+        glow
+    )
+
+    local sourceSize =
+        line.Frame.AbsoluteSize
+
+    if sourceSize.X >= sourceSize.Y then
+        glow.Size =
+            UDim2.fromOffset(
+                math.max(
+                    1,
+                    sourceSize.X
+                    + glowExtraLength
+                ),
+                math.max(
+                    1,
+                    sourceSize.Y
+                    + glowThickness
+                )
             )
-        else
-            target.Size = UDim2.fromOffset(
-                math.max(1, sourceSize.X + shortPad),
-                math.max(1, sourceSize.Y + longPad)
+    else
+        glow.Size =
+            UDim2.fromOffset(
+                math.max(
+                    1,
+                    sourceSize.X
+                    + glowThickness
+                ),
+                math.max(
+                    1,
+                    sourceSize.Y
+                    + glowExtraLength
+                )
             )
-        end
     end
 
-    fit(inner, math.max(2, glowThickness * 0.24), math.max(1, glowExtraLength * 0.35))
-    fit(mid,   math.max(4, glowThickness * 0.52), math.max(2, glowExtraLength * 0.70))
-    fit(outer, math.max(7, glowThickness),        math.max(3, glowExtraLength))
+    glow.BackgroundColor3 = color
 
-    local whiteHot = color:Lerp(Color3.new(1, 1, 1), 0.72)
-    local soft = color:Lerp(Color3.new(1, 1, 1), 0.28)
+    glow.BackgroundTransparency =
+        glowTransparency
 
-    if inner then
-        inner.BackgroundColor3 = whiteHot
-        inner.BackgroundTransparency = math.clamp(baseTransparency - 0.18, 0.42, 0.82)
-    end
-    if mid then
-        mid.BackgroundColor3 = soft
-        mid.BackgroundTransparency = math.clamp(baseTransparency + 0.04, 0.58, 0.90)
-    end
-    if outer then
-        outer.BackgroundColor3 = color
-        outer.BackgroundTransparency = math.clamp(baseTransparency + 0.17, 0.76, 0.96)
-    end
-
-    setVisible(true)
+    glow.Visible = true
 end
+
+
+
+
 
 local function referenceCursorPosition(settings)
 
@@ -28964,7 +28807,12 @@ local function referenceApplyText(
 
         runtime.MainTextStroke.Thickness = 1
 
-        runtime.MainTextStroke.Color = Color3.fromRGB(18, 16, 28)
+        runtime.MainTextStroke.Color =
+            Color3.new(
+                0,
+                0,
+                0
+            )
 
         runtime.MainTextStroke.LineJoinMode =
             Enum.LineJoinMode.Round
@@ -29000,78 +28848,17 @@ local function referenceApplyText(
             settings.TextOutline ~= false
 
         runtime.SecondTextStroke.Thickness = 1
-        runtime.SecondTextStroke.Color = Color3.fromRGB(18, 16, 28)
-        runtime.SecondTextStroke.LineJoinMode = Enum.LineJoinMode.Round
+
+        runtime.SecondTextStroke.Color =
+            Color3.new(
+                0,
+                0,
+                0
+            )
+
+        runtime.SecondTextStroke.LineJoinMode =
+            Enum.LineJoinMode.Round
     end
-
-    local function syncTextGlow(label, outerGlow, innerGlow)
-        if not label then return end
-
-        local glowEnabled = settings.TextGlow ~= false
-        local visible = label.Visible == true and glowEnabled
-        local glowSize = referenceCursorNumber(settings.TextGlowSize, 10, 0, 30)
-        local glowStrength = referenceCursorNumber(settings.TextGlowStrength, 0.80, 0, 1)
-        local glowColor = color
-
-        if settings.TextGlowFollowColor == false then
-            glowColor = referenceCursorColor(
-                settings.TextGlowColor,
-                Color3.fromRGB(205, 185, 255)
-            )
-        end
-
-        for _, glow in ipairs({outerGlow, innerGlow}) do
-            if glow then
-                glow.Visible = visible
-                glow.Text = label.Text
-                glow.Font = label.Font
-                glow.TextScaled = true
-                glow.TextColor3 = glowColor
-            end
-        end
-
-        if outerGlow then
-            local outerX = glowSize
-            local outerY = glowSize * 0.80
-            outerGlow.Size = UDim2.new(
-                label.Size.X.Scale, label.Size.X.Offset + outerX,
-                label.Size.Y.Scale, label.Size.Y.Offset + outerY
-            )
-            outerGlow.Position = UDim2.new(
-                label.Position.X.Scale, label.Position.X.Offset - outerX * 0.5,
-                label.Position.Y.Scale, label.Position.Y.Offset - outerY * 0.5
-            )
-            outerGlow.TextTransparency = 1 - (0.16 * glowStrength)
-            local s = outerGlow:FindFirstChild("NeonStroke")
-            if s then
-                s.Color = glowColor
-                s.Thickness = math.clamp(glowSize * 0.50, 0.5, 15)
-                s.Transparency = 1 - (0.30 * glowStrength)
-            end
-        end
-
-        if innerGlow then
-            local innerSize = glowSize * 0.40
-            innerGlow.Size = UDim2.new(
-                label.Size.X.Scale, label.Size.X.Offset + innerSize,
-                label.Size.Y.Scale, label.Size.Y.Offset + innerSize
-            )
-            innerGlow.Position = UDim2.new(
-                label.Position.X.Scale, label.Position.X.Offset - innerSize * 0.5,
-                label.Position.Y.Scale, label.Position.Y.Offset - innerSize * 0.5
-            )
-            innerGlow.TextTransparency = 1 - (0.46 * glowStrength)
-            local s = innerGlow:FindFirstChild("NeonStroke")
-            if s then
-                s.Color = glowColor:Lerp(Color3.new(1,1,1), 0.45)
-                s.Thickness = math.clamp(glowSize * 0.25, 0.5, 8)
-                s.Transparency = 1 - (0.66 * glowStrength)
-            end
-        end
-    end
-
-    syncTextGlow(main, runtime.MainTextGlowOuter, runtime.MainTextGlowInner)
-    syncTextGlow(second, runtime.SecondTextGlowOuter, runtime.SecondTextGlowInner)
 end
 
 
@@ -29291,23 +29078,26 @@ local function referenceRouteCursorLayer()
     local runtime = ReferenceCursorRuntime
     if not runtime.ScreenGui or not runtime.AimContainer then return end
 
-    -- Keep the cursor in its dedicated ultra-high DisplayOrder ScreenGui.
-    -- This avoids menu fade/clipping from affecting the pointer or its neon text.
-    local target = runtime.ScreenGui
-    for _, object in ipairs({
-        runtime.AimContainer,
-        runtime.MainText,
-        runtime.MainTextGlowOuter,
-        runtime.MainTextGlowInner,
-        runtime.SecondText,
-        runtime.SecondTextGlowOuter,
-        runtime.SecondTextGlowInner
-    }) do
+
+
+
+
+
+    local menuGui = library.Window and library.Window.ScreenGui
+    local target = (library.Window and library.Window.Enabled == true and menuGui and menuGui.Parent)
+        and menuGui
+        or runtime.ScreenGui
+
+    for _, object in ipairs({runtime.AimContainer, runtime.MainText, runtime.SecondText}) do
         if object and object.Parent ~= target then
             pcall(function() object.Parent = target end)
         end
     end
 end
+
+
+
+
 
 local function referenceCursorRender(deltaTime)
     local runtime =
@@ -29383,18 +29173,24 @@ local function referenceCursorRender(deltaTime)
     runtime.ScreenGui.Enabled =
         enabled
 
-    referenceSetBridgeOwnership(enabled)
-    referenceApplyNativeMouseState(enabled)
+    local menuOpen = library.Window and library.Window.Enabled == true
 
-    if runtime.AimContainer then
-        runtime.AimContainer.Visible = enabled
+    referenceSetBridgeOwnership(
+        enabled and not menuOpen
+    )
+
+    referenceApplyNativeMouseState(
+        enabled and not menuOpen
+    )
+
+    if runtime.AimContainer then runtime.AimContainer.Visible = enabled and not menuOpen end
+    if menuOpen then
+        if runtime.MainText then runtime.MainText.Visible = false end
+        if runtime.SecondText then runtime.SecondText.Visible = false end
+        return
     end
 
     if not enabled then
-        if runtime.MainTextGlowOuter then runtime.MainTextGlowOuter.Visible = false end
-        if runtime.MainTextGlowInner then runtime.MainTextGlowInner.Visible = false end
-        if runtime.SecondTextGlowOuter then runtime.SecondTextGlowOuter.Visible = false end
-        if runtime.SecondTextGlowInner then runtime.SecondTextGlowInner.Visible = false end
         return
     end
 
@@ -29497,16 +29293,18 @@ local function referenceCursorRender(deltaTime)
 
 
 
-    -- Classic bounce animation: the old four-piece reticle grows outward,
-    -- settles back to center, and repeats while keeping the neon geometry
-    -- compact.  This affects only cursor motion/scale.
-    local minLength = lineLength * 0.88
-    local maxLength = lineLength * 1.10
-    local currentLength = minLength + (maxLength - minLength) * pulse
+    local minLength =
+        -(lineLength * 0.4)
 
-    if runtime.AimScale then
-        runtime.AimScale.Scale = 0.90 + (0.18 * pulse)
-    end
+    local maxLength =
+        -(lineLength * 1.2)
+
+    local currentLength =
+        minLength
+        + (
+            maxLength
+            - minLength
+        ) * pulse
 
     local armCount =
         referenceEnsureExtraArmCount(
@@ -29562,9 +29360,7 @@ local function referenceCursorRender(deltaTime)
                 armCount == 4
             )
         else
-            if line.Glow then line.Glow.Visible = false end
-            if line.GlowInner then line.GlowInner.Visible = false end
-            if line.GlowOuter then line.GlowOuter.Visible = false end
+            line.Glow.Visible = false
         end
     end
 
@@ -29782,7 +29578,7 @@ local function addColor(section,key,name)
 end
 
 addToggle(crosshairSection,"devkage_cursor_enabled","Enabled")
-addDropdown(crosshairSection,"devkage_cursor_control_mode","Cursor Control",{"Mouse","Cursor Lock"})
+addDropdown(crosshairSection,"devkage_cursor_control_mode","Cursor Control",{"Mouse"})
 if library.Window and library.Window.SetCursorControlMode then
     library.Window:SetCursorControlMode(VisualsState.devkage_cursor_control_mode)
 end
@@ -29818,11 +29614,6 @@ addToggle(textSection,"devkage_cursor_text_enabled","Text Enabled")
 addDropdown(textSection,"devkage_cursor_main_text","Main Text",{"devkage","Vortex.exe","DevKage","Crosshair"})
 addDropdown(textSection,"devkage_cursor_second_text","Second Text",{"None","devkage","DevKage","Vortex.exe","Crosshair"})
 addToggle(textSection,"devkage_cursor_text_outline","Text Outline")
-addToggle(textSection,"devkage_cursor_text_glow","Text Glow")
-addToggle(textSection,"devkage_cursor_text_glow_follow_color","Text Glow Follows Cursor Color")
-addColor(textSection,"devkage_cursor_text_glow_color","Text Glow Color")
-addSlider(textSection,"devkage_cursor_text_glow_size","Text Glow Size",0,30,1," px")
-addSlider(textSection,"devkage_cursor_text_glow_strength","Text Glow Strength",0,1,2,"")
 addSlider(textSection,"devkage_cursor_main_text_size","Main Text Size",8,40,0,"")
 addSlider(textSection,"devkage_cursor_second_text_size","Second Text Size",8,40,0,"")
 
@@ -29923,104 +29714,6 @@ UI.ThemeTopBarOpacity = UI.ThemeSection:CreateSlider({
     Flag = "theme.top_bar_opacity",
     Callback = function(value)
         library:SetTopBarTransparency(1 - (math.clamp(tonumber(value) or 100, 0, 100) / 100))
-    end
-})
-
-UI.KeybindThemeSection = settingPage:CreateSection({
-    Name = "Keybind UI",
-    Side = "Right",
-    Size = 360
-})
-
-UI.KeybindUIScale = UI.KeybindThemeSection:CreateSlider({
-    Name = "Keybind UI Size",
-    State = math.floor(math.clamp(tonumber(library.Theme.KeybindScale) or 0.85, 0.60, 1.30) * 100 + 0.5),
-    Min = 60,
-    Max = 130,
-    Decimals = 0,
-    Suffix = "%",
-    Flag = "theme.keybind_scale",
-    Callback = function(value)
-        library:SetKeybindScale(math.clamp(tonumber(value) or 85, 60, 130) / 100)
-    end
-})
-
-UI.KeybindUIWidth = UI.KeybindThemeSection:CreateSlider({
-    Name = "Keybind HUD Width",
-    State = math.clamp(math.floor((tonumber(library.Theme.KeybindWidth) or 220) + 0.5), 150, 340),
-    Min = 150,
-    Max = 340,
-    Decimals = 0,
-    Suffix = " px",
-    Flag = "theme.keybind_width",
-    Callback = function(value)
-        library:SetKeybindWidth(value)
-    end
-})
-
-UI.KeybindUIOpacity = UI.KeybindThemeSection:CreateSlider({
-    Name = "Keybind Panel Opacity",
-    State = math.floor((1 - math.clamp(tonumber(library.Theme.KeybindTransparency) or 0.12, 0, 0.95)) * 100 + 0.5),
-    Min = 5,
-    Max = 100,
-    Decimals = 0,
-    Suffix = "%",
-    Flag = "theme.keybind_opacity",
-    Callback = function(value)
-        library:SetKeybindTransparency(1 - (math.clamp(tonumber(value) or 88, 5, 100) / 100))
-    end
-})
-
-UI.KeybindUIColor = UI.KeybindThemeSection:CreateColorpicker({
-    Name = "Keybind Panel Color",
-    State = library.Theme.KeybindColor,
-    Flag = "theme.keybind_color",
-    Callback = function(color)
-        library:SetKeybindColor(color)
-    end
-})
-
-UI.KeybindUIRainbowColor = UI.KeybindThemeSection:CreateColorpicker({
-    Name = "Keybind Rainbow Color",
-    State = library.Theme.KeybindTopBar,
-    Flag = "theme.keybind_rainbow_color",
-    Callback = function(color)
-        library:SetKeybindTopBarColor(color)
-    end
-})
-
-UI.KeybindUIRainbowOpacity = UI.KeybindThemeSection:CreateSlider({
-    Name = "Keybind Rainbow Opacity",
-    State = math.floor((1 - math.clamp(tonumber(library.Theme.KeybindTopBarTransparency) or 0, 0, 1)) * 100 + 0.5),
-    Min = 0,
-    Max = 100,
-    Decimals = 0,
-    Suffix = "%",
-    Flag = "theme.keybind_rainbow_opacity",
-    Callback = function(value)
-        library:SetKeybindTopBarTransparency(1 - (math.clamp(tonumber(value) or 100, 0, 100) / 100))
-    end
-})
-
-UI.KeybindThemeSection:CreateButton({
-    Name = "Reset Keybind UI",
-    Callback = function()
-        library:SetKeybindScale(0.85)
-        library:SetKeybindWidth(220)
-        library:SetKeybindTransparency(0.12)
-        library:SetKeybindColor(Color3.fromRGB(18,18,18))
-        library:SetKeybindTopBarColor(library.Theme.TopBar or Color3.fromRGB(255,255,255))
-        library:SetKeybindTopBarTransparency(library.Theme.TopBarTransparency or 0)
-
-        UI.KeybindUIScale:Set(85, true)
-        UI.KeybindUIWidth:Set(220, true)
-        UI.KeybindUIOpacity:Set(88, true)
-        UI.KeybindUIColor:Set(library.Theme.KeybindColor, UI.KeybindUIColor:GetAlpha(), true)
-        UI.KeybindUIRainbowColor:Set(library.Theme.KeybindTopBar, UI.KeybindUIRainbowColor:GetAlpha(), true)
-        UI.KeybindUIRainbowOpacity:Set(
-            math.floor((1 - library.Theme.KeybindTopBarTransparency) * 100 + 0.5),
-            true
-        )
     end
 })
 
@@ -30581,9 +30274,7 @@ applyRuntimeState(VisualsState,data.visuals)
 applyRuntimeState(VisualsState,data)
 VisualsState.devkage_cursor_enabled = cursorEnabledBeforeLoad ~= false
 VisualsState.devkage_cursor_position_mode = "Mouse"
-if VisualsState.devkage_cursor_control_mode ~= "Cursor Lock" then
 VisualsState.devkage_cursor_control_mode = "Mouse"
-end
 if library.Window and library.Window.SetCursorControlMode then
 library.Window:SetCursorControlMode(VisualsState.devkage_cursor_control_mode)
 end
@@ -31948,10 +31639,8 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
 })
 
 local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
-__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.65-autoload-currentbuild-ui-toggle-20260912"
+__devkageEnv.__DEVKAGE_PACKAGE_BUILD = "DevKage-v5.2.62-world-visuals-keybind-polish-20260912"
 __devkageEnv.__DEVKAGE_EMBEDDED_SOURCE = __DEVKAGE_EMBEDDED_SOURCE
-__devkageEnv.__DEVKAGE_PACKAGE_SOURCE_BUILD = "DevKage-v5.2.65-autoload-currentbuild-ui-toggle-20260912"
-__devkageEnv.__DEVKAGE_PACKAGE_SOURCE_CURRENT = __DEVKAGE_EMBEDDED_SOURCE
 
 -- CURRENT LATE-BOOT AUTOEXEC OWNERSHIP (v5.2.55)
 -- Do not disable/delete the current loader here. The embedded runtime owns
