@@ -531,7 +531,7 @@ local __devkageEnv = (type(getgenv) == "function" and getgenv()) or _G
 
 
 
-__devkageEnv.__DEVKAGE_RUNTIME_VERSION = "dual-script-autoload-v7-knife-movement"
+__devkageEnv.__DEVKAGE_RUNTIME_VERSION = "dual-script-autoload-v7-knife-movement-astra-smooth-ui-cursor-weather"
 local __devkageMultiInjectAutoBoot = __devkageEnv.__DEVKAGE_MULTI_INJECT_BOOT == true
 
 -- Autoexec coexistence boot mutex.
@@ -831,7 +831,14 @@ function library:ApplyTheme()
             table.remove(self.ThemeToggleControls, index)
         else
             pcall(function()
-                frame.BackgroundColor3 = control.State and self.Theme.Toggle or Color3.fromRGB(77, 77, 77)
+                if type(control.RefreshToggleVisual) == "function" then
+                    control:RefreshToggleVisual()
+                else
+                    frame.BackgroundColor3 = control.State == true
+                        and self.Theme.Toggle
+                        or Color3.fromRGB(77, 77, 77)
+                    if frame.Parent then frame.Parent.Visible = control.State == true end
+                end
             end)
         end
     end
@@ -1056,10 +1063,9 @@ function library:CreateWindow(Properties)
                 end
             end)
 
-            -- Always show the native cursor while the DevKage menu is open.
-            -- A custom cursor can be a few pixels off on some executors/inset modes,
-            -- which makes small keybind controls feel impossible to click.
-            local wantedIcon = true
+            -- If the integrated custom cursor is alive, keep the native arrow hidden
+            -- so the neon cursor remains the only pointer over the menu.
+            local wantedIcon = not externalCursorAlive()
             pcall(function()
                 if uis.MouseIconEnabled ~= wantedIcon then
                     uis.MouseIconEnabled = wantedIcon
@@ -1207,6 +1213,28 @@ function library:CreateWindow(Properties)
             Size                = UDim2.new(0, 660, 0, 560)
         })
         Window.MainFrame = ScreenGui_MainFrame
+
+        -- One composite animation layer makes open/close smooth and prevents
+        -- individual controls from finishing at different times.
+        local MenuAnimationGroup = Instance.new("CanvasGroup")
+        MenuAnimationGroup.Name = "DevKage_MenuAnimationGroup"
+        MenuAnimationGroup.AnchorPoint = Vector2.new(0.5, 0.5)
+        MenuAnimationGroup.Position = UDim2.fromScale(0.5, 0.5)
+        MenuAnimationGroup.Size = UDim2.fromScale(1, 1)
+        MenuAnimationGroup.BackgroundTransparency = 1
+        MenuAnimationGroup.BorderSizePixel = 0
+        MenuAnimationGroup.GroupTransparency = Window.Enabled and 0 or 1
+        MenuAnimationGroup.Parent = ScreenGui
+
+        local MenuAnimationScale = Instance.new("UIScale")
+        MenuAnimationScale.Name = "DevKage_MenuAnimationScale"
+        MenuAnimationScale.Scale = Window.Enabled and 1 or 0.965
+        MenuAnimationScale.Parent = MenuAnimationGroup
+
+        ScreenGui_MainFrame.Parent = MenuAnimationGroup
+        Window.MenuAnimationGroup = MenuAnimationGroup
+        Window.MenuAnimationScale = MenuAnimationScale
+
         local ScreenGui_MainFrame_InnerBorder = utility:RenderObject("Frame", {
             BackgroundColor3    = Color3.fromRGB(40, 40, 40),
             BackgroundTransparency = 0,
@@ -1332,63 +1360,66 @@ function library:CreateWindow(Properties)
             function Window:Fade(state)
                 Window.FadeToken = Window.FadeToken + 1
                 local fadeToken = Window.FadeToken
+                local animationSpeed = math.clamp(tonumber(library.Theme.MenuAnimationSpeed) or 1, 0.25, 3)
+                local duration = (state and 0.22 or 0.18) / animationSpeed
+
+                if Window._MenuFadeTween then
+                    pcall(function() Window._MenuFadeTween:Cancel() end)
+                    Window._MenuFadeTween = nil
+                end
+                if Window._MenuScaleTween then
+                    pcall(function() Window._MenuScaleTween:Cancel() end)
+                    Window._MenuScaleTween = nil
+                end
+
+                local wasDisabled = ScreenGui and ScreenGui.Enabled == false
                 if ScreenGui then
                     ScreenGui.Enabled = true
                 end
 
-                for index, render in pairs(library.Renders) do
-                    if not render[3] then
-                        local obj   = render[1]
-                        local props = render[2]
-                        local baseDur = render[4] or 0.25
-                        local animationSpeed = math.clamp(tonumber(library.Theme.MenuAnimationSpeed) or 1, 0.25, 3)
-                        local dur = baseDur / animationSpeed
-                        local ti    = TweenInfo.new(dur, Enum.EasingStyle.Linear,
-                            state and Enum.EasingDirection.Out or Enum.EasingDirection.In)
-                        local cls   = obj.ClassName
-
-                        if cls == "Frame" then
-                            local bt = props["BackgroundTransparency"] or 0
-                            if bt ~= 1 then
-                                tws:Create(obj, ti, {BackgroundTransparency = state and bt or 1}):Play()
-                            end
-                        elseif cls == "ImageLabel" then
-                            local bt = props["BackgroundTransparency"] or 0
-                            if bt ~= 1 then
-                                tws:Create(obj, ti, {BackgroundTransparency = state and bt or 1}):Play()
-                            end
-                            local it = props["ImageTransparency"] or 0
-                            if it ~= 1 then
-                                tws:Create(obj, ti, {ImageTransparency = state and it or 1}):Play()
-                            end
-                        elseif cls == "TextLabel" or cls == "TextButton" or cls == "TextBox" then
-                            local bt = props["BackgroundTransparency"] or 0
-                            if bt ~= 1 then
-                                tws:Create(obj, ti, {BackgroundTransparency = state and bt or 1}):Play()
-                            end
-                            local tt = props["TextTransparency"] or 0
-                            if tt ~= 1 then
-                                tws:Create(obj, ti, {TextTransparency = state and tt or 1}):Play()
-                            end
-                        elseif cls == "ScrollingFrame" then
-                            local bt = props["BackgroundTra]==================],
-    [==================[nsparency"] or 0
-                            if bt ~= 1 then
-                                tws:Create(obj, ti, {BackgroundTransparency = state and bt or 1}):Play()
-                            end
-                            local st = props["ScrollBarImageTransparency"] or 0
-                            if st ~= 1 then
-                                tws:Create(obj, ti, {ScrollBarImageTransparency = state and st or 1}):Play()
-                            end
-                        end
+                if MenuAnimationGroup then
+                    if state and wasDisabled then
+                        MenuAnimationGroup.GroupTransparency = 1
                     end
+
+                    local fadeInfo = TweenInfo.new(
+                        duration,
+                        Enum.EasingStyle.Quint,
+                        state and Enum.EasingDirection.Out or Enum.EasingDirection.In
+                    )
+                    Window._MenuFadeTween = tws:Create(
+                        MenuAnimationGroup,
+                        fadeInfo,
+                        {GroupTransparency = state and 0 or 1}
+                    )
+                    Window._MenuFadeTween:Play()
                 end
 
-                task.delay(0.26, function()
+                if MenuAnimationScale then
+                    if state and wasDisabled then
+                        MenuAnimationScale.Scale = 0.965
+                    end
+
+                    local scaleInfo = TweenInfo.new(
+                        duration,
+                        state and Enum.EasingStyle.Back or Enum.EasingStyle.Quint,
+                        state and Enum.EasingDirection.Out or Enum.EasingDirection.In
+                    )
+                    Window._MenuScaleTween = tws:Create(
+                        MenuAnimationScale,
+                        scaleInfo,
+                        {Scale = state and 1 or 0.972}
+                    )
+                    Window._MenuScaleTween:Play()
+                end
+
+                task.delay(duration + 0.025, function()
                     if fadeToken ~= Window.FadeToken then return end
                     if ScreenGui and ScreenGui.Parent then
                         if state then
                             ScreenGui.Enabled = true
+                            if MenuAnimationGroup then MenuAnimationGroup.GroupTransparency = 0 end
+                            if MenuAnimationScale then MenuAnimationScale.Scale = 1 end
                         else
                             ScreenGui.Enabled = false
                         end
@@ -2807,6 +2838,10 @@ function BindManager:RefreshControl(control)
     local key = configured and self:KeyText(control.BindKey) or "-"
     local hasKey = configured and key ~= "-"
 
+    if type(control.RefreshToggleVisual) == "function" then
+        control:RefreshToggleVisual()
+    end
+
     if control.InlineBind then
         if control.BindModeButton then
             local modeText = "bind"
@@ -2843,7 +2878,11 @@ function BindManager:RefreshActive()
     local count = 0
     for index, control in ipairs(self.Order) do
         local configured = control.BindConfigured == true
-        local active = configured and control:Get() == true
+        local keyText = configured and self:KeyText(control.BindKey) or "-"
+        local hasKey = configured and keyText ~= "-"
+        local hudEligible = hasKey
+            or (configured and (control.BindMode == "Always" or control.BindMode == "Hold"))
+        local active = hudEligible and control:Get() == true
         local record = self.ActiveRows[control]
         if active then
             count = count + 1
@@ -2865,8 +2904,7 @@ function BindManager:RefreshActive()
             record.Row.Visible = true; record.Row.LayoutOrder = index
             record.Name.Text = tostring(control.Name)
             local modeText = control.BindMode == "Always" and "always on" or string.lower(tostring(control.BindMode or "Toggle"))
-            local keyText = self:KeyText(control.BindKey)
-            record.State.Text = "[" .. modeText .. "]" .. (keyText ~= "-" and (" [" .. keyText .. "]") or "")
+            record.State.Text = "[" .. modeText .. "]" .. (hasKey and (" [" .. keyText .. "]") or "")
             record.State.TextColor3 = control.Window and control.Window.Accent or Color3.fromRGB(175,205,75)
         elseif record then
             record.Row.Visible = false
@@ -3131,7 +3169,7 @@ function sections:CreateToggle(Properties)
             TextColor3          = Color3.fromRGB(205, 205, 205),
             TextSize            = 9,
             TextStrokeTransparency = 1,
-            TextTransparency    = 1,
+            TextTransparency    = 0.5,
             TextXAlignment      = "Left"
         })
         local Content_BindValue = utility:RenderObject(Content.InlineBind and "TextButton" or "TextLabel", {
@@ -3208,6 +3246,8 @@ function sections:CreateToggle(Properties)
             ThemeIgnore         = true
         })
         Content.ThemeToggleFrame = Holder_Outline_Frame
+        Content.ThemeToggleOutline = Content_Holder_Outline
+        Content_Holder_Outline.Visible = false
         library.ThemeToggleControls[#library.ThemeToggleControls + 1] = Content
         local Outline_Frame_Gradient = utility:RenderObject("UIGradient", {
             Color   = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(140, 140, 140)),
@@ -3216,10 +3256,26 @@ function sections:CreateToggle(Properties)
             Parent  = Holder_Outline_Frame
         })
 
+        function Content:HasAssignedKeybind()
+            if Content.BindConfigured ~= true then return false end
+            if Content.BindMode == "Always" then return true end
+            return type(Content.BindKey) == "table"
+                and type(Content.BindKey[1]) == "string"
+                and type(Content.BindKey[2]) == "string"
+        end
+
+        function Content:RefreshToggleVisual()
+            -- Only render the checkbox/outline while the feature itself is active.
+            -- Keybind assignment no longer forces an inactive toggle square to appear.
+            local showToggle = Content.State == true
+            Content_Holder_Outline.Visible = showToggle
+            Holder_Outline_Frame.BackgroundColor3 = library.Theme.Toggle
+        end
+
         function Content:Set(state, silent)
             if Content.BindMode == "Always" and state == false then state = true end
             Content.State = state == true
-            Holder_Outline_Frame.BackgroundColor3 = Content.State and library.Theme.Toggle or Color3.fromRGB(77, 77, 77)
+            Content:RefreshToggleVisual()
             if not silent then utility:SafeCallback(Content.Callback, Content:Get()) end
             if library.KeybindManager then library.KeybindManager:RefreshActive() end
         end
@@ -9356,32 +9412,41 @@ devkage_cursor_color_spread        = 0.18,
 devkage_cursor_rainbow             = true,
 devkage_cursor_rainbow_speed       = 7.2,
 devkage_cursor_line_width          = 3,
-devkage_cursor_line_length         = 25,
-devkage_cursor_center_radius       = 12.5,
+devkage_cursor_line_length         = 18,
+devkage_cursor_center_radius       = 12,
 devkage_cursor_arm_count           = 4,
 devkage_cursor_angle_offset        = 0,
 devkage_cursor_spin                = true,
 devkage_cursor_spin_style          = "Static",
 devkage_cursor_spin_direction      = "Clockwise",
-devkage_cursor_spin_speed          = 288,
+devkage_cursor_spin_speed          = 205,
 devkage_cursor_spin_range          = 360,
 devkage_cursor_squash_x            = 1,
 devkage_cursor_squash_y            = 1,
-devkage_cursor_smooth_spin         = false,
-devkage_cursor_line_glow           = false,
-devkage_cursor_glow_thickness      = 30,
-devkage_cursor_glow_extra_length   = 15,
-devkage_cursor_glow_transparency   = 0.43,
+devkage_cursor_smooth_spin         = true,
+devkage_cursor_line_glow           = true,
+devkage_cursor_glow_thickness      = 12,
+devkage_cursor_glow_extra_length   = 5,
+devkage_cursor_glow_transparency   = 0.68,
 devkage_cursor_text_enabled        = true,
 devkage_cursor_main_text           = "devkage",
 devkage_cursor_second_text         = "None",
 devkage_cursor_text_outline        = true,
+devkage_cursor_text_glow           = true,
+devkage_cursor_text_glow_follow_color = true,
+devkage_cursor_text_glow_color     = Color3.fromRGB(205, 185, 255),
+devkage_cursor_text_glow_size      = 10,
+devkage_cursor_text_glow_strength  = 0.80,
 devkage_cursor_main_text_size      = 20,
 devkage_cursor_second_text_size    = 15,
 devkage_cursor_size           = 25,
 devkage_cursor_thickness      = 3,
 devkage_cursor_rotation_speed = 0.8,
-devkage_cursor_pulse_speed    = 2.5,
+devkage_cursor_pulse_speed    = 2.9,
+devkage_cursor_bounce         = true,
+devkage_cursor_bounce_amount  = 0.18,
+devkage_cursor_bounce_stretch = 0.12,
+devkage_cursor_bounce_curve   = 0.72,
 devkage_cursor_text           = true,
 skybox_enabled           = false,
 skybox_preset            = "Cloudy Moon",
@@ -20200,7 +20265,7 @@ PlayerESPUtilityRuntime.combatSoundInstances[sound]=true
 if kind=="hit" then PlayerESPUtilityRuntime.hitSound=sound else PlayerESPUtilityRuntime.killSound=sound end
 
 local completed=false
-local playAttempts=0
+local playbackRequested=false
 local endedConnection
 local loadedConnection
 local playedConnection
@@ -20230,11 +20295,15 @@ if completed or not sound.Parent then return end
 if sound.IsPlaying and (sound.IsLoaded or sound.TimeLength>0) then markPlayed() end
 end
 local function requestPlayback()
-if completed or not sound.Parent or sound:GetAttribute("DevKageCancelled")==true or playAttempts>=2 then return false end
-playAttempts=playAttempts+1
+if completed or playbackRequested or not sound.Parent or sound:GetAttribute("DevKageCancelled")==true then return false end
+playbackRequested=true
 local requested=startCombatSound(sound)
-if requested then task.delay(0.06,confirmPlayback) end
-return requested
+if not requested then
+playbackRequested=false
+return false
+end
+task.delay(0.06,confirmPlayback)
+return true
 end
 local function playWhenReady()
 if not sound.Parent or sound:GetAttribute("DevKageCancelled")==true then return end
@@ -20255,21 +20324,20 @@ if sound.IsLoaded or sound.TimeLength>0 then markPlayed() else task.delay(0.06,c
 end)
 registerPlayerESPCombatConnection(playedConnection)
 
-if sound.IsLoaded then
+if sound.IsLoaded or sound.TimeLength>0 then
 playWhenReady()
 else
 setCombatSoundStatus("Loading "..((kind=="hit") and "hit" or "kill").." sound…")
-
-
-
-requestPlayback()
 task.spawn(function()
 pcall(function() PlayerESPContentProvider:PreloadAsync({sound}) end)
-if not completed and not sound.IsPlaying then requestPlayback() else confirmPlayback() end
+if not completed and sound.Parent then
+requestPlayback()
+confirmPlayback()
+end
 end)
 end
 
-task.delay(1.35,function()
+task.delay(3,function()
 if completed or not sound.Parent then return end
 if sound.IsPlaying and (sound.IsLoaded or sound.TimeLength>0) then markPlayed(); return end
 sound:SetAttribute("DevKageCancelled",true)
@@ -20317,7 +20385,7 @@ if not force and not enabled then return false end
 
 local now=tick()
 local stampKey=(kind=="hit") and "hitGlobalLastAt" or "killGlobalLastAt"
-local minGap=(kind=="hit") and 0.045 or 0.12
+local minGap=(kind=="hit") and 0.045 or 0.35
 if not force and now-(tonumber(PlayerESPUtilityRuntime[stampKey]) or 0)<minGap then return false end
 PlayerESPUtilityRuntime[stampKey]=now
 local maxLength=0
@@ -20386,8 +20454,6 @@ newHp=tonumber(newHp) or 0
 if lastHp<=0 or newHp>0 then return end
 
 local credited=playerESPCombatCreditedToLocal(plr,humanoid)
-if not credited then credited=recentlyAttackedPlayer(plr,8) end
-if not credited and tick()-(tonumber(PlayerESPUtilityRuntime.killRecentAttackAt) or 0)<=4 then credited=true end
 if not credited then return end
 
 local now=tick()
@@ -20611,15 +20677,12 @@ local function combatRemoteName(name)
 local lower=tostring(name or ""):lower()
 return lower:find("kill",1,true)~=nil
 or lower:find("elim",1,true)~=nil
-or lower:find("combat",1,true)~=nil
-or lower:find("death",1,true)~=nil
 or lower:find("frag",1,true)~=nil
-or lower:find("feed",1,true)~=nil
 end
 
 local function combatPayloadCreditsLocal(...)
 local packed=table.pack(...)
-local state={credited=false,localPosition=nil,otherPlayerPosition=nil,visited=setmetatable({}, {__mode="k"})}
+local state={credited=false,visited=setmetatable({}, {__mode="k"})}
 local creditKeys={killer=true,attacker=true,creator=true,source=true,owner=true,winner=true,eliminator=true,lastHitBy=true,last_hit_by=true}
 local function isLocalValue(value)
 if typeof(value)=="Instance" then
@@ -20638,8 +20701,6 @@ local function scan(value,key,depth,position)
 if state.credited or depth>3 then return end
 local valueType=typeof(value)
 if creditKeys[tostring(key or "")] and isLocalValue(value) then state.credited=true; return end
-if isLocalValue(value) and not state.localPosition then state.localPosition=position end
-if valueType=="Instance" and value:IsA("Player") and value~=LocalPlayer and not state.otherPlayerPosition then state.otherPlayerPosition=position end
 if type(value)=="string" and combatTextCreditsLocal(value) then state.credited=true; return end
 if type(value)=="table" and not state.visited[value] then
 state.visited[value]=true
@@ -20647,9 +20708,6 @@ for childKey,childValue in pairs(value) do scan(childValue,childKey,depth+1,posi
 end
 end
 for index=1,packed.n do scan(packed[index],nil,0,index) end
-if not state.credited and state.localPosition and state.otherPlayerPosition and state.localPosition<state.otherPlayerPosition then
-state.credited=true
-end
 return state.credited
 end
 
@@ -27518,10 +27576,19 @@ local cursorStateMap = {
     devkage_cursor_main_text="MainText",
     devkage_cursor_second_text="SecondText",
     devkage_cursor_text_outline="TextOutline",
+    devkage_cursor_text_glow="TextGlow",
+    devkage_cursor_text_glow_follow_color="TextGlowFollowColor",
+    devkage_cursor_text_glow_color="TextGlowColor",
+    devkage_cursor_text_glow_size="TextGlowSize",
+    devkage_cursor_text_glow_strength="TextGlowStrength",
     devkage_cursor_main_text_size="MainTextSize",
     d]==================],
     [==================[evkage_cursor_second_text_size="SecondTextSize",
     devkage_cursor_pulse_speed="PulseSpeed",
+    devkage_cursor_bounce="Bounce",
+    devkage_cursor_bounce_amount="BounceAmount",
+    devkage_cursor_bounce_stretch="BounceStretch",
+    devkage_cursor_bounce_curve="BounceCurve",
 }
 
 local cursorBridgeEnv=(type(getgenv)=="function" and getgenv()) or _G
@@ -27619,12 +27686,17 @@ local ReferenceCursorRuntime = {
 
     ScreenGui = nil,
     AimContainer = nil,
+    AimScale = nil,
 
     Lines = {},
     MainText = nil,
     MainTextStroke = nil,
+    MainTextGlowOuter = nil,
+    MainTextGlowInner = nil,
     SecondText = nil,
     SecondTextStroke = nil,
+    SecondTextGlowOuter = nil,
+    SecondTextGlowInner = nil,
 
     Settings = {},
     Revision = -1,
@@ -27875,6 +27947,34 @@ local function referenceCursorReadSettings()
     target.TextOutline =
         source.TextOutline ~= false
 
+    target.TextGlow =
+        source.TextGlow ~= false
+
+    target.TextGlowFollowColor =
+        source.TextGlowFollowColor ~= false
+
+    target.TextGlowColor =
+        referenceCursorColor(
+            source.TextGlowColor,
+            Color3.fromRGB(205, 185, 255)
+        )
+
+    target.TextGlowSize =
+        referenceCursorNumber(
+            source.TextGlowSize,
+            10,
+            0,
+            30
+        )
+
+    target.TextGlowStrength =
+        referenceCursorNumber(
+            source.TextGlowStrength,
+            0.80,
+            0,
+            1
+        )
+
     target.MainTextSize =
         math.floor(
             referenceCursorNumber(
@@ -27957,12 +28057,13 @@ local function referenceSmoothRotation(currentRotation, targetRotation, smoothin
 end
 
 local function referenceSmoothPulse(t, speed)
-    local rawPulse =
-        math.sin(t * speed) * 0.5 + 0.5
-
-    return
-        rawPulse
-        * rawPulse
+    -- Restored cursor bounce: a rhythmic up/down spring instead of a flat
+    -- breathing pulse.  The absolute sine gives each beat a clean return to
+    -- the resting size, while the easing keeps the motion soft rather than
+    -- snapping at the top or bottom.
+    local phase = math.abs(math.sin(t * speed))
+    local eased = 1 - ((1 - phase) * (1 - phase) * (1 - phase))
+    return math.clamp(eased, 0, 1)
 end
 
 
@@ -28208,178 +28309,173 @@ local function referenceDestroyCursorGui()
 
     runtime.ScreenGui = nil
     runtime.AimContainer = nil
+    runtime.AimScale = nil
     runtime.Lines = {}
     runtime.MainText = nil
     runtime.MainTextStroke = nil
+    runtime.MainTextGlowOuter = nil
+    runtime.MainTextGlowInner = nil
     runtime.SecondText = nil
     runtime.SecondTextStroke = nil
+    runtime.SecondTextGlowOuter = nil
+    runtime.SecondTextGlowInner = nil
     runtime.Host = nil
 end
 
 local function referenceCreateLine(parent, name)
+    -- High-quality code-only LED line.  The glow is built from several
+    -- progressively softer layers so it stays crisp instead of looking
+    -- like one oversized translucent rectangle.
+    local function makeGlowLayer(suffix, zIndex, transparency, edgeFade)
+        local glow = Instance.new("Frame")
+        glow.Name = name .. suffix
+        glow.BackgroundColor3 = Color3.new(1, 1, 1)
+        glow.BackgroundTransparency = transparency
+        glow.BorderSizePixel = 0
+        glow.Active = false
+        glow.Selectable = false
+        glow.ZIndex = zIndex
+        glow.Visible = false
+        glow.Parent = parent
+
+        local glowCorner = Instance.new("UICorner")
+        glowCorner.CornerRadius = UDim.new(1, 0)
+        glowCorner.Parent = glow
+
+        local gradient = Instance.new("UIGradient")
+        gradient.Name = "SoftFade"
+        gradient.Rotation = 90
+        gradient.Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0.00, math.clamp(edgeFade or 0.35, 0, 1)),
+            NumberSequenceKeypoint.new(0.16, 0.08),
+            NumberSequenceKeypoint.new(0.50, 0.00),
+            NumberSequenceKeypoint.new(0.84, 0.08),
+            NumberSequenceKeypoint.new(1.00, math.clamp(edgeFade or 0.35, 0, 1)),
+        })
+        gradient.Parent = glow
+
+        return glow
+    end
+
+    local farGlow   = makeGlowLayer("_FarGlow",   99995, 0.955, 0.72)
+    local outerGlow = makeGlowLayer("_OuterGlow", 99996, 0.920, 0.56)
+    local midGlow   = makeGlowLayer("_Glow",      99997, 0.835, 0.36)
+    local innerGlow = makeGlowLayer("_InnerGlow", 99998, 0.660, 0.20)
+
     local frame = Instance.new("Frame")
-
     frame.Name = name
-
-
-    frame.Size =
-        UDim2.new(
-            0,
-            3,
-            0,
-            25
-        )
-
-    frame.Position =
-        UDim2.new(
-            0.5,
-            -1.5,
-            0,
-            0
-        )
-
-    frame.BackgroundColor3 =
-        Color3.new(
-            1,
-            1,
-            1
-        )
-
+    frame.Size = UDim2.fromOffset(3, 18)
+    frame.Position = UDim2.fromScale(0.5, 0.5)
+    frame.AnchorPoint = Vector2.new(0.5, 0.5)
+    frame.BackgroundColor3 = Color3.new(1, 1, 1)
     frame.BorderSizePixel = 0
     frame.Active = false
     frame.Selectable = false
     frame.ZIndex = 100000
     frame.Parent = parent
 
-    local stroke =
-        Instance.new("UIStroke")
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0)
+    corner.Parent = frame
 
-    stroke.Name = "Outline"
-    stroke.ApplyStrokeMode =
-        Enum.ApplyStrokeMode.Border
+    local coreGradient = Instance.new("UIGradient")
+    coreGradient.Name = "LEDCoreGradient"
+    coreGradient.Rotation = 0
+    coreGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0.00, Color3.fromRGB(210, 205, 225)),
+        ColorSequenceKeypoint.new(0.18, Color3.fromRGB(255, 255, 255)),
+        ColorSequenceKeypoint.new(0.52, Color3.fromRGB(255, 255, 255)),
+        ColorSequenceKeypoint.new(0.84, Color3.fromRGB(238, 232, 255)),
+        ColorSequenceKeypoint.new(1.00, Color3.fromRGB(185, 175, 210)),
+    })
+    coreGradient.Parent = frame
 
-    stroke.Color =
-        Color3.new(
-            0,
-            0,
-            0
-        )
+    local outline = Instance.new("UIStroke")
+    outline.Name = "Outline"
+    outline.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    outline.Color = Color3.fromRGB(16, 14, 24)
+    outline.Thickness = 1.15
+    outline.Transparency = 0.08
+    outline.LineJoinMode = Enum.LineJoinMode.Round
+    outline.Parent = frame
 
-    stroke.Thickness = 1
-    stroke.Parent = frame
-
-    local glow =
-        Instance.new("Frame")
-
-    glow.Name =
-        name
-        .. "_Glow"
-
-    glow.BackgroundColor3 =
-        Color3.new(
-            1,
-            1,
-            1
-        )
-
-    glow.BackgroundTransparency = 1
-    glow.BorderSizePixel = 0
-    glow.Active = false
-    glow.Selectable = false
-    glow.ZIndex = 99999
-    glow.Visible = false
-    glow.Parent = parent
-
-    local glowCorner =
-        Instance.new("UICorner")
-
-    glowCorner.CornerRadius =
-        UDim.new(
-            1,
-            0
-        )
-
-    glowCorner.Parent = glow
+    local highlight = Instance.new("UIStroke")
+    highlight.Name = "LEDHighlight"
+    highlight.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    highlight.Color = Color3.fromRGB(255, 250, 255)
+    highlight.Thickness = 0.55
+    highlight.Transparency = 0.28
+    highlight.LineJoinMode = Enum.LineJoinMode.Round
+    highlight.Parent = frame
 
     return {
         Frame = frame,
-        Stroke = stroke,
-        Glow = glow,
+        Stroke = outline,
+        HighlightStroke = highlight,
+        CoreGradient = coreGradient,
+        Glow = midGlow,
+        GlowInner = innerGlow,
+        GlowOuter = outerGlow,
+        GlowFar = farGlow,
     }
 end
 
 local function referenceCreateTextLabel(parent, name)
-    local label =
-        Instance.new("TextLabel")
+    local function makeGlowLayer(suffix, zIndex, textTransparency, strokeThickness, strokeTransparency)
+        local glow = Instance.new("TextLabel")
+        glow.Name = name .. suffix
+        glow.Text = name == "MainText" and "devkage" or ""
+        glow.Position = UDim2.fromOffset(0, 0)
+        glow.Size = UDim2.fromOffset(150, 23)
+        glow.BackgroundTransparency = 1
+        glow.BorderSizePixel = 0
+        glow.Font = Enum.Font.Arcade
+        glow.TextScaled = true
+        glow.TextColor3 = Color3.new(1, 1, 1)
+        glow.TextTransparency = textTransparency
+        glow.Active = false
+        glow.Selectable = false
+        glow.ZIndex = zIndex
+        glow.Parent = parent
 
+        local glowStroke = Instance.new("UIStroke")
+        glowStroke.Name = "NeonStroke"
+        glowStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+        glowStroke.Color = Color3.new(1, 1, 1)
+        glowStroke.Thickness = strokeThickness
+        glowStroke.Transparency = strokeTransparency
+        glowStroke.LineJoinMode = Enum.LineJoinMode.Round
+        glowStroke.Parent = glow
+        return glow
+    end
+
+    local outerGlow = makeGlowLayer("_OuterGlow", 99998, 0.88, 5.0, 0.78)
+    local innerGlow = makeGlowLayer("_InnerGlow", 100000, 0.62, 2.5, 0.48)
+
+    local label = Instance.new("TextLabel")
     label.Name = name
-
-    label.Text =
-        name == "MainText"
-        and "devkage"
-        or ""
-
-    label.Position =
-        UDim2.new(
-            0,
-            0,
-            0,
-            0
-        )
-
-    label.TextColor3 =
-        Color3.new(
-            1,
-            1,
-            1
-        )
-
-
-    label.Font =
-        Enum.Font.Arcade
-
-
+    label.Text = name == "MainText" and "devkage" or ""
+    label.Position = UDim2.fromOffset(0, 0)
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.Font = Enum.Font.Arcade
     label.TextScaled = true
-
     label.BackgroundTransparency = 1
     label.Active = false
     label.Selectable = false
-
-
-    label.Size =
-        UDim2.new(
-            0,
-            150,
-            0,
-            23
-        )
-
+    label.Size = UDim2.fromOffset(150, 23)
     label.ZIndex = 100001
     label.Parent = parent
 
-    local stroke =
-        Instance.new("UIStroke")
-
+    local stroke = Instance.new("UIStroke")
     stroke.Name = "TextOutline"
-
-    stroke.ApplyStrokeMode =
-        Enum.ApplyStrokeMode.Contextual
-
-    stroke.Color =
-        Color3.new(
-            0,
-            0,
-            0
-        )
-
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+    stroke.Color = Color3.fromRGB(18, 16, 28)
     stroke.Thickness = 1
-
-    stroke.LineJoinMode =
-        Enum.LineJoinMode.Round
-
+    stroke.Transparency = 0.08
+    stroke.LineJoinMode = Enum.LineJoinMode.Round
     stroke.Parent = label
 
-    return label, stroke
+    return label, stroke, outerGlow, innerGlow
 end
 
 local function referenceResolveGuiHost()
@@ -28495,8 +28591,14 @@ local function referenceCreateCursorGui()
     aimContainer.ZIndex = 100000
     aimContainer.Parent = screenGui
 
+    local aimScale = Instance.new("UIScale")
+    aimScale.Name = "NeonCursorPulse"
+    aimScale.Scale = 1
+    aimScale.Parent = aimContainer
+
     runtime.ScreenGui = screenGui
     runtime.AimContainer = aimContainer
+    runtime.AimScale = aimScale
     runtime.Host = host
 
     runtime.Lines = {
@@ -28519,14 +28621,18 @@ local function referenceCreateCursorGui()
     }
 
     runtime.MainText,
-    runtime.MainTextStroke =
+    runtime.MainTextStroke,
+    runtime.MainTextGlowOuter,
+    runtime.MainTextGlowInner =
         referenceCreateTextLabel(
             screenGui,
             "MainText"
         )
 
     runtime.SecondText,
-    runtime.SecondTextStroke =
+    runtime.SecondTextStroke,
+    runtime.SecondTextGlowOuter,
+    runtime.SecondTextGlowInner =
         referenceCreateTextLabel(
             screenGui,
             "SecondText"
@@ -28546,123 +28652,40 @@ local function referenceApplyFourArmLayout(
     currentLength,
     lineThickness
 )
-    local runtime =
-        ReferenceCursorRuntime
-
-    local lines =
-        runtime.Lines
-
+    local runtime = ReferenceCursorRuntime
+    local lines = runtime.Lines
     if #lines < 4 then return end
 
-    local top =
-        lines[1].Frame
+    local centerRadius = referenceCursorNumber(settings.CenterRadius, 12, 0, 60)
+    local squashX = referenceCursorNumber(settings.SquashX, 1, 0.25, 2)
+    local squashY = referenceCursorNumber(settings.SquashY, 1, 0.25, 2)
+    local spreadX = centerRadius * 0.72 * squashX
+    local spreadY = centerRadius * 0.72 * squashY
+    local length = math.max(2, math.abs(currentLength))
 
-    local bottom =
-        lines[2].Frame
-
-    local left =
-        lines[3].Frame
-
-    local right =
-        lines[4].Frame
+    local positions = {
+        Vector2.new(-spreadX, -spreadY),
+        Vector2.new( spreadX, -spreadY),
+        Vector2.new(-spreadX,  spreadY),
+        Vector2.new( spreadX,  spreadY),
+    }
+    -- Short diagonal LED bars exactly like the classic four-piece cursor.
+    local rotations = {-45, 45, 45, -45}
 
     for index = 1, 4 do
-        local line =
-            lines[index]
-
-        line.Frame.Visible = true
-
-        line.Frame.AnchorPoint =
-            Vector2.new(
-                0,
-                0
-            )
-
-        line.Frame.Rotation = 0
-
+        local line = lines[index]
+        local frame = line.Frame
+        frame.Visible = true
+        frame.AnchorPoint = Vector2.new(0.5, 0.5)
+        frame.Size = UDim2.fromOffset(lineThickness, length)
+        frame.Position = UDim2.new(0.5, positions[index].X, 0.5, positions[index].Y)
+        frame.Rotation = rotations[index]
         line.Stroke.Enabled = true
         line.Stroke.Thickness = 1
-        line.Stroke.Color =
-            Color3.new(
-                0,
-                0,
-                0
-            )
+        line.Stroke.Color = Color3.fromRGB(20, 18, 30)
+        line.Stroke.Transparency = 0.18
     end
-
-
-    top.Size =
-        UDim2.new(
-            0,
-            lineThickness,
-            0,
-            currentLength
-        )
-
-    bottom.Size =
-        UDim2.new(
-            0,
-            lineThickness,
-            0,
-            currentLength
-        )
-
-    left.Size =
-        UDim2.new(
-            0,
-            currentLength,
-            0,
-            lineThickness
-        )
-
-    right.Size =
-        UDim2.new(
-            0,
-            currentLength,
-            0,
-            lineThickness
-        )
-
-    top.Position =
-        UDim2.new(
-            0.5,
-            -lineThickness / 2,
-            0,
-            0
-        )
-
-    bottom.Position =
-        UDim2.new(
-            0.5,
-            -lineThickness / 2,
-            1,
-            -currentLength
-        )
-
-    left.Position =
-        UDim2.new(
-            0,
-            0,
-            0.5,
-            -lineThickness / 2
-        )
-
-    right.Position =
-        UDim2.new(
-            1,
-            -currentLength,
-            0.5,
-            -lineThickness / 2
-        )
 end
-
-
-
-
-
-
-
-
 
 local function referenceEnsureExtraArmCount(count)
     local runtime =
@@ -28808,89 +28831,94 @@ local function referenceApplyGlow(
     color,
     isHorizontalOrVerticalReference
 )
-    local glow =
-        line.Glow
+    local mid = line.Glow
+    local inner = line.GlowInner
+    local outer = line.GlowOuter
+    local far = line.GlowFar
 
-    if settings.LineGlow ~= true
-        or not line.Frame.Visible then
+    local function setVisible(value)
+        if mid then mid.Visible = value end
+        if inner then inner.Visible = value end
+        if outer then outer.Visible = value end
+        if far then far.Visible = value end
+    end
 
-        glow.Visible = false
+    if settings.LineGlow ~= true or not line.Frame.Visible then
+        setVisible(false)
         return
     end
 
-    local glowThickness =
-        referenceCursorNumber(
-            settings.GlowThickness,
-            30,
-            0,
-            50
-        )
+    local glowThickness = referenceCursorNumber(settings.GlowThickness, 14, 0, 50)
+    local glowExtraLength = referenceCursorNumber(settings.GlowExtraLength, 6, 0, 50)
+    local baseTransparency = referenceCursorNumber(settings.GlowTransparency, 0.72, 0, 1)
 
-    local glowExtraLength =
-        referenceCursorNumber(
-            settings.GlowExtraLength,
-            15,
-            0,
-            50
-        )
+    local sourceSize = line.Frame.AbsoluteSize
+    local horizontal = sourceSize.X >= sourceSize.Y
 
-    local glowTransparency =
-        referenceCursorNumber(
-            settings.GlowTransparency,
-            0.43,
-            0,
-            1
-        )
-
-    referenceCopyFrameGeometry(
-        line.Frame,
-        glow
-    )
-
-    local sourceSize =
-        line.Frame.AbsoluteSize
-
-    if sourceSize.X >= sourceSize.Y then
-        glow.Size =
-            UDim2.fromOffset(
-                math.max(
-                    1,
-                    sourceSize.X
-                    + glowExtraLength
-                ),
-                math.max(
-                    1,
-                    sourceSize.Y
-                    + glowThickness
-                )
+    local function fit(target, shortPad, longPad)
+        if not target then return end
+        referenceCopyFrameGeometry(line.Frame, target)
+        if horizontal then
+            target.Size = UDim2.fromOffset(
+                math.max(1, sourceSize.X + longPad),
+                math.max(1, sourceSize.Y + shortPad)
             )
-    else
-        glow.Size =
-            UDim2.fromOffset(
-                math.max(
-                    1,
-                    sourceSize.X
-                    + glowThickness
-                ),
-                math.max(
-                    1,
-                    sourceSize.Y
-                    + glowExtraLength
-                )
+        else
+            target.Size = UDim2.fromOffset(
+                math.max(1, sourceSize.X + shortPad),
+                math.max(1, sourceSize.Y + longPad)
             )
+        end
     end
 
-    glow.BackgroundColor3 = color
+    fit(inner, math.max(2, glowThickness * 0.20), math.max(1, glowExtraLength * 0.28))
+    fit(mid,   math.max(4, glowThickness * 0.44), math.max(2, glowExtraLength * 0.58))
+    fit(outer, math.max(7, glowThickness * 0.78), math.max(3, glowExtraLength * 0.84))
+    fit(far,   math.max(9, glowThickness * 1.14), math.max(4, glowExtraLength * 1.16))
 
-    glow.BackgroundTransparency =
-        glowTransparency
+    local whiteHot = color:Lerp(Color3.new(1, 1, 1), 0.80)
+    local innerColor = color:Lerp(Color3.new(1, 1, 1), 0.54)
+    local soft = color:Lerp(Color3.new(1, 1, 1), 0.22)
 
-    glow.Visible = true
+    if inner then
+        inner.BackgroundColor3 = whiteHot
+        inner.BackgroundTransparency = math.clamp(baseTransparency - 0.22, 0.34, 0.80)
+    end
+    if mid then
+        mid.BackgroundColor3 = innerColor
+        mid.BackgroundTransparency = math.clamp(baseTransparency - 0.01, 0.54, 0.89)
+    end
+    if outer then
+        outer.BackgroundColor3 = soft
+        outer.BackgroundTransparency = math.clamp(baseTransparency + 0.12, 0.72, 0.955)
+    end
+    if far then
+        far.BackgroundColor3 = color
+        far.BackgroundTransparency = math.clamp(baseTransparency + 0.22, 0.82, 0.985)
+    end
+
+    if line.HighlightStroke then
+        line.HighlightStroke.Color = whiteHot
+        line.HighlightStroke.Transparency = math.clamp(baseTransparency * 0.34, 0.14, 0.44)
+    end
+    if line.Stroke then
+        line.Stroke.Color = Color3.fromRGB(15, 13, 23)
+        line.Stroke.Transparency = 0.08
+    end
+
+    if line.CoreGradient then
+        local edge = color:Lerp(Color3.fromRGB(45, 38, 62), 0.48)
+        line.CoreGradient.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0.00, edge),
+            ColorSequenceKeypoint.new(0.15, color:Lerp(Color3.new(1,1,1), 0.48)),
+            ColorSequenceKeypoint.new(0.46, whiteHot),
+            ColorSequenceKeypoint.new(0.72, color:Lerp(Color3.new(1,1,1), 0.58)),
+            ColorSequenceKeypoint.new(1.00, edge),
+        })
+    end
+
+    setVisible(true)
 end
-
-
-
-
 
 local function referenceCursorPosition(settings)
 
@@ -29014,12 +29042,7 @@ local function referenceApplyText(
 
         runtime.MainTextStroke.Thickness = 1
 
-        runtime.MainTextStroke.Color =
-            Color3.new(
-                0,
-                0,
-                0
-            )
+        runtime.MainTextStroke.Color = Color3.fromRGB(18, 16, 28)
 
         runtime.MainTextStroke.LineJoinMode =
             Enum.LineJoinMode.Round
@@ -29055,17 +29078,78 @@ local function referenceApplyText(
             settings.TextOutline ~= false
 
         runtime.SecondTextStroke.Thickness = 1
-
-        runtime.SecondTextStroke.Color =
-            Color3.new(
-                0,
-                0,
-                0
-            )
-
-        runtime.SecondTextStroke.LineJoinMode =
-            Enum.LineJoinMode.Round
+        runtime.SecondTextStroke.Color = Color3.fromRGB(18, 16, 28)
+        runtime.SecondTextStroke.LineJoinMode = Enum.LineJoinMode.Round
     end
+
+    local function syncTextGlow(label, outerGlow, innerGlow)
+        if not label then return end
+
+        local glowEnabled = settings.TextGlow ~= false
+        local visible = label.Visible == true and glowEnabled
+        local glowSize = referenceCursorNumber(settings.TextGlowSize, 10, 0, 30)
+        local glowStrength = referenceCursorNumber(settings.TextGlowStrength, 0.80, 0, 1)
+        local glowColor = color
+
+        if settings.TextGlowFollowColor == false then
+            glowColor = referenceCursorColor(
+                settings.TextGlowColor,
+                Color3.fromRGB(205, 185, 255)
+            )
+        end
+
+        for _, glow in ipairs({outerGlow, innerGlow}) do
+            if glow then
+                glow.Visible = visible
+                glow.Text = label.Text
+                glow.Font = label.Font
+                glow.TextScaled = true
+                glow.TextColor3 = glowColor
+            end
+        end
+
+        if outerGlow then
+            local outerX = glowSize
+            local outerY = glowSize * 0.80
+            outerGlow.Size = UDim2.new(
+                label.Size.X.Scale, label.Size.X.Offset + outerX,
+                label.Size.Y.Scale, label.Size.Y.Offset + outerY
+            )
+            outerGlow.Position = UDim2.new(
+                label.Position.X.Scale, label.Position.X.Offset - outerX * 0.5,
+                label.Position.Y.Scale, label.Position.Y.Offset - outerY * 0.5
+            )
+            outerGlow.TextTransparency = 1 - (0.16 * glowStrength)
+            local s = outerGlow:FindFirstChild("NeonStroke")
+            if s then
+                s.Color = glowColor
+                s.Thickness = math.clamp(glowSize * 0.50, 0.5, 15)
+                s.Transparency = 1 - (0.30 * glowStrength)
+            end
+        end
+
+        if innerGlow then
+            local innerSize = glowSize * 0.40
+            innerGlow.Size = UDim2.new(
+                label.Size.X.Scale, label.Size.X.Offset + innerSize,
+                label.Size.Y.Scale, label.Size.Y.Offset + innerSize
+            )
+            innerGlow.Position = UDim2.new(
+                label.Position.X.Scale, label.Position.X.Offset - innerSize * 0.5,
+                label.Position.Y.Scale, label.Position.Y.Offset - innerSize * 0.5
+            )
+            innerGlow.TextTransparency = 1 - (0.46 * glowStrength)
+            local s = innerGlow:FindFirstChild("NeonStroke")
+            if s then
+                s.Color = glowColor:Lerp(Color3.new(1,1,1), 0.45)
+                s.Thickness = math.clamp(glowSize * 0.25, 0.5, 8)
+                s.Transparency = 1 - (0.66 * glowStrength)
+            end
+        end
+    end
+
+    syncTextGlow(main, runtime.MainTextGlowOuter, runtime.MainTextGlowInner)
+    syncTextGlow(second, runtime.SecondTextGlowOuter, runtime.SecondTextGlowInner)
 end
 
 
@@ -29285,26 +29369,23 @@ local function referenceRouteCursorLayer()
     local runtime = ReferenceCursorRuntime
     if not runtime.ScreenGui or not runtime.AimContainer then return end
 
-
-
-
-
-
-    local menuGui = library.Window and library.Window.ScreenGui
-    local target = (library.Window and library.Window.Enabled == true and menuGui and menuGui.Parent)
-        and menuGui
-        or runtime.ScreenGui
-
-    for _, object in ipairs({runtime.AimContainer, runtime.MainText, runtime.SecondText}) do
+    -- Keep the cursor in its dedicated ultra-high DisplayOrder ScreenGui.
+    -- This avoids menu fade/clipping from affecting the pointer or its neon text.
+    local target = runtime.ScreenGui
+    for _, object in ipairs({
+        runtime.AimContainer,
+        runtime.MainText,
+        runtime.MainTextGlowOuter,
+        runtime.MainTextGlowInner,
+        runtime.SecondText,
+        runtime.SecondTextGlowOuter,
+        runtime.SecondTextGlowInner
+    }) do
         if object and object.Parent ~= target then
             pcall(function() object.Parent = target end)
         end
     end
 end
-
-
-
-
 
 local function referenceCursorRender(deltaTime)
     local runtime =
@@ -29380,24 +29461,18 @@ local function referenceCursorRender(deltaTime)
     runtime.ScreenGui.Enabled =
         enabled
 
-    local menuOpen = library.Window and library.Window.Enabled == true
+    referenceSetBridgeOwnership(enabled)
+    referenceApplyNativeMouseState(enabled)
 
-    referenceSetBridgeOwnership(
-        enabled and not menuOpen
-    )
-
-    referenceApplyNativeMouseState(
-        enabled and not menuOpen
-    )
-
-    if runtime.AimContainer then runtime.AimContainer.Visible = enabled and not menuOpen end
-    if menuOpen then
-        if runtime.MainText then runtime.MainText.Visible = false end
-        if runtime.SecondText then runtime.SecondText.Visible = false end
-        return
+    if runtime.AimContainer then
+        runtime.AimContainer.Visible = enabled
     end
 
     if not enabled then
+        if runtime.MainTextGlowOuter then runtime.MainTextGlowOuter.Visible = false end
+        if runtime.MainTextGlowInner then runtime.MainTextGlowInner.Visible = false end
+        if runtime.SecondTextGlowOuter then runtime.SecondTextGlowOuter.Visible = false end
+        if runtime.SecondTextGlowInner then runtime.SecondTextGlowInner.Visible = false end
         return
     end
 
@@ -29500,18 +29575,26 @@ local function referenceCursorRender(deltaTime)
 
 
 
-    local minLength =
-        -(lineLength * 0.4)
+    -- Adjustable bounce.  The curve keeps the reticle crisp at both ends
+    -- instead of continuously stretching it like a soft breathing animation.
+    local bounceEnabled = settings.Bounce ~= false and pulseSpeed > 0
+    local bounceAmount = referenceCursorNumber(settings.BounceAmount, 0.18, 0, 0.55)
+    local bounceStretch = referenceCursorNumber(settings.BounceStretch, 0.12, 0, 0.50)
+    local bounceCurve = referenceCursorNumber(settings.BounceCurve, 0.72, 0.10, 1)
 
-    local maxLength =
-        -(lineLength * 1.2)
+    local bounceWave = 0
+    if bounceEnabled then
+        local raw = math.clamp(pulse, 0, 1)
+        -- Ease toward the peak and settle naturally.
+        bounceWave = 1 - math.pow(1 - raw, 1 + (bounceCurve * 3.2))
+        bounceWave = math.sin(bounceWave * math.pi * 0.5)
+    end
 
-    local currentLength =
-        minLength
-        + (
-            maxLength
-            - minLength
-        ) * pulse
+    local currentLength = lineLength * (1 + bounceStretch * bounceWave)
+
+    if runtime.AimScale then
+        runtime.AimScale.Scale = 1 + (bounceAmount * bounceWave)
+    end
 
     local armCount =
         referenceEnsureExtraArmCount(
@@ -29567,7 +29650,10 @@ local function referenceCursorRender(deltaTime)
                 armCount == 4
             )
         else
-            line.Glow.Visible = false
+            if line.Glow then line.Glow.Visible = false end
+            if line.GlowInner then line.GlowInner.Visible = false end
+            if line.GlowOuter then line.GlowOuter.Visible = false end
+            if line.GlowFar then line.GlowFar.Visible = false end
         end
     end
 
@@ -29810,7 +29896,11 @@ addSlider(animationSection,"devkage_cursor_spin_range","Spin Range",1,360,0,"°"
 addSlider(animationSection,"devkage_cursor_squash_x","Squash X",0.25,2,2,"x")
 addSlider(animationSection,"devkage_cursor_squash_y","Squash Y",0.25,2,2,"x")
 addToggle(animationSection,"devkage_cursor_smooth_spin","Smooth Spin")
-addSlider(animationSection,"devkage_cursor_pulse_speed","Pulse Speed",0,8,2,"x")
+addToggle(animationSection,"devkage_cursor_bounce","Bounce")
+addSlider(animationSection,"devkage_cursor_pulse_speed","Bounce Speed",0,8,2,"x")
+addSlider(animationSection,"devkage_cursor_bounce_amount","Bounce Amount",0,0.55,2,"x")
+addSlider(animationSection,"devkage_cursor_bounce_stretch","Arm Bounce",0,0.50,2,"x")
+addSlider(animationSection,"devkage_cursor_bounce_curve","Bounce Sharpness",0.10,1,2,"")
 
 addToggle(advancedSection,"devkage_cursor_line_glow","Line Glow")
 addSlider(advancedSection,"devkage_cursor_glow_thickness","Glow Thickness",0,50,0,"")
@@ -29821,6 +29911,11 @@ addToggle(textSection,"devkage_cursor_text_enabled","Text Enabled")
 addDropdown(textSection,"devkage_cursor_main_text","Main Text",{"devkage","Vortex.exe","DevKage","Crosshair"})
 addDropdown(textSection,"devkage_cursor_second_text","Second Text",{"None","devkage","DevKage","Vortex.exe","Crosshair"})
 addToggle(textSection,"devkage_cursor_text_outline","Text Outline")
+addToggle(textSection,"devkage_cursor_text_glow","Text Glow")
+addToggle(textSection,"devkage_cursor_text_glow_follow_color","Text Glow Follows Cursor Color")
+addColor(textSection,"devkage_cursor_text_glow_color","Text Glow Color")
+addSlider(textSection,"devkage_cursor_text_glow_size","Text Glow Size",0,30,1," px")
+addSlider(textSection,"devkage_cursor_text_glow_strength","Text Glow Strength",0,1,2,"")
 addSlider(textSection,"devkage_cursor_main_text_size","Main Text Size",8,40,0,"")
 addSlider(textSection,"devkage_cursor_second_text_size","Second Text Size",8,40,0,"")
 
