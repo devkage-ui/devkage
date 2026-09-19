@@ -25685,7 +25685,66 @@ rapidFireSection:CreateLabel({
 })
 
 KnifeCombatRuntime.Controls.BunnyHop = rapidFireSection:CreateToggle({
-    Name = "Bunny Hop",
+-- LUA X INTEGRATION
+local LX_CFG = { VOID = false, ORBIT = false, PRED = false }
+
+KnifeCombatRuntime.Controls.VoidMode = rapidFireSection:CreateToggle({
+    Name = "Void Mode (Quantum)",
+    State = false,
+    Callback = function(val)
+        LX_CFG.VOID = val
+        if val then
+            task.spawn(function()
+                while LX_CFG.VOID do
+                    local root = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if root then
+                        root.CFrame = CFrame.new(Vector3.new(math.random(-1e9, 1e9), 0, math.random(-1e9, 1e9)))
+                        root.AssemblyLinearVelocity = Vector3.zero
+                    end
+                    task.wait()
+                end
+            end)
+        end
+    end
+})
+
+KnifeCombatRuntime.Controls.OrbitTarget = rapidFireSection:CreateToggle({
+    Name = "Orbit Target",
+    State = false,
+    Callback = function(val)
+        LX_CFG.ORBIT = val
+        if val then
+            task.spawn(function()
+                while LX_CFG.ORBIT do
+                    local root = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    local target = nil
+                    for _, p in ipairs(game.Players:GetPlayers()) do
+                        if p ~= game.Players.LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                            target = p.Character.HumanoidRootPart; break
+                        end
+                    end
+                    if root and target then
+                        local ang = tick() * math.rad(90)
+                        root.CFrame = CFrame.new(target.Position + Vector3.new(math.cos(ang)*8, 2, math.sin(ang)*8), target.Position)
+                    end
+                    task.wait()
+                end
+            end)
+        end
+    end
+})
+
+KnifeCombatRuntime.Controls.PredictionDodge = rapidFireSection:CreateToggle({
+    Name = "Prediction Dodge",
+    State = false,
+    Callback = function(val)
+        LX_CFG.PRED = val
+        if val then
+            print("Prediction Dodge Active")
+        end
+    end
+})    
+Name = "Bunny Hop",
     State = type(config) == "table" and config.bunnyHopEnabled == true,
     Flag = "knife.bunnyHopEnabled",
     Callback = function(value)
@@ -31724,67 +31783,45 @@ local clearPlayerButton=makePlayerActionButton("Whitelist",507)
 
 
 
-local blacklistFlashToken=0
-local blacklistFlashFrame=Instance.new("Frame")
-blacklistFlashFrame.Name="BlacklistFlash"
-blacklistFlashFrame.BackgroundColor3=Color3.fromRGB(110,8,8)
-blacklistFlashFrame.BackgroundTransparency=1
-blacklistFlashFrame.BorderSizePixel=0
-blacklistFlashFrame.Position=UDim2.new(0,10,0,463)
-blacklistFlashFrame.Size=UDim2.new(1,-20,0,81)
-blacklistFlashFrame.Visible=false
-blacklistFlashFrame.Active=false
-blacklistFlashFrame.ClipsDescendants=true
-blacklistFlashFrame.ZIndex=30
-blacklistFlashFrame.Parent=playerPhotoRoot
+-- Silent Blacklist and Display Menu
+local BlacklistMenu = Instance.new("ScrollingFrame")
+BlacklistMenu.Name = "BlacklistPlayerList"
+BlacklistMenu.Size = UDim2.new(1, -20, 0, 100)
+BlacklistMenu.Position = UDim2.new(0, 10, 0, 550) 
+BlacklistMenu.BackgroundColor3 = Color3.fromRGB(10, 10, 15)
+BlacklistMenu.BackgroundTransparency = 0.4
+BlacklistMenu.BorderSizePixel = 0
+BlacklistMenu.ZIndex = 30
+BlacklistMenu.Parent = playerPhotoRoot
+Instance.new("UICorner", BlacklistMenu).CornerRadius = UDim.new(0, 6)
 
-local blacklistFlashStroke=Instance.new("UIStroke")
-blacklistFlashStroke.Color=Color3.fromRGB(255,45,45)
-blacklistFlashStroke.Transparency=1
-blacklistFlashStroke.Thickness=1
-blacklistFlashStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
-blacklistFlashStroke.Parent=blacklistFlashFrame
+local layout = Instance.new("UIListLayout", BlacklistMenu)
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Padding = UDim.new(0, 2)
 
-local blacklistFlashLabel=Instance.new("TextLabel")
-blacklistFlashLabel.BackgroundTransparency=1
-blacklistFlashLabel.BorderSizePixel=0
-blacklistFlashLabel.Size=UDim2.fromScale(1,1)
-blacklistFlashLabel.Font=Enum.Font.Code
-blacklistFlashLabel.Text="!blacklisted!"
-blacklistFlashLabel.TextColor3=Color3.fromRGB(255,72,72)
-blacklistFlashLabel.TextSize=11
-blacklistFlashLabel.TextStrokeColor3=Color3.fromRGB(45,0,0)
-blacklistFlashLabel.TextStrokeTransparency=0.25
-blacklistFlashLabel.TextTransparency=1
-blacklistFlashLabel.TextXAlignment=Enum.TextXAlignment.Center
-blacklistFlashLabel.TextYAlignment=Enum.TextYAlignment.Center
-blacklistFlashLabel.ZIndex=31
-blacklistFlashLabel.Parent=blacklistFlashFrame
-
-local function showBlacklistFlash()
-blacklistFlashToken=blacklistFlashToken+1
-local token=blacklistFlashToken
-blacklistFlashFrame.Visible=true
-task.spawn(function()
-local started=os.clock()
-while token==blacklistFlashToken and blacklistFlashFrame.Parent and os.clock()-started<1.5 do
-local elapsed=os.clock()-started
-local pulse=math.sin(elapsed*math.pi*8)*0.5+0.5
-blacklistFlashFrame.BackgroundTransparency=0.82-(pulse*0.26)
-blacklistFlashStroke.Transparency=0.55-(pulse*0.40)
-blacklistFlashLabel.TextTransparency=0.24-(pulse*0.20)
-blacklistFlashLabel.TextColor3=Color3.fromRGB(220,35,35):Lerp(Color3.fromRGB(255,105,105),pulse)
-RunService.RenderStepped:Wait()
-end
-if token==blacklistFlashToken and blacklistFlashFrame.Parent then
-blacklistFlashFrame.Visible=false
-blacklistFlashFrame.BackgroundTransparency=1
-blacklistFlashStroke.Transparency=1
-blacklistFlashLabel.TextTransparency=1
-end
-end)
+local function updateBlacklistUI()
+    for _, child in ipairs(BlacklistMenu:GetChildren()) do
+        if child:IsA("TextLabel") then child:Destroy() end
+    end
+    if _G.BlacklistedPlayers then
+        for _, name in ipairs(_G.BlacklistedPlayers) do
+            local lbl = Instance.new("TextLabel")
+            lbl.Size = UDim2.new(1, 0, 0, 18)
+            lbl.BackgroundTransparency = 1
+            lbl.Text = "  Blocked: " .. tostring(name)
+            lbl.TextColor3 = Color3.fromRGB(220, 220, 220)
+            lbl.Font = Enum.Font.Code
+            lbl.TextSize = 11
+            lbl.TextXAlignment = Enum.TextXAlignment.Left
+            lbl.Parent = BlacklistMenu
+        end
+    end
 end
 
+-- Replace the flashing function with a silent one
+local function showBlacklistFlash() 
+    updateBlacklistUI() 
+end
 selectPlayerButton.MouseButton1Click:Connect(function()
 if not selectedServerPlayer then
 library:Notify({Message="Select a player first",Duration=3})
