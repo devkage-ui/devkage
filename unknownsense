@@ -1982,7 +1982,8 @@ function pages:CreateSection(Properties)
             TextColor3          = Color3.fromRGB(205, 205, 205),
             TextSize            = 11,
             TextStrokeTransparency = 1,
-            TextXAlignment      = "Left"
+            TextXAlignment      = "Left",
+            Visible             = (#Section.Page.Window.Pages < 3 or Section.Page.Window.Pages[#Section.Page.Window.Pages].Name == Section.Name)
         })
         local Holder_Extra_Gradient1 = utility:RenderObject("ImageLabel", {
             BackgroundColor3    = Color3.fromRGB(0, 0, 0),
@@ -3259,11 +3260,11 @@ function sections:CreateToggle(Properties)
             if library.KeybindManager then library.KeybindManager:RefreshActive() end
         end
         function Content:RefreshToggleIndicator()
-            local show = Content.State == true or Content.BindConfigured == true
+            local show = Content.State == true
             Content_Holder_Outline.Visible = show
             Holder_Outline_Frame.Visible = show
-            -- Hide inline bind controls unless the feature is on or a keybind is configured
-            local showBind = Content.State == true or Content.BindConfigured == true
+            -- Hide inline bind controls unless the feature is on
+            local showBind = Content.State == true
             if Content.BindModeButton then
                 Content.BindModeButton.Visible = showBind
             end
@@ -22066,6 +22067,9 @@ visualToggle(viewmodelSection,"viewmodel_arm_chams","Arm Chams",function() libra
 visualColor(viewmodelSection,"viewmodel_arm_color",nil,"Arm Color",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
 visualDropdown(viewmodelSection,"viewmodel_arm_material","Arm Material",{"Neon","ForceField","Glass","SmoothPlastic","Plastic"},function() library.ExtraVisualRuntime:RefreshViewmodel() end)
 visualSlider(viewmodelSection,"viewmodel_arm_transparency","Arm Transparency",0,0.95,2,"",function() library.ExtraVisualRuntime:RefreshViewmodel() end)
+-- REMOVED VIEWMODEL SECTION PER REQUEST
+viewmodelSection = nil
+
 
 local creatorSection=visualsPage:CreateSection({Name="Creator Overlay",Side="Right",Size=520})
 visualToggle(creatorSection,"creator_overlay_enabled","Enable Creator Overlay",function() CreatorOverlayRuntime:ApplyLayout() end)
@@ -23167,9 +23171,9 @@ makeVisualSectionFolder(animationSection)
 
 VisualCategoryController.Sections={
 Enemy={playeresp,enemyModels,espOptions,espAppearance,espExtra,radarSection,threatCompassSection,espProfileSection},
-Models={enemyModels,espAppearance,viewmodelSection},
+Models={enemyModels,espAppearance},
 World={worldSection,worldIntelSection,waypointSection,lightingSection,snowSection,weatherSection,devkagePresetSection,PlayerESPUtilityRuntime.SkySection},
-Client={clientEffects,viewmodelSection,creatorSection,animationSection}
+Client={clientEffects,creatorSection,animationSection}
 }
 AdvancedLighting.ExtraVisuals=assert(loadstring([======[
 return function(context)
