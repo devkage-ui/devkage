@@ -1,10 +1,9 @@
 -- ============================================================================
 --  DEVKAGE + DEV WALLBANG + LUA X FEATURES  (merged, single loadstring)
 --  - DevKage runs first (build v5.2.69-autoload-wallbang-luax-20260926).
---  - The Lua X extra (feature logic + wallbang + a collapsible 'folder' list of
---    Lua X features on a new DevKage tab) is appended to DevKage's persisted
---    auto-load payload via a self-loading wrapper, so auto-load always brings
---    the NEWEST version (old build labels are refused).
+--  - Lua X extra (feature logic + wallbang + compact collapsible folder list on a
+--    new DevKage tab + blacklist list/flashes) rides the auto-load payload via a
+--    self-loading wrapper, so auto-load always brings the NEWEST version.
 -- ============================================================================
 
 local __DEVWB_LOADER = loadstring or load
@@ -31904,9 +31903,149 @@ blacklistFlashLabel.TextYAlignment=Enum.TextYAlignment.Center
 blacklistFlashLabel.ZIndex=31
 blacklistFlashLabel.Parent=blacklistFlashFrame
 
-local function showBlacklistFlash()
-	-- Silent blacklist: removed flashing overlay
+local function showBlacklistFlash(playerName, blacklisted)
+	blacklistFlashToken = blacklistFlashToken + 1
+	local token = blacklistFlashToken
+	blacklistFlashFrame.Visible = true
+	blacklistFlashFrame.BackgroundColor3 = blacklisted and Color3.fromRGB(110,8,8) or Color3.fromRGB(34,34,34)
+	blacklistFlashStroke.Color = blacklisted and Color3.fromRGB(255,45,45) or Color3.fromRGB(255,255,255)
+	blacklistFlashLabel.TextColor3 = blacklisted and Color3.fromRGB(255,72,72) or Color3.fromRGB(255,255,255)
+	blacklistFlashLabel.TextStrokeColor3 = blacklisted and Color3.fromRGB(45,0,0) or Color3.fromRGB(20,20,20)
+	blacklistFlashLabel.Text = "Player " .. tostring(playerName or "?") .. (blacklisted and " has been blacklisted" or " has been whitelisted")
+	task.spawn(function()
+		for i = 1, 5 do
+			if token ~= blacklistFlashToken then return end
+			blacklistFlashFrame.BackgroundTransparency = 0.25
+			blacklistFlashStroke.Transparency = 0.15
+			blacklistFlashLabel.TextTransparency = 0
+			task.wait(0.16)
+			if token ~= blacklistFlashToken then return end
+			blacklistFlashFrame.BackgroundTransparency = 0.75
+			blacklistFlashStroke.Transparency = 0.8
+			blacklistFlashLabel.TextTransparency = 0.65
+			task.wait(0.16)
+		end
+		if token ~= blacklistFlashToken then return end
+		blacklistFlashFrame.Visible = false
+		blacklistFlashFrame.BackgroundTransparency = 1
+		blacklistFlashStroke.Transparency = 1
+		blacklistFlashLabel.TextTransparency = 1
+	end)
 end
+
+local blacklistListSection = configPage:CreateSection({ Name = "Blacklisted Players", Side = "Left", Size = 250 })
+local blacklistListFrame = Instance.new("ScrollingFrame")
+blacklistListFrame.Name = "BlacklistList"
+blacklistListFrame.BackgroundTransparency = 1
+blacklistListFrame.BorderSizePixel = 0
+blacklistListFrame.Position = UDim2.new(0,0,0,16)
+blacklistListFrame.Size = UDim2.new(1,0,0,210)
+blacklistListFrame.CanvasSize = UDim2.new(0,0,0,0)
+blacklistListFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+blacklistListFrame.ScrollBarThickness = 4
+blacklistListFrame.ScrollBarImageColor3 = Color3.fromRGB(60,60,60)
+blacklistListFrame.ZIndex = 6
+blacklistListFrame.Parent = blacklistListSection.Holder
+
+local blacklistListCaption = Instance.new("TextLabel")
+blacklistListCaption.BackgroundTransparency = 1
+blacklistListCaption.BorderSizePixel = 0
+blacklistListCaption.Position = UDim2.new(0,0,0,2)
+blacklistListCaption.Size = UDim2.new(1,0,0,13)
+blacklistListCaption.Font = Enum.Font.Code
+blacklistListCaption.TextSize = 9
+blacklistListCaption.TextColor3 = Color3.fromRGB(145,145,145)
+blacklistListCaption.TextXAlignment = Enum.TextXAlignment.Left
+blacklistListCaption.Text = "Menu of blacklisted players"
+blacklistListCaption.ZIndex = 6
+blacklistListCaption.Parent = blacklistListSection.Holder
+
+local blacklistListLayout = Instance.new("UIListLayout")
+blacklistListLayout.FillDirection = Enum.FillDirection.Vertical
+blacklistListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+blacklistListLayout.Padding = UDim.new(0,3)
+blacklistListLayout.Parent = blacklistListFrame
+
+local function renderBlacklistEntry(entry)
+	local row = Instance.new("Frame")
+	row.Name = "BL_" .. tostring(entry.userId or entry.name)
+	row.BackgroundColor3 = Color3.fromRGB(20,20,20)
+	row.BorderColor3 = Color3.fromRGB(2,2,2)
+	row.BorderSizePixel = 1
+	row.Size = UDim2.new(1,-6,0,40)
+	row.ZIndex = 7
+	row.Parent = blacklistListFrame
+	local avatar = Instance.new("ImageLabel")
+	avatar.BackgroundTransparency = 1
+	avatar.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
+	avatar.Size = UDim2.fromOffset(30,30)
+	avatar.Position = UDim2.fromOffset(5,5)
+	avatar.ZIndex = 8
+	avatar.Parent = row
+	task.spawn(function()
+		local ok, image = pcall(function()
+			return Players:GetUserThumbnailAsync(tonumber(entry.userId) or 0, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+		end)
+		if ok and row.Parent and type(image) == "string" then avatar.Image = image end
+	end)
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.BorderSizePixel = 0
+	nameLabel.Position = UDim2.fromOffset(42,1)
+	nameLabel.Size = UDim2.new(1,-48,0,20)
+	nameLabel.Font = Enum.Font.Code
+	nameLabel.TextSize = 10
+	nameLabel.TextColor3 = Color3.fromRGB(215,215,215)
+	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+	nameLabel.TextYAlignment = Enum.TextYAlignment.Bottom
+	nameLabel.Text = tostring(entry.name or "?")
+	nameLabel.ZIndex = 8
+	nameLabel.Parent = row
+	local reasonLabel = Instance.new("TextLabel")
+	reasonLabel.BackgroundTransparency = 1
+	reasonLabel.BorderSizePixel = 0
+	reasonLabel.Position = UDim2.fromOffset(42,20)
+	reasonLabel.Size = UDim2.new(1,-48,0,15)
+	reasonLabel.Font = Enum.Font.Code
+	reasonLabel.TextSize = 8
+	reasonLabel.TextColor3 = Color3.fromRGB(130,130,130)
+	reasonLabel.TextXAlignment = Enum.TextXAlignment.Left
+	reasonLabel.TextYAlignment = Enum.TextYAlignment.Top
+	reasonLabel.Text = tostring(entry.reason or "")
+	reasonLabel.ZIndex = 8
+	reasonLabel.Parent = row
+end
+
+rebuildBlacklistList = function()
+	if not blacklistListFrame then return end
+	for _, child in ipairs(blacklistListFrame:GetChildren()) do
+		if child:IsA("Frame") then child:Destroy() end
+	end
+	local ids = {}
+	for id in pairs(PlayerBlacklist) do ids[#ids + 1] = id end
+	table.sort(ids, function(a, b)
+		local ea, eb = PlayerBlacklist[a], PlayerBlacklist[b]
+		return tostring((type(ea) == "table" and ea.name) or "") < tostring((type(eb) == "table" and eb.name) or "")
+	end)
+	if #ids == 0 then
+		local empty = Instance.new("TextLabel")
+		empty.BackgroundTransparency = 1
+		empty.Size = UDim2.new(1,-6,0,24)
+		empty.Font = Enum.Font.Code
+		empty.TextSize = 9
+		empty.TextColor3 = Color3.fromRGB(120,120,120)
+		empty.Text = "No blacklisted players"
+		empty.ZIndex = 7
+		empty.Parent = blacklistListFrame
+		return
+	end
+	for _, id in ipairs(ids) do
+		local entry = PlayerBlacklist[id]
+		if type(entry) == "table" then renderBlacklistEntry(entry)
+		else renderBlacklistEntry({ userId = tonumber(id), name = tostring(entry) }) end
+	end
+end
+rebuildBlacklistList()
 
 selectPlayerButton.MouseButton1Click:Connect(function()
 if not selectedServerPlayer then
@@ -31917,7 +32056,7 @@ local saved,err=setPlayerBlacklisted(selectedServerPlayer,true,playerReasonBox.T
 if saved then
 playerSelectionLabel.Text="Selected: "..tostring(selectedServerPlayer.Name)
 rebuildServerPlayerList()
-showBlacklistFlash()
+showBlacklistFlash(selectedServerPlayer and selectedServerPlayer.Name or "?", true)
 else
 library:Notify({Message="Blacklist failed: "..tostring(err),Duration=4})
 end
@@ -31934,6 +32073,7 @@ if saved then
 playerReasonBox.Text=""
 playerSelectionLabel.Text="Selected: "..tostring(selectedServerPlayer.Name)
 rebuildServerPlayerList()
+showBlacklistFlash(selectedServerPlayer and selectedServerPlayer.Name or "?", false)
 else
 library:Notify({Message="Whitelist failed: "..tostring(err),Duration=4})
 end
@@ -33064,7 +33204,7 @@ local function getTarget(mode)
     return list[1]
 end
 
--- (AddBindableToggle removed: the Lua X UI now uses DevKage's CreateToggle directly)
+-- (AddBindableToggle removed)
 
 local function predictPos(hrp, lead)
     if not hrp then return Vector3.zero end
@@ -35050,10 +35190,17 @@ do
         if not win then task.wait(1) end
     end
     if win then
-        local luaxPage = win:CreatePage({ Icon = "rbxassetid://8547236654", Glyph = "X", Size = UDim2.new(0, 36, 0, 36) })
+        -- Lua X tab icon. Either set LUAX_TAB_ICON to your uploaded image's rbxassetid,
+        -- or drop a "LuaXIcon.png" into the executor workspace (used via getcustomasset).
+        local LUAX_TAB_ICON = "rbxassetid://8547236654"
+        if type(getcustomasset) == "function" then
+            local okAsset, asset = pcall(getcustomasset, "LuaXIcon.png")
+            if okAsset and type(asset) == "string" and asset ~= "" then LUAX_TAB_ICON = asset end
+        end
+        local luaxPage = win:CreatePage({ Icon = LUAX_TAB_ICON, Glyph = "X", Size = UDim2.new(0, 36, 0, 36) })
         local LT = {} -- Lua X toggle registry (used by Load Preset / Kill Every)
 
-        local WB = luaxPage:CreateSection({ Name = "Wallbang", Side = "Left", Size = 110 })
+        local WB = luaxPage:CreateSection({ Name = "Wallbang", Side = "Left", Size = 90 })
         LT["DevWallbang"] = WB:CreateToggle({ Name = "Wallbang (shoot through walls)", State = false, Callback = function(v)
             local wb = getgenv().__devWallbang
             if wb then
@@ -35088,7 +35235,7 @@ do
         end
 
         local lf_Void, lc_Void = luaxFolder("Void", "Left")
-        local VG = luaxSection(lf_Void, lc_Void, { Name = "Void Control", Side = "Left", Size = 390 })
+        local VG = luaxSection(lf_Void, lc_Void, { Name = "Void Control", Side = "Left", Size = 329 })
         LT["VoidToggle"] = VG:CreateToggle({ Name = "Enable Void", State = false, Callback = function(v) CFG.VOID_ENABLED = v; if v then startVoid() else stopVoid() end end })
         local VoidMethodOpts = {"Drift","Chaos","Loop","Spiral","Quantum","TP Everywhere","OrbitTarget"}
         VG:CreateDropdown({ Name = "Method", Options = VoidMethodOpts, State = table.find(VoidMethodOpts, "Quantum") or 1, Callback = function(idx) CFG.VOID_METHOD = (VoidMethodOpts[idx] or "Quantum") end })
@@ -35101,7 +35248,7 @@ do
         VG:CreateSlider({ Name = "Y Max", State = 1e15, Min = -1e15, Max = 1e15, Decimals = 0, Callback = function(v) CFG.VOID_Y_MAX = v end })
         VG:CreateSlider({ Name = "Radius (B)", State = 200, Min = 1, Max = 1e15, Decimals = 0, Callback = function(v) CFG.RADIUS = v * 1e9 end })
 
-        local VG1b = luaxSection(lf_Void, lc_Void, { Name = "Void Helpers", Side = "Right", Size = 462 })
+        local VG1b = luaxSection(lf_Void, lc_Void, { Name = "Void Helpers", Side = "Right", Size = 369 })
         LT["VoidPredictive"] = VG1b:CreateToggle({ Name = "Predictive Void", State = false, Callback = function(v) CFG.VOID_PREDICTIVE = v end })
         VG1b:CreateSlider({ Name = "Predict Lead (x0.01s)", State = 15, Min = 1, Max = 100, Decimals = 0, Callback = function(v) CFG.VOID_PREDICT_LEAD = v * 0.01 end })
         LT["VoidOrbitTarget"] = VG1b:CreateToggle({ Name = "Orbit Target While Void", State = false, Callback = function(v) CFG.VOID_ORBIT_TARGET = v end })
@@ -35115,7 +35262,7 @@ do
         VG1b:CreateSlider({ Name = "Safe Radius (studs)", State = 0, Min = 0, Max = 200, Decimals = 0, Callback = function(v) CFG.VOID_SAFE_RADIUS = v end })
         LT["VoidPreserveY"] = VG1b:CreateToggle({ Name = "Preserve Y Position", State = false, Callback = function(v) CFG.TP_PRESERVE_Y = v end })
 
-        local VG1c = luaxSection(lf_Void, lc_Void, { Name = "Void Duration / Region", Side = "Left", Size = 714 })
+        local VG1c = luaxSection(lf_Void, lc_Void, { Name = "Void Duration / Region", Side = "Left", Size = 572 })
         LT["VoidDurationEnabled"] = VG1c:CreateToggle({ Name = "Enable Duration Limit", State = false, Callback = function(v) CFG.VOID_DURATION_ENABLED = v end })
         VG1c:CreateSlider({ Name = "Duration (s)", State = 10, Min = 1, Max = 300, Decimals = 0, Callback = function(v) CFG.VOID_DURATION = v end })
         LT["VoidRandomDuration"] = VG1c:CreateToggle({ Name = "Randomize Duration", State = false, Callback = function(v) CFG.VOID_RANDOM_DURATION = v end })
@@ -35136,7 +35283,7 @@ do
         LT["VoidRegionNotifyOnExit"] = VG1c:CreateToggle({ Name = "Notify On Region Exit", State = false, Callback = function(v) CFG.VOID_REGION_NOTIFY_EXIT = v end })
         LT["VoidRegionSnapToEdge"] = VG1c:CreateToggle({ Name = "Snap Back To Edge", State = true, Callback = function(v) CFG.VOID_REGION_SNAP_EDGE = v end })
 
-        local VG2 = luaxSection(lf_Void, lc_Void, { Name = "TP Everywhere", Side = "Right", Size = 570 })
+        local VG2 = luaxSection(lf_Void, lc_Void, { Name = "TP Everywhere", Side = "Right", Size = 459 })
         LT["TpRandToggle"] = VG2:CreateToggle({ Name = "Randomize Studs", State = true, Callback = function(v) CFG.TP_RAND_ENABLED = v end })
         VG2:CreateSlider({ Name = "Random Min Studs", State = -1e15, Min = -1e15, Max = 0, Decimals = 0, Callback = function(v) CFG.TP_RAND_MIN = v end })
         VG2:CreateSlider({ Name = "Random Max Studs", State = 1e15, Min = 0, Max = 1e15, Decimals = 0, Callback = function(v) CFG.TP_RAND_MAX = v end })
@@ -35153,7 +35300,7 @@ do
         VG2:CreateSlider({ Name = "Edge Weight (%)", State = 35, Min = 0, Max = 100, Decimals = 0, Callback = function(v) CFG.TP_EDGE_WEIGHT = v * 0.01 end })
         VG2:CreateSlider({ Name = "Screen Jitter (%)", State = 12, Min = 0, Max = 100, Decimals = 0, Callback = function(v) CFG.TP_SCREEN_JITTER = v * 0.01 end })
 
-        local VG3 = luaxSection(lf_Void, lc_Void, { Name = "Smart Evasion V2", Side = "Left", Size = 426 })
+        local VG3 = luaxSection(lf_Void, lc_Void, { Name = "Smart Evasion V2", Side = "Left", Size = 342 })
         LT["SmartEvasionToggle"] = VG3:CreateToggle({ Name = "Enable Smart Evasion V2", State = false, Callback = function(v) CFG.SMART_EVASION = v end })
         VG3:CreateSlider({ Name = "Detection Range", State = 80, Min = 10, Max = 500, Decimals = 0, Callback = function(v) CFG.EVASION_RANGE = v end })
         VG3:CreateSlider({ Name = "Threat Distance", State = 40, Min = 5, Max = 300, Decimals = 0, Callback = function(v) CFG.EVASION_THREAT_DIST = v end })
@@ -35166,7 +35313,7 @@ do
         LT["EvasionThreatScale"] = VG3:CreateToggle({ Name = "Threat-Scaled Cooldown", State = true, Callback = function(v) CFG.EVASION_THREAT_SCALE = v end })
         LT["EvasionInfiniteRange"] = VG3:CreateToggle({ Name = "Infinite Range Evasion", State = true, Callback = function(v) CFG.SMART_EVASION_INF = v end })
 
-        local VK = luaxSection(lf_Void, lc_Void, { Name = "Void Killer", Side = "Right", Size = 462 })
+        local VK = luaxSection(lf_Void, lc_Void, { Name = "Void Killer", Side = "Right", Size = 369 })
         LT["VoidKillerToggle"] = VK:CreateToggle({ Name = "Enable Void Killer", State = true, Callback = function(v) CFG.VOID_KILLER_ENABLED = v end })
         LT["VoidKillerDesync"] = VK:CreateToggle({ Name = "Desync Target", State = true, Callback = function(v) CFG.VOID_KILLER_DESYNC = v end })
         LT["VoidKillerForceHitbox"] = VK:CreateToggle({ Name = "Force Hitbox Expand", State = true, Callback = function(v) CFG.VOID_KILLER_FORCE_HITBOX = v end })
@@ -35181,7 +35328,7 @@ do
         VK:CreateSlider({ Name = "Aim Strength", State = 1, Min = 0.1, Max = 3, Decimals = 1, Callback = function(v) CFG.VOID_KILLER_AIM_STRENGTH = v end })
 
         local lf_Orbit, lc_Orbit = luaxFolder("Orbit", "Right")
-        local OG = luaxSection(lf_Orbit, lc_Orbit, { Name = "Orbit", Side = "Left", Size = 534 })
+        local OG = luaxSection(lf_Orbit, lc_Orbit, { Name = "Orbit", Side = "Left", Size = 463 })
         LT["OrbitToggle"] = OG:CreateToggle({ Name = "Enable Orbit", State = false, Callback = function(v) cfg.orbitEnabled = v; if v then startOrbit() else stopOrbit() end end })
         local OrbitModeOpts = {"Circle","Figure 8","Ellipse","Spiral In","Spiral Out","Bounce","Lemniscate","Infinity","RandomOrbit"}
         OG:CreateDropdown({ Name = "Mode", Options = OrbitModeOpts, State = table.find(OrbitModeOpts, "Circle") or 1, Callback = function(idx) cfg.orbitMode = (OrbitModeOpts[idx] or "Circle"); orbitCurrentRadius = cfg.orbitDist end })
@@ -35200,7 +35347,7 @@ do
         OG:CreateSlider({ Name = "Min Rand Radius", State = 5, Min = 1, Max = 50, Decimals = 0, Callback = function(v) cfg.orbitRandMin = v end })
         OG:CreateSlider({ Name = "Max Rand Radius", State = 20, Min = 1, Max = 50, Decimals = 0, Callback = function(v) cfg.orbitRandMax = v end })
 
-        local OG2 = luaxSection(lf_Orbit, lc_Orbit, { Name = "Helpful Options", Side = "Right", Size = 1578 })
+        local OG2 = luaxSection(lf_Orbit, lc_Orbit, { Name = "Helpful Options", Side = "Right", Size = 1252 })
         LT["OrbitFace"] = OG2:CreateToggle({ Name = "Face Target", State = true, Callback = function(v) cfg.orbitFace = v end })
         LT["OrbitPredict"] = OG2:CreateToggle({ Name = "Predict Target Movement", State = true, Callback = function(v) cfg.orbitPredict = v end })
         OG2:CreateSlider({ Name = "Prediction Strength (%)", State = 20, Min = 0, Max = 100, Decimals = 0, Callback = function(v) cfg.orbitPredStr = v / 100 end })
@@ -35246,7 +35393,7 @@ do
         OG2:CreateSlider({ Name = "Hitbox Size", State = 500, Min = 10, Max = 5000, Decimals = 0, Callback = function(v) cfg.orbitHitboxSize = v end })
 
         local lf_Prediction, lc_Prediction = luaxFolder("Prediction", "Left")
-        local PG = luaxSection(lf_Prediction, lc_Prediction, { Name = "Prediction V2", Side = "Left", Size = 1506 })
+        local PG = luaxSection(lf_Prediction, lc_Prediction, { Name = "Prediction V2", Side = "Left", Size = 1194 })
         LT["PredToggle"] = PG:CreateToggle({ Name = "Enable Prediction V2", State = false, Callback = function(v) cfgDodge.predEnabled = v; if v then startPredictionV2() else stopPredictionV2() end end })
         PG:CreateSlider({ Name = "Danger Radius", State = 120, Min = 5, Max = 5000, Decimals = 0, Callback = function(v) cfgDodge.predRadius = v end })
         PG:CreateSlider({ Name = "Dodge Distance", State = 80, Min = 5, Max = 500, Decimals = 0, Callback = function(v) cfgDodge.predDodgeDist = v end })
@@ -35289,7 +35436,7 @@ do
         LT["PredPhaseThrough"] = PG:CreateToggle({ Name = "Phase Through Walls", State = true, Callback = function(v) cfgDodge.predPhaseThrough = v end })
         LT["PredIgnoreCollide"] = PG:CreateToggle({ Name = "Ignore Collisions", State = true, Callback = function(v) cfgDodge.predIgnoreCollide = v end })
 
-        local PG2 = luaxSection(lf_Prediction, lc_Prediction, { Name = "Anti Bait V2", Side = "Right", Size = 1758 })
+        local PG2 = luaxSection(lf_Prediction, lc_Prediction, { Name = "Anti Bait V2", Side = "Right", Size = 1405 })
         LT["AntiBaitToggle"] = PG2:CreateToggle({ Name = "Enable Anti Bait V2", State = false, Callback = function(v) antiBaitCFG.enabled = v; if v then startAntiBaitV2() else stopAntiBait() end end })
         local AntiBaitDodgeModeOpts = {"Perpendicular","Away","Random"}
         PG2:CreateDropdown({ Name = "Dodge Mode", Options = AntiBaitDodgeModeOpts, State = table.find(AntiBaitDodgeModeOpts, "Perpendicular") or 1, Callback = function(idx) antiBaitCFG.dodgeMode = (AntiBaitDodgeModeOpts[idx] or "Perpendicular") end })
@@ -35341,7 +35488,7 @@ do
         PG2:CreateSlider({ Name = "Rescan Interval (s)", State = 2, Min = 1, Max = 60, Decimals = 0, Callback = function(v) antiBaitCFG.reScanInterval = v end })
 
         local lf_Defense, lc_Defense = luaxFolder("Defense", "Right")
-        local AG = luaxSection(lf_Defense, lc_Defense, { Name = "Anti-Aim", Side = "Left", Size = 1002 })
+        local AG = luaxSection(lf_Defense, lc_Defense, { Name = "Anti-Aim", Side = "Left", Size = 813 })
         LT["AaToggle"] = AG:CreateToggle({ Name = "Enable Anti-Aim", State = false, Callback = function(v) aaSettings.enabled = v; if v then startAntiAim() else stopAntiAim() end end })
         local AaModeOpts = {"Spin","Jitter","Static","Up","Down","Side","RandomSpin","Custom"}
         AG:CreateDropdown({ Name = "Mode", Options = AaModeOpts, State = table.find(AaModeOpts, "RandomSpin") or 1, Callback = function(idx) aaSettings.mode = (AaModeOpts[idx] or "RandomSpin") end })
@@ -35371,7 +35518,7 @@ do
         LT["AaRandomFlip"] = AG:CreateToggle({ Name = "Random Flip", State = false, Callback = function(v) aaSettings.randomFlip = v end })
         AG:CreateSlider({ Name = "Flip Chance (%)", State = 5, Min = 1, Max = 50, Decimals = 0, Callback = function(v) aaSettings.flipChance = v * 0.01 end })
 
-        local AG2 = luaxSection(lf_Defense, lc_Defense, { Name = "Anti-Aim Helpful Options", Side = "Right", Size = 1182 })
+        local AG2 = luaxSection(lf_Defense, lc_Defense, { Name = "Anti-Aim Helpful Options", Side = "Right", Size = 937 })
         LT["AaEnhancedMode"] = AG2:CreateToggle({ Name = "Enhanced Mode", State = true, Callback = function(v) aaSettings.enhancedMode = v end })
         LT["AaMultiAxisSpin"] = AG2:CreateToggle({ Name = "Multi Axis Spin", State = true, Callback = function(v) aaSettings.multiAxisSpin = v end })
         LT["AaMultiAxisX"] = AG2:CreateToggle({ Name = "Multi Axis X", State = true, Callback = function(v) aaSettings.multiAxisX = v end })
@@ -35405,7 +35552,7 @@ do
         AG2:CreateSlider({ Name = "Auto Shoot Range", State = 1e15, Min = 1, Max = 1e15, Decimals = 0, Callback = function(v) aaSettings.aaAutoShootRange = v end })
         LT["AaInfiniteRange"] = AG2:CreateToggle({ Name = "Infinite Range", State = true, Callback = function(v) aaSettings.aaInfiniteRange = v end })
 
-        local AG3 = luaxSection(lf_Defense, lc_Defense, { Name = "Range Extender", Side = "Left", Size = 606 })
+        local AG3 = luaxSection(lf_Defense, lc_Defense, { Name = "Range Extender", Side = "Left", Size = 484 })
         LT["RangeExtToggle"] = AG3:CreateToggle({ Name = "Enable Range Extender", State = false, Callback = function(v) if v then startRangeExt() else stopRangeExt() end end })
         AG3:CreateSlider({ Name = "Range (studs)", State = 5e12, Min = 100, Max = 5e12, Decimals = 0, Callback = function(v) rangeExtCFG.range = v end })
         AG3:CreateSlider({ Name = "Hitbox Size", State = 500, Min = 1, Max = 5000, Decimals = 0, Callback = function(v) rangeExtCFG.hitboxSize = v end })
@@ -35423,7 +35570,7 @@ do
         AG3:CreateSlider({ Name = "Safe Distance (studs)", State = 5, Min = 1, Max = 50, Decimals = 0, Callback = function(v) rangeExtCFG.safeDist = v end })
         AG3:CreateSlider({ Name = "Max Enemies To Expand", State = 50, Min = 1, Max = 50, Decimals = 0, Callback = function(v) rangeExtCFG.maxEnemies = v end })
 
-        local AG4 = luaxSection(lf_Defense, lc_Defense, { Name = "Range Extender Helpful Options", Side = "Right", Size = 1038 })
+        local AG4 = luaxSection(lf_Defense, lc_Defense, { Name = "Range Extender Helpful Options", Side = "Right", Size = 821 })
         LT["RangeExtRivalsMode"] = AG4:CreateToggle({ Name = "Rivals Mode", State = true, Callback = function(v) rangeExtCFG.rivalsMode = v end })
         LT["RangeExtSelf"] = AG4:CreateToggle({ Name = "Include Self", State = true, Callback = function(v) rangeExtCFG.includeSelf = v end })
         AG4:CreateSlider({ Name = "Avatar Scale", State = 50, Min = 1, Max = 500, Decimals = 0, Callback = function(v) rangeExtCFG.rivalsAvatarScale = v end })
@@ -35453,7 +35600,7 @@ do
         LT["RangeExtInfiniteRange"] = AG4:CreateToggle({ Name = "Infinite Range", State = true, Callback = function(v) rangeExtCFG.rangeExtInfiniteRange = v end })
         LT["RangeExtRestore"] = AG4:CreateToggle({ Name = "Restore On Disable", State = true, Callback = function(v) rangeExtCFG.restoreOnDisable = v end })
 
-        local AG5 = luaxSection(lf_Defense, lc_Defense, { Name = "Anti Translocation", Side = "Left", Size = 462 })
+        local AG5 = luaxSection(lf_Defense, lc_Defense, { Name = "Anti Translocation", Side = "Left", Size = 385 })
         LT["AntiTranslocToggle"] = AG5:CreateToggle({ Name = "Enable Anti Translocation", State = false, Callback = function(v) antiTranslocCFG.enabled = v; if v then startAntiTransloc() else stopAntiTransloc() end end })
         local AntiTranslocModeOpts = {"Evade","Freeze","Predict"}
         AG5:CreateDropdown({ Name = "Mode", Options = AntiTranslocModeOpts, State = table.find(AntiTranslocModeOpts, "Evade") or 1, Callback = function(idx) antiTranslocCFG.mode = (AntiTranslocModeOpts[idx] or "Evade") end })
@@ -35468,7 +35615,7 @@ do
         LT["ATCounterTp"] = AG5:CreateToggle({ Name = "Counter Teleport", State = false, Callback = function(v) antiTranslocCFG.counterTeleport = v end })
         AG5:CreateSlider({ Name = "Counter TP Offset", State = 50, Min = 5, Max = 200, Decimals = 0, Callback = function(v) antiTranslocCFG.counterTpOffset = v end })
 
-        local AG6 = luaxSection(lf_Defense, lc_Defense, { Name = "Anti Translocation Helpful Options", Side = "Right", Size = 1074 })
+        local AG6 = luaxSection(lf_Defense, lc_Defense, { Name = "Anti Translocation Helpful Options", Side = "Right", Size = 852 })
         LT["ATAutoEvadeAll"] = AG6:CreateToggle({ Name = "Auto Evade All", State = false, Callback = function(v) antiTranslocCFG.autoEvadeAll = v end })
         AG6:CreateSlider({ Name = "Evade All Radius", State = 200, Min = 10, Max = 1000, Decimals = 0, Callback = function(v) antiTranslocCFG.evadeAllRadius = v end })
         LT["ATShieldMode"] = AG6:CreateToggle({ Name = "Shield Mode", State = false, Callback = function(v) antiTranslocCFG.shieldMode = v end })
@@ -35499,7 +35646,7 @@ do
         AG6:CreateSlider({ Name = "Auto Shoot Range", State = 1e15, Min = 1, Max = 1e15, Decimals = 0, Callback = function(v) antiTranslocCFG.atAutoShootRange = v end })
         LT["ATInfiniteRange"] = AG6:CreateToggle({ Name = "Infinite Range", State = true, Callback = function(v) antiTranslocCFG.atInfiniteRange = v end })
 
-        local AG7 = luaxSection(lf_Defense, lc_Defense, { Name = "Velocity Desync", Side = "Left", Size = 714 })
+        local AG7 = luaxSection(lf_Defense, lc_Defense, { Name = "Velocity Desync", Side = "Left", Size = 574 })
         LT["VelDesyncToggle"] = AG7:CreateToggle({ Name = "Enable Velocity Desync", State = false, Callback = function(v) velDesyncCFG.enabled = v; if v then startVelDesync() else stopVelDesync() end end })
         AG7:CreateSlider({ Name = "Intensity (%)", State = 50, Min = 1, Max = 100, Decimals = 0, Callback = function(v) velDesyncCFG.intensity = v end })
         AG7:CreateSlider({ Name = "Base Angle (deg)", State = 90, Min = 0, Max = 360, Decimals = 0, Callback = function(v) velDesyncCFG.angle = v end })
@@ -35520,7 +35667,7 @@ do
         AG7:CreateSlider({ Name = "Oscillate Freq", State = 5, Min = 0.5, Max = 50, Decimals = 1, Callback = function(v) velDesyncCFG.oscillateFreq = v end })
         AG7:CreateSlider({ Name = "Oscillate Amp", State = 30, Min = 0, Max = 180, Decimals = 0, Callback = function(v) velDesyncCFG.oscillateAmp = v end })
 
-        local AG8 = luaxSection(lf_Defense, lc_Defense, { Name = "Velocity Desync Helpful Options", Side = "Right", Size = 1002 })
+        local AG8 = luaxSection(lf_Defense, lc_Defense, { Name = "Velocity Desync Helpful Options", Side = "Right", Size = 795 })
         LT["VDNoiseVel"] = AG8:CreateToggle({ Name = "Noise Velocity", State = true, Callback = function(v) velDesyncCFG.noiseVel = v end })
         AG8:CreateSlider({ Name = "Noise Scale", State = 1, Min = 0.1, Max = 10, Decimals = 1, Callback = function(v) velDesyncCFG.noiseScale = v end })
         LT["VDBurstDesync"] = AG8:CreateToggle({ Name = "Burst Desync", State = true, Callback = function(v) velDesyncCFG.burstDesync = v end })
@@ -35550,7 +35697,7 @@ do
         LT["VDInfiniteRange"] = AG8:CreateToggle({ Name = "Infinite Range", State = true, Callback = function(v) velDesyncCFG.vdInfiniteRange = v end })
 
         local lf_Translocation, lc_Translocation = luaxFolder("Translocation", "Left")
-        local TL = luaxSection(lf_Translocation, lc_Translocation, { Name = "Translocation", Side = "Left", Size = 498 })
+        local TL = luaxSection(lf_Translocation, lc_Translocation, { Name = "Translocation", Side = "Left", Size = 413 })
         LT["TranslocToggle"] = TL:CreateToggle({ Name = "Enable Translocation", State = false, Callback = function(v) translocCFG.enabled = v; if v then startTransloc() else stopTransloc() end end })
         local TranslocModeOpts = {"Ahead","Behind","Perpendicular","Above","Below","AboveBelow","MirrorX","MirrorZ","Diagonal","ScreenEdge","Orbit","ZoneEscape"}
         TL:CreateDropdown({ Name = "Offset Mode", Options = TranslocModeOpts, State = table.find(TranslocModeOpts, "Ahead") or 1, Callback = function(idx) translocCFG.offsetMode = (TranslocModeOpts[idx] or "Ahead") end })
@@ -35566,7 +35713,7 @@ do
         TL:CreateSlider({ Name = "Burst Interval (ms)", State = 1, Min = 1, Max = 100, Decimals = 0, Callback = function(v) translocCFG.burstInterval = v * 0.001 end })
         LT["TranslocRivalsMode"] = TL:CreateToggle({ Name = "Rivals Mode", State = true, Callback = function(v) translocCFG.rivalsMode = v end })
 
-        local TL2 = luaxSection(lf_Translocation, lc_Translocation, { Name = "Helpful Options", Side = "Right", Size = 2046 })
+        local TL2 = luaxSection(lf_Translocation, lc_Translocation, { Name = "Helpful Options", Side = "Right", Size = 1619 })
         LT["TranslocFakeVel"] = TL2:CreateToggle({ Name = "Fake Velocity", State = true, Callback = function(v) translocCFG.fakeVel = v end })
         LT["TranslocSnapBack"] = TL2:CreateToggle({ Name = "Snap Back", State = true, Callback = function(v) translocCFG.snapBack = v end })
         LT["TranslocJitter"] = TL2:CreateToggle({ Name = "Position Jitter", State = true, Callback = function(v) translocCFG.jitter = v end })
@@ -35625,7 +35772,7 @@ do
         LT["TranslocInfiniteRange"] = TL2:CreateToggle({ Name = "Infinite Range", State = true, Callback = function(v) translocCFG.translocInfiniteRange = v end })
 
         local lf_Sling, lc_Sling = luaxFolder("Sling", "Right")
-        local SBL = luaxSection(lf_Sling, lc_Sling, { Name = "Sling Bypass V2", Side = "Left", Size = 2154 })
+        local SBL = luaxSection(lf_Sling, lc_Sling, { Name = "Sling Bypass V2", Side = "Left", Size = 1731 })
         LT["SlingToggle"] = SBL:CreateToggle({ Name = "Enable Sling Bypass V2", State = false, Callback = function(v) slingCFG.enabled = v; if v then startSlingBypassV2() else stopSlingBypassV2() end end })
         local SlingModeOpts = {"Follow","Stalk","Hover","FastTp","TargetStick","OrbitTarget","RandomAroundTarget"}
         SBL:CreateDropdown({ Name = "Mode", Options = SlingModeOpts, State = table.find(SlingModeOpts, "Follow") or 1, Callback = function(idx) slingCFG.mode = (SlingModeOpts[idx] or "Follow") end })
@@ -35688,7 +35835,7 @@ do
         LT["SlingFastTpRandAng"] = SBL:CreateToggle({ Name = "Random Angle Offset", State = true, Callback = function(v) slingCFG.fastTpRandAng = v end })
         SBL:CreateSlider({ Name = "Rush Cooldown (ms)", State = 10, Min = 1, Max = 200, Decimals = 0, Callback = function(v) slingCFG.rushCooldown = v * 0.001 end })
 
-        local SBR = luaxSection(lf_Sling, lc_Sling, { Name = "Helpful Options", Side = "Right", Size = 1074 })
+        local SBR = luaxSection(lf_Sling, lc_Sling, { Name = "Helpful Options", Side = "Right", Size = 850 })
         LT["SlingRivalsMode"] = SBR:CreateToggle({ Name = "Rivals Mode", State = true, Callback = function(v) slingCFG.rivalsMode = v end })
         LT["SlingRivalsInfiniteRange"] = SBR:CreateToggle({ Name = "Rivals Infinite Range", State = true, Callback = function(v) slingCFG.rivalsInfiniteRange = v end })
         SBR:CreateSlider({ Name = "Rivals Range", State = 1e15, Min = 100, Max = 1e15, Decimals = 0, Callback = function(v) slingCFG.rivalsRange = v end })
@@ -35720,7 +35867,7 @@ do
         LT["SlingInfiniteRange"] = SBR:CreateToggle({ Name = "Infinite Range", State = true, Callback = function(v) slingCFG.slingInfiniteRange = v end })
 
         local lf_Riot, lc_Riot = luaxFolder("Riot", "Left")
-        local RG = luaxSection(lf_Riot, lc_Riot, { Name = "Riot Godmode", Side = "Left", Size = 1398 })
+        local RG = luaxSection(lf_Riot, lc_Riot, { Name = "Riot Godmode", Side = "Left", Size = 1121 })
         LT["RiotGodmodeToggle"] = RG:CreateToggle({ Name = "Enable Riot Godmode", State = false, Callback = function(v) riotGodmodeCFG.enabled = v; if v then startRiotGodmode() else stopRiotGodmode() end end })
         RG:CreateSlider({ Name = "Teleport Delay (s)", State = 0.03, Min = 0.01, Max = 0.5, Decimals = 2, Callback = function(v) riotGodmodeCFG.speed = v end })
         RG:CreateSlider({ Name = "Min Jump Range", State = 10, Min = 1, Max = 100, Decimals = 0, Callback = function(v) riotGodmodeCFG.minJump = v end })
@@ -35761,7 +35908,7 @@ do
         RG:CreateSlider({ Name = "Aim Strength", State = 1, Min = 0.1, Max = 3, Decimals = 1, Callback = function(v) riotGodmodeCFG.rgAimStrength = v end })
         LT["RGInfiniteRange"] = RG:CreateToggle({ Name = "Infinite Range", State = true, Callback = function(v) riotGodmodeCFG.rgInfiniteRange = v end })
 
-        local RA = luaxSection(lf_Riot, lc_Riot, { Name = "Riot Abuser", Side = "Right", Size = 1470 })
+        local RA = luaxSection(lf_Riot, lc_Riot, { Name = "Riot Abuser", Side = "Right", Size = 1179 })
         LT["RiotAbuserToggle"] = RA:CreateToggle({ Name = "Enable Riot Abuser", State = false, Callback = function(v) riotAbuserCFG.enabled = v; if v then startRiotAbuser() else stopRiotAbuser() end end })
         local RAModeOpts = {"Stick","Bounce","Orbit","Phase"}
         RA:CreateDropdown({ Name = "Mode", Options = RAModeOpts, State = table.find(RAModeOpts, "Stick") or 1, Callback = function(idx) riotAbuserCFG.mode = (RAModeOpts[idx] or "Stick") end })
@@ -35805,7 +35952,7 @@ do
         LT["RAInfiniteRange"] = RA:CreateToggle({ Name = "Infinite Range", State = true, Callback = function(v) riotAbuserCFG.raInfiniteRange = v end })
 
         local lf_Menu, lc_Menu = luaxFolder("Menu", "Right")
-        local MenuG = luaxSection(lf_Menu, lc_Menu, { Name = "Menu", Side = "Left", Size = 210 })
+        local MenuG = luaxSection(lf_Menu, lc_Menu, { Name = "Menu", Side = "Left", Size = 130 })
         MenuG:CreateButton({ Name = "Load Preset", Callback = function()
         CFG.VOID_ENABLED = true; CFG.VOID_METHOD = "Quantum"; CFG.VOID_KILLER_ENABLED = true
         cfgDodge.predEnabled = true; antiBaitCFG.enabled = true
@@ -35879,8 +36026,6 @@ end
 
 ]==]
 
--- self-loading wrapper appended to DevKage's auto-load payload (own chunk,
--- keeps the combined payload under Luau's 200-local limit)
 local __EXTRA_LOADER = "\ndo\nlocal __luaxSrc = [==[" .. __EXTRA_SOURCE .. "]==]\nlocal __luaxLd = loadstring or load\nif __luaxLd then pcall(function() __luaxLd(__luaxSrc)() end) end\nend\n"
 
 getgenv().__DEVKAGE_EXTRA_SOURCE = __EXTRA_LOADER
