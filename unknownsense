@@ -32629,6 +32629,1694 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             warn("[DevKage Package Boot] " .. tostring(err))
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           end
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         end)
+-- =====================================================================
+--  DEVKAGE PATCH - Wall Bang + Blacklist Menu + Color Clipboard
+--  Paste at the VERY END of your DevKage script, or run after it loads.
+--  Console lines starting with [DevKage Patch] tell you what attached.
+-- =====================================================================
+
+local genv = (type(getgenv) == "function" and getgenv()) or _G
+if genv.__DevKagePatchLoaded then return end
+genv.__DevKagePatchLoaded = true
+
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService  = game:GetService("UserInputService")
+local LocalPlayer       = Players.LocalPlayer
+
+local function log(msg) print("[DevKage Patch] " .. tostring(msg)) end
+local function warnLog(msg) warn("[DevKage Patch] " .. tostring(msg)) end
+
+local patchConnections = {}
+local function connect(signal, callback)
+    local connection = signal:Connect(callback)
+    patchConnections[#patchConnections + 1] = connection
+    return connection
+end
+
+local function new(className, props)
+    local inst = Instance.new(className)
+    local parent = nil
+    if props then
+        for key, value in pairs(props) do
+            if key == "Parent" then parent = value else inst[key] = value end
+        end
+    end
+    if parent then inst.Parent = parent end
+    return inst
+end
+
+local function corner(parent, radius)
+    return new("UICorner", {CornerRadius = UDim.new(0, radius or 4), Parent = parent})
+end
+
+local Patch = {
+    SwatchRegistry = setmetatable({}, {__mode = "k"}),
+    Window = nil, WindowRoot = nil, SectionRoot = nil, MasterToggle = nil,
+    RebuildColorTools = nil, mouseLockRebound = false, themeColorsRegistered = false,
+}
+
+local Theme = {
+    Background = Color3.fromRGB(23, 23, 23),
+    Row        = Color3.fromRGB(30, 30, 30),
+    RowDark    = Color3.fromRGB(26, 26, 26),
+    Accent     = Color3.fromRGB(175, 205, 75),
+    AccentDim  = Color3.fromRGB(70, 85, 40),
+    Text       = Color3.fromRGB(205, 205, 205),
+    TextDim    = Color3.fromRGB(140, 140, 140),
+    Danger     = Color3.fromRGB(200, 70, 70),
+}
+
+local function isPatchOwned(obj)
+    local current = obj
+    while current and current ~= game do
+        if current:GetAttribute("DevKagePatchOwn") or current:GetAttribute("DevKagePatchListRoot") then
+            return true
+        end
+        current = current.Parent
+    end
+    return false
+end
+
+-- =====================================================================
+--  BLACKLIST (silent by design - no notifications, ever)
+-- =====================================================================
+local Blacklist = {
+    Entries = {},     -- userId -> {Name, UserId}
+    Order = {},       -- array of userIds
+    Listeners = {},
+    AccentColor = Color3.fromRGB(235, 90, 90),
+}
+
+function Blacklist:IsBlacklisted(player)
+    if player == nil then return false end
+    if type(player) == "number" then return self.Entries[player] ~= nil end
+    if type(player) == "string" then
+        local lower = player:lower()
+        for _, entry in pairs(self.Entries) do
+            if entry.Name:lower() == lower then return true end
+        end
+        return false
+    end
+    if typeof(player) == "Instance" then return self.Entries[player.UserId] ~= nil end
+    return false
+end
+
+function Blacklist:Add(player)
+    local userId, name
+    if type(player) == "number" then
+        userId, name = player, ("UserId %d"):format(player)
+    elseif type(player) == "string" then
+        local found = Players:FindFirstChild(player)
+        if found and found:IsA("Player") then userId, name = found.UserId, found.Name end
+    elseif typeof(player) == "Instance" and player:IsA("Player") then
+        userId, name = player.UserId, player.Name
+    end
+    if not userId or self.Entries[userId] then return false end
+    self.Entries[userId] = {Name = name, UserId = userId}
+    self.Order[#self.Order + 1] = userId
+    self:Changed()
+    return true -- silent
+end
+
+function Blacklist:Remove(userId)
+    if not self.Entries[userId] then return false end
+    self.Entries[userId] = nil
+    local index = table.find(self.Order, userId)
+    if index then table.remove(self.Order, index) end
+    self:Changed()
+    return true
+end
+
+function Blacklist:Clear()
+    table.clear(self.Entries)
+    table.clear(self.Order)
+    self:Changed()
+end
+
+function Blacklist:Count() return #self.Order end
+
+function Blacklist:Changed()
+    for index = #self.Listeners, 1, -1 do
+        local ok = pcall(self.Listeners[index], self)
+        if not ok then table.remove(self.Listeners, index) end
+    end
+end
+
+genv.__DevKageBlacklist = Blacklist
+
+-- =====================================================================
+--  DEV WALL BANG  (rebuilt from your source: bullet CFrame spoof +
+--  desync teleport/restore on Gun.StartShooting)
+-- =====================================================================
+local Wallbang = {
+    Enabled = false,
+    MaxDistance = 200,
+    TeamCheck = true,
+    TargetPart = "Head",
+    DesyncEnabled = true,
+    DesyncOffset = 5,
+    DesyncStartDelay = 0.1,
+    DesyncDuration = 0.15,
+    HighlightColor = Color3.fromRGB(175, 205, 75),
+    Target = nil, DesyncActive = false, DesyncTarget = nil,
+    DesyncConn = nil, RestoreTask = nil,
+    OriginalStartShooting = nil, GunModule = nil, UtilityModule = nil,
+    Hooked = false, modulesWarned = false,
+}
+
+function Wallbang:LoadModules()
+    if self.GunModule then return true end
+    local playerScripts = LocalPlayer:FindFirstChild("PlayerScripts") or LocalPlayer:WaitForChild("PlayerScripts", 5)
+    if not playerScripts then return false end
+
+    local gunModule = playerScripts:FindFirstChild("Modules")
+    gunModule = gunModule and gunModule:FindFirstChild("ItemTypes")
+    gunModule = gunModule and gunModule:FindFirstChild("Gun")
+    if gunModule then
+        local ok, gun = pcall(require, gunModule)
+        if ok and type(gun) == "table" then self.GunModule = gun end
+    end
+
+    local utilModule = ReplicatedStorage:FindFirstChild("Modules")
+    utilModule = utilModule and utilModule:FindFirstChild("Utility")
+    if utilModule then
+        local ok, util = pcall(require, utilModule)
+        if ok and type(util) == "table" then self.UtilityModule = util end
+    end
+
+    if not self.GunModule then
+        if not self.modulesWarned then
+            self.modulesWarned = true
+            warnLog("Gun module not found (PlayerScripts/Modules/ItemTypes/Gun) - retrying in background.")
+        end
+        return false
+    end
+    return true
+end
+
+function Wallbang:FindTarget()
+    local myChar = LocalPlayer.Character
+    if not myChar then return nil end
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
+
+    local closest, closestDist = nil, math.huge
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+        if self.TeamCheck and player:GetAttribute("TeamID") == LocalPlayer:GetAttribute("TeamID") then continue end
+        if Blacklist:IsBlacklisted(player) then continue end
+
+        local char = player.Character
+        if not char then continue end
+        local root = char:FindFirstChild("HumanoidRootPart")
+        local hum = char:FindFirstChildWhichIsA("Humanoid")
+        if not (root and hum and hum.Health > 0) then continue end
+
+        local dist = (myRoot.Position - root.Position).Magnitude
+        if dist > self.MaxDistance then continue end
+        if dist < closestDist then closestDist, closest = dist, player end
+    end
+    return closest
+end
+
+function Wallbang:DesyncStart(targetPlayer)
+    self:DesyncStop()
+    self.DesyncActive = true
+    self.DesyncTarget = targetPlayer
+    self.DesyncConn = RunService.Heartbeat:Connect(function()
+        if not self.DesyncActive then return end
+        local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not myRoot then return end
+        local tRoot = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not tRoot then self:DesyncStop() return end
+
+        local savedCFrame = myRoot.CFrame
+        local savedVelocity = myRoot.Velocity
+        local savedRotVel = myRoot.RotVelocity
+
+        myRoot.CFrame = tRoot.CFrame * CFrame.new(0, -self.DesyncOffset, 0)
+
+        pcall(function() RunService:UnbindFromRenderStep("DevKageWallbangRestore") end)
+        RunService:BindToRenderStep("DevKageWallbangRestore", 101, function()
+            myRoot.CFrame = savedCFrame
+            myRoot.Velocity = savedVelocity
+            myRoot.RotVelocity = savedRotVel
+            RunService:UnbindFromRenderStep("DevKageWallbangRestore")
+        end)
+    end)
+end
+
+function Wallbang:DesyncStop()
+    self.DesyncActive = false
+    self.DesyncTarget = nil
+    if self.DesyncConn then
+        pcall(function() self.DesyncConn:Disconnect() end)
+        self.DesyncConn = nil
+    end
+    pcall(function() RunService:UnbindFromRenderStep("DevKageWallbangRestore") end)
+end
+
+function Wallbang:InstallHook()
+    if self.Hooked or not self.GunModule then return end
+    local gunModule = self.GunModule
+    local original = gunModule.StartShooting
+    if type(original) ~= "function" then
+        warnLog("Gun.StartShooting not found - wall-bang hook not installed.")
+        return
+    end
+    self.OriginalStartShooting = original
+    self.Hooked = true
+
+    gunModule.StartShooting = function(gunSelf, ...)
+        local results = {original(gunSelf, ...)}
+
+        if not self.Enabled then return unpack(results) end
+        if not gunSelf.ClientFighter or not gunSelf.ClientFighter.IsLocalPlayer then
+            return unpack(results)
+        end
+
+        local bulletData = results[3]
+        if not bulletData or typeof(bulletData) ~= "table" then
+            return unpack(results)
+        end
+
+        results[4] = true
+
+        local target = self.Target or self:FindTarget()
+        self.Target = target
+        if not target or not target.Character then
+            return unpack(results)
+        end
+
+        if self.DesyncEnabled then
+            if not self.DesyncActive or self.DesyncTarget ~= target then
+                self:DesyncStart(target)
+                if self.DesyncStartDelay > 0 then
+                    task.wait(self.DesyncStartDelay)
+                end
+            end
+            if self.RestoreTask then
+                pcall(function() task.cancel(self.RestoreTask) end)
+                self.RestoreTask = nil
+            end
+        end
+
+        local char = target.Character
+        if not char then return unpack(results) end
+        local targetPart = char:FindFirstChild(self.TargetPart) or char:FindFirstChild("Head")
+        if not targetPart then return unpack(results) end
+
+        local partPosition = targetPart.Position
+        local partCFrame = targetPart.CFrame
+        local belowPart = partPosition - Vector3.new(0, self.DesyncOffset, 0)
+        local lookCFrame = CFrame.lookAt(belowPart, partPosition)
+        local objectOffset = partCFrame:ToObjectSpace(
+            CFrame.new(partPosition + Vector3.new(math.random(), math.random(), math.random()))
+        )
+
+        if self.UtilityModule and typeof(self.UtilityModule.EncodeCFrame) == "function" then
+            bulletData[utf8.char(0)] = self.UtilityModule:EncodeCFrame(
+                CFrame.new(belowPart, partPosition) * CFrame.Angles(lookCFrame:ToOrientation())
+            )
+            bulletData[utf8.char(1)] = self.UtilityModule:EncodeCFrame(
+                CFrame.new(partPosition) * CFrame.Angles(lookCFrame:ToOrientation())
+            )
+            bulletData[utf8.char(3)] = self.UtilityModule:EncodeCFrame(objectOffset)
+        end
+        bulletData[utf8.char(2)] = targetPart
+
+        if self.DesyncEnabled then
+            self.RestoreTask = task.delay(self.DesyncDuration, function()
+                self:DesyncStop()
+            end)
+        end
+
+        return unpack(results)
+    end
+    log("Wall-bang hook installed on Gun.StartShooting.")
+end
+
+function Wallbang:SetEnabled(value)
+    self.Enabled = value == true
+    if self.Enabled then
+        task.spawn(function()
+            if self:LoadModules() then self:InstallHook() end
+        end)
+    else
+        self:DesyncStop()
+        if self.RestoreTask then
+            pcall(function() task.cancel(self.RestoreTask) end)
+            self.RestoreTask = nil
+        end
+        self.Target = nil
+    end
+end
+
+function Wallbang:Shutdown()
+    self.Enabled = false
+    self:DesyncStop()
+    if self.RestoreTask then
+        pcall(function() task.cancel(self.RestoreTask) end)
+        self.RestoreTask = nil
+    end
+    if self.Hooked and self.GunModule and self.OriginalStartShooting then
+        pcall(function() self.GunModule.StartShooting = self.OriginalStartShooting end)
+        self.Hooked = false
+    end
+end
+
+-- =====================================================================
+--  COLOR CLIPBOARD  (copy a color from any feature, paste onto another)
+-- =====================================================================
+local ColorClipboard = {Color = nil, SourceName = nil}
+local ColorRegistry = {}
+genv.__DevKageColorClipboard = ColorClipboard
+
+local function registerColor(name, getFn, setFn)
+    ColorRegistry[#ColorRegistry + 1] = {Name = name, Get = getFn, Set = setFn}
+end
+
+registerColor("Wall Bang - Highlight", function() return Wallbang.HighlightColor end,
+    function(color) Wallbang.HighlightColor = color end)
+registerColor("Blacklist - Name Color", function() return Blacklist.AccentColor end,
+    function(color) Blacklist.AccentColor = color Blacklist:Changed() end)
+
+-- =====================================================================
+--  UI BUILDERS  (match the DevKage look; gray frames carry the
+--  DevKageThemeBaseGray attribute so your theme re-tints them)
+-- =====================================================================
+local function sectionHeader(parent, title)
+    local header = new("Frame", {
+        BackgroundColor3 = Theme.RowDark, BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 28), Parent = parent,
+    })
+    header:SetAttribute("DevKageThemeBaseGray", 26 / 255)
+    corner(header, 4)
+    new("TextLabel", {
+        BackgroundTransparency = 1, Position = UDim2.fromOffset(8, 0),
+        Size = UDim2.new(1, -16, 1, 0), Font = Enum.Font.GothamBold,
+        Text = title, TextSize = 13, TextColor3 = Theme.Text,
+        TextXAlignment = Enum.TextXAlignment.Left, Parent = header,
+    })
+    return header
+end
+
+local function createToggle(parent, title, default, onChanged)
+    local state = default == true
+    local row = new("Frame", {
+        BackgroundColor3 = Theme.Row, BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 32), Parent = parent,
+    })
+    row:SetAttribute("DevKageThemeBaseGray", 30 / 255)
+
+    new("TextLabel", {
+        BackgroundTransparency = 1, Position = UDim2.fromOffset(8, 0),
+        Size = UDim2.new(1, -66, 1, 0), Font = Enum.Font.Gotham,
+        Text = title, TextSize = 13, TextColor3 = Theme.Text,
+        TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
+    })
+
+    local switch = new("TextButton", {
+        BackgroundColor3 = state and Theme.Accent or Color3.fromRGB(45, 45, 45),
+        BorderSizePixel = 0, Position = UDim2.new(1, -44, 0.5, -9),
+        Size = UDim2.fromOffset(34, 18), Font = Enum.Font.Gotham,
+        Text = "", TextSize = 12, AutoButtonColor = false, Parent = row,
+    })
+    corner(switch, 9)
+
+    local knob = new("Frame", {
+        BackgroundColor3 = Color3.fromRGB(240, 240, 240), BorderSizePixel = 0,
+        Size = UDim2.fromOffset(14, 14),
+        Position = state and UDim2.new(1, -16, 0.5, -7) or UDim2.fromOffset(2, 2),
+        Parent = switch,
+    })
+    corner(knob, 7)
+
+    local api = {}
+    local function render()
+        switch.BackgroundColor3 = state and Theme.Accent or Color3.fromRGB(45, 45, 45)
+        knob.Position = state and UDim2.new(1, -16, 0.5, -7) or UDim2.fromOffset(2, 2)
+    end
+
+    function api:Set(value)
+        local newValue = value == true
+        if newValue ~= state then
+            state = newValue
+            render()
+            pcall(onChanged, state)
+        end
+    end
+    function api:Get() return state end
+    function api:Refresh(value)
+        local newValue = value == true
+        if newValue ~= state then state = newValue render() end
+    end
+
+    switch.MouseButton1Click:Connect(function() api:Set(not state) end)
+    return api
+end
+
+local function createSlider(parent, title, minValue, maxValue, default, step, onChanged)
+    local value = math.clamp(tonumber(default) or minValue, minValue, maxValue)
+    step = step or ((maxValue - minValue) / 100)
+    local format = (step >= 1) and "%d" or "%.2f"
+
+    local row = new("Frame", {
+        BackgroundColor3 = Theme.Row, BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 44), Parent = parent,
+    })
+    row:SetAttribute("DevKageThemeBaseGray", 30 / 255)
+
+    new("TextLabel", {
+        BackgroundTransparency = 1, Position = UDim2.fromOffset(8, 0),
+        Size = UDim2.new(1, -70, 0, 18), Font = Enum.Font.Gotham,
+        Text = title, TextSize = 13, TextColor3 = Theme.Text,
+        TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
+    })
+
+    local valueLabel = new("TextLabel", {
+        BackgroundTransparency = 1, Position = UDim2.new(1, -64, 0, 0),
+        Size = UDim2.fromOffset(56, 18), Font = Enum.Font.Gotham,
+        Text = format:format(value), TextSize = 13, TextColor3 = Theme.Accent,
+        TextXAlignment = Enum.TextXAlignment.Right, Parent = row,
+    })
+
+    local bar = new("Frame", {
+        BackgroundColor3 = Color3.fromRGB(45, 45, 45), BorderSizePixel = 0,
+        Position = UDim2.fromOffset(8, 24), Size = UDim2.new(1, -16, 0, 8), Parent = row,
+    })
+    corner(bar, 4)
+
+    local fill = new("Frame", {
+        BackgroundColor3 = Theme.Accent, BorderSizePixel = 0,
+        Size = UDim2.fromScale((value - minValue) / (maxValue - minValue), 1), Parent = bar,
+    })
+    corner(fill, 4)
+
+    local api = {}
+    local function render()
+        valueLabel.Text = format:format(value)
+        fill.Size = UDim2.fromScale(math.clamp((value - minValue) / (maxValue - minValue), 0, 1), 1)
+    end
+
+    local dragging = false
+    local function updateFromX(x)
+        local rel = math.clamp((x - bar.AbsolutePosition.X) / math.max(bar.AbsoluteSize.X, 1), 0, 1)
+        local raw = minValue + (maxValue - minValue) * rel
+        local snapped = math.clamp(math.floor(raw / step + 0.5) * step, minValue, maxValue)
+        if snapped ~= value then
+            value = snapped
+            render()
+            pcall(onChanged, value)
+        end
+    end
+
+    bar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            updateFromX(input.Position.X)
+        end
+    end)
+    bar.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+    end)
+    connect(UserInputService.InputEnded, function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+    end)
+    connect(UserInputService.InputChanged, function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            updateFromX(input.Position.X)
+        end
+    end)
+
+    function api:Set(newValue)
+        newValue = math.clamp(tonumber(newValue) or value, minValue, maxValue)
+        if newValue ~= value then value = newValue render() pcall(onChanged, value) end
+    end
+    function api:Get() return value end
+    return api
+end
+
+local function createDropdown(parent, title, getOptions, onPick, currentText)
+    local row = new("Frame", {
+        BackgroundColor3 = Theme.Row, BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 32), Parent = parent,
+    })
+    row:SetAttribute("DevKageThemeBaseGray", 30 / 255)
+
+    new("TextLabel", {
+        BackgroundTransparency = 1, Position = UDim2.fromOffset(8, 0),
+        Size = UDim2.new(0.55, -8, 1, 0), Font = Enum.Font.Gotham,
+        Text = title, TextSize = 13, TextColor3 = Theme.Text,
+        TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
+    })
+
+    local button = new("TextButton", {
+        BackgroundColor3 = Color3.fromRGB(45, 45, 45), BorderSizePixel = 0,
+        Position = UDim2.new(1, -104, 0.5, -12), Size = UDim2.fromOffset(96, 24),
+        Font = Enum.Font.Gotham, Text = currentText or "Select", TextSize = 12,
+        TextColor3 = Theme.Text, AutoButtonColor = false, Parent = row,
+    })
+    corner(button, 4)
+
+    local listFrame = nil
+    local function close()
+        if listFrame then pcall(function() listFrame:Destroy() end) listFrame = nil end
+    end
+    local function open()
+        close()
+        local options = getOptions() or {}
+        if #options == 0 then button.Text = "None" return end
+        listFrame = new("Frame", {
+            BackgroundColor3 = Color3.fromRGB(16, 16, 16), BorderSizePixel = 0,
+            Position = UDim2.new(1, -104, 1, 4), Size = UDim2.fromOffset(150, math.min(#options, 6) * 24 + 4),
+            ZIndex = 50, Parent = row,
+        })
+        corner(listFrame, 4)
+        new("UIListLayout", {Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder, Parent = listFrame})
+        for _, option in ipairs(options) do
+            local optionButton = new("TextButton", {
+                BackgroundColor3 = Theme.Row, BorderSizePixel = 0,
+                Size = UDim2.new(1, -4, 0, 22), Font = Enum.Font.Gotham,
+                Text = tostring(option), TextSize = 12, TextColor3 = Theme.Text,
+                AutoButtonColor = false, ZIndex = 51, Parent = listFrame,
+            })
+            corner(optionButton, 3)
+            optionButton.MouseButton1Click:Connect(function()
+                close()
+                button.Text = tostring(option)
+                pcall(onPick, option)
+            end)
+        end
+    end
+
+    button.MouseButton1Click:Connect(function()
+        if listFrame then close() else open() end
+    end)
+
+    return {SetText = function(text) button.Text = tostring(text) end, Close = close}
+end
+
+local function createButton(parent, title, onClick)
+    local row = new("Frame", {
+        BackgroundColor3 = Theme.Row, BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 30), Parent = parent,
+    })
+    row:SetAttribute("DevKageThemeBaseGray", 30 / 255)
+    local button = new("TextButton", {
+        BackgroundColor3 = Color3.fromRGB(45, 45, 45), BorderSizePixel = 0,
+        Position = UDim2.fromOffset(4, 4), Size = UDim2.new(1, -8, 1, -8),
+        Font = Enum.Font.Gotham, Text = title, TextSize = 12,
+        TextColor3 = Theme.Text, AutoButtonColor = false, Parent = row,
+    })
+    corner(button, 3)
+    button.MouseButton1Click:Connect(function() pcall(onClick) end)
+    return button
+end
+
+local function createBlacklistList(parent)
+    local container = new("Frame", {
+        BackgroundColor3 = Theme.RowDark, BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, Parent = parent,
+    })
+    container:SetAttribute("DevKagePatchOwn", true)
+    container:SetAttribute("DevKagePatchListRoot", true)
+    container:SetAttribute("DevKageThemeBaseGray", 26 / 255)
+    corner(container, 4)
+    new("UIListLayout", {Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder, Parent = container})
+
+    local header = new("TextLabel", {
+        BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 22),
+        Font = Enum.Font.GothamBold, Text = "Blacklisted Players (0)",
+        TextSize = 12, TextColor3 = Theme.TextDim,
+        TextXAlignment = Enum.TextXAlignment.Left, Parent = container,
+    })
+
+    local function refresh()
+        if not container.Parent then error("list destroyed") end
+        for _, child in ipairs(container:GetChildren()) do
+            if child:GetAttribute("DevKagePatchListRow") then child:Destroy() end
+        end
+        header.Text = ("Blacklisted Players (%d)"):format(Blacklist:Count())
+
+        if Blacklist:Count() == 0 then
+            local empty = new("TextLabel", {
+                BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 20),
+                Font = Enum.Font.Gotham, Text = "  Nobody blacklisted yet", TextSize = 12,
+                TextColor3 = Theme.TextDim, TextXAlignment = Enum.TextXAlignment.Left, Parent = container,
+            })
+            empty:SetAttribute("DevKagePatchListRow", true)
+            return
+        end
+
+        for index, userId in ipairs(Blacklist.Order) do
+            local entry = Blacklist.Entries[userId]
+            if entry then
+                local rowFrame = new("Frame", {
+                    BackgroundColor3 = Theme.Row, BorderSizePixel = 0,
+                    Size = UDim2.new(1, 0, 0, 24), LayoutOrder = 100 + index, Parent = container,
+                })
+                rowFrame:SetAttribute("DevKagePatchListRow", true)
+                rowFrame:SetAttribute("DevKageThemeBaseGray", 30 / 255)
+                corner(rowFrame, 3)
+
+                new("TextLabel", {
+                    BackgroundTransparency = 1, Position = UDim2.fromOffset(8, 0),
+                    Size = UDim2.new(1, -60, 1, 0), Font = Enum.Font.Gotham,
+                    Text = entry.Name, TextSize = 12, TextColor3 = Blacklist.AccentColor,
+                    TextXAlignment = Enum.TextXAlignment.Left, Parent = rowFrame,
+                })
+
+                local removeButton = new("TextButton", {
+                    BackgroundColor3 = Theme.Danger, BorderSizePixel = 0,
+                    Position = UDim2.new(1, -30, 0.5, -9), Size = UDim2.fromOffset(24, 18),
+                    Font = Enum.Font.GothamBold, Text = "X", TextSize = 11,
+                    TextColor3 = Color3.fromRGB(255, 255, 255), AutoButtonColor = false, Parent = rowFrame,
+                })
+                corner(removeButton, 3)
+                removeButton.MouseButton1Click:Connect(function()
+                    Blacklist:Remove(userId) -- silent
+                end)
+            end
+        end
+    end
+
+    Blacklist.Listeners[#Blacklist.Listeners + 1] = refresh
+    refresh()
+    return container
+end
+
+local function buildColorTools(section)
+    local holder = new("Frame", {
+        BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y, Parent = section,
+    })
+    new("UIListLayout", {Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder, Parent = holder})
+
+    local rows = {}
+    local function rebuild()
+        for _, row in ipairs(rows) do pcall(function() row:Destroy() end) end
+        table.clear(rows)
+
+        local previewRow = new("Frame", {
+            BackgroundColor3 = Theme.Row, BorderSizePixel = 0,
+            Size = UDim2.new(1, 0, 0, 30), Parent = holder,
+        })
+        previewRow:SetAttribute("DevKageThemeBaseGray", 30 / 255)
+        corner(previewRow, 3)
+        rows[#rows + 1] = previewRow
+
+        new("TextLabel", {
+            BackgroundTransparency = 1, Position = UDim2.fromOffset(8, 0),
+            Size = UDim2.new(1, -60, 1, 0), Font = Enum.Font.Gotham,
+            Text = ColorClipboard.Color and ("Copied: " .. tostring(ColorClipboard.SourceName or "")) or "Clipboard empty - copy a color",
+            TextSize = 12, TextColor3 = Theme.TextDim,
+            TextXAlignment = Enum.TextXAlignment.Left, Parent = previewRow,
+        })
+        new("Frame", {
+            BackgroundColor3 = ColorClipboard.Color or Color3.fromRGB(60, 60, 60),
+            BorderSizePixel = 0, Position = UDim2.new(1, -36, 0.5, -8),
+            Size = UDim2.fromOffset(28, 16), Parent = previewRow,
+        })
+
+        for index, entry in ipairs(ColorRegistry) do
+            local row = new("Frame", {
+                BackgroundColor3 = Theme.Row, BorderSizePixel = 0,
+                Size = UDim2.new(1, 0, 0, 28), LayoutOrder = index + 1, Parent = holder,
+            })
+            row:SetAttribute("DevKageThemeBaseGray", 30 / 255)
+            corner(row, 3)
+            rows[#rows + 1] = row
+
+            local swatch = new("Frame", {
+                BackgroundColor3 = Color3.fromRGB(120, 120, 120), BorderSizePixel = 0,
+                AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromOffset(6, 0.5),
+                Size = UDim2.fromOffset(18, 18), Parent = row,
+            })
+            corner(swatch, 4)
+            pcall(function() swatch.BackgroundColor3 = entry.Get() or Color3.fromRGB(120, 120, 120) end)
+            Patch.SwatchRegistry[swatch] = entry
+
+            new("TextLabel", {
+                BackgroundTransparency = 1, Position = UDim2.fromOffset(30, 0),
+                Size = UDim2.new(1, -140, 1, 0), Font = Enum.Font.Gotham,
+                Text = entry.Name, TextSize = 12, TextColor3 = Theme.Text,
+                TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
+            })
+
+            local copyButton = new("TextButton", {
+                BackgroundColor3 = Theme.AccentDim, BorderSizePixel = 0,
+                Position = UDim2.new(1, -86, 0.5, -10), Size = UDim2.fromOffset(38, 20),
+                Font = Enum.Font.Gotham, Text = "Copy", TextSize = 11,
+                TextColor3 = Color3.fromRGB(255, 255, 255), AutoButtonColor = false, Parent = row,
+            })
+            corner(copyButton, 3)
+
+            local pasteButton = new("TextButton", {
+                BackgroundColor3 = Color3.fromRGB(60, 60, 60), BorderSizePixel = 0,
+                Position = UDim2.new(1, -44, 0.5, -10), Size = UDim2.fromOffset(38, 20),
+                Font = Enum.Font.Gotham, Text = "Paste", TextSize = 11,
+                TextColor3 = Color3.fromRGB(255, 255, 255), AutoButtonColor = false, Parent = row,
+            })
+            corner(pasteButton, 3)
+
+            copyButton.MouseButton1Click:Connect(function()
+                local color = entry.Get and entry.Get()
+                if typeof(color) == "Color3" then
+                    ColorClipboard.Color = color
+                    ColorClipboard.SourceName = entry.Name
+                    log("Copied color from '" .. entry.Name .. "'.")
+                end
+                rebuild()
+            end)
+            pasteButton.MouseButton1Click:Connect(function()
+                if typeof(ColorClipboard.Color) == "Color3" and entry.Set then
+                    pcall(entry.Set, ColorClipboard.Color)
+                    log("Pasted color onto '" .. entry.Name .. "'.")
+                end
+                rebuild()
+            end)
+        end
+    end
+
+    rebuild()
+    Patch.RebuildColorTools = rebuild
+end
+
+-- =====================================================================
+--  KNIFE TAB DISCOVERY + SECTION BUILD
+-- =====================================================================
+local highlightEnabled = false
+local currentHighlight = nil
+local function clearHighlight()
+    if currentHighlight then pcall(function() currentHighlight:Destroy() end) currentHighlight = nil end
+end
+
+local function findRowFor(label)
+    local current = label
+    for _ = 1, 6 do
+        if not current then break end
+        current = current.Parent
+        if not current or not current:IsA("GuiObject") then break end
+        local size = current.AbsoluteSize
+        if size.Y >= 16 and size.Y <= 90 and size.X >= 120 then return current end
+    end
+    return label and label.Parent or nil
+end
+
+local function largestFrame(frames)
+    local best, bestArea = nil, -1
+    for _, frame in ipairs(frames) do
+        local area = frame.AbsoluteSize.X * frame.AbsoluteSize.Y
+        if area > bestArea then best, bestArea = frame, area end
+    end
+    return best
+end
+
+local function getPageContent(page)
+    if type(page) ~= "table" then return nil end
+    local candidates = {}
+    for _, key in ipairs({"Frame", "Content", "Container", "SectionHolder", "Scroll", "Root", "Main", "Holder", "Body", "List"}) do
+        local inst = page[key]
+        if typeof(inst) == "Instance" and inst:IsA("GuiObject") then candidates[#candidates + 1] = inst end
+    end
+    if typeof(page.Instance) == "Instance" then
+        for _, child in ipairs(page.Instance:GetChildren()) do
+            if child:IsA("GuiObject") then candidates[#candidates + 1] = child end
+        end
+    end
+    for _, frame in ipairs(candidates) do
+        if frame:IsA("ScrollingFrame") then return frame end
+    end
+    return largestFrame(candidates)
+end
+
+local function pageLooksLikeKnife(page)
+    for _, key in ipairs({"Title", "Name", "Text", "title", "name", "text"}) do
+        if type(page[key]) == "string" and page[key]:lower():find("knife", 1, true) then return true end
+    end
+    for _, key in ipairs({"Frame", "Content", "Container", "Root", "Instance", "Button", "Tab"}) do
+        local inst = page[key]
+        if typeof(inst) == "Instance" then
+            if inst.Name:lower():find("knife", 1, true) then return true end
+            if (inst:IsA("TextLabel") or inst:IsA("TextButton")) and tostring(inst.Text):lower():find("knife", 1, true) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function callFirst(object, methodNames, ...)
+    if type(object) ~= "table" then return nil end
+    for _, methodName in ipairs(methodNames) do
+        local method = object[methodName]
+        if type(method) == "function" then
+            local ok, result = pcall(method, object, ...)
+            if ok then return result end
+        end
+    end
+    return nil
+end
+
+local function findLibrary()
+    for _, name in ipairs({"library", "Library", "devkage", "DevKage", "UILibrary", "ui", "UI"}) do
+        local lib = genv[name]
+        if type(lib) == "table" and type(lib.Controls) == "table" and type(lib.Theme) == "table" then
+            return lib
+        end
+    end
+    return nil
+end
+
+local knifeFallbackContent = nil
+local function findKnifeContent(window)
+    if type(window.Pages) == "table" then
+        for _, page in pairs(window.Pages) do
+            if type(page) == "table" then
+                local content = getPageContent(page)
+                if content and pageLooksLikeKnife(page) then
+                    return content, "your Knife tab (window.Pages)"
+                end
+            end
+        end
+        for _, page in pairs(window.Pages) do
+            if type(page) == "table" then
+                local content = getPageContent(page)
+                if content then knifeFallbackContent = content break end
+            end
+        end
+    end
+
+    if window.MainFrame then
+        local named = {}
+        for _, obj in ipairs(window.MainFrame:GetDescendants()) do
+            if obj:IsA("GuiObject") and obj.Name:lower():find("knife", 1, true) then
+                named[#named + 1] = obj
+            end
+        end
+        for _, frame in ipairs(named) do
+            if frame:IsA("ScrollingFrame") then return frame, "the Knife container (by name)" end
+        end
+        local best = largestFrame(named)
+        if best then return best, "the Knife container (by name)" end
+    end
+
+    local page = callFirst(window, {"CreatePage", "AddPage", "NewPage", "Page", "CreateTab", "AddTab", "Tab"},
+        {Title = "Knife", title = "Knife", Name = "Knife", name = "Knife", Text = "Knife"})
+    if page then
+        local content = getPageContent(page)
+        if content then return content, "a fresh Knife page" end
+    end
+
+    if knifeFallbackContent then return knifeFallbackContent, "your first tab (Knife tab was not found)" end
+    return nil
+end
+
+local function buildKnifeSection(content)
+    local section = new("Frame", {
+        BackgroundTransparency = 1, BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, Parent = content,
+    })
+    section:SetAttribute("DevKagePatchOwn", true)
+    new("UIListLayout", {Padding = UDim.new(0, 3), SortOrder = Enum.SortOrder.LayoutOrder, Parent = section})
+
+    if content:IsA("ScrollingFrame") then
+        pcall(function() content.AutomaticCanvasSize = Enum.AutomaticSize.Y end)
+    end
+
+    sectionHeader(section, "DEV WALL BANG")
+
+    Patch.MasterToggle = createToggle(section, "Dev Wall Bang", false, function(value)
+        Wallbang:SetEnabled(value)
+    end)
+    createSlider(section, "Max Distance", 10, 1000, Wallbang.MaxDistance, 5, function(v) Wallbang.MaxDistance = v end)
+    createToggle(section, "Team Check", Wallbang.TeamCheck, function(v) Wallbang.TeamCheck = v end)
+    createDropdown(section, "Target Part", function()
+        return {"Head", "HumanoidRootPart", "Torso", "UpperTorso"}
+    end, function(option) Wallbang.TargetPart = option end, Wallbang.TargetPart)
+    createToggle(section, "Desync Enabled", Wallbang.DesyncEnabled, function(v) Wallbang.DesyncEnabled = v end)
+    createSlider(section, "Desync Offset (studs)", 1, 20, Wallbang.DesyncOffset, 1, function(v) Wallbang.DesyncOffset = v end)
+    createSlider(section, "Desync Start Delay", 0, 0.5, Wallbang.DesyncStartDelay, 0.01, function(v) Wallbang.DesyncStartDelay = v end)
+    createSlider(section, "Desync Duration", 0.05, 1, Wallbang.DesyncDuration, 0.01, function(v) Wallbang.DesyncDuration = v end)
+    createToggle(section, "Target Highlight", false, function(v)
+        highlightEnabled = v
+        if not v then clearHighlight() end
+    end)
+
+    sectionHeader(section, "BLACKLIST (silent)")
+    createDropdown(section, "Blacklist Player", function()
+        local options = {}
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and not Blacklist:IsBlacklisted(player) then
+                options[#options + 1] = player.Name
+            end
+        end
+        return options
+    end, function(name) Blacklist:Add(name) end, "Select")
+    createBlacklistList(section)
+    createButton(section, "Clear Blacklist", function() Blacklist:Clear() end)
+
+    sectionHeader(section, "COLOR TOOLS")
+    buildColorTools(section)
+
+    return section
+end
+
+local function buildFloatingPanel(window)
+    local panel = new("Frame", {
+        BackgroundColor3 = Theme.Background, BorderSizePixel = 0,
+        Position = UDim2.new(1, -236, 0, 40), Size = UDim2.fromOffset(220, 0),
+        AutomaticSize = Enum.AutomaticSize.Y, Parent = window.MainFrame or window.Root,
+    })
+    panel:SetAttribute("DevKagePatchOwn", true)
+    panel:SetAttribute("DevKageThemeBaseGray", 23 / 255)
+    corner(panel, 6)
+    new("UIListLayout", {Padding = UDim.new(0, 3), Parent = panel})
+    warnLog("Knife tab not found - Dev Wall Bang built as a side panel instead.")
+    return panel
+end
+
+-- =====================================================================
+--  COLOR SWATCH RIGHT-CLICK (copy / paste on ANY color swatch)
+-- =====================================================================
+local function isRedish(color)
+    if typeof(color) ~= "Color3" then return false end
+    return color.R >= 0.5 and color.G <= 0.45 and color.B <= 0.45
+end
+
+local function isColorSwatchCandidate(obj)
+    if not obj:IsA("GuiObject") then return false end
+    if obj:IsA("TextButton") or obj:IsA("TextBox") then return false end
+    if not (obj:IsA("Frame") or obj:IsA("ImageLabel") or obj:IsA("TextLabel")) then return false end
+    if obj:IsA("TextLabel") and tostring(obj.Text) ~= "" then return false end
+    local size = obj.AbsoluteSize
+    if size.X < 8 or size.X > 48 or size.Y < 8 or size.Y > 48 then return false end
+    local color = obj:IsA("ImageLabel") and obj.ImageColor3 or obj.BackgroundColor3
+    if typeof(color) ~= "Color3" then return false end
+    if (math.max(color.R, color.G, color.B) - math.min(color.R, color.G, color.B)) < 0.18 then return false end
+    return obj.Visible
+end
+
+local function findControlForInstance(lib, target)
+    if type(lib) ~= "table" or typeof(target) ~= "Instance" then return nil end
+    if type(lib.Controls) ~= "table" then return nil end
+    for flag, control in pairs(lib.Controls) do
+        if type(control) == "table" then
+            for _, key in ipairs({"Instance", "Main", "Frame", "Root", "Object", "Holder", "Container", "Button", "Box", "Toggle", "Element"}) do
+                local inst = control[key]
+                if typeof(inst) == "Instance" then
+                    if inst == target or inst:IsAncestorOf(target) or target:IsAncestorOf(inst) then
+                        return control, flag
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+local function applyColorToSwatch(swatch, color)
+    if swatch:IsA("ImageLabel") then
+        swatch.ImageColor3 = color
+    else
+        swatch.BackgroundColor3 = color
+    end
+    local gradient = swatch:FindFirstChildWhichIsA("UIGradient")
+    if gradient then gradient.Color = ColorSequence.new(color) end
+end
+
+local function copyFromSwatch(swatch)
+    local color = nil
+    local gradient = swatch:FindFirstChildWhichIsA("UIGradient")
+    if gradient and gradient.Color and #gradient.Color.Keypoints > 0 then
+        color = gradient.Color.Keypoints[1].Value
+    end
+    if not color then
+        color = swatch:IsA("ImageLabel") and swatch.ImageColor3 or swatch.BackgroundColor3
+    end
+    if typeof(color) == "Color3" then
+        ColorClipboard.Color = color
+        local entry = Patch.SwatchRegistry[swatch]
+        ColorClipboard.SourceName = entry and entry.Name or nil
+        log(("Color copied: RGB(%d, %d, %d)"):format(
+            math.floor(color.R * 255 + 0.5), math.floor(color.G * 255 + 0.5), math.floor(color.B * 255 + 0.5)))
+    end
+end
+
+local function pasteToSwatch(swatch)
+    if typeof(ColorClipboard.Color) ~= "Color3" then return end
+    local entry = Patch.SwatchRegistry[swatch]
+    if entry and entry.Set then
+        pcall(entry.Set, ColorClipboard.Color)
+        applyColorToSwatch(swatch, ColorClipboard.Color)
+        log("Pasted color onto '" .. tostring(entry.Name) .. "'.")
+        return
+    end
+    local control, flag = findControlForInstance(findLibrary(), swatch)
+    if control then
+        if type(control.Set) == "function" then
+            local ok = pcall(control.Set, control, ColorClipboard.Color)
+            if ok then
+                applyColorToSwatch(swatch, ColorClipboard.Color)
+                log("Pasted color into '" .. tostring(flag) .. "'.")
+                return
+            end
+        end
+        for _, key in ipairs({"Value", "value", "Color", "color"}) do
+            if typeof(control[key]) == "Color3" then
+                control[key] = ColorClipboard.Color
+                applyColorToSwatch(swatch, ColorClipboard.Color)
+                log("Pasted color into '" .. tostring(flag) .. "'.")
+                return
+            end
+        end
+    end
+    applyColorToSwatch(swatch, ColorClipboard.Color)
+    log("Pasted color visually (no setter found for this swatch).")
+end
+
+local popupFrame = nil
+local function closeColorPopup()
+    if popupFrame then pcall(function() popupFrame:Destroy() end) popupFrame = nil end
+end
+
+local function openColorPopup(swatch)
+    closeColorPopup()
+    local windowRoot = Patch.WindowRoot
+    if not windowRoot then return end
+    local mouse = UserInputService:GetMouseLocation()
+    local hasColor = typeof(ColorClipboard.Color) == "Color3"
+
+    local frame = new("Frame", {
+        BackgroundColor3 = Color3.fromRGB(18, 18, 18), BorderSizePixel = 0,
+        Position = UDim2.fromOffset(mouse.X + 4, mouse.Y + 4),
+        Size = UDim2.fromOffset(160, 82), ZIndex = 500, Parent = windowRoot,
+    })
+    frame:SetAttribute("DevKagePatchOwn", true)
+    corner(frame, 6)
+    popupFrame = frame
+
+    new("TextLabel", {
+        BackgroundTransparency = 1, Position = UDim2.fromOffset(8, 4),
+        Size = UDim2.new(1, -16, 0, 18), Font = Enum.Font.GothamBold,
+        Text = "Color Clipboard", TextSize = 12, TextColor3 = Theme.Text,
+        TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 501, Parent = frame,
+    })
+
+    local copyButton = new("TextButton", {
+        BackgroundColor3 = Theme.AccentDim, BorderSizePixel = 0,
+        Position = UDim2.fromOffset(8, 26), Size = UDim2.new(1, -20, 0, 22),
+        Font = Enum.Font.Gotham, Text = "Copy This Color", TextSize = 12,
+        TextColor3 = Color3.fromRGB(255, 255, 255), AutoButtonColor = false,
+        ZIndex = 501, Parent = frame,
+    })
+    corner(copyButton, 4)
+
+    local pasteButton = new("TextButton", {
+        BackgroundColor3 = hasColor and Color3.fromRGB(70, 90, 50) or Color3.fromRGB(50, 50, 50),
+        BorderSizePixel = 0, Position = UDim2.fromOffset(8, 52),
+        Size = UDim2.new(1, -20, 0, 22), Font = Enum.Font.Gotham,
+        Text = hasColor and "Paste Copied Color" or "Nothing Copied", TextSize = 12,
+        TextColor3 = Color3.fromRGB(255, 255, 255), AutoButtonColor = false,
+        ZIndex = 501, Parent = frame,
+    })
+    corner(pasteButton, 4)
+
+    copyButton.MouseButton1Click:Connect(function()
+        copyFromSwatch(swatch)
+        if Patch.RebuildColorTools then Patch.RebuildColorTools() end
+        closeColorPopup()
+    end)
+    pasteButton.MouseButton1Click:Connect(function()
+        if hasColor then
+            pasteToSwatch(swatch)
+            if Patch.RebuildColorTools then Patch.RebuildColorTools() end
+        end
+        closeColorPopup()
+    end)
+end
+
+connect(UserInputService.InputBegan, function(input)
+    if popupFrame and input.UserInputType == Enum.UserInputType.MouseButton1 then
+        local mouse = UserInputService:GetMouseLocation()
+        local pos = popupFrame.AbsolutePosition
+        local size = popupFrame.AbsoluteSize
+        if mouse.X < pos.X or mouse.X > pos.X + size.X or mouse.Y < pos.Y or mouse.Y > pos.Y + size.Y then
+            closeColorPopup()
+        end
+    end
+end)
+
+local function hookSwatch(obj)
+    obj:SetAttribute("DevKagePatchSwatchHooked", true)
+    obj.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton2 then
+            openColorPopup(obj)
+        end
+    end)
+end
+
+-- =====================================================================
+--  SILENT BLACKLISTING + SYNC WITH YOUR EXISTING CONTROL
+-- =====================================================================
+local function suppressBlacklistNotifications(window)
+    local targets = {}
+    local lib = findLibrary()
+    if lib then targets[#targets + 1] = lib end
+    if window then targets[#targets + 1] = window end
+    for _, name in ipairs({"Notify", "notify", "Notification", "SendNotification", "CreateNotification"}) do
+        for _, target in ipairs(targets) do
+            local original = target[name]
+            if type(original) == "function" and not target["__patchNotify" .. name] then
+                pcall(function()
+                    target["__patchNotify" .. name] = true
+                    target[name] = function(self, ...)
+                        local args = {...}
+                        for _, arg in ipairs(args) do
+                            if type(arg) == "string" and arg:lower():find("blacklist") then return end
+                            if type(arg) == "table" then
+                                local text = tostring(arg.Text or arg.text or arg.Title or arg.title or arg.Message or arg.message or "")
+                                if text:lower():find("blacklist") then return end
+                            end
+                        end
+                        return original(self, ...)
+                    end
+                end)
+            end
+        end
+    end
+    for _, name in ipairs({"Notify", "notify"}) do
+        if type(genv[name]) == "function" and not genv["__patchNotify" .. name] then
+            pcall(function()
+                genv["__patchNotify" .. name] = true
+                local original = genv[name]
+                genv[name] = function(...)
+                    for _, arg in ipairs({...}) do
+                        if type(arg) == "string" and arg:lower():find("blacklist") then return end
+                    end
+                    return original(...)
+                end
+            end)
+        end
+    end
+end
+
+local importedNames = {}
+
+local function findTheirBlacklistControl(lib)
+    if not lib then return nil end
+    for flag, control in pairs(lib.Controls) do
+        local f = tostring(flag):lower():gsub("[%s_]+", "")
+        if f:find("blacklist", 1, true) then return control, flag end
+    end
+    return nil
+end
+
+local function readControlValue(control)
+    if type(control) ~= "table" then return nil end
+    if type(control.Get) == "function" then
+        local ok, value = pcall(control.Get, control)
+        if ok and value ~= nil then return value end
+    end
+    for _, key in ipairs({"Value", "value", "Current", "current"}) do
+        if control[key] ~= nil then return control[key] end
+    end
+    return nil
+end
+
+local function parseBlacklistValue(value)
+    local names = {}
+    if type(value) == "string" then
+        for name in value:gmatch("[^,;\n]+") do
+            name = name:match("^%s*(.-)%s*$")
+            if name ~= "" then names[#names + 1] = name end
+        end
+    elseif type(value) == "table" then
+        for key, val in pairs(value) do
+            if type(key) == "string" then
+                names[#names + 1] = key
+            elseif type(val) == "string" then
+                names[#names + 1] = val
+            end
+        end
+    end
+    return names
+end
+
+local function importNames(names)
+    local added = 0
+    for _, name in ipairs(names) do
+        if type(name) == "string" and name ~= "" and Blacklist:Add(name) then
+            added = added + 1
+            local found = Players:FindFirstChild(name)
+            importedNames[name:lower()] = found and found.UserId or -1
+        end
+    end
+    return added
+end
+
+local controlSync = {control = nil, flag = nil, last = nil, imported = nil}
+local function syncFromTheirBlacklistControl()
+    if controlSync.control == nil then
+        local lib = findLibrary()
+        if not lib then return end
+        controlSync.control, controlSync.flag = findTheirBlacklistControl(lib)
+        if controlSync.control then
+            log("Found your Blacklist control ('" .. tostring(controlSync.flag) .. "') - syncing silently.")
+        end
+    end
+    if not controlSync.control then return end
+
+    local value = readControlValue(controlSync.control)
+    if value == nil then return end
+    local names = parseBlacklistValue(value)
+    table.sort(names)
+    local serialized = table.concat(names, "\1")
+    if serialized ~= controlSync.last then
+        controlSync.last = serialized
+        return -- wait one cycle for the value to settle (no half-typed imports)
+    end
+    if serialized == controlSync.imported then return end
+    controlSync.imported = serialized
+
+    local theirNames = {}
+    for _, name in ipairs(names) do
+        theirNames[name:lower()] = true
+        importNames({name})
+    end
+    for nameLower, userId in pairs(importedNames) do
+        if not theirNames[nameLower] then
+            if userId and userId > 0 then Blacklist:Remove(userId) end
+            importedNames[nameLower] = nil
+        end
+    end
+end
+
+local function syncFromBlacklistTextBox(blacklistLabels)
+    for _, label in ipairs(blacklistLabels) do
+        local row = findRowFor(label)
+        if row then
+            for _, obj in ipairs(row:GetDescendants()) do
+                if obj:IsA("TextBox") and not obj:GetAttribute("DevKagePatchBoxHooked") then
+                    obj:SetAttribute("DevKagePatchBoxHooked", true)
+                    obj.FocusLost:Connect(function(enterPressed)
+                        if enterPressed and obj.Text ~= "" then
+                            importNames(parseBlacklistValue(obj.Text))
+                        end
+                    end)
+                end
+            end
+        end
+    end
+end
+
+-- =====================================================================
+--  MOUSE LOCK  ->  DEV WALL BANG  (rename + rebind)
+-- =====================================================================
+local function tryRebindMouseLock(descendants)
+    if Patch.mouseLockRebound then return end
+    local lib = findLibrary()
+    if not lib then return end
+
+    for _, obj in ipairs(descendants) do
+        if (obj:IsA("TextLabel") or obj:IsA("TextButton"))
+            and obj:GetAttribute("DevKagePatchRenamed")
+            and obj.Text == "Dev Wall Bang" then
+            local row = findRowFor(obj)
+            if row then
+                local control = findControlForInstance(lib, row)
+                if control then
+                    if type(control.Set) == "function" then
+                        local oldSet = control.Set
+                        local ok = pcall(function()
+                            control.Set = function(self, value)
+                                pcall(function() Wallbang:SetEnabled(value == true) end)
+                                return oldSet(self, value)
+                            end
+                        end)
+                        if ok then
+                            Patch.mouseLockRebound = true
+                            log("Renamed 'Mouse Lock' is now driving Dev Wall Bang.")
+                            return
+                        end
+                    end
+                    for _, key in ipairs({"Callback", "callback", "Function", "OnChanged", "onChanged"}) do
+                        if type(control[key]) == "function" then
+                            local ok = pcall(function()
+                                control[key] = function(a, b)
+                                    local value = (type(a) == "boolean") and a or b
+                                    pcall(function() Wallbang:SetEnabled(value == true) end)
+                                end
+                            end)
+                            if ok then
+                                Patch.mouseLockRebound = true
+                                log("Renamed 'Mouse Lock' callback now drives Dev Wall Bang.")
+                                return
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- =====================================================================
+--  RED FLASHING OVERLAY REMOVAL
+-- =====================================================================
+local function killRedOverlays(descendants, blacklistLabels)
+    if #blacklistLabels == 0 then return end
+    local textRects = {}
+    for _, label in ipairs(blacklistLabels) do
+        if label.Parent then
+            local pos, size = label.AbsolutePosition, label.AbsoluteSize
+            textRects[#textRects + 1] = {pos.X, pos.Y, pos.X + size.X, pos.Y + size.Y}
+        end
+    end
+    for _, obj in ipairs(descendants) do
+        if obj:IsA("GuiObject") and obj.Visible and obj.BackgroundTransparency < 1
+            and not obj:GetAttribute("DevKagePatchHiddenRedOverlay") and not isPatchOwned(obj) then
+            local objColor = obj.BackgroundColor3
+            if obj:IsA("ImageLabel") and obj.ImageTransparency < 1 then objColor = obj.ImageColor3 end
+            if isRedish(objColor) then
+                local isTextCarrier = (obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox"))
+                    and tostring(obj.Text):gsub("%s", "") ~= ""
+                if not isTextCarrier then
+                    local pos, size = obj.AbsolutePosition, obj.AbsoluteSize
+                    local minX, minY = pos.X, pos.Y
+                    local maxX, maxY = pos.X + size.X, pos.Y + size.Y
+                    for _, rect in ipairs(textRects) do
+                        if minX < rect[3] and rect[1] < maxX and minY < rect[4] and rect[2] < maxY then
+                            obj:SetAttribute("DevKagePatchHiddenRedOverlay", true)
+                            pcall(function() obj.Visible = false end)
+                            log("Removed red flashing overlay over the Blacklist text (" .. obj.Name .. ").")
+                            break
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Drawing-library overlays (in case the flash is drawn externally)
+local drawnObjects = {}
+do
+    local drawingLib = (typeof(Drawing) == "table" and Drawing) or (syn and syn.drawing) or _G.Drawing
+    if type(drawingLib) == "table" and type(drawingLib.new) == "function" then
+        local originalNew = drawingLib.new
+        pcall(function()
+            drawingLib.new = function(className)
+                local obj = originalNew(className)
+                drawnObjects[#drawnObjects + 1] = obj
+                return obj
+            end
+        end)
+    end
+end
+
+local function killRedDrawnOverlays(blacklistLabels)
+    if #drawnObjects == 0 or #blacklistLabels == 0 then return end
+    for _, obj in ipairs(drawnObjects) do
+        pcall(function()
+            if obj.Visible and isRedish(obj.Color) and typeof(obj.Position) == "Vector2" then
+                local size = typeof(obj.Size) == "Vector2" and obj.Size or Vector2.new(0, 0)
+                for _, label in ipairs(blacklistLabels) do
+                    local lp, ls = label.AbsolutePosition, label.AbsoluteSize
+                    if obj.Position.X < lp.X + ls.X and lp.X < obj.Position.X + size.X
+                        and obj.Position.Y < lp.Y + ls.Y and lp.Y < obj.Position.Y + size.Y then
+                        obj.Visible = false
+                        log("Removed red flashing Drawing overlay over the Blacklist text.")
+                    end
+                end
+            end
+        end)
+    end
+end
+
+-- =====================================================================
+--  BLACKLIST MENU PLACEMENT (under your existing blacklist text)
+-- =====================================================================
+local function placeListUnderLabel(label)
+    local row = findRowFor(label)
+    if not row or not row.Parent then return false end
+    local container = row.Parent
+    local list = createBlacklistList(container)
+
+    local hasLayout = false
+    for _, child in ipairs(container:GetChildren()) do
+        if child:IsA("UIListLayout") or child:IsA("UIGridLayout") then hasLayout = true break end
+    end
+
+    if hasLayout then
+        pcall(function() list.LayoutOrder = (row.LayoutOrder or 0) + 1 end)
+    else
+        local offset = Vector2.new(
+            row.AbsolutePosition.X - container.AbsolutePosition.X,
+            row.AbsolutePosition.Y - container.AbsolutePosition.Y + row.AbsoluteSize.Y + 4
+        )
+        if container:IsA("ScrollingFrame") then
+            offset = offset + container.CanvasPosition
+        end
+        list.Position = UDim2.fromOffset(math.max(offset.X, 0), math.max(offset.Y, 0))
+        pcall(function()
+            if container:IsA("ScrollingFrame") and container.CanvasSize.Y > 0 then
+                local needed = offset.Y + 220
+                if container.CanvasSize.Y < needed then
+                    container.CanvasSize = UDim2.new(container.CanvasSize.X.Scale, container.CanvasSize.X.Offset, 0, needed)
+                end
+            end
+        end)
+    end
+    log("Blacklist menu attached underneath your Blacklist text.")
+    return true
+end
+
+-- =====================================================================
+--  THEME COLOR REGISTRATION (for the color clipboard)
+-- =====================================================================
+local function registerThemeColors(lib)
+    if Patch.themeColorsRegistered then return end
+    local kinds = {
+        {"Theme - UI", "UI"}, {"Theme - Toggle", "Toggle"}, {"Theme - Slider", "Slider"},
+        {"Theme - Text", "Text"}, {"Theme - Top Bar", "TopBar"},
+    }
+    for _, pair in ipairs(kinds) do
+        local label, kind = pair[1], pair[2]
+        registerColor(label,
+            function() return lib.Theme and lib.Theme[kind] end,
+            function(color)
+                if lib.SetThemeColor then lib:SetThemeColor(kind, color) end
+            end)
+    end
+    Patch.themeColorsRegistered = true
+    log("Theme colors registered to the color clipboard.")
+end
+
+-- =====================================================================
+--  GUARD LOOP  (rename, kill flash, sync, place, hook swatches)
+-- =====================================================================
+local guardState = {textColors = {}, placedLists = {}, sawRenamed = false, lastRegistryCount = #ColorRegistry}
+
+local function guardTick(cycle)
+    local window = Patch.Window or genv.__DevKageWindow
+    if not window or not window.Root or not window.Root.Parent then return end
+    local root = window.Root
+    local descendants = root:GetDescendants()
+
+    local blacklistLabels = {}
+    local sawRenamedLabel = false
+
+    for _, obj in ipairs(descendants) do
+        if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+            local text = tostring(obj.Text or "")
+            if text ~= "" then
+                local compact = text:lower():gsub("[%s_]+", "")
+                if compact:find("mouselock", 1, true) or compact:find("cursorlock", 1, true) then
+                    if obj.Text ~= "Dev Wall Bang" then obj.Text = "Dev Wall Bang" end
+                    obj:SetAttribute("DevKagePatchRenamed", true)
+                    sawRenamedLabel = true
+                end
+                if compact:find("blacklist", 1, true) and not isPatchOwned(obj) then
+                    blacklistLabels[#blacklistLabels + 1] = obj
+                end
+            end
+        end
+        if obj:IsA("GuiObject") and obj.Visible and not obj:GetAttribute("DevKagePatchSwatchHooked") then
+            if isColorSwatchCandidate(obj) then hookSwatch(obj) end
+        end
+    end
+
+    killRedOverlays(descendants, blacklistLabels)
+
+    -- stabilize flashing red text
+    for _, label in ipairs(blacklistLabels) do
+        if label.Parent then
+            local current = label.TextColor3
+            local last = guardState.textColors[label]
+            if last and typeof(last) == "Color3" and typeof(current) == "Color3" then
+                local delta = math.abs(last.R - current.R) + math.abs(last.G - current.G) + math.abs(last.B - current.B)
+                if delta > 0.10 then label:SetAttribute("DevKagePatchTextStabilized", true) end
+            end
+            guardState.textColors[label] = current
+            if label:GetAttribute("DevKagePatchTextStabilized") then
+                label.TextColor3 = Color3.fromRGB(205, 205, 205)
+            end
+        else
+            guardState.textColors[label] = nil
+        end
+    end
+
+    -- place the blacklist menu under the first foreign blacklist control
+    for _, label in ipairs(blacklistLabels) do
+        if label.Parent and not guardState.placedLists[label] then
+            guardState.placedLists[label] = true
+            task.spawn(function() pcall(placeListUnderLabel, label) end)
+            break
+        end
+    end
+    for label in pairs(guardState.placedLists) do
+        if not label.Parent then guardState.placedLists[label] = nil end
+    end
+
+    if sawRenamedLabel then guardState.sawRenamed = true end
+    if guardState.sawRenamed then tryRebindMouseLock(descendants) end
+
+    suppressBlacklistNotifications(window)
+    syncFromTheirBlacklistControl()
+    syncFromBlacklistTextBox(blacklistLabels)
+    killRedDrawnOverlays(blacklistLabels)
+
+    if Patch.MasterToggle then Patch.MasterToggle:Refresh(Wallbang.Enabled) end
+
+    local lib = findLibrary()
+    if lib then registerThemeColors(lib) end
+
+    if #ColorRegistry ~= guardState.lastRegistryCount then
+        guardState.lastRegistryCount = #ColorRegistry
+        if Patch.RebuildColorTools then Patch.RebuildColorTools() end
+    elseif cycle % 15 == 0 and Patch.RebuildColorTools then
+        Patch.RebuildColorTools() -- keep swatch previews fresh
+    end
+end
+
+-- =====================================================================
+--  BOOT
+-- =====================================================================
+function Patch.Unload()
+    pcall(function() Wallbang:Shutdown() end)
+    for _, connection in ipairs(patchConnections) do
+        pcall(function() connection:Disconnect() end)
+    end
+    table.clear(patchConnections)
+    if Patch.SectionRoot then pcall(function() Patch.SectionRoot:Destroy() end) end
+    closeColorPopup()
+    genv.__DevKagePatchLoaded = nil
+    log("Unloaded.")
+end
+genv.__DevKagePatch = Patch
+
+local function detectWindowFromCoreGui()
+    local coreGui = game:GetService("CoreGui")
+    for _, screenGui in ipairs(coreGui:GetChildren()) do
+        if screenGui:IsA("ScreenGui") and screenGui.IgnoreGuiInset then
+            for _, child in ipairs(screenGui:GetChildren()) do
+                if child:IsA("Frame") and math.abs(child.AbsoluteSize.X - 660) < 40
+                    and math.abs(child.AbsoluteSize.Y - 560) < 60 then
+                    return {Root = screenGui, MainFrame = child, Pages = nil}
+                end
+            end
+        end
+    end
+    return nil
+end
+
+local function waitForWindow(timeout)
+    local deadline = os.clock() + (timeout or 20)
+    while os.clock() < deadline do
+        local window = genv.__DevKageWindow
+        if type(window) == "table" and window.Root and window.Root.Parent then
+            return window
+        end
+        task.wait(0.25)
+    end
+    return detectWindowFromCoreGui()
+end
+
+local function main()
+    local window = waitForWindow(20)
+    if not window then
+        warnLog("DevKage window not found after 20s. Load this AFTER your DevKage script.")
+        return
+    end
+    Patch.Window = window
+    Patch.WindowRoot = window.Root
+    log("DevKage window detected - installing Wall Bang / Blacklist menu / Color tools.")
+
+    local content, source = findKnifeContent(window)
+    if content then
+        log("Knife section target: " .. tostring(source) .. ".")
+        Patch.SectionRoot = buildKnifeSection(content)
+    else
+        Patch.SectionRoot = buildFloatingPanel(window)
+    end
+
+    -- keep the wall-bang target fresh + drive the highlight
+    connect(RunService.Heartbeat, function()
+        if Wallbang.Enabled then
+            Wallbang.Target = Wallbang:FindTarget()
+        end
+        if not highlightEnabled or not Wallbang.Enabled then
+            if currentHighlight then clearHighlight() end
+            return
+        end
+        local char = Wallbang.Target and Wallbang.Target.Character
+        if not char or not char.Parent then
+            clearHighlight()
+            return
+        end
+        if not currentHighlight or currentHighlight.Parent ~= char then
+            clearHighlight()
+            currentHighlight = Instance.new("Highlight")
+            currentHighlight.Name = "DevKagePatchWallbangTarget"
+            currentHighlight.FillTransparency = 0.8
+            currentHighlight.OutlineTransparency = 0
+            currentHighlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            currentHighlight.Parent = char
+        end
+        currentHighlight.FillColor = Wallbang.HighlightColor
+        currentHighlight.OutlineColor = Wallbang.HighlightColor
+    end)
+
+    -- load the Gun/Utility modules in the background, then install the hook
+    task.spawn(function()
+        for _ = 1, 60 do
+            if Wallbang.GunModule then break end
+            if Wallbang:LoadModules() then break end
+            task.wait(2)
+        end
+        if Wallbang.GunModule then
+            Wallbang:InstallHook()
+        else
+            warnLog("Gun module never loaded - Dev Wall Bang will not work on this server/game.")
+        end
+    end)
+
+    task.spawn(function()
+        local cycle = 0
+        while true do
+            task.wait(2)
+            cycle = cycle + 1
+            local ok, err = pcall(guardTick, cycle)
+            if not ok then warnLog("guard error: " .. tostring(err)) end
+        end
+    end)
+end
+
+main()
 
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         -- Return immediately. The executor is free to start the other Auto Execute
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         -- script while DevKage is waiting in its own LateBoot task.
