@@ -1025,12 +1025,6 @@ end
 
 
 function utility:RenderObject(RenderType, RenderProperties, RenderHidden)
-    if (__devkageStartupRenderBudget or 0) > 0 then
-        __devkageStartupRenderCount = __devkageStartupRenderCount + 1
-        if (__devkageStartupRenderCount % __devkageStartupRenderBudget) == 0 then
-            task.wait()
-        end
-    end
     local Render = Instance.new(RenderType)
     if RenderProperties and typeof(RenderProperties) == "table" then
         for Property, Value in pairs(RenderProperties) do
