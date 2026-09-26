@@ -743,6 +743,7 @@ local sections = {}
 -- Yield every N rendered objects only while the initial UI is being assembled.
 local __devkageStartupRenderBudget = __devkageMultiInjectAutoBoot and 36 or 120
 local __devkageStartupRenderCount = 0
+local __devkageUIReady = false
 
 do
     library.__index  = library
@@ -1083,6 +1084,11 @@ function utility:RegisterControl(Content, Properties)
     Content.Flag = Flag
     if Flag ~= nil and tostring(Flag) ~= "" then
         library.Controls[tostring(Flag)] = Content
+    end
+    -- Register for config saving
+    if Flag then
+        library.ConfigRegistry = library.ConfigRegistry or {}
+        library.ConfigRegistry[tostring(Flag)] = Content
     end
     return Content
 end
@@ -5371,6 +5377,17 @@ function UA.save()
     if type(writefile) ~= "function" then return false end
     if not ua_isActiveInstance() then return false end
 
+    -- Sync UI states to config before saving
+    if library and library.ConfigRegistry then
+        local config = getgenv().__DevKageConfig or {}
+        for flag, control in pairs(library.ConfigRegistry) do
+            if type(control.Get) == "function" then
+                config[flag] = control:Get()
+            end
+        end
+        getgenv().__DevKageConfig = config
+    end
+
     local now = os.clock()
     local remaining = 0.18 - (now - (UA.lastSaveAt or 0))
     if UA.saveBusy or remaining > 0 then
@@ -5430,6 +5447,17 @@ function UA.load()
     UA.ImportWeaponLoadout(decoded.weaponLoadout or decoded.equipped)
     UA.ImportFavorites(decoded.weaponFavorites or decoded.favorites)
     UA.ImportEmoteLoadout(decoded.emoteLoadout)
+
+    -- Apply saved config states to UI controls
+    if library and library.ConfigRegistry and type(decoded) == "table" then
+        for flag, state in pairs(decoded) do
+            local control = library.ConfigRegistry[flag]
+            if control and type(control.Set) == "function" then
+                control:Set(state, true)
+            end
+        end
+    end
+
     return true
 end
 
@@ -32795,7 +32823,6 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         return nil
 ]==]
 
--- [2] Lua X extra module -------------------------------------------------------
 local __EXTRA_SOURCE = [==[
 -- ============================================================================
 --  LUA X EXTRA MODULE
