@@ -1,5 +1,5 @@
 -- ============================================================================
---  DEVKAGE + DEV WALLBANG + LUA X (incl. RAGE BOT)  (merged, single loadstring)
+--  DEVKAGE + DEV WALLBANG + RAGE BOT + LUA X  (merged, single loadstring)
 --  DevKage build v5.2.69-autoload-wallbang-luax-20260926.
 -- ============================================================================
 
@@ -36718,7 +36718,12 @@ do
                 end
             end
         end
-        local LUAX_TAB_ICON = "rbxthumb://type=Asset&id=503464057&w=150&h=150"
+        -- the tab rail's UIListLayout has no SortOrder -> sorts by Name; force LayoutOrder
+        if win.TabsHolder then
+            local tl = win.TabsHolder:FindFirstChildOfClass("UIListLayout")
+            if tl then tl.SortOrder = Enum.SortOrder.LayoutOrder end
+        end
+        local LUAX_TAB_ICON = "rbxassetid://503464057"
         local luaxPage = win:CreatePage({ Icon = LUAX_TAB_ICON, Glyph = "X", layoutorder = -1, Size = UDim2.new(0, 36, 0, 36) })
         luaxPage.__luax = true
         local LT = {} -- Lua X toggle registry (used by Load Preset / Kill Every)
