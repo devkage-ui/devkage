@@ -36897,23 +36897,6 @@ do
         end
         local luaxPage = win:CreatePage({ Icon = LUAX_TAB_ICON, Glyph = "X", layoutorder = -1, Size = UDim2.new(0, 36, 0, 36) })
         luaxPage.__luax = true
-        task.delay(2, function()
-            if not win.TabsHolder then return end
-            for _, c in ipairs(win.TabsHolder:GetChildren()) do
-                if c:IsA("Frame") then
-                    local img, glyph
-                    for _, cc in ipairs(c:GetChildren()) do
-                        if cc:IsA("ImageLabel") then img = cc end
-                        if cc:IsA("TextLabel") and tostring(cc.Text) == "X" then glyph = cc end
-                    end
-                    if glyph and (not img or img.IsLoaded == false) then
-                        glyph.Text = "\u{2620}"; glyph.TextColor3 = Color3.fromRGB(255,255,255)
-                        glyph.Visible = true
-                        if img then img.Visible = false end
-                    end
-                end
-            end
-        end)
         local LT = {} -- Lua X toggle registry (used by Load Preset / Kill Every)
 
         -- DevKage's own CreateFolder/AddSection is broken (AddSection would reparent
