@@ -9379,7 +9379,7 @@ end)
 
 local VisualsState = {
 esp_enabled         = false,
-high_quality_esp    = true,
+high_quality_esp    = false,
 teamcheck           = false,
 highlights          = true,
 show_only_highlights= false,
@@ -36701,6 +36701,84 @@ end)
 if not __rbOk then warn("[luax-extra] ragebot module failed: " .. tostring(__rbErr)) end
 pcall(function() local rb = getgenv().__ragebot; if rb and rb.Start then rb.Start() end end)
 
+-- [B4] Non-Drawing ESP (BillboardGui) — OpiumWare has no Drawing, so DevKage's box/name ESP cannot
+--      render. This adds a BillboardGui-based ESP (AlwaysOnTop => shows through walls).
+local __espOk, __espErr = pcall(function()
+    local Players = game:GetService("Players")
+    local RunService = game:GetService("RunService")
+    local LocalPlayer = Players.LocalPlayer
+    local LuaxESP = { Config = { enabled = false, names = true, distance = true, teamCheck = false, maxDistance = 2500 } }
+    local pool = {}
+    local function ensure(player, character)
+        local head = character:FindFirstChild("Head") or character:FindFirstChild("HumanoidRootPart")
+        if not head then return end
+        local bb = pool[player]
+        if not bb or not bb.Parent then
+            bb = Instance.new("BillboardGui")
+            bb.Name = "LuaxESP"
+            bb.Size = UDim2.new(0, 200, 0, 18)
+            bb.StudsOffsetWorldSpace = Vector3.new(0, 2.6, 0)
+            bb.AlwaysOnTop = true
+            bb.LightInfluence = 0
+            bb.Adornee = head
+            bb.MaxDistance = LuaxESP.Config.maxDistance
+            bb.Parent = character
+            local name = Instance.new("TextLabel")
+            name.Name = "NameLabel"
+            name.BackgroundTransparency = 1
+            name.Size = UDim2.new(1, 0, 1, 0)
+            name.Font = Enum.Font.Code
+            name.TextSize = 13
+            name.TextColor3 = Color3.fromRGB(255, 255, 255)
+            name.TextStrokeTransparency = 0
+            name.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+            name.RichText = true
+            name.Parent = bb
+            pool[player] = bb
+        end
+        bb.Adornee = head
+        local name = bb:FindFirstChild("NameLabel")
+        if name then
+            local txt = player.Name
+            if LuaxESP.Config.distance then
+                local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then txt = txt .. "  [" .. math.floor((hrp.Position - head.Position).Magnitude) .. "]" end
+            end
+            name.Text = txt
+            name.Visible = LuaxESP.Config.names
+        end
+        bb.Enabled = true
+    end
+    local function clearAll()
+        for _, bb in pairs(pool) do pcall(function() bb:Destroy() end) end
+        pool = {}
+    end
+    LuaxESP.Update = function()
+        if not LuaxESP.Config.enabled then
+            if next(pool) then clearAll() end
+            return
+        end
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer then
+                local sameTeam = LuaxESP.Config.teamCheck and LocalPlayer.Team ~= nil and p.Team == LocalPlayer.Team
+                local char = p.Character
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                if char and hum and hum.Health > 0 and not sameTeam then
+                    ensure(p, char)
+                elseif pool[p] then
+                    pcall(function() pool[p]:Destroy() end); pool[p] = nil
+                end
+            end
+        end
+    end
+    LuaxESP.Clear = clearAll
+    LuaxESP.SetActive = function(on) LuaxESP.Config.enabled = on; if on then LuaxESP.Update() else clearAll() end end
+    RunService.RenderStepped:Connect(function() pcall(LuaxESP.Update) end)
+    Players.PlayerRemoving:Connect(function(p) if pool[p] then pcall(function() pool[p]:Destroy() end); pool[p] = nil end end)
+    getgenv().__luaxESP = LuaxESP
+end)
+if not __espOk then warn("[luax-extra] luax ESP failed: " .. tostring(__espErr)) end
+
 -- [C] Lua X UI: medium fixed-height scrolling folders on a new 'Lua X' tab -----
 -- [Lua X features -> DevKage UI] (converted from the Obsidian-style panel)
 do
@@ -36762,7 +36840,7 @@ do
                         if cc:IsA("TextLabel") and tostring(cc.Text) == "X" then glyph = cc end
                     end
                     if glyph and (not img or img.IsLoaded == false) then
-                        glyph.Text = "\u{2620}"; glyph.TextColor3 = Color3.fromRGB(200,200,200)
+                        glyph.Text = "\u{2620}"; glyph.TextColor3 = Color3.fromRGB(255,255,255)
                         glyph.Visible = true
                         if img then img.Visible = false end
                     end
@@ -36854,6 +36932,9 @@ do
         WB:CreateSlider({ Name = "Hit Sound Pitch", State = 100, Min = 50, Max = 200, Decimals = 0, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.HitSound then rb.HitSound.pitch = v / 100 end end })
         local __hsStyle = {"Rust HS","Soft Tick","Impact","Swoosh","Switch","Snap"}
         WB:CreateDropdown({ Name = "Hit Sound Style", Options = __hsStyle, State = 1, Callback = function(i) local rb = getgenv().__ragebot; if rb and rb.HitSound then rb.HitSound.style = __hsStyle[i] or "Rust HS" end end })
+        WB:CreateSlider({ Name = "Aimbot FOV", State = 90, Min = 1, Max = 360, Decimals = 0, Callback = function(v) local rb=getgenv().__ragebot; if rb and rb.Aimbot then rb.Aimbot.fov = v end end })
+        WB:CreateToggle({ Name = "Auto Shoot", State = true, Callback = function(v) rbSet("target.autoshoot", v) end })
+        WB:CreateToggle({ Name = "ESP (names, through walls)", State = false, Callback = function(v) local e = getgenv().__luaxESP; if e then e.SetActive(v) end end })
         WB:CreateToggle({ Name = "Visibility Check (off = shoot through walls)", State = true, Callback = function(v)
             local rb = getgenv().__ragebot
             if rb and rb.SilentAim then rb.SilentAim.ignoreWalls = not v end
