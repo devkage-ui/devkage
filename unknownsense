@@ -32798,10 +32798,8 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
 -- [2] Lua X extra module -------------------------------------------------------
 local __EXTRA_SOURCE = [==[
 -- ============================================================================
---  LUA X EXTRA MODULE (feature logic + wallbang + Lua X tab on DevKage)
+--  LUA X EXTRA MODULE
 -- ============================================================================
-
--- (mount guard removed: the UI block de-dupes its own tab before creating it)
 
 -- [A] Lua X feature logic -----------------------------------------------------
 local function Notify(text, duration)
@@ -36855,7 +36853,7 @@ local __icOk, __icErr = pcall(function()
 end)
 if not __icOk then warn("[luax-extra] luax icons failed: " .. tostring(__icErr)) end
 
--- [C] Lua X UI: medium fixed-height scrolling folders on a new 'Lua X' tab -----
+-- [C] Lua X UI ----------------------------------------------------------------
 -- [Lua X features -> DevKage UI] (converted from the Obsidian-style panel)
 do
     task.spawn(function()
@@ -36866,102 +36864,47 @@ do
         if not win then task.wait(1) end
     end
     if win then
-        -- remove any previously-added Lua X tab so only one exists
-        if win.TabsHolder then
-            for _, c in ipairs(win.TabsHolder:GetChildren()) do
-                if c:IsA("Frame") then
-                    local isX = false
-                    for _, g in ipairs(c:GetChildren()) do
-                        if g:IsA("TextLabel") and tostring(g.Text) == "X" then isX = true end
-                    end
-                    if isX then c:Destroy() end
-                end
-            end
-        end
-        if win.Pages then
-            for i = #win.Pages, 1, -1 do
-                local p = win.Pages[i]
-                if type(p) == "table" and p.__luax then
-                    if p["Page"] then p["Page"]:Destroy() end
-                    table.remove(win.Pages, i)
-                end
-            end
-        end
-        -- the tab rail's UIListLayout has no SortOrder -> sorts by Name; force LayoutOrder
-        if win.TabsHolder then
-            local tl = win.TabsHolder:FindFirstChildOfClass("UIListLayout")
-            if tl then tl.SortOrder = Enum.SortOrder.LayoutOrder end
-        end
-        -- Dedsec-style skull tab icon: your PNG loaded via getcustomasset when possible
+        local luaxPage = win:CreatePage({ Icon = LUAX_TAB_ICON, Glyph = "X", Size = UDim2.new(0, 36, 0, 36) })
         local LUAX_TAB_ICON = ""
-        -- Reuse DevKage's own anti-aim tab icon file (it provably renders on this executor via getcustomasset)
         if type(getcustomasset) == "function" then
             local okA, a = pcall(getcustomasset, "devkage_anti_aim_icon.png")
             if okA and type(a) == "string" and a ~= "" then LUAX_TAB_ICON = a end
         end
         if LUAX_TAB_ICON == "" then LUAX_TAB_ICON = "rbxassetid://503464057" end
-                local okA, asset = pcall(getcustomasset, "LuaXIcon.png")
-                if okA and type(asset) == "string" and asset ~= "" then LUAX_TAB_ICON = asset end
-            end)
-        end
-        local luaxPage = win:CreatePage({ Icon = LUAX_TAB_ICON, Glyph = "X", layoutorder = -1, Size = UDim2.new(0, 36, 0, 36) })
-        luaxPage.__luax = true
-        -- Force the real image onto the Lua X tab (no emoji); re-set a few times in case the asset lags
-        task.spawn(function()
-            for _ = 1, 8 do
-                task.wait(0.5)
-                local th = win.TabsHolder
-                if th then
-                    for _, c in ipairs(th:GetChildren()) do
-                        if c:IsA("Frame") then
-                            local img, glyph
-                            for _, cc in ipairs(c:GetChildren()) do
-                                if cc:IsA("ImageLabel") then img = cc end
-                                if cc:IsA("TextLabel") and tostring(cc.Text) == "X" then glyph = cc end
-                            end
-                            if glyph and img and LUAX_TAB_ICON and tostring(LUAX_TAB_ICON) ~= "" then
-                                pcall(function()
-                                    img.Image = LUAX_TAB_ICON
-                                    img.ScaleType = Enum.ScaleType.Fit
-                                    img.Visible = true
-                                    glyph.Visible = false
-                                end)
-                            end
-                        end
-                    end
-                end
-            end
-        end)
         local LT = {} -- Lua X toggle registry (used by Load Preset / Kill Every)
+
+        local WB = luaxPage:CreateSection({ Name = "Wallbang", Side = "Left", Size = 120 })
+        LT["DevWallbang"] = WB:CreateToggle({ Name = "Wallbang (shoot through walls)", State = false, Callback = function(v)
+            local wb = getgenv().__devWallbang
+            if wb then if v then wb.Start() else wb.Stop() end end
+        end })
+        LT["LuaxRageBot"] = WB:CreateToggle({ Name = "Rage Bot", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb then rb.Enable(v) end end })
+        WB:CreateToggle({ Name = "ESP (names, through walls)", State = false, Callback = function(v) local e = getgenv().__luaxESP; if e then e.SetActive(v) end end })
+        WB:CreateToggle({ Name = "Visibility Check (off = shoot through walls)", State = true, Callback = function(v) local rb = getgenv().__ragebot; if rb then if rb.SilentAim then rb.SilentAim.ignoreWalls = not v end if rb.Aimbot then rb.Aimbot.ignoreWalls = not v end end end })
 
         -- DevKage's own CreateFolder/AddSection is broken (AddSection would reparent
         -- the whole column). Build folders and reparent each section's Root ourselves.
-        local luaxFolderRefs = {}
         local luaxFolderRefs = {}
         local function luaxFolder(name, side)
             local col = luaxPage[side]
             local before = {}
             for _, c in ipairs(col:GetChildren()) do before[c] = true end
             local folder = luaxPage:CreateFolder({ Name = name, Side = side })
-            local holder, container, header
+            local holder, container
             for _, c in ipairs(col:GetChildren()) do
                 if not before[c] and c:IsA("Frame") then holder = c; break end
             end
             if holder then
                 for _, c in ipairs(holder:GetChildren()) do
-                    if c:IsA("TextButton") then header = c end
-                    if c:IsA("Frame") and c:FindFirstChildOfClass("UIListLayout") then container = c end
+                    if c:IsA("Frame") and c:FindFirstChildOfClass("UIListLayout") then container = c; break end
                 end
             end
-            luaxFolderRefs[#luaxFolderRefs + 1] = { folder = folder, holder = holder, container = container, header = header }
+            luaxFolderRefs[#luaxFolderRefs + 1] = { folder = folder, holder = holder, container = container }
             return folder, container
         end
         local function luaxSection(folder, container, props)
             local sec = luaxPage:CreateSection(props)
-            if container and sec.Root then
-                sec.Root.Parent = container
-                sec.Root.Position = UDim2.new(0, 0, 0, 0)  -- de-overlap after reparent
-            end
+            if container and sec.Root then sec.Root.Parent = container end
             return sec
         end
         local function luaxWireDeps(section, toggle, seq)
@@ -36980,51 +36923,16 @@ do
                 local total = 0
                 for _, c in ipairs(kids) do if c.Visible then total = total + c.Size.Y.Offset end end
                 if section.Root then section.Root.Size = UDim2.new(1, 0, 0, 28 + total) end
+                local par = section.Root and section.Root.Parent
+                if par and par.Parent and par.Parent:IsA("Frame") then
+                    par.Parent.Size = UDim2.new(1, 0, 0, 20 + par.AbsoluteSize.Y)
+                end
             end
             local orig = toggle.Callback
             toggle.Callback = function(v) if orig then pcall(orig, v) end; apply(v == true) end
             apply(toggle.State == true)
         end
 
-        local WB = luaxPage:CreateSection({ Name = "Wallbang", Side = "Left", Size = 560 })
-        LT["DevWallbang"] = WB:CreateToggle({ Name = "Wallbang (shoot through walls)", State = false, Callback = function(v)
-            local wb = getgenv().__devWallbang
-            if wb then
-                if v then wb.Start() else wb.Stop() end
-            end
-        end })
-        local function rbSet(k, v) local rb = getgenv().__ragebot; if rb then rb.SetSetting(k, v) end end
-        local WBProt = {"Head","HumanoidRootPart","Torso","UpperTorso","Closest","Random"}
-        local WBAimPart = {"Head","HumanoidRootPart","Torso","UpperTorso","LowerTorso"}
-        WB:CreateToggle({ Name = "Rage Bot", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb then rb.Enable(v) end end })
-        WB:CreateToggle({ Name = "Auto Shoot", State = true, Callback = function(v) rbSet("target.autoshoot", v) end })
-        WB:CreateToggle({ Name = "Auto Target", State = false, Callback = function(v) rbSet("target.auto", v) end })
-        WB:CreateDropdown({ Name = "Target Hit Part", Options = WBProt, State = 1, Callback = function(i) rbSet("target.hitpart", WBProt[i] or "Head") end })
-        WB:CreateSlider({ Name = "Shoot Attempts", State = 1, Min = 1, Max = 3, Decimals = 0, Callback = function(v) rbSet("target.shootAttempts", v) end })
-        WB:CreateToggle({ Name = "Silent Aim", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb then rb.EnableSilentAim(v) end end })
-        WB:CreateSlider({ Name = "Silent Hit Chance", State = 100, Min = 0, Max = 100, Decimals = 0, Callback = function(v) rbSet("silent.hitChance", v) end })
-        WB:CreateSlider({ Name = "Silent FOV Radius", State = 100, Min = 10, Max = 750, Decimals = 0, Callback = function(v) rbSet("silent.fovRadius", v) end })
-        WB:CreateDropdown({ Name = "Silent Hit Part", Options = WBProt, State = 1, Callback = function(i) rbSet("silent.hitPart", WBProt[i] or "Head") end })
-        WB:CreateToggle({ Name = "Show Silent FOV", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb then rb.ShowSilentFOV(v) end end })
-        WB:CreateToggle({ Name = "Aimbot", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb then rb.EnableAimbot(v) end end })
-        WB:CreateSlider({ Name = "Aimbot Smoothness", State = 2, Min = 0.1, Max = 10, Decimals = 2, Callback = function(v) rbSet("aimbot.smoothness", v) end })
-        WB:CreateDropdown({ Name = "Aimbot Hit Part", Options = WBAimPart, State = 1, Callback = function(i) rbSet("aimbot.targetPart", WBAimPart[i] or "Head") end })
-        WB:CreateToggle({ Name = "Show Aimbot FOV", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb then rb.ShowAimbotFOV(v) end end })
-        WB:CreateToggle({ Name = "Prediction", State = false, Callback = function(v) rbSet("prediction.enabled", v) end })
-        WB:CreateSlider({ Name = "Prediction Mult", State = 1.2, Min = 0.1, Max = 3, Decimals = 2, Callback = function(v) rbSet("prediction.multiplier", v) end })
-        WB:CreateToggle({ Name = "Hit Sound", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.HitSound then rb.HitSound.enabled = v end end })
-        WB:CreateSlider({ Name = "Hit Sound Volume", State = 50, Min = 1, Max = 100, Decimals = 0, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.HitSound then rb.HitSound.volume = v / 100 end end })
-        WB:CreateSlider({ Name = "Hit Sound Pitch", State = 100, Min = 50, Max = 200, Decimals = 0, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.HitSound then rb.HitSound.pitch = v / 100 end end })
-        local __hsStyle = {"Rust HS","Soft Tick","Impact","Swoosh","Switch","Snap"}
-        WB:CreateDropdown({ Name = "Hit Sound Style", Options = __hsStyle, State = 1, Callback = function(i) local rb = getgenv().__ragebot; if rb and rb.HitSound then rb.HitSound.style = __hsStyle[i] or "Rust HS" end end })
-        WB:CreateSlider({ Name = "Aimbot FOV", State = 90, Min = 1, Max = 360, Decimals = 0, Callback = function(v) local rb=getgenv().__ragebot; if rb and rb.Aimbot then rb.Aimbot.fov = v end end })
-        WB:CreateToggle({ Name = "Auto Shoot", State = true, Callback = function(v) rbSet("target.autoshoot", v) end })
-        WB:CreateToggle({ Name = "ESP (names, through walls)", State = false, Callback = function(v) local e = getgenv().__luaxESP; if e then e.SetActive(v) end end })
-        WB:CreateToggle({ Name = "Visibility Check (off = shoot through walls)", State = true, Callback = function(v)
-            local rb = getgenv().__ragebot
-            if rb and rb.SilentAim then rb.SilentAim.ignoreWalls = not v end
-            if rb and rb.Aimbot then rb.Aimbot.ignoreWalls = not v end
-        end })
         local lf_Void, lc_Void = luaxFolder("Void", "Left")
         local VG = luaxSection(lf_Void, lc_Void, { Name = "Void Control", Side = "Left", Size = 329 })
         LT["VoidToggle"] = VG:CreateToggle({ Name = "Enable Void", State = false, Callback = function(v) CFG.VOID_ENABLED = v; if v then startVoid() else stopVoid() end end })
@@ -37120,8 +37028,9 @@ do
         VK:CreateSlider({ Name = "Hitbox Size", State = 500, Min = 10, Max = 5000, Decimals = 0, Callback = function(v) CFG.VOID_KILLER_HITBOX_SIZE = v end })
         VK:CreateSlider({ Name = "Detection Range", State = 1e15, Min = 100, Max = 1e15, Decimals = 0, Callback = function(v) CFG.VOID_KILLER_RANGE = v end })
         VK:CreateSlider({ Name = "Aim Strength", State = 1, Min = 0.1, Max = 3, Decimals = 1, Callback = function(v) CFG.VOID_KILLER_AIM_STRENGTH = v end })
-        luaxWireDeps(VK, LT["VoidKillerToggle"], "t,t,t,t,t,t,t,t,t,s,s,s")
+
         local lf_Orbit, lc_Orbit = luaxFolder("Orbit", "Right")
+        luaxWireDeps(VK, LT["VoidKillerToggle"], "t,t,t,t,t,t,t,t,t,s,s,s")
         local OG = luaxSection(lf_Orbit, lc_Orbit, { Name = "Orbit", Side = "Left", Size = 463 })
         LT["OrbitToggle"] = OG:CreateToggle({ Name = "Enable Orbit", State = false, Callback = function(v) cfg.orbitEnabled = v; if v then startOrbit() else stopOrbit() end end })
         local OrbitModeOpts = {"Circle","Figure 8","Ellipse","Spiral In","Spiral Out","Bounce","Lemniscate","Infinity","RandomOrbit"}
@@ -37186,6 +37095,7 @@ do
         LT["OrbitInfiniteRange"] = OG2:CreateToggle({ Name = "Infinite Range", State = true, Callback = function(v) cfg.orbitInfiniteRange = v end })
         LT["OrbitExpandedHitbox"] = OG2:CreateToggle({ Name = "Expanded Hitbox", State = true, Callback = function(v) cfg.orbitExpandedHitbox = v end })
         OG2:CreateSlider({ Name = "Hitbox Size", State = 500, Min = 10, Max = 5000, Decimals = 0, Callback = function(v) cfg.orbitHitboxSize = v end })
+
         local lf_Prediction, lc_Prediction = luaxFolder("Prediction", "Left")
         local PG = luaxSection(lf_Prediction, lc_Prediction, { Name = "Prediction V2", Side = "Left", Size = 1194 })
         LT["PredToggle"] = PG:CreateToggle({ Name = "Enable Prediction V2", State = false, Callback = function(v) cfgDodge.predEnabled = v; if v then startPredictionV2() else stopPredictionV2() end end })
@@ -37281,8 +37191,9 @@ do
         PG2:CreateSlider({ Name = "Flicker Window (x0.1s)", State = 3, Min = 1, Max = 20, Decimals = 0, Callback = function(v) antiBaitCFG.flickerWindow = v * 0.1 end })
         PG2:CreateSlider({ Name = "TP Delta (studs)", State = 10, Min = 5, Max = 100, Decimals = 0, Callback = function(v) antiBaitCFG.flickerTpDist = v end })
         PG2:CreateSlider({ Name = "Rescan Interval (s)", State = 2, Min = 1, Max = 60, Decimals = 0, Callback = function(v) antiBaitCFG.reScanInterval = v end })
-        luaxWireDeps(PG2, LT["AntiBaitToggle"], "t,d,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,s,s,t,s,t,t,t,s,t,s,t,t,t,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s")
+
         local lf_Defense, lc_Defense = luaxFolder("Defense", "Right")
+        luaxWireDeps(PG2, LT["AntiBaitToggle"], "t,d,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,s,s,t,s,t,t,t,s,t,s,t,t,t,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s")
         local AG = luaxSection(lf_Defense, lc_Defense, { Name = "Anti-Aim", Side = "Left", Size = 813 })
         LT["AaToggle"] = AG:CreateToggle({ Name = "Enable Anti-Aim", State = false, Callback = function(v) aaSettings.enabled = v; if v then startAntiAim() else stopAntiAim() end end })
         local AaModeOpts = {"Spin","Jitter","Static","Up","Down","Side","RandomSpin","Custom"}
@@ -37494,6 +37405,7 @@ do
         LT["VDAutoShoot"] = AG8:CreateToggle({ Name = "Auto Shoot", State = true, Callback = function(v) velDesyncCFG.vdAutoShoot = v end })
         AG8:CreateSlider({ Name = "Auto Shoot Range", State = 1e15, Min = 1, Max = 1e15, Decimals = 0, Callback = function(v) velDesyncCFG.vdAutoShootRange = v end })
         LT["VDInfiniteRange"] = AG8:CreateToggle({ Name = "Infinite Range", State = true, Callback = function(v) velDesyncCFG.vdInfiniteRange = v end })
+
         local lf_Translocation, lc_Translocation = luaxFolder("Translocation", "Left")
         local TL = luaxSection(lf_Translocation, lc_Translocation, { Name = "Translocation", Side = "Left", Size = 413 })
         LT["TranslocToggle"] = TL:CreateToggle({ Name = "Enable Translocation", State = false, Callback = function(v) translocCFG.enabled = v; if v then startTransloc() else stopTransloc() end end })
@@ -37569,6 +37481,7 @@ do
         LT["TranslocAutoShoot"] = TL2:CreateToggle({ Name = "Auto Shoot", State = true, Callback = function(v) translocCFG.translocAutoShoot = v end })
         TL2:CreateSlider({ Name = "Auto Shoot Range", State = 1e15, Min = 1, Max = 1e15, Decimals = 0, Callback = function(v) translocCFG.translocAutoShootRange = v end })
         LT["TranslocInfiniteRange"] = TL2:CreateToggle({ Name = "Infinite Range", State = true, Callback = function(v) translocCFG.translocInfiniteRange = v end })
+
         local lf_Sling, lc_Sling = luaxFolder("Sling", "Right")
         local SBL = luaxSection(lf_Sling, lc_Sling, { Name = "Sling Bypass V2", Side = "Left", Size = 1731 })
         LT["SlingToggle"] = SBL:CreateToggle({ Name = "Enable Sling Bypass V2", State = false, Callback = function(v) slingCFG.enabled = v; if v then startSlingBypassV2() else stopSlingBypassV2() end end })
@@ -37664,6 +37577,7 @@ do
         LT["SlingStickToTarget"] = SBR:CreateToggle({ Name = "Stick to Target", State = true, Callback = function(v) slingCFG.slingStickToTarget = v end })
         SBR:CreateSlider({ Name = "Stick Offset", State = 2, Min = 0, Max = 20, Decimals = 1, Callback = function(v) slingCFG.slingStickOffset = v end })
         LT["SlingInfiniteRange"] = SBR:CreateToggle({ Name = "Infinite Range", State = true, Callback = function(v) slingCFG.slingInfiniteRange = v end })
+
         local lf_Riot, lc_Riot = luaxFolder("Riot", "Left")
         local RG = luaxSection(lf_Riot, lc_Riot, { Name = "Riot Godmode", Side = "Left", Size = 1121 })
         LT["RiotGodmodeToggle"] = RG:CreateToggle({ Name = "Enable Riot Godmode", State = false, Callback = function(v) riotGodmodeCFG.enabled = v; if v then startRiotGodmode() else stopRiotGodmode() end end })
@@ -37749,49 +37663,10 @@ do
         LT["RAAutoAim"] = RA:CreateToggle({ Name = "Auto Aim at Target", State = true, Callback = function(v) riotAbuserCFG.raAutoAim = v end })
         RA:CreateSlider({ Name = "Aim Strength", State = 1, Min = 0.1, Max = 3, Decimals = 1, Callback = function(v) riotAbuserCFG.raAimStrength = v end })
         LT["RAInfiniteRange"] = RA:CreateToggle({ Name = "Infinite Range", State = true, Callback = function(v) riotAbuserCFG.raInfiniteRange = v end })
-        luaxWireDeps(RA, LT["RiotAbuserToggle"], "t,d,s,s,s,s,s,s,s,s,s,s,s,s,s,s,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,s,s,t,s,t,s,t")
+
         local lf_Menu, lc_Menu = luaxFolder("Menu", "Right")
+        luaxWireDeps(RA, LT["RiotAbuserToggle"], "t,d,s,s,s,s,s,s,s,s,s,s,s,s,s,s,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,s,s,t,s,t,s,t")
         local MenuG = luaxSection(lf_Menu, lc_Menu, { Name = "Menu", Side = "Left", Size = 130 })
-        local function luaxApplyPreset(map, togglesOn)
-            for k, v in pairs(map or {}) do
-                local grp, field = k:match("^([^%.]+)%.(.+)$")
-                if grp and field then
-                    local t = ({ CFG=CFG, cfg=cfg, cfgDodge=cfgDodge, antiBaitCFG=antiBaitCFG, rangeExtCFG=rangeExtCFG,
-                        translocCFG=translocCFG, antiTranslocCFG=antiTranslocCFG, velDesyncCFG=velDesyncCFG,
-                        riotGodmodeCFG=riotGodmodeCFG, riotAbuserCFG=riotAbuserCFG, slingCFG=slingCFG, aaSettings=aaSettings })[grp]
-                    if type(t) == "table" then t[field] = v end
-                end
-            end
-            for _, name in ipairs(togglesOn or {}) do
-                if LT[name] then pcall(function() LT[name]:Set(true) end) end
-            end
-            Notify("Preset applied", 3)
-        end
-        local function luaxPresetHVH()
-            luaxApplyPreset({ ["aaSettings.enabled"]=true, ["antiBaitCFG.enabled"]=true, ["velDesyncCFG.enabled"]=true,
-                ["antiTranslocCFG.enabled"]=true, ["rangeExtCFG.enabled"]=true, ["cfgDodge.predEnabled"]=true,
-                ["CFG.VOID_ENABLED"]=false, ["slingCFG.enabled"]=false },
-                {"AaToggle","AntiBaitToggle","VelDesyncToggle","AntiTranslocToggle","RangeExtToggle","PredToggle"})
-        end
-        local function luaxPresetRage()
-            luaxApplyPreset({ ["CFG.VOID_ENABLED"]=true, ["CFG.VOID_METHOD"]="Quantum", ["CFG.VOID_KILLER_ENABLED"]=true,
-                ["slingCFG.enabled"]=true, ["riotAbuserCFG.enabled"]=true, ["rangeExtCFG.enabled"]=true,
-                ["velDesyncCFG.enabled"]=true, ["cfgDodge.predEnabled"]=true },
-                {"VoidToggle","SlingToggle","RiotAbuserToggle","RangeExtToggle","VelDesyncToggle","PredToggle","VoidKillerToggle"})
-        end
-        local function luaxPresetLegit()
-            luaxApplyPreset({ ["CFG.VOID_ENABLED"]=false, ["slingCFG.enabled"]=false, ["riotAbuserCFG.enabled"]=false,
-                ["riotGodmodeCFG.enabled"]=false, ["antiBaitCFG.enabled"]=true, ["aoSettings"]=nil },
-                {"AntiBaitToggle"})
-        end
-        local function luaxPresetMovement()
-            luaxApplyPreset({ ["translocCFG.enabled"]=true, ["velDesyncCFG.enabled"]=true, ["rangeExtCFG.enabled"]=true },
-                {"TranslocToggle","VelDesyncToggle","RangeExtToggle"})
-        end
-        MenuG:CreateButton({ Name = "Preset: HVH (hacker vs hacker)", Callback = luaxPresetHVH })
-        MenuG:CreateButton({ Name = "Preset: Rage", Callback = luaxPresetRage })
-        MenuG:CreateButton({ Name = "Preset: Legit", Callback = luaxPresetLegit })
-        MenuG:CreateButton({ Name = "Preset: Movement", Callback = luaxPresetMovement })
         MenuG:CreateButton({ Name = "Load Preset", Callback = function()
         CFG.VOID_ENABLED = true; CFG.VOID_METHOD = "Quantum"; CFG.VOID_KILLER_ENABLED = true
         cfgDodge.predEnabled = true; antiBaitCFG.enabled = true
@@ -37850,11 +37725,7 @@ do
                     f.container.Visible = false
                     f.holder.Size = UDim2.new(1, 0, 0, 20)
                     if f.folder then pcall(function() f.folder.Open = false end) end
-                    if f.header then
-                        for _, c in ipairs(f.header:GetChildren()) do
-                            if c:IsA("ImageLabel") then c.Rotation = 180 end
-                        end
-                    end
+                    if f.header then for _, c in ipairs(f.header:GetChildren()) do if c:IsA("ImageLabel") then c.Rotation = 180 end end end
                 end
             end
         end)
