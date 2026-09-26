@@ -35830,6 +35830,14 @@ local function shouldHitTarget()
     return math.random(1, 100) <= silentAim.hitChance
 end
 
+-- Targeting visibility mode: "visible" | "hidden" | "both" (host UI sets it)
+local function luaxVisMode()
+    local m = silentAim.visibility or aimbot.visibility
+    if type(m) == "string" and m ~= "" then return m end
+    if silentAim.ignoreWalls or aimbot.ignoreWalls then return "both" end
+    return "visible"
+end
+
 local function closestinfov(radius, center)
     local closest, closestDist = nil, math.huge
     local cam = Camera
@@ -35841,10 +35849,13 @@ local function closestinfov(radius, center)
                 if hum and hum.Health > 0 and not char:FindFirstChildOfClass("ForceField") then
                     local root = char:FindFirstChild("HumanoidRootPart")
                     if root then
-                        local pos, onScreen = worldToScreen(root.Position, cam)
-                        if (silentAim.ignoreWalls or aimbot.ignoreWalls) and not onScreen then
+                        local pos, __ok = worldToScreen(root.Position, cam)
+                        local __vis = luaxVisMode()
+                        local onScreen = __ok
+                        if __vis ~= "visible" and not onScreen then
                             pos = Vector2.new(center.X, center.Y); onScreen = true
                         end
+                        if __vis == "hidden" and __ok then onScreen = false end
                         if onScreen then
                             local dx = pos.X - center.X
                             local dy = pos.Y - center.Y
@@ -36343,7 +36354,7 @@ local function checkForHit()
                     params.FilterDescendantsInstances = {myChar, char}
                     params.FilterType = Enum.RaycastFilterType.Exclude
                     local visible = true
-                    if not (silentAim.ignoreWalls or aimbot.ignoreWalls) then
+                    if luaxVisMode() == "visible" then
                         local res = workspace:Raycast(myChar.HumanoidRootPart.Position, dir*dist, params)
                         if res then
                             local hp = res.Instance.Parent
@@ -36877,28 +36888,6 @@ do
         WB:CreateToggle({ Name = "Silent Aim", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb then if rb.EnableSilentAim then rb.EnableSilentAim(v) else if rb.SilentAim then rb.SilentAim.enabled = v end end end end })
         WB:CreateToggle({ Name = "Aimbot", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb then if rb.EnableAimbot then rb.EnableAimbot(v) else if rb.Aimbot then rb.Aimbot.enabled = v end end end end })
         WB:CreateToggle({ Name = "Auto Shoot", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb then if rb.SetSetting then rb.SetSetting("silent.autoShoot", v) end if rb.SilentAim then rb.SilentAim.autoShoot = v end end end })
-        do
-            local __sf, __sc = luaxFolder("Silent Aim", "Left")
-            local SA = luaxSection(__sf, __sc, { Name = "Silent Aim Settings", Side = "Left", Size = 250 })
-            LT["LuaxSilent"] = SA:CreateToggle({ Name = "Silent Aim", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb then if rb.EnableSilentAim then rb.EnableSilentAim(v) elseif rb.SilentAim then rb.SilentAim.enabled = v end end end })
-            SA:CreateSlider({ Name = "Hit Chance", State = 100, Min = 0, Max = 100, Decimals = 0, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("silent.hitChance", v) end end })
-            SA:CreateDropdown({ Name = "Silent Hit Part", Options = { "Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso", "Closest", "Random" }, State = 1, Callback = function(i) local rb = getgenv().__ragebot; local o = { "Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso", "Closest", "Random" }; if rb and rb.SetSetting then rb.SetSetting("silent.hitPart", o[i]) end end })
-            SA:CreateSlider({ Name = "Silent FOV Radius", State = 100, Min = 10, Max = 750, Decimals = 0, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("silent.fovRadius", v) end end })
-            SA:CreateToggle({ Name = "Follow Muzzle", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("silent.followMuzzle", v) end end })
-            SA:CreateToggle({ Name = "Auto Shoot", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb then if rb.SetSetting then rb.SetSetting("silent.autoShoot", v) end if rb.SilentAim then rb.SilentAim.autoShoot = v end end end })
-            SA:CreateToggle({ Name = "Show Silent FOV", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.ShowSilentFOV then rb.ShowSilentFOV(v) end end })
-        end
-        do
-            local __af, __ac = luaxFolder("Aimbot", "Left")
-            local AB = luaxSection(__af, __ac, { Name = "Aimbot Settings", Side = "Left", Size = 250 })
-            LT["LuaxAimbot"] = AB:CreateToggle({ Name = "Aimbot", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb then if rb.EnableAimbot then rb.EnableAimbot(v) elseif rb.Aimbot then rb.Aimbot.enabled = v end end end })
-            AB:CreateSlider({ Name = "Aimbot Smoothness", State = 2, Min = 0.1, Max = 10, Decimals = 1, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("aimbot.smoothness", v) end end })
-            AB:CreateDropdown({ Name = "Aim Curve", Options = { "Linear", "Expo", "EaseIn", "EaseOut", "EaseInOut", "Cubic", "Instant" }, State = 1, Callback = function(i) local rb = getgenv().__ragebot; local o = { "Linear", "Expo", "EaseIn", "EaseOut", "EaseInOut", "Cubic", "Instant" }; if rb and rb.SetSetting then rb.SetSetting("aimbot.aimCurve", o[i]) end end })
-            AB:CreateDropdown({ Name = "Aimbot Hit Part", Options = { "Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso" }, State = 1, Callback = function(i) local rb = getgenv().__ragebot; local o = { "Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso" }; if rb and rb.SetSetting then rb.SetSetting("aimbot.targetPart", o[i]) end end })
-            AB:CreateSlider({ Name = "Aimbot FOV Radius", State = 500, Min = 10, Max = 1000, Decimals = 0, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("aimbot.fovRadius", v) end end })
-            AB:CreateToggle({ Name = "Follow Muzzle", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("aimbot.followMuzzle", v) end end })
-            AB:CreateToggle({ Name = "Show Aimbot FOV", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.ShowAimbotFOV then rb.ShowAimbotFOV(v) end end })
-        end
         WB:CreateToggle({ Name = "ESP (names, through walls)", State = false, Callback = function(v) local e = getgenv().__luaxESP; if e then e.SetActive(v) end end })
         WB:CreateToggle({ Name = "Visibility Check (off = shoot through walls)", State = true, Callback = function(v) local rb = getgenv().__ragebot; if rb then if rb.SilentAim then rb.SilentAim.ignoreWalls = not v end if rb.Aimbot then rb.Aimbot.ignoreWalls = not v end end end })
 
@@ -36953,6 +36942,34 @@ do
             apply(toggle.State == true)
         end
 
+        do
+            local __sf, __sc = luaxFolder("Silent Aim", "Left")
+            local SA = luaxSection(__sf, __sc, { Name = "Silent Aim Settings", Side = "Left", Size = 340 })
+            LT["LuaxSilent"] = SA:CreateToggle({ Name = "Silent Aim", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb then if rb.EnableSilentAim then rb.EnableSilentAim(v) elseif rb.SilentAim then rb.SilentAim.enabled = v end end end })
+            SA:CreateSlider({ Name = "Hit Chance", State = 100, Min = 0, Max = 100, Decimals = 0, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("silent.hitChance", v) end end })
+            SA:CreateSlider({ Name = "Silent FOV Radius", State = 100, Min = 10, Max = 750, Decimals = 0, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("silent.fovRadius", v) end end })
+            SA:CreateDropdown({ Name = "Silent Hit Part", Options = { "Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso", "Closest", "Random" }, State = 1, Callback = function(i) local rb = getgenv().__ragebot; local o = { "Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso", "Closest", "Random" }; if rb and rb.SetSetting then rb.SetSetting("silent.hitPart", o[i]) end end })
+            SA:CreateDropdown({ Name = "Targeting", Options = { "Visible", "Not Visible", "Both" }, State = 1, Callback = function(i) local rb = getgenv().__ragebot; local m = ({ "Visible", "Not Visible", "Both" })[i] or "Visible"; local mm = (m == "Both") and "both" or ((m == "Not Visible") and "hidden" or "visible"); if rb then if rb.SetSetting then rb.SetSetting("silent.visibility", mm) end if rb.SilentAim then rb.SilentAim.visibility = mm; rb.SilentAim.ignoreWalls = (mm ~= "visible") end end end })
+            SA:CreateToggle({ Name = "Follow Muzzle", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("silent.followMuzzle", v) end end })
+            SA:CreateToggle({ Name = "Auto Shoot", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb then if rb.SetSetting then rb.SetSetting("silent.autoShoot", v) end if rb.SilentAim then rb.SilentAim.autoShoot = v end end end })
+            SA:CreateSlider({ Name = "Silent FOV Thickness", State = 2, Min = 1, Max = 8, Decimals = 0, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("silentFOV.OutlineThickness", v) end end })
+            SA:CreateToggle({ Name = "Silent FOV Filled", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("silentFOV.FilledEnabled", v) end end })
+            SA:CreateToggle({ Name = "Show Silent FOV", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.ShowSilentFOV then rb.ShowSilentFOV(v) end end })
+        end
+        do
+            local __af, __ac = luaxFolder("Aimbot", "Left")
+            local AB = luaxSection(__af, __ac, { Name = "Aimbot Settings", Side = "Left", Size = 360 })
+            LT["LuaxAimbot"] = AB:CreateToggle({ Name = "Aimbot", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb then if rb.EnableAimbot then rb.EnableAimbot(v) elseif rb.Aimbot then rb.Aimbot.enabled = v end end end })
+            AB:CreateSlider({ Name = "Aimbot Sensitivity", State = 2, Min = 0.1, Max = 10, Decimals = 1, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("aimbot.smoothness", v) end end })
+            AB:CreateSlider({ Name = "Aimbot FOV Radius", State = 500, Min = 10, Max = 1000, Decimals = 0, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("aimbot.fovRadius", v) end end })
+            AB:CreateDropdown({ Name = "Aim Curve", Options = { "Linear", "Expo", "EaseIn", "EaseOut", "EaseInOut", "Cubic", "Instant" }, State = 1, Callback = function(i) local rb = getgenv().__ragebot; local o = { "Linear", "Expo", "EaseIn", "EaseOut", "EaseInOut", "Cubic", "Instant" }; if rb and rb.SetSetting then rb.SetSetting("aimbot.aimCurve", o[i]) end end })
+            AB:CreateDropdown({ Name = "Aimbot Hit Part", Options = { "Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso" }, State = 1, Callback = function(i) local rb = getgenv().__ragebot; local o = { "Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso" }; if rb and rb.SetSetting then rb.SetSetting("aimbot.targetPart", o[i]) end end })
+            AB:CreateDropdown({ Name = "Targeting", Options = { "Visible", "Not Visible", "Both" }, State = 1, Callback = function(i) local rb = getgenv().__ragebot; local m = ({ "Visible", "Not Visible", "Both" })[i] or "Visible"; local mm = (m == "Both") and "both" or ((m == "Not Visible") and "hidden" or "visible"); if rb then if rb.SetSetting then rb.SetSetting("aimbot.visibility", mm) end if rb.Aimbot then rb.Aimbot.visibility = mm; rb.Aimbot.ignoreWalls = (mm ~= "visible") end end end })
+            AB:CreateToggle({ Name = "Follow Muzzle", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("aimbot.followMuzzle", v) end end })
+            AB:CreateSlider({ Name = "Aimbot FOV Thickness", State = 2, Min = 1, Max = 8, Decimals = 0, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("aimbotFOV.OutlineThickness", v) end end })
+            AB:CreateToggle({ Name = "Aimbot FOV Filled", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("aimbotFOV.FilledEnabled", v) end end })
+            AB:CreateToggle({ Name = "Show Aimbot FOV", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.ShowAimbotFOV then rb.ShowAimbotFOV(v) end end })
+        end
         local lf_Void, lc_Void = luaxFolder("Void", "Left")
         local VG = luaxSection(lf_Void, lc_Void, { Name = "Void Control", Side = "Left", Size = 329 })
         LT["VoidToggle"] = VG:CreateToggle({ Name = "Enable Void", State = false, Callback = function(v) CFG.VOID_ENABLED = v; if v then startVoid() else stopVoid() end end })
