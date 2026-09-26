@@ -32630,44 +32630,16 @@ print("[DevKage] Mask Shard guardian active (safe compatibility mode).")
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           end
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         end)
 --=======================================================================
---  DEVKAGE NATIVE PATCH v4
---  Lua X features -> Client Side tab (cloned native controls)
---  Dev Wall Bang settings -> Knife tab, above Cursor Lock
---  + Hit Chance %, Target Part, silent blacklist, color clipboard
---  Console lines: [DK-Native]
+--  DEVKAGE KNIFE-TAB ADDON (all-in-one)
+--  - Dev Wall Bang settings -> Knife tab, above Cursor Lock
+--  - All Lua X features -> bottom of the Knife tab
+--  - Silent blacklist menu + color clipboard + red overlay removal
+--  Console lines: [DK-Knife]
 --=======================================================================
 
 local genv = (type(getgenv) == "function" and getgenv()) or _G
-
--- ---------- cleanup of every previous patch ----------
-do
-    if genv.__DevKageLuaXPanel then pcall(function() genv.__DevKageLuaXPanel:Shutdown() end) end
-    if genv.__DevKageWallbangPanel then pcall(function() genv.__DevKageWallbangPanel:Shutdown() end) end
-    if genv.__DevKagePatch and genv.__DevKagePatch.Unload then pcall(function() genv.__DevKagePatch:Unload() end) end
-    pcall(function()
-        local CG = game:GetService("CoreGui")
-        for _, sg in ipairs(CG:GetChildren()) do
-            if sg:IsA("ScreenGui") then
-                if sg.Name == "LuaX_Panel" or sg.Name == "DevKage_WallbangPanel" or sg.Name == "LuaX_HUD" then
-                    sg:Destroy()
-                else
-                    for _, d in ipairs(sg:GetDescendants()) do
-                        if d.Name == "LuaX_Tab"
-                            or d:GetAttribute("DevKagePatchOwn")
-                            or d:GetAttribute("DevKagePatchListRoot") then
-                            pcall(function() d:Destroy() end)
-                        end
-                    end
-                end
-            end
-        end
-    end)
-    for _, n in ipairs({"__DevKagePatchLoaded", "__DevKageLuaXTabV2", "__DevKageLuaXTabBeat", "__LuaXRefreshColorRows"}) do
-        genv[n] = nil
-    end
-    pcall(function() game:GetService("RunService"):UnbindFromRenderStep("LuaXRestore") end)
-    pcall(function() game:GetService("RunService"):UnbindFromRenderStep("DevKageWallbangRestore") end)
-    pcall(function() game:GetService("RunService"):UnbindFromRenderStep("LuaXWallbangRestore") end)
+if genv.__DevKageKnifeAddon then
+    pcall(function() genv.__DevKageKnifeAddon:Unload() end)
 end
 
 local Players    = game:GetService("Players")
@@ -32678,8 +32650,8 @@ local CG         = game:GetService("CoreGui")
 local LP         = Players.LocalPlayer
 local Camera     = workspace.CurrentCamera
 
-local function LOG(m) print("[DK-Native] " .. tostring(m)) end
-local function WARN(m) warn("[DK-Native] " .. tostring(m)) end
+local function LOG(m) print("[DK-Knife] " .. tostring(m)) end
+local function WARN(m) warn("[DK-Knife] " .. tostring(m)) end
 
 local conns = {}
 local function conn(s, f) local c = s:Connect(f) conns[#conns + 1] = c return c end
@@ -32723,7 +32695,7 @@ function Blacklist:Add(p)
     self.Entries[uid] = {Name = name, UserId = uid}
     self.Order[#self.Order + 1] = uid
     self:Changed()
-    return true
+    return true -- silent
 end
 function Blacklist:Remove(uid)
     if not self.Entries[uid] then return false end
@@ -32832,10 +32804,8 @@ function Wallbang:InstallHook()
         if not self.Enabled or not gs.ClientFighter or not gs.ClientFighter.IsLocalPlayer then return unpack(res) end
         local bd = res[3]
         if not bd or typeof(bd) ~= "table" then return unpack(res) end
-        -- hit chance roll: on a "miss" the bullet just fires normally
-        if self.HitChance < 100 and math.random(1, 100) > self.HitChance then
-            return unpack(res)
-        end
+        -- hit chance roll: on a miss the bullet fires normally
+        if self.HitChance < 100 and math.random(1, 100) > self.HitChance then return unpack(res) end
         res[4] = true
         local t = self.Target or self:FindTarget()
         self.Target = t
@@ -33595,7 +33565,7 @@ local function stepAll(dt)
             if not curHighlight or curHighlight.Parent ~= ch then
                 if curHighlight then pcall(function() curHighlight:Destroy() end) end
                 curHighlight = Instance.new("Highlight")
-                curHighlight.Name = "LuaXWallbangTarget"
+                curHighlight.Name = "DKWallbangTarget"
                 curHighlight.FillTransparency = 0.8
                 curHighlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
                 curHighlight.Parent = ch
@@ -33664,7 +33634,7 @@ end
 --======================= NATIVE UI LAYER ==============================
 local lib, win, winRoot
 local toggleTemplate, sliderTemplate
-local trackPath, tLabelPath, tClickPath
+local tLabelPath, tClickPath, trackPath
 local fillPath, sLabelPath, sValPath
 local masterRow, masterTrack
 
@@ -33723,29 +33693,26 @@ end
 local function isPatchOwned(obj)
     local cur = obj
     while cur and cur ~= game do
-        if cur:GetAttribute("LuaXPatchRow") or cur:GetAttribute("DevKagePatchOwn") or cur:GetAttribute("DevKagePatchListRoot") then
+        if cur:GetAttribute("DKKnifeRow") or cur:GetAttribute("DevKagePatchOwn") or cur:GetAttribute("DevKagePatchListRoot") then
             return true
         end
         cur = cur.Parent
     end
     return false
 end
-
 local function findAnchorLabel()
-    local best
     for _, obj in ipairs(winRoot:GetDescendants()) do
         if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
             local txt = tostring(obj.Text or "")
             if txt ~= "" and not isPatchOwned(obj) then
                 local compact = txt:lower():gsub("[%s_%-]+", "")
                 if compact:find("cursorlock", 1, true) or compact:find("mouselock", 1, true) or compact:find("devwallbang", 1, true) then
-                    best = obj
-                    break
+                    return obj
                 end
             end
         end
     end
-    return best
+    return nil
 end
 local function findTrackInRow(row)
     if lib and type(lib.ThemeToggleControls) == "table" then
@@ -33783,11 +33750,11 @@ local function findClickFor(row, track)
     return row
 end
 
--- ---- fallback custom rows (theme-attributed, only used if cloning fails)
+-- ---- styled fallback rows (only used if cloning fails) --------------
 local function customRow(parent, h)
     local r = mk("Frame", {BackgroundColor3 = C.row, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, h), Parent = parent})
     r:SetAttribute("DevKageThemeBaseGray", 30 / 255)
-    r:SetAttribute("LuaXPatchRow", true)
+    r:SetAttribute("DKKnifeRow", true)
     crn(r, 3)
     return r
 end
@@ -33892,7 +33859,7 @@ end
 local function customHeader(parent, title)
     local h = mk("Frame", {BackgroundColor3 = C.dark, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 24), Parent = parent})
     h:SetAttribute("DevKageThemeBaseGray", 26 / 255)
-    h:SetAttribute("LuaXPatchRow", true)
+    h:SetAttribute("DKKnifeRow", true)
     crn(h, 4)
     mk("TextLabel", {BackgroundTransparency = 1, Position = UDim2.fromOffset(8, 0), Size = UDim2.new(1, -16, 1, 0),
         Font = Enum.Font.GothamBold, Text = title, TextSize = 12, TextColor3 = C.txt,
@@ -33907,7 +33874,7 @@ local function customButton(parent, label, fn)
     b.MouseButton1Click:Connect(function() pcall(fn) end)
 end
 
--- ---- right-click color popup (parented to the DevKage window) --------
+-- ---- right-click color popup (parented to the DevKage window) -------
 local popupFrame
 function openNativePopup(swatch)
     if popupFrame then pcall(function() popupFrame:Destroy() end) popupFrame = nil end
@@ -33916,7 +33883,7 @@ function openNativePopup(swatch)
     local has = typeof(Clip.Color) == "Color3"
     popupFrame = mk("Frame", {BackgroundColor3 = Color3.fromRGB(18, 18, 18), BorderSizePixel = 0,
         Position = UDim2.fromOffset(m.X + 4, m.Y + 4), Size = UDim2.fromOffset(160, 82), ZIndex = 500, Parent = winRoot})
-    popupFrame:SetAttribute("LuaXPatchRow", true)
+    popupFrame:SetAttribute("DKKnifeRow", true)
     crn(popupFrame, 6)
     mk("TextLabel", {BackgroundTransparency = 1, Position = UDim2.fromOffset(8, 4), Size = UDim2.new(1, -16, 0, 18),
         Font = Enum.Font.GothamBold, Text = "Color Clipboard", TextSize = 12, TextColor3 = C.txt,
@@ -33964,8 +33931,8 @@ local function nativeHeader(parent, title)
     local ok = pcall(function()
         if not toggleTemplate or not tLabelPath or not trackPath then error("no template") end
         local row = toggleTemplate:Clone()
-        row.Name = "LuaX_H"
-        row:SetAttribute("LuaXPatchRow", true)
+        row.Name = "DK_H"
+        row:SetAttribute("DKKnifeRow", true)
         local label = descend(row, tLabelPath)
         local track = descend(row, trackPath)
         if not label then error("no label") end
@@ -33983,8 +33950,8 @@ local function nativeToggle(parent, labelText, initial, onChange)
     local ok = pcall(function()
         if not toggleTemplate or not tLabelPath or not trackPath then error("no template") end
         local row = toggleTemplate:Clone()
-        row.Name = "LuaX_T"
-        row:SetAttribute("LuaXPatchRow", true)
+        row.Name = "DK_T"
+        row:SetAttribute("DKKnifeRow", true)
         local label = descend(row, tLabelPath)
         local track = descend(row, trackPath)
         if not label or not track then error("internals") end
@@ -34023,8 +33990,8 @@ local function nativeSlider(parent, labelText, cfg, key, min, max, step)
     local ok = pcall(function()
         if not sliderTemplate or not fillPath or not sLabelPath or not sValPath then error("no template") end
         local row = sliderTemplate:Clone()
-        row.Name = "LuaX_S"
-        row:SetAttribute("LuaXPatchRow", true)
+        row.Name = "DK_S"
+        row:SetAttribute("DKKnifeRow", true)
         local fill = descend(row, fillPath)
         local label = descend(row, sLabelPath)
         local val = descend(row, sValPath)
@@ -34065,8 +34032,8 @@ local function nativeCycle(parent, labelText, options, getIndex, setIndex)
     local ok = pcall(function()
         if not toggleTemplate or not tLabelPath or not trackPath then error("no template") end
         local row = toggleTemplate:Clone()
-        row.Name = "LuaX_C"
-        row:SetAttribute("LuaXPatchRow", true)
+        row.Name = "DK_C"
+        row:SetAttribute("DKKnifeRow", true)
         local label = descend(row, tLabelPath)
         local track = descend(row, trackPath)
         if not label then error("no label") end
@@ -34096,8 +34063,8 @@ local function nativeColor(parent, label, getFn, setFn)
     local ok = pcall(function()
         if not toggleTemplate or not tLabelPath or not trackPath then error("no template") end
         local row = toggleTemplate:Clone()
-        row.Name = "LuaX_K"
-        row:SetAttribute("LuaXPatchRow", true)
+        row.Name = "DK_K"
+        row:SetAttribute("DKKnifeRow", true)
         local labelO = descend(row, tLabelPath)
         local track = descend(row, trackPath)
         if not labelO then error("no label") end
@@ -34145,7 +34112,7 @@ local function createBlacklistList(parent)
     local container = mk("Frame", {BackgroundColor3 = C.dark, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y, Parent = parent})
     container:SetAttribute("DevKagePatchListRoot", true)
-    container:SetAttribute("LuaXPatchRow", true)
+    container:SetAttribute("DKKnifeRow", true)
     container:SetAttribute("DevKageThemeBaseGray", 26 / 255)
     crn(container, 4)
     mk("UIListLayout", {Padding = UDim.new(0, 2), Parent = container})
@@ -34155,14 +34122,14 @@ local function createBlacklistList(parent)
     local function refreshList()
         if not container.Parent then return end
         for _, ch in ipairs(container:GetChildren()) do
-            if ch:GetAttribute("LuaXListRow") then ch:Destroy() end
+            if ch:GetAttribute("DKListRow") then ch:Destroy() end
         end
         header.Text = ("Blacklisted Players (%d)"):format(Blacklist:Count())
         if Blacklist:Count() == 0 then
             local e = mk("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 18), Font = Enum.Font.Gotham,
                 Text = "  Nobody blacklisted yet", TextSize = 12, TextColor3 = C.dim,
                 TextXAlignment = Enum.TextXAlignment.Left, Parent = container})
-            e:SetAttribute("LuaXListRow", true)
+            e:SetAttribute("DKListRow", true)
             return
         end
         for i, uid in ipairs(Blacklist.Order) do
@@ -34170,7 +34137,7 @@ local function createBlacklistList(parent)
             if entry then
                 local rf = mk("Frame", {BackgroundColor3 = C.row, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 22),
                     LayoutOrder = 100 + i, Parent = container})
-                rf:SetAttribute("LuaXListRow", true)
+                rf:SetAttribute("DKListRow", true)
                 rf:SetAttribute("DevKageThemeBaseGray", 30 / 255)
                 crn(rf, 3)
                 mk("TextLabel", {BackgroundTransparency = 1, Position = UDim2.fromOffset(8, 0),
@@ -34189,7 +34156,7 @@ local function createBlacklistList(parent)
     return container
 end
 
--- ---- insertion -------------------------------------------------------
+-- ---- placement helpers ----------------------------------------------
 local function insertAbove(container, anchor, element, estHeight)
     local hasLayout = false
     for _, c in ipairs(container:GetChildren()) do
@@ -34225,152 +34192,46 @@ local function insertAbove(container, anchor, element, estHeight)
         if container:IsA("ScrollingFrame") then container.AutomaticCanvasSize = Enum.AutomaticSize.Y end
     end)
 end
+local function appendToBottom(container, element)
+    local hasLayout = false
+    for _, c in ipairs(container:GetChildren()) do
+        if c:IsA("UIListLayout") or c:IsA("UIGridLayout") then hasLayout = true break end
+    end
+    if hasLayout then
+        local maxOrder = 0
+        for _, c in ipairs(container:GetChildren()) do
+            if c:IsA("GuiObject") then
+                local o = c.LayoutOrder or 0
+                if o > maxOrder and o < 900000 then maxOrder = o end
+            end
+        end
+        element.LayoutOrder = maxOrder + 1
+        element.Parent = container
+    else
+        pcall(function()
+            local maxY = 0
+            for _, c in ipairs(container:GetChildren()) do
+                if c:IsA("GuiObject") and c ~= element then
+                    local y = c.Position.Y.Offset + c.AbsoluteSize.Y
+                    if y > maxY then maxY = y end
+                end
+            end
+            element.Position = UDim2.new(0, 6, 0, maxY + 8)
+        end)
+        element.Parent = container
+    end
+    pcall(function()
+        if container:IsA("ScrollingFrame") then container.AutomaticCanvasSize = Enum.AutomaticSize.Y end
+    end)
+end
 local function makeWrapper()
     local w = mk("Frame", {BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y})
-    w:SetAttribute("LuaXPatchRow", true)
+    w:SetAttribute("DKKnifeRow", true)
     mk("UIListLayout", {Padding = UDim.new(0, 2), Parent = w})
     return w
 end
 
--- ---- client side tab discovery --------------------------------------
-local function getPageContent(page)
-    if type(page) ~= "table" then return nil end
-    local cands = {}
-    local function addInst(inst)
-        if typeof(inst) == "Instance" and inst:IsA("GuiObject") then cands[#cands + 1] = inst end
-    end
-    for _, v in pairs(page) do
-        if typeof(v) == "Instance" then addInst(v)
-        elseif type(v) == "table" then
-            for _, v2 in pairs(v) do addInst(v2) end
-        end
-    end
-    local best
-    for _, f in ipairs(cands) do
-        if f:IsA("ScrollingFrame") then
-            if not best or #f:GetChildren() > #best:GetChildren() then best = f end
-        end
-    end
-    if best then return best end
-    for _, f in ipairs(cands) do
-        if not best or #f:GetChildren() > #best:GetChildren() then best = f end
-    end
-    return best
-end
-local function findStripButtons()
-    local btns = {}
-    for _, d in ipairs(winRoot:GetDescendants()) do
-        if (d:IsA("TextButton") or d:IsA("ImageButton")) and d.Visible then
-            local s = d.AbsoluteSize
-            if s.X >= 30 and s.X <= 220 and s.Y >= 16 and s.Y <= 46 then btns[#btns + 1] = d end
-        end
-    end
-    local groups = {}
-    for _, b in ipairs(btns) do
-        local placed = false
-        for _, g in ipairs(groups) do
-            if math.abs(g.y - b.AbsolutePosition.Y) <= 6 then g.items[#g.items + 1] = b placed = true break end
-        end
-        if not placed then groups[#groups + 1] = {y = b.AbsolutePosition.Y, items = {b}} end
-    end
-    local best
-    for _, g in ipairs(groups) do
-        if #g.items >= 2 and (not best or #g.items > #best.items) then best = g end
-    end
-    if best then
-        table.sort(best.items, function(a, b) return a.AbsolutePosition.X < b.AbsolutePosition.X end)
-        return best.items
-    end
-    return nil
-end
-local function clickAt(pos)
-    local ok = pcall(function()
-        local VIM = game:GetService("VirtualInputManager")
-        VIM:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 0)
-        task.wait(0.05)
-        VIM:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 0)
-    end)
-    return ok
-end
-local function findClientContent()
-    -- 1) window.Pages scan
-    if type(win.Pages) == "table" then
-        for key, page in pairs(win.Pages) do
-            local title = tostring(key)
-            if type(page) == "table" then
-                for _, fk in ipairs({"Title", "title", "Name", "name", "Text"}) do
-                    if type(page[fk]) == "string" then title = page[fk] break end
-                end
-            end
-            if title:lower():find("client", 1, true) then
-                local content = getPageContent(page)
-                if content then return content, "window.Pages['" .. title .. "']" end
-            end
-        end
-        local keys = {}
-        for k in pairs(win.Pages) do keys[#keys + 1] = tostring(k) end
-        if #keys > 0 then LOG("window.Pages keys: " .. table.concat(keys, ", ")) end
-    end
-    -- 2) click the Client tab via VirtualInputManager and diff visibility
-    if win.Enabled then
-        local strip = findStripButtons()
-        if strip then
-            local clientBtn, knifeBtn
-            for _, b in ipairs(strip) do
-                local t = (b:IsA("TextButton") and tostring(b.Text) or b.Name):lower()
-                if t:find("client", 1, true) and not clientBtn then clientBtn = b end
-                if t:find("knife", 1, true) and not knifeBtn then knifeBtn = b end
-            end
-            if clientBtn then
-                local before = {}
-                for _, d in ipairs(winRoot:GetDescendants()) do
-                    if d:IsA("ScrollingFrame") and d.Visible then before[d] = true end
-                end
-                local pos = clientBtn.AbsolutePosition + clientBtn.AbsoluteSize / 2
-                if clickAt(pos) then
-                    task.wait(0.25)
-                    local best, bestKids = nil, -1
-                    for _, d in ipairs(winRoot:GetDescendants()) do
-                        if d:IsA("ScrollingFrame") and d.Visible and not before[d] then
-                            local n = #d:GetChildren()
-                            if n > bestKids then best, bestKids = d, n end
-                        end
-                    end
-                    if best then
-                        if knifeBtn then
-                            task.wait(0.1)
-                            clickAt(knifeBtn.AbsolutePosition + knifeBtn.AbsoluteSize / 2)
-                        end
-                        return best, "Client tab (auto-clicked)"
-                    end
-                    if knifeBtn then clickAt(knifeBtn.AbsolutePosition + knifeBtn.AbsoluteSize / 2) end
-                end
-            end
-        end
-    end
-    return nil
-end
-
---======================= BUILDERS =====================================
-local function buildSectionInto(parent, title, cfg, items)
-    nativeHeader(parent, title)
-    for _, it in ipairs(items) do
-        local k = it[1]
-        if k == "t" then nativeToggle(parent, it[3], cfg[it[2]] == true, function(v) cfg[it[2]] = v if it[5] then pcall(it[5], v) end end)
-        elseif k == "s" then nativeSlider(parent, it[3], cfg, it[2], it[4], it[5], it[6])
-        elseif k == "d" then
-            local options = it[4]
-            local function getIndex()
-                for i, o in ipairs(options) do
-                    if tostring(cfg[it[2]]) == tostring(o) then return i end
-                end
-                return 1
-            end
-            nativeCycle(parent, it[3], options, getIndex, function(i) cfg[it[2]] = options[i] end)
-        end
-    end
-end
-
+--======================= BUILD: WALL BANG (above anchor) ==============
 local function buildKnifeSettings(container, anchorRow)
     local wrap = makeWrapper()
     nativeHeader(wrap, "WALL BANG SETTINGS")
@@ -34394,15 +34255,35 @@ local function buildKnifeSettings(container, anchorRow)
         function(c) Wallbang.HighlightColor = c end)
     local est = 11 * 32 + 30
     insertAbove(container, anchorRow, wrap, est)
-    LOG("Wall bang settings inserted into the Knife tab above the anchor row.")
+    LOG("Wall bang settings inserted into the Knife tab above the Cursor Lock row.")
 end
 
-local function buildClientSections(content)
+--======================= BUILD: LUA X (bottom of Knife tab) ===========
+local function buildSectionInto(parent, title, cfg, items)
+    nativeHeader(parent, title)
+    for _, it in ipairs(items) do
+        local k = it[1]
+        if k == "t" then nativeToggle(parent, it[3], cfg[it[2]] == true, function(v) cfg[it[2]] = v if it[5] then pcall(it[5], v) end end)
+        elseif k == "s" then nativeSlider(parent, it[3], cfg, it[2], it[4], it[5], it[6])
+        elseif k == "d" then
+            local options = it[4]
+            local function getIndex()
+                for i, o in ipairs(options) do
+                    if tostring(cfg[it[2]]) == tostring(o) then return i end
+                end
+                return 1
+            end
+            nativeCycle(parent, it[3], options, getIndex, function(i) cfg[it[2]] = options[i] end)
+        end
+    end
+end
+
+local function buildLuaXSections(container)
     pcall(function()
-        if content:IsA("ScrollingFrame") then content.AutomaticCanvasSize = Enum.AutomaticSize.Y end
+        if container:IsA("ScrollingFrame") then container.AutomaticCanvasSize = Enum.AutomaticSize.Y end
     end)
     local wrap = makeWrapper()
-    wrap.Parent = content
+    mk("UIPadding", {PaddingTop = UDim.new(0, 8), Parent = wrap})
 
     buildSectionInto(wrap, "LUA X — VOID ENGINE", CFG, {
         {"t","VOID_ENABLED","Enabled",nil,function(v)
@@ -34731,30 +34612,23 @@ local function buildClientSections(content)
         {"s","hitboxSize","Hitbox Size",50,2000,10},
     })
 
-    -- blacklist + color tools + misc
+    -- blacklist + color + misc
     nativeHeader(wrap, "LUA X — BLACKLIST (silent)")
-    local sel = {idx = 1}
+    local pickState = {i = 1}
     local function playerOptions()
         local o = {}
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= LP and not Blacklist:IsBlacklisted(p) then o[#o + 1] = p.Name end
         end
-        if #o == 0 then o[#o + 1] = "(no players)" end
+        if #o == 0 then o[#o + 1] = "(nobody left)" end
         return o
     end
-    nativeCycle(wrap, "Blacklist Player", {"(click to load)", "(click to load)"},
-        function() return 1 end,
-        function(i) sel.idx = i end)
-    -- replace the cycle above's behavior with a live list via a simple rebuild:
-    -- (kept simple: the picker row below re-lists players each click)
-    nativeToggle(wrap, "Refresh Player Picker (then use row below)", false, function() end)
-    local pickState = {i = 1}
     nativeCycle(wrap, "Pick Player", {"(click)", "(click)"},
         function() return pickState.i end,
         function(i)
             pickState.i = i
             local o = playerOptions()
-            if o[i] and o[i] ~= "(no players)" then Blacklist:Add(o[i]) end
+            if o[i] and o[i] ~= "(nobody left)" then Blacklist:Add(o[i]) end
         end)
     createBlacklistList(wrap)
     customButton(wrap, "Clear Blacklist", function() Blacklist:Clear() end)
@@ -34790,7 +34664,9 @@ local function buildClientSections(content)
         if hudSG then pcall(function() hudSG:Destroy() end) end
         LOG("features unloaded (UI rows stay until rejoin).")
     end)
-    return wrap
+
+    appendToBottom(container, wrap)
+    LOG("all Lua X features appended to the bottom of the Knife tab.")
 end
 
 --======================= GUARD ========================================
@@ -34807,9 +34683,9 @@ local function suppressBlacklistNotifications()
     for _, name in ipairs({"Notify", "notify", "Notification", "SendNotification"}) do
         for _, t in ipairs(targets) do
             local orig = t[name]
-            if type(orig) == "function" and not t["__dknNotify" .. name] then
+            if type(orig) == "function" and not t["__dkkNotify" .. name] then
                 pcall(function()
-                    t["__dknNotify" .. name] = true
+                    t["__dkkNotify" .. name] = true
                     t[name] = function(self, ...)
                         for _, a in ipairs({...}) do
                             if type(a) == "string" and a:lower():find("blacklist") then return end
@@ -34854,13 +34730,13 @@ local function guardTick()
                     end
                 end
             end
-            if obj:IsA("GuiObject") and obj.Visible and not obj:GetAttribute("DKNSwatchHooked") and not isPatchOwned(obj) then
+            if obj:IsA("GuiObject") and obj.Visible and not obj:GetAttribute("DKKSwatchHooked") and not isPatchOwned(obj) then
                 local s = obj.AbsoluteSize
                 if s.X >= 8 and s.X <= 60 and s.Y >= 8 and s.Y <= 60 then
                     local c = obj:IsA("ImageLabel") and obj.ImageColor3 or obj.BackgroundColor3
                     local sat = typeof(c) == "Color3" and (math.max(c.R, c.G, c.B) - math.min(c.R, c.G, c.B)) or 0
                     if typeof(c) == "Color3" and sat > 0.12 and obj.BackgroundTransparency < 1 then
-                        obj:SetAttribute("DKNSwatchHooked", true)
+                        obj:SetAttribute("DKKSwatchHooked", true)
                         obj.InputBegan:Connect(function(i)
                             if i.UserInputType == Enum.UserInputType.MouseButton2 then openNativePopup(obj) end
                         end)
@@ -34887,10 +34763,10 @@ local function guardTick()
                 local last = guardState.colors[label]
                 if last and typeof(last) == "Color3" and typeof(cur) == "Color3" then
                     local d = math.abs(last.R - cur.R) + math.abs(last.G - cur.G) + math.abs(last.B - cur.B)
-                    if d > 0.10 then label:SetAttribute("DKNTextStabilized", true) end
+                    if d > 0.10 then label:SetAttribute("DKKTextStabilized", true) end
                 end
                 guardState.colors[label] = cur
-                if label:GetAttribute("DKNTextStabilized") then
+                if label:GetAttribute("DKKTextStabilized") then
                     pcall(function() label.TextColor3 = Color3.fromRGB(205, 205, 205) end)
                 end
             else
@@ -34943,7 +34819,6 @@ local function guardTick()
                     break
                 end
             end
-            local imported = false
             for flag, control in pairs(lib.Controls) do
                 if tostring(flag):lower():find("blacklist") and type(control) == "table" then
                     local v
@@ -34959,18 +34834,47 @@ local function guardTick()
                     if type(v) == "string" then
                         for name in v:gmatch("[^,;\n]+") do
                             name = name:match("^%s*(.-)%s*$")
-                            if name ~= "" then Blacklist:Add(name) imported = true end
+                            if name ~= "" then Blacklist:Add(name) end
                         end
                     end
                 end
             end
-            if imported then LOG("names imported silently from your blacklist control.") end
         end
     end)
     suppressBlacklistNotifications()
 end
 
 --======================= BOOT =========================================
+genv.__DevKageKnifeAddon = {
+    Unload = function()
+        pcall(function() Wallbang:Shutdown() end)
+        pcall(function()
+            CFG.VOID_ENABLED = false; CFG.VOID_KILLER_ENABLED = false
+            OC.orbitEnabled = false; PD.predEnabled = false; AB.enabled = false
+            RE.enabled = false; TR.enabled = false; AT.enabled = false; VD.enabled = false
+            RG.enabled = false; RA.enabled = false; SL.enabled = false; AA.enabled = false
+        end)
+        pcall(restoreHitboxes)
+        pcall(function() hideChar(false) end)
+        if curHighlight then pcall(function() curHighlight:Destroy() end) end
+        for _, c in ipairs(conns) do pcall(function() c:Disconnect() end) end
+        table.clear(conns)
+        pcall(function() RunService:UnbindFromRenderStep(RB) end)
+        if hudSG then pcall(function() hudSG:Destroy() end) end
+        if winRoot then
+            pcall(function()
+                for _, d in ipairs(winRoot:GetDescendants()) do
+                    if d:GetAttribute("DKKnifeRow") or d:GetAttribute("DevKagePatchListRoot") then
+                        d:Destroy()
+                    end
+                end
+            end)
+        end
+        genv.__DevKageKnifeAddon = nil
+        LOG("unloaded.")
+    end,
+}
+
 local function waitForWindow(timeout)
     local deadline = os.clock() + (timeout or 30)
     while os.clock() < deadline do
@@ -34993,7 +34897,7 @@ end
 task.spawn(function()
     local okBoot, errBoot = pcall(function()
         win = waitForWindow(30)
-        if not win then WARN("DevKage window not found after 30s.") return end
+        if not win then WARN("DevKage window not found after 30s. Make sure this runs after your DevKage script.") return end
         winRoot = win.Root
         lib = findLibrary()
         if lib then
@@ -35006,82 +34910,72 @@ task.spawn(function()
             end
         end
 
-        -- find the Knife tab anchor (Cursor Lock / Mouse Lock / Dev Wall Bang row)
         local anchorLabel = findAnchorLabel()
         if not anchorLabel then
-            WARN("could not find the Cursor Lock / Mouse Lock row in the Knife tab - wall bang settings not added.")
-        else
-            masterRow = findRowFor(anchorLabel)
-            if masterRow and masterRow.Parent then
-                masterTrack = findTrackInRow(masterRow)
-                toggleTemplate = masterRow
-                if masterTrack then
-                    trackPath = pathUp(masterTrack, masterRow)
-                    tLabelPath = pathUp(anchorLabel, masterRow)
-                    local clickObj = findClickFor(masterRow, masterTrack)
-                    tClickPath = pathUp(clickObj, masterRow)
+            WARN("could not find the Cursor Lock / Mouse Lock row in the Knife tab. Open the Knife tab once, then re-run this script.")
+            return
+        end
+        masterRow = findRowFor(anchorLabel)
+        if not (masterRow and masterRow.Parent) then
+            WARN("anchor row has no container.")
+            return
+        end
+        masterTrack = findTrackInRow(masterRow)
+        toggleTemplate = masterRow
+        if masterTrack then
+            trackPath = pathUp(masterTrack, masterRow)
+            tLabelPath = pathUp(anchorLabel, masterRow)
+            local clickObj = findClickFor(masterRow, masterTrack)
+            tClickPath = pathUp(clickObj, masterRow)
+        end
+        -- remove any leftover patch-added blocks in this container
+        pcall(function()
+            for _, c in ipairs(masterRow.Parent:GetChildren()) do
+                if c ~= masterRow and (c:GetAttribute("DevKagePatchOwn") or c:GetAttribute("DKKnifeRow")) then
+                    c:Destroy()
+                    LOG("removed a leftover patch-added block.")
                 end
-                -- remove duplicate patch-added wall bang sections in this container
-                pcall(function()
-                    for _, c in ipairs(masterRow.Parent:GetChildren()) do
-                        if c ~= masterRow and (c:GetAttribute("DevKagePatchOwn") or c:GetAttribute("LuaXPatchRow")) then
-                            c:Destroy()
-                            LOG("removed a duplicate patch-added wall bang block.")
-                        end
-                    end
-                end)
-                -- slider template
-                if lib and type(lib.ThemeSliderFrames) == "table" then
-                    for _, f in ipairs(lib.ThemeSliderFrames) do
-                        if f and f.Parent then
-                            local row = walkUpToRow(f)
-                            if row and row ~= masterRow then
-                                sliderTemplate = row
-                                fillPath = pathUp(f, row)
-                                local bestLabel, bestVal
-                                for _, d in ipairs(row:GetDescendants()) do
-                                    if d:IsA("TextLabel") and tostring(d.Text) ~= "" then
-                                        if tostring(d.Text):match("^%-?%d+%.?%d*$") then
-                                            bestVal = bestVal or d
-                                        else
-                                            bestLabel = bestLabel or d
-                                        end
-                                    end
+            end
+        end)
+        -- slider template
+        if lib and type(lib.ThemeSliderFrames) == "table" then
+            for _, f in ipairs(lib.ThemeSliderFrames) do
+                if f and f.Parent then
+                    local row = walkUpToRow(f)
+                    if row and row ~= masterRow then
+                        sliderTemplate = row
+                        fillPath = pathUp(f, row)
+                        local bestLabel, bestVal
+                        for _, d in ipairs(row:GetDescendants()) do
+                            if d:IsA("TextLabel") and tostring(d.Text) ~= "" then
+                                if tostring(d.Text):match("^%-?%d+%.?%d*$") then
+                                    bestVal = bestVal or d
+                                else
+                                    bestLabel = bestLabel or d
                                 end
-                                if bestLabel then sLabelPath = pathUp(bestLabel, row) end
-                                if bestVal then sValPath = pathUp(bestVal, row) end
-                                if fillPath and sLabelPath then break end
-                                sliderTemplate = nil
                             end
                         end
+                        if bestLabel then sLabelPath = pathUp(bestLabel, row) end
+                        if bestVal then sValPath = pathUp(bestVal, row) end
+                        if fillPath and sLabelPath then break end
+                        sliderTemplate = nil
                     end
                 end
-                LOG(sliderTemplate and "native slider template found." or "no slider template - sliders use styled fallback rows.")
-                buildKnifeSettings(masterRow.Parent, masterRow)
-            else
-                WARN("anchor row has no container - knife settings skipped.")
             end
         end
+        LOG(sliderTemplate and "native slider template found." or "no slider template - sliders use styled fallback rows.")
 
-        -- find the Client Side tab and build the Lua X sections
-        local content, source = findClientContent()
-        if content then
-            LOG("Client Side content found via " .. tostring(source) .. ".")
-            buildClientSections(content)
-            LOG("all Lua X features built into the Client Side tab.")
-        else
-            WARN("Client Side tab not found - Lua X features go into the Knife tab instead.")
-            if masterRow and masterRow.Parent then
-                buildClientSections(masterRow.Parent)
-            end
-        end
+        -- 1) wall bang settings above the Cursor Lock row
+        buildKnifeSettings(masterRow.Parent, masterRow)
+        -- 2) Lua X features at the bottom of the Knife tab
+        buildLuaXSections(masterRow.Parent)
+        LOG("ready.")
     end)
     if not okBoot then WARN("boot failed: " .. tostring(errBoot)) end
 end)
 
 conn(RunService.Heartbeat, function(dt)
     local ok, err = pcall(function()
-        -- keep the wall bang engine synced to the master toggle in the Knife tab
         if masterRow and masterRow.Parent then
             local st = readMasterState()
             if st ~= Wallbang.Enabled then Wallbang:SetEnabled(st) end
@@ -35110,7 +35004,7 @@ task.spawn(function()
         local ok, err = pcall(guardTick)
         if not ok then WARN("guard: " .. tostring(err)) end
     end
-end)`
+end)
 
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         -- Return immediately. The executor is free to start the other Auto Execute
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         -- script while DevKage is waiting in its own LateBoot task.
