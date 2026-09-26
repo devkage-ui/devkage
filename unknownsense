@@ -35445,6 +35445,8 @@ aimbotFOVCfg = aimbotFOVCfg or {
 }
 
 hitSound = hitSound or { enabled = false, style = "Rust HS", volume = 0.5, pitch = 1.0 }
+silentAim.ignoreWalls = silentAim.ignoreWalls or false
+aimbot.ignoreWalls = aimbot.ignoreWalls or false
 localHitTargets = setmetatable({}, { __mode = "k" })
 
 -- Shared scratch / state that the source kept as globals:
@@ -35824,6 +35826,9 @@ local function closestinfov(radius, center)
                     local root = char:FindFirstChild("HumanoidRootPart")
                     if root then
                         local pos, onScreen = worldToScreen(root.Position, cam)
+                        if (silentAim.ignoreWalls or aimbot.ignoreWalls) and not onScreen then
+                            pos = Vector2.new(center.X, center.Y); onScreen = true
+                        end
                         if onScreen then
                             local dx = pos.X - center.X
                             local dy = pos.Y - center.Y
@@ -36321,11 +36326,13 @@ local function checkForHit()
                     local params = RaycastParams.new()
                     params.FilterDescendantsInstances = {myChar, char}
                     params.FilterType = Enum.RaycastFilterType.Exclude
-                    local res = workspace:Raycast(myChar.HumanoidRootPart.Position, dir*dist, params)
                     local visible = true
-                    if res then
-                        local hp = res.Instance.Parent
-                        if hp ~= char and hp.Parent ~= char then visible = false end
+                    if not (silentAim.ignoreWalls or aimbot.ignoreWalls) then
+                        local res = workspace:Raycast(myChar.HumanoidRootPart.Position, dir*dist, params)
+                        if res then
+                            local hp = res.Instance.Parent
+                            if hp ~= char and hp.Parent ~= char then visible = false end
+                        end
                     end
                     if visible and tick()-lastHitTime > 0.05 then
                         lastHitTime = tick()
@@ -36745,25 +36752,45 @@ do
         end
         local luaxPage = win:CreatePage({ Icon = LUAX_TAB_ICON, Glyph = "X", layoutorder = -1, Size = UDim2.new(0, 36, 0, 36) })
         luaxPage.__luax = true
+        task.delay(2, function()
+            if not win.TabsHolder then return end
+            for _, c in ipairs(win.TabsHolder:GetChildren()) do
+                if c:IsA("Frame") then
+                    local img, glyph
+                    for _, cc in ipairs(c:GetChildren()) do
+                        if cc:IsA("ImageLabel") then img = cc end
+                        if cc:IsA("TextLabel") and tostring(cc.Text) == "X" then glyph = cc end
+                    end
+                    if glyph and (not img or img.IsLoaded == false) then
+                        glyph.Text = "\u{2620}"; glyph.TextColor3 = Color3.fromRGB(200,200,200)
+                        glyph.Visible = true
+                        if img then img.Visible = false end
+                    end
+                end
+            end
+        end)
         local LT = {} -- Lua X toggle registry (used by Load Preset / Kill Every)
 
         -- DevKage's own CreateFolder/AddSection is broken (AddSection would reparent
         -- the whole column). Build folders and reparent each section's Root ourselves.
+        local luaxFolderRefs = {}
         local luaxFolderRefs = {}
         local function luaxFolder(name, side)
             local col = luaxPage[side]
             local before = {}
             for _, c in ipairs(col:GetChildren()) do before[c] = true end
             local folder = luaxPage:CreateFolder({ Name = name, Side = side })
-            local holder, container
+            local holder, container, header
             for _, c in ipairs(col:GetChildren()) do
                 if not before[c] and c:IsA("Frame") then holder = c; break end
             end
             if holder then
                 for _, c in ipairs(holder:GetChildren()) do
-                    if c:IsA("Frame") and c:FindFirstChildOfClass("UIListLayout") then container = c; break end
+                    if c:IsA("TextButton") then header = c end
+                    if c:IsA("Frame") and c:FindFirstChildOfClass("UIListLayout") then container = c end
                 end
             end
+            luaxFolderRefs[#luaxFolderRefs + 1] = { folder = folder, holder = holder, container = container, header = header }
             return folder, container
         end
         local function luaxSection(folder, container, props)
@@ -36827,6 +36854,11 @@ do
         WB:CreateSlider({ Name = "Hit Sound Pitch", State = 100, Min = 50, Max = 200, Decimals = 0, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.HitSound then rb.HitSound.pitch = v / 100 end end })
         local __hsStyle = {"Rust HS","Soft Tick","Impact","Swoosh","Switch","Snap"}
         WB:CreateDropdown({ Name = "Hit Sound Style", Options = __hsStyle, State = 1, Callback = function(i) local rb = getgenv().__ragebot; if rb and rb.HitSound then rb.HitSound.style = __hsStyle[i] or "Rust HS" end end })
+        WB:CreateToggle({ Name = "Visibility Check (off = shoot through walls)", State = true, Callback = function(v)
+            local rb = getgenv().__ragebot
+            if rb and rb.SilentAim then rb.SilentAim.ignoreWalls = not v end
+            if rb and rb.Aimbot then rb.Aimbot.ignoreWalls = not v end
+        end })
         local lf_Void, lc_Void = luaxFolder("Void", "Left")
         local VG = luaxSection(lf_Void, lc_Void, { Name = "Void Control", Side = "Left", Size = 329 })
         LT["VoidToggle"] = VG:CreateToggle({ Name = "Enable Void", State = false, Callback = function(v) CFG.VOID_ENABLED = v; if v then startVoid() else stopVoid() end end })
@@ -37645,6 +37677,21 @@ do
             end
         end)
     end })
+        task.defer(function()
+            task.wait(0.6)
+            for _, f in ipairs(luaxFolderRefs) do
+                if f.holder and f.container then
+                    f.container.Visible = false
+                    f.holder.Size = UDim2.new(1, 0, 0, 20)
+                    if f.folder then pcall(function() f.folder.Open = false end) end
+                    if f.header then
+                        for _, c in ipairs(f.header:GetChildren()) do
+                            if c:IsA("ImageLabel") then c.Rotation = 180 end
+                        end
+                    end
+                end
+            end
+        end)
     end
     end)
 end
