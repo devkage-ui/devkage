@@ -36970,7 +36970,11 @@ do
         if win then
             local luaxPage = getgenv().__DevKageLuaxPage
             if not luaxPage then
+                -- This should almost never happen now that we create it at boot, but kept as fallback
+            local luaxPage = getgenv().__DevKageLuaxPage
+            if not luaxPage then
                 luaxPage = win:CreatePage({ Icon = "rbxassetid://97832472593469", Size = UDim2.new(0, 36, 0, 36) })
+            end
             end
             getgenv().__luaxTabIcon = "rbxassetid://97832472593469"
             local LT = {} -- Lua X toggle registry (used by Load Preset / Kill Every)
