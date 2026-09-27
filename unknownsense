@@ -2224,7 +2224,7 @@ function pages:CreateFolder(Properties)
     Properties = Properties or {}
     local Folder = {
         Name    = (Properties.name or Properties.Name or Properties.title or Properties.Title or "New Folder"),
-        Open    = true,
+        Open    = false,
         Side    = (Properties.side or Properties.Side or "Left"),
         Sections = {},
         Window   = self.Window,
@@ -2286,7 +2286,7 @@ function pages:CreateFolder(Properties)
             Position            = UDim2.new(0, 0, 0, 20),
             Size                = UDim2.new(1, 0, 0, 0),
             ZIndex              = 2,
-            Visible             = true,
+            Visible             = Folder.Open,
             AutomaticSize       = Enum.AutomaticSize.Y
         })
         utility:RenderObject("UIListLayout", {
@@ -2296,6 +2296,12 @@ function pages:CreateFolder(Properties)
             HorizontalAlignment= "Left",
             VerticalAlignment  = "Top"
         })
+        -- Lua X folders start collapsed. Clicking the header still toggles them normally.
+        Folder.Open = false
+        Folder_Container.Visible = false
+        Folder_Holder.Size = UDim2.new(1, 0, 0, 20)
+        Folder_Arrow.Rotation = 180
+
         utility:CreateConnection(Folder_Header.MouseButton1Click, function()
             Folder.Open = not Folder.Open
             Folder_Container.Visible = Folder.Open
@@ -18117,7 +18123,7 @@ getgenv().__DevKageWindow = library.Window
 -- FIX: Correct Tab Order
 -- Spoofer: 1, AntiAim: 2, LuaX: 3, ESP (Visuals): 4
 local spooferPage = library.Window:CreatePage({ Icon = "rbxassetid://8547236654", Glyph = "R", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 1 })
-                local antiAimPage = library.Window:CreatePage({ Icon = "rbxassetid://113229312578847", Glyph = "", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 2 })
+                local antiAimPage = library.Window:CreatePage({ Icon = "rbxassetid://121886618627230", Glyph = "", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 2 })
 
 local luaxPage = library.Window:CreatePage({ Icon = "rbxassetid://97832472593469", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 3 })
 local visualsPage = library.Window:CreatePage({ Icon = "rbxassetid://8547254518", Glyph = "V", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 4 })
@@ -38477,7 +38483,173 @@ do
             end
         end
     end
-end\n\n-- DevKage bridge: all RIVALS controls are exposed to the Lua X tab.\ndo\n    local env = (type(getgenv) == "function" and getgenv()) or _G\n    local api = {}\n    api.Settings = Settings\n    api.Combat = Settings.Combat\n    api.Misc = Settings.Misc\n    api.Entities = Entities\n    api.Weapon = Weapon\n    api.Scan = Scan\n    api.Ragebot = Ragebot\n    api.Legitbot = Legitbot\n    api.Controller = Controller\n    api.Fighter = Fighter\n    local lastRage = 0\n    api.AutoShootTick = function()\n        local cfg = Settings.Combat.AutoShoot\n        if not cfg or not cfg.Enabled then return end\n        local hitPart = Scan.SilentAim\n        if not hitPart or not hitPart.Parent then return end\n        local character = hitPart:FindFirstAncestorOfClass("Model")\n        if not character then return end\n        local origin = Weapon : Origin( )\n        if not origin then return end\n        Weapon : Shoot(hitPart.Position, character, origin, hitPart)\n    end\n    api.RageTick = function()\n        local cfg = Settings.Combat.Ragebot\n        if not cfg.Enabled then return end\n        local now = tick()\n        local interval = tonumber(cfg.Interval) or 0.2\n        if (now - lastRage) < interval then return end\n        lastRage = now\n\n        local root = Controller : RootPart( )\n        if not root then return end\n\n        -- Preserve the supplied source's void replication behavior.\n        if cfg.VoidSpam and cfg.VoidSpam.Enabled then\n            if Replicator.Timestamp then Replicator.Timestamp = nil end\n            if not Replicator.Timestamp and not (Ragebot.VoidReplacement and Ragebot.VoidReplacement[1]) then\n                Replicator : Update(root, CFrameNew(cfg.VoidSpam.Position))\n            end\n        end\n\n        local character, position, hitPart, origin = Ragebot : GetTarget(root.Position, 150, {\n            Enabled = cfg.OriginShift and cfg.OriginShift.Enabled,\n            Range = cfg.OriginShift and cfg.OriginShift.Range or 14,\n        })\n        if not character or not position or not hitPart or not origin then return end\n        Weapon : Shoot(position, character, origin, hitPart)\n    end\n    api.Set = function(path, value)\n        local current = Settings\n        local parts = {}\n        for part in string.gmatch(tostring(path), "[^%.]+") do parts[#parts+1] = part end\n        if #parts == 0 then return false end\n        for i = 1, #parts - 1 do\n            current = current and current[parts[i]]\n            if type(current) ~= "table" then return false end\n        end\n        current[parts[#parts]] = value\n        return true\n    end\n    api.Get = function(path)\n        local current = Settings\n        for part in string.gmatch(tostring(path), "[^%.]+") do\n            current = current and current[part]\n        end\n        return current\n    end\n    api.StopCombat = function()\n        Settings.Combat.Triggerbot.Enabled = false\n        Settings.Combat.AimAssist.Enabled = false\n        Settings.Combat.SilentAim.Enabled = false\n        Settings.Combat.Ragebot.Enabled = false\n    end\n    env.__DevKageRivals = api\nend\n
+end\n\n-- DevKage bridge: all RIVALS controls are exposed to the Lua X tab.
+do
+    local env = (type(getgenv) == "function" and getgenv()) or _G
+    local api = {}
+    api.Settings = Settings
+    api.Combat = Settings.Combat
+    api.Misc = Settings.Misc
+    api.Entities = Entities
+    api.Weapon = Weapon
+    api.Scan = Scan
+    api.Ragebot = Ragebot
+
+    Settings.Combat.SilentAim.HitChance = Settings.Combat.SilentAim.HitChance or 100
+    Settings.Combat.SilentAim.FOVRadius = Settings.Combat.SilentAim.FOVRadius or 100
+    Settings.Combat.SilentAim.Visibility = Settings.Combat.SilentAim.Visibility or "visible"
+    Settings.Combat.SilentAim.FollowMuzzle = Settings.Combat.SilentAim.FollowMuzzle or false
+    Settings.Combat.Ragebot.Range = Settings.Combat.Ragebot.Range or 150
+
+    local __rawScanStepper = Scan.Stepper
+    local function __silentVisible(part)
+        local mode = Settings.Combat.SilentAim.Visibility or "visible"
+        if mode == "both" or not part then return true end
+        local cam = Workspace.CurrentCamera or CurrentCamera
+        if not cam then return true end
+        local origin = cam.CFrame.Position
+        local delta = part.Position - origin
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        if LocalPlayer.Character then params.FilterDescendantsInstances = { LocalPlayer.Character } end
+        local hit = Workspace:Raycast(origin, delta, params)
+        local visible = (not hit) or hit.Instance == part or (part.Parent and hit.Instance:IsDescendantOf(part.Parent))
+        if mode == "visible" then return visible end
+        if mode == "hidden" then return not visible end
+        return true
+    end
+
+    Scan.Stepper = function(self)
+        local cfg = Settings.Combat.SilentAim
+        local requestedPart = cfg.Part or "Head"
+        local queryPart = (requestedPart == "Closest" or requestedPart == "Random") and "Head" or requestedPart
+        local originalPart = cfg.Part
+        cfg.Part = queryPart
+        __rawScanStepper(self)
+        cfg.Part = originalPart
+
+        local part = self.SilentAim
+        if not part then return end
+
+        if requestedPart == "Closest" or requestedPart == "Random" then
+            local model = part.Parent
+            local choices = {}
+            for _, name in ipairs({"Head","HumanoidRootPart","Torso","UpperTorso","LowerTorso"}) do
+                local candidate = model and model:FindFirstChild(name)
+                if candidate and candidate:IsA("BasePart") then choices[#choices + 1] = candidate end
+            end
+            if #choices > 0 then
+                if requestedPart == "Random" then
+                    part = choices[math.random(1, #choices)]
+                else
+                    local cam = Workspace.CurrentCamera or CurrentCamera
+                    local center = cam and Vector2.new(cam.ViewportSize.X * 0.5, cam.ViewportSize.Y * 0.5)
+                    local best, bestDist
+                    if cam and center then
+                        for _, candidate in ipairs(choices) do
+                            local point, onScreen = cam:WorldToViewportPoint(candidate.Position)
+                            if onScreen then
+                                local dist = (Vector2.new(point.X, point.Y) - center).Magnitude
+                                if not bestDist or dist < bestDist then best, bestDist = candidate, dist end
+                            end
+                        end
+                    end
+                    part = best or choices[1]
+                end
+                self.SilentAim = part
+            end
+        end
+
+        local cam = Workspace.CurrentCamera or CurrentCamera
+        local fovRadius = tonumber(cfg.FOVRadius) or 0
+        if cam and fovRadius > 0 then
+            local point, onScreen = cam:WorldToViewportPoint(part.Position)
+            if not onScreen then self.SilentAim = nil; return end
+            local center = Vector2.new(cam.ViewportSize.X * 0.5, cam.ViewportSize.Y * 0.5)
+            if (Vector2.new(point.X, point.Y) - center).Magnitude > fovRadius then
+                self.SilentAim = nil
+                return
+            end
+        end
+
+        if not __silentVisible(part) then
+            self.SilentAim = nil
+            return
+        end
+
+        local chance = math.clamp(tonumber(cfg.HitChance) or 100, 0, 100)
+        if chance < 100 and math.random(1, 100) > chance then self.SilentAim = nil end
+    end
+    api.Legitbot = Legitbot
+    api.Controller = Controller
+    api.Fighter = Fighter
+    local lastRage = 0
+    api.AutoShootTick = function()
+        local cfg = Settings.Combat.AutoShoot
+        if not cfg or not cfg.Enabled then return end
+        local hitPart = Scan.SilentAim
+        if not hitPart or not hitPart.Parent then return end
+        local character = hitPart:FindFirstAncestorOfClass("Model")
+        if not character then return end
+        local origin = Weapon : Origin( )
+        if not origin then return end
+        Weapon : Shoot(hitPart.Position, character, origin, hitPart)
+    end
+    api.RageTick = function()
+        local cfg = Settings.Combat.Ragebot
+        if not cfg.Enabled then return end
+        local now = tick()
+        local interval = tonumber(cfg.Interval) or 0.2
+        if (now - lastRage) < interval then return end
+        lastRage = now
+
+        local root = Controller : RootPart( )
+        if not root then return end
+
+        -- Preserve the supplied source's void replication behavior.
+        if cfg.VoidSpam and cfg.VoidSpam.Enabled then
+            if Replicator.Timestamp then Replicator.Timestamp = nil end
+            if not Replicator.Timestamp and not (Ragebot.VoidReplacement and Ragebot.VoidReplacement[1]) then
+                Replicator : Update(root, CFrameNew(cfg.VoidSpam.Position))
+            end
+        end
+
+        local rageRange = tonumber(cfg.Range) or 150
+        local character, position, hitPart, origin = Ragebot : GetTarget(root.Position, rageRange, {
+            Enabled = cfg.OriginShift and cfg.OriginShift.Enabled,
+            Range = cfg.OriginShift and cfg.OriginShift.Range or 14,
+        })
+        if not character or not position or not hitPart or not origin then return end
+        Weapon : Shoot(position, character, origin, hitPart)
+    end
+    api.Set = function(path, value)
+        local current = Settings
+        local parts = {}
+        for part in string.gmatch(tostring(path), "[^%.]+") do parts[#parts+1] = part end
+        if #parts == 0 then return false end
+        for i = 1, #parts - 1 do
+            current = current and current[parts[i]]
+            if type(current) ~= "table" then return false end
+        end
+        current[parts[#parts]] = value
+        return true
+    end
+    api.Get = function(path)
+        local current = Settings
+        for part in string.gmatch(tostring(path), "[^%.]+") do
+            current = current and current[part]
+        end
+        return current
+    end
+    api.StopCombat = function()
+        Settings.Combat.Triggerbot.Enabled = false
+        Settings.Combat.AimAssist.Enabled = false
+        Settings.Combat.SilentAim.Enabled = false
+        Settings.Combat.Ragebot.Enabled = false
+    end
+    env.__DevKageRivals = api
+end
+
 
 ]====]
         local __load = loadstring or load
@@ -38537,14 +38709,30 @@ do
                     local map = {
                         ["silent.hitPart"] = "Combat.SilentAim.Part",
                         ["silent.range"] = "Combat.SilentAim.Range",
+                        ["silent.hitChance"] = "Combat.SilentAim.HitChance",
+                        ["silent.fovRadius"] = "Combat.SilentAim.FOVRadius",
+                        ["silent.visibility"] = "Combat.SilentAim.Visibility",
+                        ["silent.followMuzzle"] = "Combat.SilentAim.FollowMuzzle",
+                        ["silent.autoShoot"] = "Combat.AutoShoot.Enabled",
+                        ["target.range"] = "Combat.Ragebot.Range",
                         ["target.interval"] = "Combat.Ragebot.Interval",
                         ["target.hitpart"] = "Combat.Ragebot.Part",
                         ["target.originShiftEnabled"] = "Combat.Ragebot.OriginShift.Enabled",
                         ["target.originShiftRange"] = "Combat.Ragebot.OriginShift.Range",
                     }
                     local dst = map[key]
-                    if dst then rv.Set(dst, value); return end
-                    -- Silent FOV/auto-shot settings from the replaced UI are intentionally ignored.
+                    if dst then
+                        rv.Set(dst, value)
+                        if rb.SilentAim then
+                            if key == "silent.hitChance" then rb.SilentAim.hitChance = value end
+                            if key == "silent.fovRadius" then rb.SilentAim.fovRadius = value end
+                            if key == "silent.visibility" then rb.SilentAim.visibility = value; rb.SilentAim.ignoreWalls = (value ~= "visible") end
+                            if key == "silent.followMuzzle" then rb.SilentAim.followMuzzle = value end
+                            if key == "silent.autoShoot" then rb.SilentAim.autoShoot = value end
+                            if key == "silent.hitPart" then rb.SilentAim.hitPart = value end
+                        end
+                        return
+                    end
                     if oldSet then pcall(oldSet, key, value) end
                     if rb.SilentAim then rb.SilentAim.enabled = false end
                     if rb.Config and rb.Config.target then rb.Config.target.auto = false; rb.Config.target.autoshoot = false end
@@ -38583,6 +38771,14 @@ do
             local wb = getgenv().__devWallbang
             if wb then if v then wb.Start() else wb.Stop() end end
         end })
+        LT["LuaxSilentTop"] = WB:CreateToggle({ Name = "Silent Aim", State = false, Flag = "Luax_Wallbang_Silent_Aim", Callback = function(v)
+            local rv = getgenv().__DevKageRivals
+            if rv then rv.Set("Combat.SilentAim.Enabled", v == true) end
+        end })
+        LT["LuaxRageTop"] = WB:CreateToggle({ Name = "Rage Bot", State = false, Flag = "Luax_Wallbang_Rage_Bot", Callback = function(v)
+            local rv = getgenv().__DevKageRivals
+            if rv then rv.Set("Combat.Ragebot.Enabled", v == true) end
+        end })
         LT["LuaxTopAimbot"] = WB:CreateToggle({ Name = "Aimbot", State = false, Flag = "Luax_Wallbang_Aimbot", Callback = function(v)
             local rb = getgenv().__ragebot
             if rb then
@@ -38592,6 +38788,8 @@ do
         LT["LuaxAutoShoot"] = WB:CreateToggle({ Name = "Auto Shoot", State = false, Flag = "Luax_Wallbang_Auto_Shoot", Callback = function(v)
             local rv = getgenv().__DevKageRivals
             if rv then rv.Set("Combat.AutoShoot.Enabled", v == true) end
+            local rb = getgenv().__ragebot
+            if rb and rb.SetSetting then rb.SetSetting("silent.autoShoot", v == true) end
         end })
         LT["LuaxESP"] = WB:CreateToggle({ Name = "ESP (names, through walls)", State = false, Flag = "Luax_Wallbang_ESP", Callback = function(v)
             local e = getgenv().__luaxESP
@@ -38701,36 +38899,48 @@ do
         do
             local __sf, __sc = luaxFolder("RIVALS Combat", "Left")
 
-            local SA = luaxSection(__sf, __sc, { Name = "RIVALS Silent Aim", Side = "Left", Size = 190 })
-            LT["RivalsSilentAim"] = SA:CreateToggle({ Name = "Silent Aim", State = false, Flag = "Rivals_SilentAim_Enabled", Callback = function(v)
-                local rv = getgenv().__DevKageRivals
-                if rv then rv.Set("Combat.SilentAim.Enabled", v == true) end
-            end })
-            SA:CreateSlider({ Name = "Range", State = 300, Min = 25, Max = 1000, Decimals = 0, Suffix = " px", Flag = "Rivals_SilentAim_Range", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.SilentAim.Range", v) end end })
-            SA:CreateDropdown({ Name = "Hit Part", Options = { "Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso" }, State = 1, Flag = "Rivals_SilentAim_Part", Callback = function(i) local o={"Head","HumanoidRootPart","Torso","UpperTorso","LowerTorso"}; local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.SilentAim.Part", o[i] or "Head") end end })
-
-            local TB = luaxSection(__sf, __sc, { Name = "RIVALS Triggerbot", Side = "Right", Size = 170 })
+            local TB = luaxSection(__sf, __sc, { Name = "RIVALS Triggerbot", Side = "Left", Size = 170 })
             LT["RivalsTriggerbot"] = TB:CreateToggle({ Name = "Triggerbot", State = false, Flag = "Rivals_Triggerbot_Enabled", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.Triggerbot.Enabled", v == true) end end })
             TB:CreateSlider({ Name = "Range", State = 100, Min = 25, Max = 1000, Decimals = 0, Suffix = " px", Flag = "Rivals_Triggerbot_Range", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.Triggerbot.Range", v) end end })
             TB:CreateDropdown({ Name = "Hit Part", Options = { "Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso" }, State = 1, Flag = "Rivals_Triggerbot_Part", Callback = function(i) local o={"Head","HumanoidRootPart","Torso","UpperTorso","LowerTorso"}; local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.Triggerbot.Part", o[i] or "Head") end end })
 
-            local AAim = luaxSection(__sf, __sc, { Name = "RIVALS Aim Assist", Side = "Left", Size = 230 })
+            local AAim = luaxSection(__sf, __sc, { Name = "RIVALS Aim Assist", Side = "Right", Size = 230 })
             LT["RivalsAimAssist"] = AAim:CreateToggle({ Name = "Aim Assist", State = false, Flag = "Rivals_AimAssist_Enabled", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.AimAssist.Enabled", v == true) end end })
             AAim:CreateDropdown({ Name = "Key", Options = { "MouseButton1", "MouseButton2", "MouseButton3" }, State = 2, Flag = "Rivals_AimAssist_Key", Callback = function(i) local o={"MouseButton1","MouseButton2","MouseButton3"}; local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.AimAssist.Key", o[i] or "MouseButton2") end end })
             AAim:CreateSlider({ Name = "Smoothness", State = 0, Min = 0, Max = 20, Decimals = 1, Flag = "Rivals_AimAssist_Smoothness", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.AimAssist.Smoothness", v) end end })
             AAim:CreateSlider({ Name = "Range", State = 300, Min = 25, Max = 1000, Decimals = 0, Suffix = " px", Flag = "Rivals_AimAssist_Range", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.AimAssist.Range", v) end end })
             AAim:CreateDropdown({ Name = "Hit Part", Options = { "Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso" }, State = 1, Flag = "Rivals_AimAssist_Part", Callback = function(i) local o={"Head","HumanoidRootPart","Torso","UpperTorso","LowerTorso"}; local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.AimAssist.Part", o[i] or "Head") end end })
+        end
 
-            local RR = luaxSection(__sf, __sc, { Name = "RIVALS Ragebot", Side = "Right", Size = 310 })
-            LT["RivalsRagebot"] = RR:CreateToggle({ Name = "Ragebot", State = false, Flag = "Rivals_Ragebot_Enabled", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.Ragebot.Enabled", v == true) end end })
-            RR:CreateSlider({ Name = "Interval", State = 0.2, Min = 0.01, Max = 1, Decimals = 2, Suffix = " s", Flag = "Rivals_Ragebot_Interval", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.Ragebot.Interval", v) end end })
-            RR:CreateDropdown({ Name = "Hit Part", Options = { "Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso" }, State = 1, Flag = "Rivals_Ragebot_Part", Callback = function(i) local o={"Head","HumanoidRootPart","Torso","UpperTorso","LowerTorso"}; local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.Ragebot.Part", o[i] or "Head") end end })
-            RR:CreateToggle({ Name = "Origin Shift", State = true, Flag = "Rivals_Ragebot_OriginShift", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.Ragebot.OriginShift.Enabled", v == true) end end })
-            RR:CreateSlider({ Name = "Origin Shift Range", State = 14, Min = 1, Max = 50, Decimals = 0, Suffix = " studs", Flag = "Rivals_Ragebot_OriginShiftRange", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.Ragebot.OriginShift.Range", v) end end })
-            RR:CreateToggle({ Name = "Void Spam", State = false, Flag = "Rivals_Ragebot_VoidSpam", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.Ragebot.VoidSpam.Enabled", v == true) end end })
-            RR:CreateSlider({ Name = "Void X", State = 0, Min = -10000, Max = 10000, Decimals = 0, Flag = "Rivals_Ragebot_VoidX", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then local p=rv.Get("Combat.Ragebot.VoidSpam.Position") or Vector3.new(0,1000,0); rv.Set("Combat.Ragebot.VoidSpam.Position", Vector3.new(v,p.Y,p.Z)) end end })
-            RR:CreateSlider({ Name = "Void Y", State = 1000, Min = -10000, Max = 10000, Decimals = 0, Flag = "Rivals_Ragebot_VoidY", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then local p=rv.Get("Combat.Ragebot.VoidSpam.Position") or Vector3.new(0,1000,0); rv.Set("Combat.Ragebot.VoidSpam.Position", Vector3.new(p.X,v,p.Z)) end end })
-            RR:CreateSlider({ Name = "Void Z", State = 0, Min = -10000, Max = 10000, Decimals = 0, Flag = "Rivals_Ragebot_VoidZ", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then local p=rv.Get("Combat.Ragebot.VoidSpam.Position") or Vector3.new(0,1000,0); rv.Set("Combat.Ragebot.VoidSpam.Position", Vector3.new(p.X,p.Y,v)) end end })
+        do
+            local __ss, __ssc = luaxFolder("Silent Aim", "Left")
+            local SA = luaxSection(__ss, __ssc, { Name = "Silent Aim Settings", Side = "Left", Size = 390 })
+            LT["LuaxSilent"] = SA:CreateToggle({ Name = "Silent Aim", State = false, Flag = "Luax_SilentAim_Enabled", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.SilentAim.Enabled", v == true) end end })
+            SA:CreateSlider({ Name = "Target Range", State = 300, Min = 25, Max = 1000, Decimals = 0, Suffix = " studs", Flag = "Luax_SilentAim_TargetRange", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.SilentAim.Range", v) end end })
+            SA:CreateSlider({ Name = "Hit Chance", State = 100, Min = 0, Max = 100, Decimals = 0, Suffix = "%", Flag = "Luax_SilentAim_HitChance", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.SilentAim.HitChance", v) end; local rb=getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("silent.hitChance", v) end end })
+            SA:CreateSlider({ Name = "Silent FOV Radius", State = 100, Min = 10, Max = 750, Decimals = 0, Suffix = " px", Flag = "Luax_SilentAim_FOVRadius", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.SilentAim.FOVRadius", v) end; local rb=getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("silent.fovRadius", v) end end })
+            SA:CreateDropdown({ Name = "Silent Hit Part", Options = { "Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso", "Closest", "Random" }, State = 1, Flag = "Luax_SilentAim_HitPart", Callback = function(i) local o={"Head","HumanoidRootPart","Torso","UpperTorso","LowerTorso","Closest","Random"}; local pick=o[i] or "Head"; local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.SilentAim.Part", pick) end; local rb=getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("silent.hitPart", pick) end end })
+            SA:CreateDropdown({ Name = "Targeting", Options = { "Visible", "Not Visible", "Both" }, State = 1, Flag = "Luax_SilentAim_Targeting", Callback = function(i) local m=({"Visible","Not Visible","Both"})[i] or "Visible"; local mm=(m=="Both") and "both" or ((m=="Not Visible") and "hidden" or "visible"); local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.SilentAim.Visibility", mm) end; local rb=getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("silent.visibility", mm) end end })
+            SA:CreateToggle({ Name = "Follow Muzzle", State = false, Flag = "Luax_SilentAim_FollowMuzzle", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.SilentAim.FollowMuzzle", v == true) end; local rb=getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("silent.followMuzzle", v) end end })
+            SA:CreateToggle({ Name = "Auto Shoot", State = false, Flag = "Luax_SilentAim_AutoShoot", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.AutoShoot.Enabled", v == true) end; local rb=getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("silent.autoShoot", v) end end })
+            SA:CreateSlider({ Name = "Silent FOV Thickness", State = 2, Min = 1, Max = 8, Decimals = 0, Flag = "Luax_SilentAim_FOVThickness", Callback = function(v) local rb=getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("silentFOV.OutlineThickness", v) end end })
+            SA:CreateToggle({ Name = "Silent FOV Filled", State = false, Flag = "Luax_SilentAim_FOVFilled", Callback = function(v) local rb=getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("silentFOV.FilledEnabled", v) end end })
+            SA:CreateToggle({ Name = "Show Silent FOV", State = false, Flag = "Luax_SilentAim_ShowFOV", Callback = function(v) local rb=getgenv().__ragebot; if rb and rb.ShowSilentFOV then rb.ShowSilentFOV(v == true) end end })
+        end
+
+        do
+            local __rs, __rsc = luaxFolder("Rage Bot", "Right")
+            local RR = luaxSection(__rs, __rsc, { Name = "Rage Bot Settings", Side = "Right", Size = 340 })
+            LT["LuaxRageBot"] = RR:CreateToggle({ Name = "Rage Bot", State = false, Flag = "Luax_RageBot_Enabled", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.Ragebot.Enabled", v == true) end end })
+            RR:CreateSlider({ Name = "Rage Range", State = 150, Min = 25, Max = 1000, Decimals = 0, Suffix = " studs", Flag = "Luax_RageBot_Range", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.Ragebot.Range", v) end; local rb=getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("target.range", v) end end })
+            RR:CreateSlider({ Name = "Interval", State = 0.2, Min = 0.01, Max = 1, Decimals = 2, Suffix = " s", Flag = "Luax_RageBot_Interval", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.Ragebot.Interval", v) end end })
+            RR:CreateDropdown({ Name = "Rage Hit Part", Options = { "Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso" }, State = 1, Flag = "Luax_RageBot_HitPart", Callback = function(i) local o={"Head","HumanoidRootPart","Torso","UpperTorso","LowerTorso"}; local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.Ragebot.Part", o[i] or "Head") end end })
+            RR:CreateToggle({ Name = "Origin Shift", State = true, Flag = "Luax_RageBot_OriginShift", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.Ragebot.OriginShift.Enabled", v == true) end end })
+            RR:CreateSlider({ Name = "Origin Shift Range", State = 14, Min = 1, Max = 50, Decimals = 0, Suffix = " studs", Flag = "Luax_RageBot_OriginShiftRange", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.Ragebot.OriginShift.Range", v) end end })
+            RR:CreateToggle({ Name = "Void Spam", State = false, Flag = "Luax_RageBot_VoidSpam", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Combat.Ragebot.VoidSpam.Enabled", v == true) end end })
+            RR:CreateSlider({ Name = "Void X", State = 0, Min = -10000, Max = 10000, Decimals = 0, Flag = "Luax_RageBot_VoidX", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then local p=rv.Get("Combat.Ragebot.VoidSpam.Position") or Vector3.new(0,1000,0); rv.Set("Combat.Ragebot.VoidSpam.Position", Vector3.new(v,p.Y,p.Z)) end end })
+            RR:CreateSlider({ Name = "Void Y", State = 1000, Min = -10000, Max = 10000, Decimals = 0, Flag = "Luax_RageBot_VoidY", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then local p=rv.Get("Combat.Ragebot.VoidSpam.Position") or Vector3.new(0,1000,0); rv.Set("Combat.Ragebot.VoidSpam.Position", Vector3.new(p.X,v,p.Z)) end end })
+            RR:CreateSlider({ Name = "Void Z", State = 0, Min = -10000, Max = 10000, Decimals = 0, Flag = "Luax_RageBot_VoidZ", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then local p=rv.Get("Combat.Ragebot.VoidSpam.Position") or Vector3.new(0,1000,0); rv.Set("Combat.Ragebot.VoidSpam.Position", Vector3.new(p.X,p.Y,v)) end end })
         end
         do
             local __af, __ac = luaxFolder("Aimbot", "Left")
@@ -39382,6 +39592,7 @@ do
         LT["SlingNoTpInfiniteRange"] = SBL:CreateToggle({ Name = "No TP Infinite Range", State = true, Callback = function(v) slingCFG.noTpInfiniteRange = v end })
         LT["SlingNoTpInstantHit"] = SBL:CreateToggle({ Name = "No TP Instant Hit", State = true, Callback = function(v) slingCFG.noTpInstantHit = v end })
         LT["SlingNoTpHitscanOverride"] = SBL:CreateToggle({ Name = "No TP Hitscan Override", State = true, Callback = function(v) slingCFG.noTpHitscanOverride = v end })
+        LT["SlingNoTpWallBang"] = SBL:CreateToggle({ Name = "No TP Wall Bang", State = true, Callback = function(v) slingCFG.noTpWallBang = v end })
         LT["SlingNoTpProjectileFollow"] = SBL:CreateToggle({ Name = "No TP Projectile Follow", State = true, Callback = function(v) slingCFG.noTpProjectileFollow = v end })
         LT["SlingNoTpSpoofSelf"] = SBL:CreateToggle({ Name = "No TP Spoof Self", State = true, Callback = function(v) slingCFG.noTpSpoofSelf = v end })
         LT["SlingHideAvatar"] = SBL:CreateToggle({ Name = "Hide Avatar", State = true, Callback = function(v) slingCFG.hideAvatar = v end })
@@ -39614,21 +39825,18 @@ getgenv().__DEVKAGE_EXTRA_SOURCE = nil
 pcall(function() __DEVWB_LOADER(__EXTRA_SOURCE)() end)
 
 task.spawn(function()
-    local ANTI_AIM_ICON = "rbxassetid://113229312578847"
+    local ANTI_AIM_ICON = "rbxassetid://121886618627230"
     while true do
         local win = getgenv().__DEVKAGE_RUNTIME_WINDOW
         local holder = win and win:FindFirstChild("TabsHolder")
         if holder then
-            local tabs = {}
+            local antiAimTab
             for _, tab in ipairs(holder:GetChildren()) do
                 if tab:IsA("Frame") and (tab.LayoutOrder or 0) == 2 then
-                    local img = tab:FindFirstChildOfClass("ImageLabel")
-                    if img then tabs[#tabs + 1] = tab end
+                    antiAimTab = tab
+                    break
                 end
             end
-            table.sort(tabs, function(a,b) return tostring(a) < tostring(b) end)
-            local antiAimTab = tabs[1]
-            for i = 2, #tabs do pcall(function() tabs[i]:Destroy() end) end
             if antiAimTab then
                 local images = {}
                 for _, child in ipairs(antiAimTab:GetChildren()) do
@@ -39641,11 +39849,10 @@ task.spawn(function()
                     img.Visible = true
                     img.ImageTransparency = 0
                     img.Size = UDim2.new(0, 36, 0, 36)
-                    for i = 2, #images do pcall(function() images[i]:Destroy() end) end
+                    img.BackgroundTransparency = 1
+                    img.ScaleType = Enum.ScaleType.Fit
                 end
-                for _, child in ipairs(antiAimTab:GetChildren()) do
-                    if child:IsA("TextLabel") then child.Visible = false end
-                end
+                for i = 2, #images do pcall(function() images[i]:Destroy() end) end
             end
         end
         task.wait(0.25)
