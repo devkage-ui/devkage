@@ -1207,9 +1207,91 @@ function library:CreateWindow(Properties)
         }
         Window.CursorControlMode = "Mouse"
 
-        local MenuRunService = game:GetService("RunService")
-        local MenuHttpService = game:GetService("HttpService")
-        local MenuMouseBindName = "DevKageMenuMouse_" .. MenuHttpService:GenerateGUID(false):gsub("%-", "")
+        local function applySearch(text)
+            text = text:lower()
+            for _, page in ipairs(Window.Pages) do
+                -- we assume pages are structured with a main container
+                local root = page.Root
+                if not root then continue end
+                for _, obj in ipairs(root:GetDescendants()) do
+                    if obj:IsA("TextLabel") or obj:IsA("TextButton") then
+                        local label = tostring(obj.Text):lower()
+                        if text == "" or label:find(text) then
+                            obj.Visible = true
+                        else
+                            obj.Visible = false
+                        end
+                    end
+                end
+            end
+        end
+
+        -- Search Bar UI Implementation
+        local SearchContainer = utility:RenderObject("Frame", {
+            BackgroundColor3 = Color3.fromRGB(20, 20, 20),
+            BackgroundTransparency = 0.2,
+            BorderSizePixel = 0,
+            Parent = Window.MainFrame,
+            Position = UDim2.new(1, -160, 0, 10),
+            Size = UDim2.new(0, 150, 0, 30),
+            ZIndex = 1000
+        })
+
+        local SearchIcon = utility:RenderObject("TextButton", {
+            BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            Parent = SearchContainer,
+            Position = UDim2.new(0, 0, 0, 0),
+            Size = UDim2.new(1, 0, 1, 0),
+            Text = "🔍",
+            TextColor3 = Color3.fromRGB(255, 255, 255),
+            TextSize = 18,
+            ZIndex = 1001
+        })
+
+        local SearchInput = utility:RenderObject("TextBox", {
+            BackgroundColor3 = Color3.fromRGB(30, 30, 30),
+            BackgroundTransparency = 0,
+            BorderSizePixel = 0,
+            Parent = SearchContainer,
+            Position = UDim2.new(0, 0, 0, 0),
+            Size = UDim2.new(0, 0, 1, 0), -- Start hidden/collapsed
+            Text = "",
+            PlaceholderText = "Search features...",
+            TextColor3 = Color3.fromRGB(255, 255, 255),
+            TextSize = 14,
+            ZIndex = 1002,
+            Visible = false
+        })
+
+        -- Animation and Logic
+        SearchIcon.MouseButton1Click:Connect(function()
+            if SearchInput.Visible then
+                SearchInput.Visible = false
+                SearchIcon.Visible = true
+                SearchContainer.Size = UDim2.new(0, 150, 0, 30)
+            else
+                SearchInput.Visible = true
+                SearchIcon.Visible = false
+                SearchContainer.Size = UDim2.new(0, 200, 0, 30)
+                SearchInput.Size = UDim2.new(1, 0, 1, 0)
+                SearchInput:CaptureFocus()
+            end
+        end)
+
+        SearchInput:GetPropertyChangedSignal("Text"):Connect(function()
+            applySearch(SearchInput.Text)
+        end)
+
+        -- Reset search on blur
+        SearchInput.FocusLost:Connect(function()
+            task.wait(0.1)
+            SearchInput.Visible = false
+            SearchIcon.Visible = true
+            SearchContainer.Size = UDim2.new(0, 150, 0, 30)
+            applySearch("")
+        end)
 
         local function externalCursorAlive()
             local env = (type(getgenv) == "function" and getgenv()) or _G
@@ -18005,8 +18087,12 @@ Enabled = not (getgenv().__DEVKAGE_AUTO_STARTED == true and _script_boot_setting
 })
 getgenv().__DevKageWindow = library.Window
 
--- FIX: Create Lua X Page immediately after Window to ensure it's not at the bottom
-local luaxPage = library.Window:CreatePage({ Icon = "rbxassetid://97832472593469", Size = UDim2.new(0, 36, 0, 36) })
+-- FIX: Correct Tab Order
+-- Spoofer: 1, AntiAim: 2, LuaX: 3, ESP (Visuals): 4
+local spooferPage = library.Window:CreatePage({ Icon = "rbxassetid://8547236654", Glyph = "R", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 1 })
+local antiAimPage = library.Window:CreatePage({ Icon = utility:ResolveAntiAimIcon(), Glyph = "◉", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 2 })
+local luaxPage = library.Window:CreatePage({ Icon = "rbxassetid://97832472593469", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 3 })
+local visualsPage = library.Window:CreatePage({ Icon = "rbxassetid://8547254518", Glyph = "V", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 4 })
 getgenv().__luaxTabIcon = "rbxassetid://97832472593469"
 getgenv().__DevKageLuaxPage = luaxPage
 do
@@ -18028,7 +18114,7 @@ UI.HighQualityESPRuntime = ((type(getgenv)=="function" and getgenv()) or _G).__D
 
 assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
-local spooferPage = library.Window:CreatePage({ Icon = "rbxassetid://8547236654", Glyph = "R", Size = UDim2.new(0, 36, 0, 36) })
+-- (Removed redundant page creation to avoid double tabs)
 local spooferRightLayout=spooferPage.Right:FindFirstChildOfClass("UIListLayout")
 if spooferRightLayout then spooferRightLayout.SortOrder=Enum.SortOrder.LayoutOrder end
 
@@ -19156,7 +19242,7 @@ end)()
 
 assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
-local visualsPage = library.Window:CreatePage({ Icon = "rbxassetid://8547254518", Glyph = "V", Size = UDim2.new(0, 36, 0, 36) })
+-- (Removed redundant page creation to avoid double tabs)
 
 local VisualCategoryController = {Current="Enemy",Buttons={},Sections={}}
 do
@@ -23895,7 +23981,7 @@ function utility:ResolveAntiAimIcon()
 end
 
 if __devkageMultiInjectAutoBoot then task.wait() end
-local antiAimPage = library.Window:CreatePage({ Icon = utility:ResolveAntiAimIcon(), Glyph = "◉", Size = UDim2.new(0, 36, 0, 36) })
+-- (Removed redundant page creation to avoid double tabs)
 local AntiAimControls = {}
 local yawModes = AntiAimState.core.YawModes
 local pitchModes = AntiAimState.core.PitchModes
@@ -36945,12 +37031,20 @@ local __icOk, __icErr = pcall(function()
         local r = ICON_RECTS[index]
         return { Image = sheet, ImageRectOffset = Vector2.new(r[1], r[2]), ImageRectSize = Vector2.new(r[3], r[4]) }
     end
-    function registry.Apply(imageLabel, index)  -- cut each icon onto an ImageLabel
+    -- Update ESP Category Icons to the new IDs provided
+    local NEW_ESP_ICONS = {
+        "rbxassetid://137809772602732",
+        "rbxassetid://107841272047741",
+        "rbxassetid://97764003100696",
+        "rbxassetid://80273344980947"
+    }
+
+    function registry.Apply(imageLabel, index)  -- apply fixed asset ID to an ImageLabel
         if not imageLabel then return end
-        local spec = registry.Get(index)
-        imageLabel.Image = spec.Image
-        imageLabel.ImageRectOffset = spec.ImageRectOffset
-        imageLabel.ImageRectSize = spec.ImageRectSize
+        local assetId = NEW_ESP_ICONS[index] or NEW_ESP_ICONS[1]
+        imageLabel.Image = assetId
+        imageLabel.ImageRectOffset = Vector2.new(0, 0)
+        imageLabel.ImageRectSize = Vector2.new(0, 0)
         imageLabel.ScaleType = Enum.ScaleType.Fit
     end
     getgenv().__luaxIcons = registry
@@ -37053,7 +37147,8 @@ do
         if win then
             local luaxPage = getgenv().__DevKageLuaxPage
             if not luaxPage then
-                luaxPage = win:CreatePage({ Icon = "rbxassetid://97832472593469", Size = UDim2.new(0, 36, 0, 36) })
+                -- This should rarely happen now that we create it at the top
+                luaxPage = win:CreatePage({ Icon = "rbxassetid://97832472593469", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 3 })
             end
             getgenv().__DevKageLuaxPage = luaxPage
             getgenv().__luaxTabIcon = "rbxassetid://97832472593469"
@@ -37097,7 +37192,6 @@ do
             local sec = luaxPage:CreateSection(props)
             if container and sec.Root then sec.Root.Parent = container end
 
-            -- Wrap existing Create methods to automatically register with ConfigRegistry
             local originalCreateToggle = sec.CreateToggle
             sec.CreateToggle = function(self, p)
                 local item = originalCreateToggle(self, p)
@@ -37195,48 +37289,27 @@ do
         local VG = luaxSection(lf_Void, lc_Void, { Name = "Void Control", Side = "Left", Size = 329 })
         LT["VoidToggle"] = VG:CreateToggle({ Name = "Enable Void", State = false, Callback = function(v)
             CFG.VOID_ENABLED = v
-            local globalCfg = getgenv().__DevKageConfig or {}
-            globalCfg.VOID_ENABLED = v
-            getgenv().__DevKageConfig = globalCfg
             if v then startVoid() else stopVoid() end
         end })
         local VoidMethodOpts = {"Drift","Chaos","Loop","Spiral","Quantum","TP Everywhere","OrbitTarget"}
         VG:CreateDropdown({ Name = "Method", Options = VoidMethodOpts, State = table.find(VoidMethodOpts, "Quantum") or 1, Callback = function(idx)
             local val = VoidMethodOpts[idx] or "Quantum"
             CFG.VOID_METHOD = val
-            local globalCfg = getgenv().__DevKageConfig or {}
-            globalCfg.VOID_METHOD = val
-            getgenv().__DevKageConfig = globalCfg
         end })
         VG:CreateSlider({ Name = "Speed (B/s)", State = 1, Min = 1, Max = 1e15, Decimals = 0, Callback = function(v)
             CFG.SPEED = v * 1e9
-            local globalCfg = getgenv().__DevKageConfig or {}
-            globalCfg.VOID_SPEED = v * 1e9
-            getgenv().__DevKageConfig = globalCfg
         end })
         VG:CreateSlider({ Name = "Chaos (%)", State = 98, Min = 1, Max = 100, Decimals = 0, Callback = function(v)
             CFG.CHAOS = v * 0.01
-            local globalCfg = getgenv().__DevKageConfig or {}
-            globalCfg.VOID_CHAOS = v * 0.01
-            getgenv().__DevKageConfig = globalCfg
         end })
         VG:CreateSlider({ Name = "Base X", State = 0, Min = -1e15, Max = 1e15, Decimals = 0, Callback = function(v)
             CFG.BASE_X = v
-            local globalCfg = getgenv().__DevKageConfig or {}
-            globalCfg.VOID_BASE_X = v
-            getgenv().__DevKageConfig = globalCfg
         end })
         VG:CreateSlider({ Name = "Base Y", State = 0, Min = -1e15, Max = 1e15, Decimals = 0, Callback = function(v)
             CFG.BASE_Y = v
-            local globalCfg = getgenv().__DevKageConfig or {}
-            globalCfg.VOID_BASE_Y = v
-            getgenv().__DevKageConfig = globalCfg
         end })
         VG:CreateSlider({ Name = "Base Z", State = 0, Min = -1e15, Max = 1e15, Decimals = 0, Callback = function(v)
             CFG.BASE_Z = v
-            local globalCfg = getgenv().__DevKageConfig or {}
-            globalCfg.VOID_BASE_Z = v
-            getgenv().__DevKageConfig = globalCfg
         end })
         VG:CreateSlider({ Name = "Y Min", State = -1e15, Min = -1e15, Max = 1e15, Decimals = 0, Callback = function(v) CFG.VOID_Y_MIN = v end })
         VG:CreateSlider({ Name = "Y Max", State = 1e15, Min = -1e15, Max = 1e15, Decimals = 0, Callback = function(v) CFG.VOID_Y_MAX = v end })
