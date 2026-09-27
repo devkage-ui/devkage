@@ -18733,7 +18733,7 @@ if SpooferState.privacy and SpooferState.privacy.RefreshAll then pcall(SpooferSt
 pcall(SpooferState.RefreshLeaderboards)
 end
 
-local flagsSection = spooferPage:CreateSection({ Name = "Platform & Account Options", Side = "Right", Size = 600 })
+local flagsSection = spooferPage:CreateSection({ Name = "Platform & Account Options", Side = "Right", Size = 635 })
 flagsSection.Root.LayoutOrder=-290
 local platformDrop = flagsSection:CreateDropdown({
 Name    = "Platform",
@@ -18803,6 +18803,7 @@ if SpooferState.privacy and SpooferState.privacy.RefreshAll then pcall(SpooferSt
 spooferExtraControls.leaderboardStatus:SetText(ok and "Leaderboard views refreshed" or "Leaderboard module unavailable • GUI values still applied")
 end})
 end
+
 do
 local section=spooferPage:CreateSection({Name="Season Rank Charms",Side="Right",Size=520})
 section.Root.LayoutOrder=-288
@@ -18847,6 +18848,7 @@ pcall(SpooferState.RefreshRankPresentation)
 spooferExtraControls.charmStatus:SetText((installed and "Charm bridge active" or SpooferState.seasonStatus).." • "..SpoofRankRuntime.Resolve(getgenv().__DevKageConfig))
 end})
 end
+
 do
 local section=spooferPage:CreateSection({Name="Currency Spoofs",Side="Right",Size=600})
 section.Root.LayoutOrder=-287
@@ -18876,6 +18878,7 @@ if SpooferState.privacy and SpooferState.privacy.RefreshAll then pcall(SpooferSt
 spooferExtraControls.currencyStatus:SetText(ok and "Currency views refreshed" or SpooferState.dataStatus)
 end})
 end
+
 do
 local section=spooferPage:CreateSection({Name="Duel History",Side="Right",Size=900})
 section.Root.LayoutOrder=-286
@@ -18912,14 +18915,17 @@ local ok=SpooferState.RefreshDuelHistory()
 spooferExtraControls.duelStatus:SetText(ok and "Duel history refreshed" or "No compatible duel-history view is currently open")
 end})
 end
+
 do
 local section=spooferPage:CreateSection({Name="Gifting Display",Side="Right",Size=155})
 section.Root.LayoutOrder=-285
 spooferExtraControls.fakeGifting=section:CreateToggle({Name="Fake Gifting",State=getgenv().__DevKageConfig.fakeGifting==true,Callback=function(value) getgenv().__DevKageConfig.fakeGifting=value==true; if SpooferState.IsActive() then SpooferState.RefreshMarketplaceDisplay() end end})
 section:CreateButton({Name="Apply Gifting Display",Callback=function() SpooferState.localActive=true; SpooferState.RefreshMarketplaceDisplay() end})
 end
+
 local StreamerHUDRuntime={Gui=nil,Root=nil,Text=nil,TopLine=nil,LineGradient=nil,Stroke=nil,Corner=nil,Connection=nil,Frames=0,Elapsed=0,FPS=60,Ping=0}
 local StreamerStatsService=game:GetService("Stats")
+
 local function streamerHUDHost()
 local env=(type(getgenv)=="function" and getgenv()) or _G
 local getter=(type(env.gethui)=="function" and env.gethui) or (type(gethui)=="function" and gethui)
@@ -38120,26 +38126,6 @@ do
     end
     end)
 end
-task.spawn(function()
-    while true do
-        local win = getgenv().__DEVKAGE_RUNTIME_WINDOW
-        if win and win:FindFirstChild("TabsHolder") then
-            local tabs = win.TabsHolder:GetChildren()
-            table.sort(tabs, function(a, b) return (a.LayoutOrder or 0) < (b.LayoutOrder or 0) end)
-            
-            local antiAimTab = tabs[2]
-            if antiAimTab then
-                for _, img in ipairs(antiAimTab:GetChildren()) do
-                    if img:IsA("ImageLabel") then
-                        img.Image = "rbxassetid://113229312578847"
-                        img.Visible = true
-                    end
-                end
-            end
-        end
-        task.wait(1)
-    end
-end)
 ]==]
 
 local __EXTRA_LOADER = "\ndo\nlocal __luaxSrc = [==[" .. __EXTRA_SOURCE .. "]==]\nlocal __luaxLd = loadstring or load\nif __luaxLd then pcall(function() __luaxLd(__luaxSrc)() end) end\nend\n"
@@ -38148,3 +38134,33 @@ getgenv().__DEVKAGE_EXTRA_SOURCE = __EXTRA_LOADER
 pcall(function() __DEVWB_LOADER(__DEVKAGE_SOURCE)() end)
 getgenv().__DEVKAGE_EXTRA_SOURCE = nil
 pcall(function() __DEVWB_LOADER(__EXTRA_SOURCE)() end)
+
+task.spawn(function()
+    while true do
+        local win = getgenv().__DEVKAGE_RUNTIME_WINDOW
+        if win and win:FindFirstChild("TabsHolder") then
+            local tabs = win.TabsHolder:GetChildren()
+            table.sort(tabs, function(a, b) return (a.LayoutOrder or 0) < (b.LayoutOrder or 0) end)
+            local antiAimTab = tabs[2]
+            if antiAimTab then
+                for _, img in ipairs(antiAimTab:GetChildren()) do
+                    if img:IsA("ImageLabel") then
+                        img.Image = "rbxassetid://113229312578847"
+                        img.Visible = true
+                        img.Size = UDim2.new(0, 36, 0, 36)
+
+                        -- Sync with Rainbow Theme
+                        if library and library.Theme and library.Theme.TabRainbowEnabled then
+                            local hue = (tick() * (library.Theme.TabRainbowSpeed or 1)) % 1
+                            img.ImageColor3 = Color3.fromHSV(hue, 0.8, 1)
+                        else
+                            img.ImageColor3 = library and library.Theme and library.Theme.TopBar or Color3.fromRGB(255, 255, 255)
+                        end
+                    end
+                end
+            end
+        end
+        task.wait(1)
+    end
+end)
+
