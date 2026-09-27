@@ -2228,7 +2228,8 @@ function pages:CreateFolder(Properties)
         Side    = (Properties.side or Properties.Side or "Left"),
         Sections = {},
         Window   = self.Window,
-        Page    = self
+        Page     = self,
+        IsLuaX   = Properties.IsLuaX == true or Properties.LuaX == true
     }
     do
         local Folder_Holder = utility:RenderObject("Frame", {
@@ -2286,36 +2287,82 @@ function pages:CreateFolder(Properties)
             Position            = UDim2.new(0, 0, 0, 20),
             Size                = UDim2.new(1, 0, 0, 0),
             ZIndex              = 2,
-            Visible             = Folder.Open,
+            Visible             = false,
             AutomaticSize       = Enum.AutomaticSize.Y
         })
-        utility:RenderObject("UIListLayout", {
+        local Folder_Layout = utility:RenderObject("UIListLayout", {
             Padding            = UDim.new(0, 2),
             Parent             = Folder_Container,
             FillDirection      = "Vertical",
             HorizontalAlignment= "Left",
-            VerticalAlignment  = "Top"
+            VerticalAlignment  = "Top",
+            SortOrder          = Enum.SortOrder.LayoutOrder
         })
-        -- Lua X folders start collapsed. Clicking the header still toggles them normally.
-        Folder.Open = false
-        Folder_Container.Visible = false
-        Folder_Holder.Size = UDim2.new(1, 0, 0, 20)
-        Folder_Arrow.Rotation = 180
+
+        Folder.Holder = Folder_Holder
+        Folder.Header = Folder_Header
+        Folder.Title = Folder_Title
+        Folder.Arrow = Folder_Arrow
+        Folder.Container = Folder_Container
+        Folder.Layout = Folder_Layout
+
+        local function updateSize()
+            if Folder.Open then
+                local contentY = math.max(Folder_Container.AbsoluteSize.Y, Folder_Layout.AbsoluteContentSize.Y)
+                Folder_Holder.Size = UDim2.new(1, 0, 0, 20 + math.max(0, contentY))
+            else
+                Folder_Holder.Size = UDim2.new(1, 0, 0, 20)
+            end
+        end
+        Folder.UpdateSize = updateSize
+
+        function Folder:SetOpen(state)
+            state = state == true
+            self.Open = state
+            Folder_Container.Visible = state
+            Folder_Arrow.Rotation = state and 0 or 180
+            if state then
+                task.defer(updateSize)
+                task.delay(0, updateSize)
+                task.delay(0.03, updateSize)
+            else
+                Folder_Holder.Size = UDim2.new(1, 0, 0, 20)
+            end
+        end
+
+        function Folder:Toggle()
+            self:SetOpen(not self.Open)
+        end
 
         utility:CreateConnection(Folder_Header.MouseButton1Click, function()
-            Folder.Open = not Folder.Open
-            Folder_Container.Visible = Folder.Open
-            Folder_Holder.Size = Folder.Open and UDim2.new(1, 0, 0, 20 + Folder_Container.AbsoluteSize.Y) or UDim2.new(1, 0, 0, 20)
-            Folder_Arrow.Rotation = Folder.Open and 0 or 180
+            Folder:Toggle()
         end)
+        utility:CreateConnection(Folder_Layout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
+            updateSize()
+        end)
+        utility:CreateConnection(Folder_Container:GetPropertyChangedSignal("AbsoluteSize"), function()
+            updateSize()
+        end)
+
+        -- Every folder starts collapsed; Lua X startup code also explicitly
+        -- collapses these after construction/auto-load so execution never leaves
+        -- a long expanded list on screen.
+        Folder:SetOpen(false)
     end
     return setmetatable(Folder, {
-        AddSection = function(self, Section)
-            Section.Parent = self
-            Section.Page[Section.Side].Parent = self.Folder_Container
-            table.insert(self.Sections, Section)
-            return Section
-        end
+        __index = {
+            AddSection = function(self, Section)
+                if not Section or not Section.Root then return Section end
+                Section.Parent = self
+                Section.Root.Parent = self.Container
+                table.insert(self.Sections, Section)
+                self:UpdateSize()
+                return Section
+            end,
+            SetOpen = Folder.SetOpen,
+            Toggle = Folder.Toggle,
+            UpdateSize = Folder.UpdateSize
+        }
     })
 end
 
@@ -2337,7 +2384,7 @@ function pages:CreateSection(Properties)
             BorderColor3        = Color3.fromRGB(12, 12, 12),
             BorderMode          = "Inset",
             BorderSizePixel     = 1,
-            Parent              = Section.Parent and Section.Parent.Folder_Container or Section.Page[Section.Side],
+            Parent              = (Properties.ParentFolder and Properties.ParentFolder.Container) or Section.Page[Section.Side],
             Size                = UDim2.new(1, 0, 0, Section.Size),
             ZIndex              = 2
         })
@@ -38861,69 +38908,72 @@ do
             end
         end })
 
-        -- DevKage's own CreateFolder/AddSection is broken (AddSection would reparent
-        -- the whole column). Build folders and reparent each section's Root ourselves.
+        -- Stable Lua X folder helper. Sections are created directly inside the
+        -- folder container instead of reparenting whole page columns. This keeps
+        -- every feature visible when a folder is opened and prevents layout drift.
         local luaxFolderRefs = {}
         local function luaxFolder(name, side)
-            local col = luaxPage[side]
-            local before = {}
-            for _, c in ipairs(col:GetChildren()) do before[c] = true end
-            local folder = luaxPage:CreateFolder({ Name = name, Side = side })
-            local holder, container
-            for _, c in ipairs(col:GetChildren()) do
-                if not before[c] and c:IsA("Frame") then holder = c; break end
-            end
-            if holder then
-                for _, c in ipairs(holder:GetChildren()) do
-                    if c:IsA("Frame") and c:FindFirstChildOfClass("UIListLayout") then container = c; break end
-                end
-            end
-            luaxFolderRefs[#luaxFolderRefs + 1] = { folder = folder, holder = holder, container = container }
-            return folder, container
+            local folder = luaxPage:CreateFolder({ Name = name, Side = side, IsLuaX = true })
+            luaxFolderRefs[#luaxFolderRefs + 1] = folder
+            return folder, folder.Container
         end
         local function luaxSection(folder, container, props)
-            -- Add a unique flag for config saving based on the section name
-            local flag = "Luax_" .. props.Name:gsub(" ", "_")
+            props = props or {}
+            props.ParentFolder = folder
+            local flag = "Luax_" .. tostring(props.Name or "Section"):gsub(" ", "_")
             local sec = luaxPage:CreateSection(props)
-            if container and sec.Root then sec.Root.Parent = container end
+
+            local function registerLuaxControl(item, p)
+                if not item then return item end
+                local displayName = p and (p.Name or p.name or p.Title or p.title)
+                local explicitFlag = p and (p.Flag or p.flag or p.Id or p.id)
+                local itemFlag = explicitFlag
+                if itemFlag == nil or tostring(itemFlag) == "" then
+                    itemFlag = flag .. "_" .. tostring(displayName or "Control")
+                        :gsub("%s+", "_")
+                        :gsub("[^%w_%-]", "")
+                end
+                itemFlag = tostring(itemFlag)
+                item.Flag = itemFlag
+                item.__DevKageLuaXControl = true
+                item.__DevKageLuaXSection = tostring(props.Name or "LuaX")
+                library.Controls = library.Controls or {}
+                library.ConfigRegistry = library.ConfigRegistry or {}
+                library.Controls[itemFlag] = item
+                library.ConfigRegistry[itemFlag] = item
+                return item
+            end
 
             local originalCreateToggle = sec.CreateToggle
             sec.CreateToggle = function(self, p)
-                local item = originalCreateToggle(self, p)
-                if p.Name then
-                    local itemFlag = flag .. "_" .. p.Name:gsub(" ", "_")
-                    -- We use the library's internal registration mechanism
-                    if library and library.ConfigRegistry then
-                        library.ConfigRegistry[itemFlag] = item
-                    end
-                end
-                return item
+                return registerLuaxControl(originalCreateToggle(self, p), p)
             end
-
             local originalCreateSlider = sec.CreateSlider
             sec.CreateSlider = function(self, p)
-                local item = originalCreateSlider(self, p)
-                if p.Name then
-                    local itemFlag = flag .. "_" .. p.Name:gsub(" ", "_")
-                    if library and library.ConfigRegistry then
-                        library.ConfigRegistry[itemFlag] = item
-                    end
-                end
-                return item
+                return registerLuaxControl(originalCreateSlider(self, p), p)
             end
-
             local originalCreateDropdown = sec.CreateDropdown
             sec.CreateDropdown = function(self, p)
-                local item = originalCreateDropdown(self, p)
-                if p.Name then
-                    local itemFlag = flag .. "_" .. p.Name:gsub(" ", "_")
-                    if library and library.ConfigRegistry then
-                        library.ConfigRegistry[itemFlag] = item
-                    end
+                return registerLuaxControl(originalCreateDropdown(self, p), p)
+            end
+            local originalCreateButton = sec.CreateButton
+            if originalCreateButton then
+                sec.CreateButton = function(self, p)
+                    return registerLuaxControl(originalCreateButton(self, p), p)
                 end
-                return item
+            end
+            local originalCreateLabel = sec.CreateLabel
+            if originalCreateLabel then
+                sec.CreateLabel = function(self, p)
+                    return registerLuaxControl(originalCreateLabel(self, p), p)
+                end
             end
 
+            if folder and folder.AddSection then
+                folder:AddSection(sec)
+            elseif container and sec.Root then
+                sec.Root.Parent = container
+            end
             return sec
         end
         local function luaxWireDeps(section, toggle, seq)
@@ -40016,18 +40066,20 @@ do
             }
         end
 
-        -- Lua X folders start collapsed and remain clickable.
-        task.defer(function()
-            task.wait(0.6)
-            for _, f in ipairs(luaxFolderRefs) do
-                if f.holder and f.container then
-                    f.container.Visible = false
-                    if f.folder then pcall(function() f.folder.Open = false end) end
-                    f.holder.Size = UDim2.new(1, 0, 0, 20)
-                    if f.header then for _, c in ipairs(f.header:GetChildren()) do if c:IsA("ImageLabel") then c.Rotation = 180 end end end
-                end
+        -- Force Lua X folders closed at startup, after auto-load, and after the
+        -- first UI layout passes. The user can still open any folder by clicking it.
+        local function collapseLuaXFolders()
+            for _, folder in ipairs(luaxFolderRefs) do
+                pcall(function() folder:SetOpen(false) end)
             end
-        end)
+        end
+        getgenv().__DevKageCollapseLuaXFolders = collapseLuaXFolders
+        collapseLuaXFolders()
+        task.defer(collapseLuaXFolders)
+        task.delay(0.05, collapseLuaXFolders)
+        task.delay(0.25, collapseLuaXFolders)
+        task.delay(0.75, collapseLuaXFolders)
+        task.delay(1.5, collapseLuaXFolders)
     end
     end)
 end
