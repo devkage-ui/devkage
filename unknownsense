@@ -36970,12 +36970,9 @@ do
         if win then
             local luaxPage = getgenv().__DevKageLuaxPage
             if not luaxPage then
-                -- This should almost never happen now that we create it at boot, but kept as fallback
-            local luaxPage = getgenv().__DevKageLuaxPage
-            if not luaxPage then
                 luaxPage = win:CreatePage({ Icon = "rbxassetid://97832472593469", Size = UDim2.new(0, 36, 0, 36) })
             end
-            end
+            getgenv().__DevKageLuaxPage = luaxPage
             getgenv().__luaxTabIcon = "rbxassetid://97832472593469"
             local LT = {} -- Lua X toggle registry (used by Load Preset / Kill Every)
 
@@ -37012,8 +37009,49 @@ do
             return folder, container
         end
         local function luaxSection(folder, container, props)
+            -- Add a unique flag for config saving based on the section name
+            local flag = "Luax_" .. props.Name:gsub(" ", "_")
             local sec = luaxPage:CreateSection(props)
             if container and sec.Root then sec.Root.Parent = container end
+
+            -- Wrap existing Create methods to automatically register with ConfigRegistry
+            local originalCreateToggle = sec.CreateToggle
+            sec.CreateToggle = function(self, p)
+                local item = originalCreateToggle(self, p)
+                if p.Name then
+                    local itemFlag = flag .. "_" .. p.Name:gsub(" ", "_")
+                    -- We use the library's internal registration mechanism
+                    if library and library.ConfigRegistry then
+                        library.ConfigRegistry[itemFlag] = item
+                    end
+                end
+                return item
+            end
+
+            local originalCreateSlider = sec.CreateSlider
+            sec.CreateSlider = function(self, p)
+                local item = originalCreateSlider(self, p)
+                if p.Name then
+                    local itemFlag = flag .. "_" .. p.Name:gsub(" ", "_")
+                    if library and library.ConfigRegistry then
+                        library.ConfigRegistry[itemFlag] = item
+                    end
+                end
+                return item
+            end
+
+            local originalCreateDropdown = sec.CreateDropdown
+            sec.CreateDropdown = function(self, p)
+                local item = originalCreateDropdown(self, p)
+                if p.Name then
+                    local itemFlag = flag .. "_" .. p.Name:gsub(" ", "_")
+                    if library and library.ConfigRegistry then
+                        library.ConfigRegistry[itemFlag] = item
+                    end
+                end
+                return item
+            end
+
             return sec
         end
         local function luaxWireDeps(section, toggle, seq)
