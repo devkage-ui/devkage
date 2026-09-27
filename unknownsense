@@ -24255,6 +24255,21 @@ do
         AntiAimControls.noclip_enabled = movementToolsSection:CreateToggle({Name="Noclip", State=AntiAimState.noclip_enabled, Flag="antiAimV3.noclip_enabled", Callback=function(value) AntiAimState.SetValue("noclip_enabled", value) end})
         AntiAimControls.flight_enabled = movementToolsSection:CreateToggle({Name="Flight", State=AntiAimState.flight_enabled, Flag="antiAimV3.flight_enabled", Callback=function(value) AntiAimState.SetValue("flight_enabled", value) end})
         AntiAimControls.flight_speed = movementToolsSection:CreateSlider({Name="Flight Speed", State=AntiAimState.flight_speed, Min=10, Max=500, Decimals=0, Suffix=" studs/s", Flag="antiAimV3.flight_speed", Callback=function(value) AntiAimState.SetValue("flight_speed", value) end})
+
+        -- RIVALS Underground restored on the Anti-Aim page. This uses the same
+        -- RIVALS implementation exposed to Lua X and does not alter the main
+        -- Anti-Aim state/preset controls.
+        local undergroundSection = antiAimPage:CreateSection({Name="RIVALS Underground", Side="Left", Size=100})
+        local undergroundToggle = undergroundSection:CreateToggle({
+            Name="Underground",
+            State=false,
+            Flag="Rivals_AntiAimPage_Underground",
+            Callback=function(value)
+                local rv = getgenv().__DevKageRivals
+                if rv then rv.Set("Misc.Underground.Enabled", value == true) end
+            end
+        })
+        undergroundSection:CreateLabel({Text="Uses the supplied RIVALS underground pulse."})
     end
     core.Syncing = false
     AntiAimState.Normalize()
@@ -38595,6 +38610,35 @@ do
         if not origin then return end
         Weapon : Shoot(hitPart.Position, character, origin, hitPart)
     end
+
+    -- Underground is restored from the supplied RIVALS source.  It is exposed
+    -- through the Lua X bridge so both Lua X and the Anti-Aim page use the same
+    -- implementation and setting.
+    api.UndergroundTick = function()
+        local cfg = Settings.Misc.Underground
+        if not cfg or not cfg.Enabled then return end
+
+        local rootPart, character = Controller : RootPart( )
+        if not rootPart or not character then return end
+
+        local humanoid = character : FindFirstChildOfClass("Humanoid")
+        if not humanoid then return end
+
+        if not AnimationTrack then
+            AnimationTrack = humanoid : LoadAnimation( LayAnimation )
+        end
+
+        AnimationTrack.TimePosition = 1.48
+        AnimationTrack : Play( 0, 1, 0 )
+
+        local oldCFrame = rootPart.CFrame
+        rootPart.CFrame = oldCFrame + Vector3New( 0, -6, 0 )
+
+        RunService.PreRender : Wait( )
+        if rootPart.Parent then
+            rootPart.CFrame = oldCFrame
+        end
+    end
     api.RageTick = function()
         local cfg = Settings.Combat.Ragebot
         if not cfg.Enabled then return end
@@ -38673,6 +38717,18 @@ do
                 if rv.RageTick then pcall(rv.RageTick) end
             end
             task.wait(0.01)
+        end
+    end)
+
+    -- Keep Underground on its own loop because the source implementation waits
+    -- for PreRender while restoring the original CFrame each pulse.
+    task.spawn(function()
+        while true do
+            local rv = getgenv().__DevKageRivals
+            if rv and rv.UndergroundTick then
+                pcall(rv.UndergroundTick)
+            end
+            task.wait(0.03)
         end
     end)
 end
@@ -39800,15 +39856,175 @@ do
             end
         end)
     end })
-        -- Do not collapse Lua X folders: all first-file features stay visible on the tab.
+        -- -----------------------------------------------------------------------
+        -- Lua X Config Presets
+        -- These presets intentionally operate ONLY on controls registered by the
+        -- Lua X tab (Luax_* and RIVALS_* flags). They do not touch the standalone
+        -- Anti-Aim page or any non-Lua-X configuration.
+        do
+            local pf, pc = luaxFolder("Lua X Presets", "Right")
+            local PS = luaxSection(pf, pc, { Name = "Preset Profiles", Side = "Right", Size = 270 })
+
+            local presetNames = { "Hacker vs. Hacker", "Legit", "Underground", "Un Hitable" }
+            local presetIndex = 1
+
+            local presetDefinitions = {
+                ["Hacker vs. Hacker"] = {
+                    -- Main Luax combat controls
+                    ["Luax_Wallbang_DevWallbang"] = true,
+                    ["Luax_Wallbang_Silent_Aim"] = true,
+                    ["Luax_Wallbang_Rage_Bot"] = true,
+                    ["Luax_Wallbang_Auto_Shoot"] = true,
+                    ["Luax_Wallbang_Aimbot"] = false,
+                    ["Rivals_Triggerbot_Enabled"] = true,
+                    ["Rivals_AimAssist_Enabled"] = false,
+                    ["Rivals_GunMods_NoSpread"] = true,
+                    ["Rivals_GunMods_FullAuto"] = true,
+                    ["Rivals_AntiAim_Enabled"] = true,
+                    ["Rivals_Underground_Enabled"] = false,
+                    -- Luax tuning kept explicit so the profile is reproducible.
+                    ["Luax_SilentAim_HitChance"] = 100,
+                    ["Luax_SilentAim_FOVRadius"] = 100,
+                    ["Luax_RageBot_Range"] = 150,
+                    ["Luax_RageBot_Interval"] = 0.2,
+                    ["Luax_RageBot_OriginShift"] = true,
+                    ["Luax_RageBot_OriginShiftRange"] = 14,
+                    ["Luax_RageBot_VoidSpam"] = false,
+                },
+                ["Legit"] = {
+                    ["Luax_Wallbang_DevWallbang"] = false,
+                    ["Luax_Wallbang_Silent_Aim"] = false,
+                    ["Luax_Wallbang_Rage_Bot"] = false,
+                    ["Luax_Wallbang_Auto_Shoot"] = false,
+                    ["Luax_Wallbang_Aimbot"] = true,
+                    ["Rivals_Triggerbot_Enabled"] = false,
+                    ["Rivals_AimAssist_Enabled"] = true,
+                    ["Rivals_GunMods_NoSpread"] = false,
+                    ["Rivals_GunMods_FullAuto"] = false,
+                    ["Rivals_AntiAim_Enabled"] = false,
+                    ["Rivals_Underground_Enabled"] = false,
+                    ["Luax_SilentAim_HitChance"] = 45,
+                    ["Luax_SilentAim_FOVRadius"] = 100,
+                    ["Luax_RageBot_Range"] = 150,
+                    ["Luax_RageBot_Interval"] = 0.2,
+                    ["Luax_RageBot_OriginShift"] = false,
+                    ["Luax_RageBot_OriginShiftRange"] = 14,
+                    ["Luax_RageBot_VoidSpam"] = false,
+                },
+                ["Underground"] = {
+                    ["Luax_Wallbang_DevWallbang"] = false,
+                    ["Luax_Wallbang_Silent_Aim"] = false,
+                    ["Luax_Wallbang_Rage_Bot"] = false,
+                    ["Luax_Wallbang_Auto_Shoot"] = false,
+                    ["Luax_Wallbang_Aimbot"] = false,
+                    ["Rivals_Triggerbot_Enabled"] = false,
+                    ["Rivals_AimAssist_Enabled"] = false,
+                    ["Rivals_GunMods_NoSpread"] = false,
+                    ["Rivals_GunMods_FullAuto"] = false,
+                    ["Rivals_AntiAim_Enabled"] = false,
+                    ["Rivals_Underground_Enabled"] = true,
+                    ["Rivals_Player_NoClip"] = true,
+                    ["Luax_Void_Helpers_Enable_Smart_Evasion_V2"] = false,
+                    ["Luax_Velocity_Desync_Enable_Velocity_Desync"] = false,
+                    ["Luax_Translocation_Enable_Translocation"] = false,
+                    ["Luax_Anti_Translocation_Enable_Anti_Translocation"] = false,
+                },
+                ["Un Hitable"] = {
+                    ["Luax_Wallbang_DevWallbang"] = false,
+                    ["Luax_Wallbang_Silent_Aim"] = false,
+                    ["Luax_Wallbang_Rage_Bot"] = false,
+                    ["Luax_Wallbang_Auto_Shoot"] = false,
+                    ["Luax_Wallbang_Aimbot"] = false,
+                    ["Rivals_Triggerbot_Enabled"] = false,
+                    ["Rivals_AimAssist_Enabled"] = false,
+                    ["Rivals_GunMods_NoSpread"] = false,
+                    ["Rivals_GunMods_FullAuto"] = false,
+                    ["Rivals_AntiAim_Enabled"] = false,
+                    ["Rivals_Underground_Enabled"] = true,
+                    ["Rivals_Player_NoClip"] = true,
+                    ["Luax_Void_Helpers_Enable_Smart_Evasion_V2"] = true,
+                    ["Luax_Anti_Translocation_Enable_Anti_Translocation"] = true,
+                    ["Luax_Velocity_Desync_Enable_Velocity_Desync"] = true,
+                    ["Luax_Velocity_Desync_Helpers_Enable_Velocity_Desync"] = false,
+                    ["Luax_Translocation_Enable_Translocation"] = false,
+                    ["Luax_Sling_Bypass_V2_Enable_Sling_Bypass_V2"] = false,
+                },
+            }
+
+            local baseline = {}
+            for flag, control in pairs(library.ConfigRegistry or {}) do
+                local s = tostring(flag)
+                if (s:sub(1, 5) == "Luax_" or s:sub(1, 7) == "Rivals_") and type(control.Get) == "function" and not s:find("Luax_Preset", 1, true) then
+                    local ok, value = pcall(function() return control:Get() end)
+                    if ok and value ~= nil then baseline[flag] = value end
+                end
+            end
+
+            local function setLuaxControl(flag, value)
+                local control = library.ConfigRegistry and library.ConfigRegistry[flag]
+                if not control or type(control.Set) ~= "function" then return false end
+                local ok = pcall(function() control:Set(value) end)
+                return ok
+            end
+
+            local function restoreLuaxBaseline()
+                for flag, value in pairs(baseline) do
+                    setLuaxControl(flag, value)
+                end
+            end
+
+            local function applyLuaxPreset(name)
+                -- First restore all Lua X/RIVALS Lua X-tab controls to their original
+                -- defaults, then apply only this preset's explicit Lua X flags.
+                restoreLuaxBaseline()
+                local definition = presetDefinitions[name] or {}
+                for flag, value in pairs(definition) do
+                    setLuaxControl(flag, value)
+                end
+                if library and library.Notify then
+                    library:Notify({ Message = "Lua X preset applied • " .. tostring(name), Duration = 2.5 })
+                end
+            end
+
+            local selector = PS:CreateDropdown({
+                Name = "Preset",
+                Options = presetNames,
+                State = presetIndex,
+                Flag = "Luax_Preset_Selector",
+                Callback = function(index) presetIndex = math.clamp(tonumber(index) or 1, 1, #presetNames) end
+            })
+            PS:CreateButton({ Name = "Apply Selected Preset", Callback = function()
+                applyLuaxPreset(presetNames[presetIndex] or presetNames[1])
+            end })
+            PS:CreateButton({ Name = "Reset Lua X Defaults", Callback = function()
+                restoreLuaxBaseline()
+                if library and library.Notify then
+                    library:Notify({ Message = "Lua X defaults restored", Duration = 2.5 })
+                end
+            end })
+            PS:CreateButton({ Name = "Hacker vs. Hacker", Callback = function() applyLuaxPreset("Hacker vs. Hacker") end })
+            PS:CreateButton({ Name = "Legit", Callback = function() applyLuaxPreset("Legit") end })
+            PS:CreateButton({ Name = "Underground", Callback = function() applyLuaxPreset("Underground") end })
+            PS:CreateButton({ Name = "Un Hitable", Callback = function() applyLuaxPreset("Un Hitable") end })
+            PS:CreateLabel({ Text = "Presets only modify Lua X / RIVALS controls on this tab." })
+
+            -- Expose the preset runner for diagnostics without touching non-Lua-X state.
+            getgenv().__DevKageLuaxPresets = {
+                Apply = applyLuaxPreset,
+                Names = presetNames,
+                Definitions = presetDefinitions,
+            }
+        end
+
+        -- Lua X folders start collapsed and remain clickable.
         task.defer(function()
             task.wait(0.6)
             for _, f in ipairs(luaxFolderRefs) do
                 if f.holder and f.container then
-                    f.container.Visible = true
-                    if f.folder then pcall(function() f.folder.Open = true end) end
-                    f.holder.Size = UDim2.new(1, 0, 0, 20 + f.container.AbsoluteSize.Y)
-                    if f.header then for _, c in ipairs(f.header:GetChildren()) do if c:IsA("ImageLabel") then c.Rotation = 0 end end end
+                    f.container.Visible = false
+                    if f.folder then pcall(function() f.folder.Open = false end) end
+                    f.holder.Size = UDim2.new(1, 0, 0, 20)
+                    if f.header then for _, c in ipairs(f.header:GetChildren()) do if c:IsA("ImageLabel") then c.Rotation = 180 end end end
                 end
             end
         end)
