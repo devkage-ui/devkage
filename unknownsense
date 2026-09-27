@@ -2,6 +2,13 @@
 --  DEVKAGE + DEV WALLBANG + RAGE BOT + LUA X  (merged, single loadstring)
 -- ============================================================================
 
+-- Singleton Guard: Prevent multiple versions from executing simultaneously
+if getgenv().__DEVKAGE_LOADED then
+    print("[DevKage] A version of the script is already running. Please restart or use the provided unload method if available.")
+    return
+end
+getgenv().__DEVKAGE_LOADED = true
+
 local __DEVWB_LOADER = loadstring or load
 
 -- [1] DevKage -----------------------------------------------------------------
@@ -1919,10 +1926,13 @@ function library:CreatePage(Properties)
         -- Force image update for auto-execution
         if Page_Tab_Image.Image ~= "" then
             Page_Tab_Image.Visible = true
-            -- Defer update to ensure engine has processed the asset
-            task.defer(function()
-                if Page_Tab_Image.Image ~= "" then
-                    Page_Tab_Image.Visible = true
+            -- Using a longer delay and loop to ensure asset is actually loaded
+            task.spawn(function()
+                for i = 1, 10 do
+                    task.wait(0.5)
+                    if Page_Tab_Image.Image ~= "" then
+                        Page_Tab_Image.Visible = true
+                    end
                 end
             end)
         end
@@ -36944,24 +36954,31 @@ local __icOk, __icErr = pcall(function()
         imageLabel.ScaleType = Enum.ScaleType.Fit
     end
     getgenv().__luaxIcons = registry
-    -- Apply the 4 cut icons onto the first 4 category tabs (skips the Lua X tab)
+    -- Apply the 4 cut icons onto the ESP category tabs
     task.spawn(function()
         local win = getgenv().__DEVKAGE_RUNTIME_WINDOW
         local th = win and win.TabsHolder
         if not th then return end
-        local n = 0
+
+        local categories = {}
         for _, c in ipairs(th:GetChildren()) do
-            if c:IsA("Frame") and n < 4 then
-                local img, isLuax
+            if c:IsA("Frame") then
+                local isLuax = false
+                local img = nil
                 for _, cc in ipairs(c:GetChildren()) do
                     if cc:IsA("ImageLabel") then img = cc end
-                    if cc:IsA("TextLabel") and tostring(cc.Text) == "X" then isLuax = true end
+                    if cc:IsA("TextLabel") and (tostring(cc.Text) == "X" or tostring(cc.Text) == "Lua X") then isLuax = true end
                 end
                 if img and not isLuax then
-                    n = n + 1
-                    registry.Apply(img, n)
-                    img.Visible = true
+                    table.insert(categories, img)
                 end
+            end
+        end
+
+        for i, img in ipairs(categories) do
+            if i <= 4 then
+                registry.Apply(img, i)
+                img.Visible = true
             end
         end
     end)
