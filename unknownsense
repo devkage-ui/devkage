@@ -36956,42 +36956,84 @@ local __icOk, __icErr = pcall(function()
     getgenv().__luaxIcons = registry
     -- Apply the 4 cut icons onto the ESP category tabs
     task.spawn(function()
+        -- Critical: Wait for the runtime window to actually be initialized
         local win = getgenv().__DEVKAGE_RUNTIME_WINDOW
-        local th = win and win.TabsHolder
-        if not th then return end
-
-        -- Wait for tabs to actually be created and the UI to be ready
         local attempts = 0
-        while not th:GetChildren() and attempts < 20 do
-            task.wait(0.5)
-            th = win and win.TabsHolder
+        while not win and attempts < 100 do
+            task.wait(0.2)
+            win = getgenv().__DEVKAGE_RUNTIME_WINDOW
             attempts = attempts + 1
         end
 
-        local categories = {}
-        for _, c in ipairs(th:GetChildren()) do
-            if c:IsA("Frame") then
-                local isLuax = false
-                local img = nil
-                for _, cc in ipairs(c:GetChildren()) do
-                    if cc:IsA("ImageLabel") then img = cc end
-                    if cc:IsA("TextLabel") and (tostring(cc.Text) == "X" or tostring(cc.Text) == "Lua X") then isLuax = true end
-                end
-                if img and not isLuax then
-                    table.insert(categories, img)
-                end
-            end
+        if not win then return end
+
+        -- Critical: Wait for TabsHolder to exist
+        local th = win:FindFirstChild("TabsHolder")
+        attempts = 0
+        while not th and attempts < 100 do
+            task.wait(0.2)
+            th = win:FindFirstChild("TabsHolder")
+            attempts = attempts + 1
         end
 
-        for i, img in ipairs(categories) do
-            if i <= 4 then
-                -- Use a small delay per icon to ensure assets are processed
-                task.delay(i * 0.1, function()
-                    registry.Apply(img, i)
-                    img.Visible = true
-                    -- Force visibility again after a short delay to combat auto-load race conditions
-                    task.delay(1, function() img.Visible = true end)
-                end)
+        if not th then return end
+
+        -- This loop ensures icons are applied AND stay applied
+        -- It only starts the 'maintenance' phase once all 4 are confirmed visible
+        local allApplied = false
+        while true do
+            local currentTabs = th:GetChildren()
+            local categories = {}
+
+            for _, c in ipairs(currentTabs) do
+                if c:IsA("Frame") then
+                    local isLuax = false
+                    local img = nil
+                    for _, cc in ipairs(c:GetChildren()) do
+                        if cc:IsA("ImageLabel") then img = cc end
+                        if cc:IsA("TextLabel") and (tostring(cc.Text) == "X" or tostring(cc.Text) == "Lua X") then isLuax = true end
+                    end
+                    if img and not isLuax then
+                        table.insert(categories, img)
+                    end
+                end
+            end
+
+            local missingAny = false
+            for i = 1, 4 do
+                local img = categories[i]
+                if img then
+                    local spec = registry.Get(i)
+                    if spec then
+                        if img.Image ~= spec.Image or
+                           img.ImageRectOffset ~= spec.ImageRectOffset or
+                           img.ImageRectSize ~= spec.ImageRectSize or
+                           not img.Visible then
+
+                            registry.Apply(img, i)
+                            img.Visible = true
+                            img.ZIndex = 100
+                            missingAny = true
+                        end
+                    end
+                else
+                    missingAny = true
+                end
+            end
+
+            -- If we successfully applied all 4 and they are visible, we can slow down the loop
+            -- but we still check occasionally in case of server-hops/UI resets
+            if not missingAny and #categories >= 4 then
+                allApplied = true
+            else
+                allApplied = false
+            end
+
+            -- If not yet applied, check fast (0.2s). Once applied, check slower (2s) to save resources.
+            if allApplied then
+                task.wait(2)
+            else
+                task.wait(0.2)
             end
         end
     end)
