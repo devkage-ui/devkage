@@ -764,7 +764,9 @@ library.Theme = library.Theme or {
     TopBar = Color3.fromRGB(255, 255, 255),
     TopBarTransparency = 0,
     MenuAnimationSpeed = 1,
-    DPIScale = 1
+    DPIScale = 1,
+    TabRainbowEnabled = false,
+    TabRainbowSpeed = 1
 }
 if library.Theme.TopBar == nil then library.Theme.TopBar = Color3.fromRGB(255, 255, 255) end
 if library.Theme.TopBarTransparency == nil then library.Theme.TopBarTransparency = 0 end
@@ -951,6 +953,44 @@ function library:ObserveThemeRoot(root)
 end
 
 function library:ApplyTheme()
+    -- Rainbow Tab Loop Logic
+    if self.Theme.TabRainbowEnabled then
+        if not self.TabRainbowLoop then
+            self.TabRainbowLoop = game:GetService("RunService").RenderStepped:Connect(function()
+                local hue = (tick() * self.Theme.TabRainbowSpeed) % 1
+                local color = Color3.fromHSV(hue, 0.8, 1)
+                local win = getgenv().__DEVKAGE_RUNTIME_WINDOW
+                if win and win.TabsHolder then
+                    for _, tab in ipairs(win.TabsHolder:GetChildren()) do
+                        if tab:IsA("Frame") then
+                            for _, img in ipairs(tab:GetChildren()) do
+                                if img:IsA("ImageLabel") then
+                                    img.ImageColor3 = color
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    elseif self.TabRainbowLoop then
+        self.TabRainbowLoop:Disconnect()
+        self.TabRainbowLoop = nil
+        -- Reset to default color (TopBar)
+        local win = getgenv().__DEVKAGE_RUNTIME_WINDOW
+        if win and win.TabsHolder then
+            for _, tab in ipairs(win.TabsHolder:GetChildren()) do
+                if tab:IsA("Frame") then
+                    for _, img in ipairs(tab:GetChildren()) do
+                        if img:IsA("ImageLabel") then
+                            img.ImageColor3 = self.Theme.TopBar
+                        end
+                    end
+                end
+            end
+        end
+    end
+
     for index = #self.ThemeUIObjects, 1, -1 do
         local entry = self.ThemeUIObjects[index]
         local object = entry and entry.Object
@@ -17943,6 +17983,11 @@ Key = Enum.KeyCode.RightShift,
 Enabled = not (getgenv().__DEVKAGE_AUTO_STARTED == true and _script_boot_settings.SilentLoad == true)
 })
 getgenv().__DevKageWindow = library.Window
+
+-- FIX: Create Lua X Page immediately after Window to ensure it's not at the bottom
+local luaxPage = library.Window:CreatePage({ Icon = "rbxassetid://97832472593469", Size = UDim2.new(0, 36, 0, 36) })
+getgenv().__luaxTabIcon = "rbxassetid://97832472593469"
+getgenv().__DevKageLuaxPage = luaxPage
 do
 local environment=(type(getgenv)=="function" and getgenv()) or _G
 environment.__DEVKAGE_RUNTIME_WINDOW=library.Window
@@ -30559,6 +30604,28 @@ UI.ThemeTopBarOpacity = UI.ThemeSection:CreateSlider({
     end
 })
 
+UI.TabRainbowToggle = UI.ThemeSection:CreateToggle({
+    Name = "Rainbow Tab Icons",
+    State = library.Theme.TabRainbowEnabled,
+    Flag = "theme.tab_rainbow",
+    Callback = function(v)
+        library.Theme.TabRainbowEnabled = v
+    end
+})
+
+UI.TabRainbowSpeed = UI.ThemeSection:CreateSlider({
+    Name = "Tab Rainbow Speed",
+    State = math.floor(library.Theme.TabRainbowSpeed * 100),
+    Min = 1,
+    Max = 1000,
+    Decimals = 0,
+    Suffix = "%",
+    Flag = "theme.tab_rainbow_speed",
+    Callback = function(v)
+        library.Theme.TabRainbowSpeed = v / 100
+    end
+})
+
 UI.KeybindThemeSection = settingPage:CreateSection({
     Name = "Keybind UI",
     Side = "Right",
@@ -36868,7 +36935,6 @@ local __icOk, __icErr = pcall(function()
     getgenv().__luaxIcons = registry
     -- Apply the 4 cut icons onto the first 4 category tabs (skips the Lua X tab)
     task.spawn(function()
-        task.wait(2)
         local win = getgenv().__DEVKAGE_RUNTIME_WINDOW
         local th = win and win.TabsHolder
         if not th then return end
@@ -36895,16 +36961,19 @@ if not __icOk then warn("[luax-extra] luax icons failed: " .. tostring(__icErr))
 -- [Lua X features -> DevKage UI] (converted from the Obsidian-style panel)
 do
     task.spawn(function()
-    local win = nil
-    local t0 = os.clock()
-    while not win and (os.clock() - t0) < 90 do
-        win = getgenv().__DEVKAGE_RUNTIME_WINDOW
-        if not win then task.wait(1) end
-    end
-    if win then
-        local luaxPage = win:CreatePage({ Icon = "rbxassetid://97832472593469", Size = UDim2.new(0, 36, 0, 36) })
-        getgenv().__luaxTabIcon = "rbxassetid://97832472593469"
-        local LT = {} -- Lua X toggle registry (used by Load Preset / Kill Every)
+        local win = nil
+        local t0 = os.clock()
+        while not win and (os.clock() - t0) < 90 do
+            win = getgenv().__DEVKAGE_RUNTIME_WINDOW
+            if not win then task.wait(1) end
+        end
+        if win then
+            local luaxPage = getgenv().__DevKageLuaxPage
+            if not luaxPage then
+                luaxPage = win:CreatePage({ Icon = "rbxassetid://97832472593469", Size = UDim2.new(0, 36, 0, 36) })
+            end
+            getgenv().__luaxTabIcon = "rbxassetid://97832472593469"
+            local LT = {} -- Lua X toggle registry (used by Load Preset / Kill Every)
 
         local WB = luaxPage:CreateSection({ Name = "Wallbang", Side = "Left", Size = 210 })
         LT["DevWallbang"] = WB:CreateToggle({ Name = "Wallbang (shoot through walls)", State = false, Callback = function(v)
