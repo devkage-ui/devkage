@@ -36960,6 +36960,14 @@ local __icOk, __icErr = pcall(function()
         local th = win and win.TabsHolder
         if not th then return end
 
+        -- Wait for tabs to actually be created and the UI to be ready
+        local attempts = 0
+        while not th:GetChildren() and attempts < 20 do
+            task.wait(0.5)
+            th = win and win.TabsHolder
+            attempts = attempts + 1
+        end
+
         local categories = {}
         for _, c in ipairs(th:GetChildren()) do
             if c:IsA("Frame") then
@@ -36977,8 +36985,13 @@ local __icOk, __icErr = pcall(function()
 
         for i, img in ipairs(categories) do
             if i <= 4 then
-                registry.Apply(img, i)
-                img.Visible = true
+                -- Use a small delay per icon to ensure assets are processed
+                task.delay(i * 0.1, function()
+                    registry.Apply(img, i)
+                    img.Visible = true
+                    -- Force visibility again after a short delay to combat auto-load race conditions
+                    task.delay(1, function() img.Visible = true end)
+                end)
             end
         end
     end)
