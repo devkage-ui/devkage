@@ -25790,6 +25790,78 @@ local rapidFireSection = ragePage:CreateSection({
     Size = 805
 })
 
+-- Get All Gear lives on the Knife/RIVALS tab, not Lua X.
+do
+    local gearSection = ragePage:CreateSection({
+        Name = "Get All Gear",
+        Side = "Left",
+        Size = 150,
+    })
+
+    local function devkageGetAllGear()
+        local player = game:GetService("Players").LocalPlayer
+        if not player then return 0 end
+
+        local backpack = player:FindFirstChildOfClass("Backpack")
+            or player:FindFirstChild("Backpack")
+        if not backpack then return 0 end
+
+        local replicated = game:GetService("ReplicatedStorage")
+        local moved = 0
+        local folders = {}
+
+        local function scan(container)
+            if not container or not container:IsA("Folder") then return end
+            if folders[container] then return end
+            folders[container] = true
+
+            for _, child in ipairs(container:GetChildren()) do
+                if child:IsA("Tool") then
+                    local ok = pcall(function()
+                        child.Parent = backpack
+                    end)
+                    if ok and child.Parent == backpack then
+                        moved = moved + 1
+                    end
+                end
+            end
+        end
+
+        -- Primary RIVALS hierarchy.
+        scan(replicated:FindFirstChild("Gear"))
+
+        -- Fallback for common nested gear folders.
+        for _, object in ipairs(replicated:GetDescendants()) do
+            if object:IsA("Folder") then
+                local lowerName = object.Name:lower()
+                if lowerName == "gear"
+                    or lowerName:find("gear", 1, true) ~= nil then
+                    scan(object)
+                end
+            end
+        end
+
+        if library and library.Notify then
+            library:Notify({
+                Message = "Get All Gear: moved " .. tostring(moved) .. " tool(s)",
+                Duration = 3,
+            })
+        end
+
+        return moved
+    end
+
+    gearSection:CreateButton({
+        Name = "Get All Gear",
+        Callback = devkageGetAllGear,
+    })
+    gearSection:CreateLabel({
+        Text = "Scans available ReplicatedStorage gear folders.",
+    })
+
+    getgenv().__DevKageGetAllGear = devkageGetAllGear
+end
+
 local rapidFireStatus = rapidFireSection:CreateLabel({
     Text = rapidFireIsRivals()
         and "RIVALS • melee cooldown scaler ready"
@@ -39030,60 +39102,30 @@ do
         -- ====================================================================
         -- Lua X categories
         -- Combat = RIVALS integrations / utility features.
-        -- Rage   = the original Lua X feature set and its presets.
-        -- No collapsible folder wrappers are used; sections stay open.
+        -- Rage   = the original Lua X feature set and presets.
+        -- Both categories use the page's original Left/Right ScrollingFrames.
+        -- This avoids the extra-frame/local-register issues that can make the
+        -- Lua X page appear completely empty on some Luau builds.
         -- ====================================================================
-        local luaxCategorySections = { Combat = {}, Rage = {} }
-        local luaxCategoryActive = "Combat"
+        local C = getgenv().__DevKageLuaxCategoryState
+        if type(C) ~= "table" then C = {} end
+        C.sections = { Combat = {}, Rage = {} }
+        C.buttons = {}
+        C.active = "Combat"
+        getgenv().__DevKageLuaxCategoryState = C
 
-        local function makeLuaxColumn(side)
-            local frame = utility:RenderObject("ScrollingFrame", {
-                BackgroundColor3    = Color3.fromRGB(0, 0, 0),
-                BackgroundTransparency = 1,
-                BorderColor3        = Color3.fromRGB(0, 0, 0),
-                BorderSizePixel     = 0,
-                Parent              = luaxPage.Page,
-                Position            = side == "Left" and UDim2.new(0, 0, 0, 36) or UDim2.new(0.5, 10, 0, 36),
-                Size                = side == "Left" and UDim2.new(0.5, -10, 1, -36) or UDim2.new(0.5, -10, 1, -36),
-                CanvasSize          = UDim2.new(0, 0, 0, 0),
-                AutomaticCanvasSize  = Enum.AutomaticSize.Y,
-                ScrollBarThickness   = 0,
-                ScrollingEnabled     = true,
-                ClipsDescendants     = true,
-                Visible              = false,
-                ZIndex               = 1,
-            })
-            utility:RenderObject("UIListLayout", {
-                Padding             = UDim.new(0, 8),
-                Parent              = frame,
-                FillDirection       = "Vertical",
-                HorizontalAlignment = "Left",
-                VerticalAlignment   = "Top",
-            })
-            utility:RenderObject("UIPadding", {
-                Parent = frame,
-                PaddingTop = UDim.new(0, 9),
-                PaddingBottom = UDim.new(0, 10),
-            })
-            return frame
-        end
+        luaxPage.Left.Visible = true
+        luaxPage.Right.Visible = true
+        luaxPage.Left.Position = UDim2.new(0, 0, 0, 34)
+        luaxPage.Left.Size = UDim2.new(0.5, -10, 1, -34)
+        luaxPage.Right.Position = UDim2.new(0.5, 10, 0, 34)
+        luaxPage.Right.Size = UDim2.new(0.5, -10, 1, -34)
 
-        local luaxCategoryContainers = {
-            Combat = {
-                Left = luaxPage.Left,
-                Right = luaxPage.Right,
-            },
-            Rage = {
-                Left = makeLuaxColumn("Left"),
-                Right = makeLuaxColumn("Right"),
-            },
-        }
-        luaxPage.Left.Position = UDim2.new(0, 0, 0, 36)
-        luaxPage.Left.Size = UDim2.new(0.5, -10, 1, -36)
-        luaxPage.Right.Position = UDim2.new(0.5, 10, 0, 36)
-        luaxPage.Right.Size = UDim2.new(0.5, -10, 1, -36)
+        local oldCategoryBar = luaxPage.Page:FindFirstChild("LuaXCategoryBar")
+        if oldCategoryBar then pcall(function() oldCategoryBar:Destroy() end) end
 
-        local categoryBar = utility:RenderObject("Frame", {
+        C.bar = utility:RenderObject("Frame", {
+            Name = "LuaXCategoryBar",
             BackgroundColor3 = Color3.fromRGB(23, 23, 23),
             BackgroundTransparency = 0,
             BorderColor3 = Color3.fromRGB(12, 12, 12),
@@ -39091,77 +39133,88 @@ do
             Parent = luaxPage.Page,
             Position = UDim2.new(0, 0, 0, 0),
             Size = UDim2.new(1, 0, 0, 28),
-            ZIndex = 20,
+            ZIndex = 30,
+            Visible = true,
         })
         utility:RenderObject("UIListLayout", {
-            Padding = UDim.new(0, 4),
+            Parent = C.bar,
             FillDirection = "Horizontal",
             HorizontalAlignment = "Left",
             VerticalAlignment = "Center",
-            Parent = categoryBar,
+            Padding = UDim.new(0, 4),
+            SortOrder = Enum.SortOrder.LayoutOrder,
         })
         utility:RenderObject("UIPadding", {
-            Parent = categoryBar,
+            Parent = C.bar,
             PaddingLeft = UDim.new(0, 5),
             PaddingRight = UDim.new(0, 5),
             PaddingTop = UDim.new(0, 3),
             PaddingBottom = UDim.new(0, 3),
         })
 
-        local categoryButtons = {}
-        local function paintCategoryButton(name)
-            for category, button in pairs(categoryButtons) do
-                if button then
-                    button.BackgroundColor3 = category == name and Color3.fromRGB(48, 48, 48) or Color3.fromRGB(28, 28, 28)
-                    button.TextColor3 = category == name and Color3.fromRGB(235, 235, 235) or Color3.fromRGB(155, 155, 155)
-                end
-            end
-        end
+        getgenv().__DevKageSetLuaxCategory = function(name)
+            local state = getgenv().__DevKageLuaxCategoryState
+            if type(state) ~= "table" then return end
+            name = name == "Rage" and "Rage" or "Combat"
+            state.active = name
 
-        local function setLuaxCategory(name)
-            name = (name == "Rage") and "Rage" or "Combat"
-            luaxCategoryActive = name
-            for category, pair in pairs(luaxCategoryContainers) do
+            for category, sections in pairs(state.sections or {}) do
                 local visible = category == name
-                if pair.Left then pair.Left.Visible = visible end
-                if pair.Right then pair.Right.Visible = visible end
-            end
-            for category, sections in pairs(luaxCategorySections) do
                 for _, section in ipairs(sections) do
                     if section and section.Root then
-                        section.Root.Visible = category == name
+                        section.Root.Visible = visible
                     end
                 end
             end
-            paintCategoryButton(name)
+
+            if luaxPage.Left then luaxPage.Left.Visible = true end
+            if luaxPage.Right then luaxPage.Right.Visible = true end
+
+            for category, button in pairs(state.buttons or {}) do
+                if button and button.Parent then
+                    button.BackgroundColor3 = category == name
+                        and Color3.fromRGB(48, 48, 48)
+                        or Color3.fromRGB(28, 28, 28)
+                    button.TextColor3 = category == name
+                        and Color3.fromRGB(235, 235, 235)
+                        or Color3.fromRGB(155, 155, 155)
+                end
+            end
         end
 
-        for _, name in ipairs({"Combat", "Rage"}) do
-            local button = Instance.new("TextButton")
-            button.Name = "LuaXCategory_" .. name
-            button.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
-            button.BorderColor3 = Color3.fromRGB(55, 55, 55)
-            button.BorderSizePixel = 1
-            button.Size = UDim2.new(0, 92, 1, 0)
-            button.AutoButtonColor = false
-            button.Font = Enum.Font.Code
-            button.Text = string.upper(name)
-            button.TextSize = 11
-            button.TextColor3 = Color3.fromRGB(155, 155, 155)
-            button.Parent = categoryBar
-            button.ZIndex = 21
-            categoryButtons[name] = button
+        for index, name in ipairs({"Combat", "Rage"}) do
+            local button = utility:RenderObject("TextButton", {
+                Name = "LuaXCategory_" .. name,
+                LayoutOrder = index,
+                BackgroundColor3 = Color3.fromRGB(28, 28, 28),
+                BorderColor3 = Color3.fromRGB(55, 55, 55),
+                BorderSizePixel = 1,
+                Size = UDim2.new(0, 100, 1, -6),
+                AutoButtonColor = false,
+                Font = Enum.Font.Code,
+                Text = string.upper(name),
+                TextSize = 11,
+                TextColor3 = Color3.fromRGB(155, 155, 155),
+                ZIndex = 31,
+            })
+            C.buttons[name] = button
             utility:CreateConnection(button.MouseButton1Click, function()
-                setLuaxCategory(name)
+                if getgenv().__DevKageSetLuaxCategory then
+                    getgenv().__DevKageSetLuaxCategory(name)
+                end
             end)
         end
 
-        local function registerLuaxSection(section, category)
+        getgenv().__DevKageRegisterLuaxSection = function(section, category)
+            local state = getgenv().__DevKageLuaxCategoryState
+            if type(state) ~= "table" or not section then return end
             category = category == "Combat" and "Combat" or "Rage"
-            if not section then return end
             section.__DevKageLuaxCategory = category
-            luaxCategorySections[category][#luaxCategorySections[category] + 1] = section
-            if section.Root then section.Root.Visible = category == luaxCategoryActive end
+            state.sections[category] = state.sections[category] or {}
+            state.sections[category][#state.sections[category] + 1] = section
+            if section.Root then
+                section.Root.Visible = (category == (state.active or "Combat"))
+            end
         end
 
         -- Original Lua X features live on Rage.
@@ -39169,9 +39222,11 @@ do
             Name = "Lua X Core",
             Side = "Left",
             Size = 205,
-            FolderContainer = luaxCategoryContainers.Rage.Left
+            FolderContainer = luaxPage.Left
         })
-        registerLuaxSection(WB, "Rage")
+        if getgenv().__DevKageRegisterLuaxSection then
+            getgenv().__DevKageRegisterLuaxSection(WB, "Rage")
+        end
 
         LT["DevWallbang"] = WB:CreateToggle({ Name = "Wallbang (shoot through walls)", State = false, Flag = "Luax_Wallbang_DevWallbang", Callback = function(v)
             local wb = getgenv().__devWallbang
@@ -39239,7 +39294,7 @@ do
         local luaxFolderRefs = {}
         local function luaxFolder(name, side)
             local category = (tostring(name):sub(1, 6) == "RIVALS") and "Combat" or "Rage"
-            local container = luaxCategoryContainers[category][side]
+            local container = luaxPage[side] or luaxPage.Left
             local fakeFolder = {
                 Name = name,
                 Open = true,
@@ -39257,7 +39312,9 @@ do
             sectionProps.FolderContainer = container
             local sec = luaxPage:CreateSection(sectionProps)
             local category = (folder and folder.Category) or props.Category or "Rage"
-            registerLuaxSection(sec, category)
+            if getgenv().__DevKageRegisterLuaxSection then
+                getgenv().__DevKageRegisterLuaxSection(sec, category)
+            end
 
             local function registerLuaxControl(item, controlName)
                 if not item or not controlName then return item end
@@ -39403,46 +39460,6 @@ do
             EX:CreateToggle({ Name = "Sound Spam", State = false, Flag = "Rivals_SoundSpam_Enabled", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Misc.Exploits.SoundSpam.Enabled", v == true) end end })
             EX:CreateDropdown({ Name = "Sound", Options = { "Warp" }, State = 1, Flag = "Rivals_SoundSpam_Value", Callback = function(i) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Misc.Exploits.SoundSpam.Value", "Warp") end end })
             EX:CreateSlider({ Name = "Interval", State = 0.1, Min = 0.01, Max = 1, Decimals = 2, Suffix = " s", Flag = "Rivals_SoundSpam_Interval", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Misc.Exploits.SoundSpam.Interval", v) end end })
-
-            local UD = luaxSection(__mf, __mc, { Name = "RIVALS Underground", Side = "Left", Size = 100 })
-            UD:CreateToggle({ Name = "Underground", State = false, Flag = "Rivals_Underground_Enabled", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Misc.Underground.Enabled", v == true) end end })
-
-            local GE = luaxSection(__mf, __mc, { Name = "Get All Gear", Side = "Left", Size = 135 })
-            local function devkageGetAllGear()
-                local player = game:GetService("Players").LocalPlayer
-                if not player then return 0 end
-                local backpack = player:FindFirstChildOfClass("Backpack") or player:FindFirstChild("Backpack")
-                if not backpack then return 0 end
-                local replicated = game:GetService("ReplicatedStorage")
-                local moved, foldersScanned = 0, 0
-                local function scanGearContainer(container)
-                    if not container or not container:IsA("Folder") then return end
-                    foldersScanned += 1
-                    for _, child in ipairs(container:GetChildren()) do
-                        if child:IsA("Tool") then
-                            local ok = pcall(function() child.Parent = backpack end)
-                            if ok and child.Parent == backpack then moved += 1 end
-                        end
-                    end
-                end
-                local direct = replicated:FindFirstChild("Gear")
-                scanGearContainer(direct)
-                -- Also handle common nested/renamed gear containers without
-                -- assuming a particular game hierarchy.
-                for _, obj in ipairs(replicated:GetDescendants()) do
-                    if obj:IsA("Folder") and obj.Name:lower():find("gear", 1, true) then
-                        if obj ~= direct then scanGearContainer(obj) end
-                    end
-                end
-                if library and library.Notify then
-                    library:Notify({Message="Get All Gear: moved "..tostring(moved).." tool(s)",Duration=3})
-                end
-                return moved
-            end
-            GE:CreateButton({ Name = "Get All Gear", Callback = devkageGetAllGear })
-            GE:CreateLabel({ Text = "Scans ReplicatedStorage gear folders and moves available Tools." })
-            getgenv().__DevKageGetAllGear = devkageGetAllGear
-
             local AN = luaxSection(__mf, __mc, { Name = "RIVALS Anti-Aim", Side = "Right", Size = 230 })
             AN:CreateToggle({ Name = "Anti-Aim", State = false, Flag = "Rivals_AntiAim_Enabled", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Misc.AntiAim.Enabled", v == true) end end })
             AN:CreateToggle({ Name = "Spin Bot", State = true, Flag = "Rivals_AntiAim_SpinBot", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Misc.AntiAim.SpinBot", v == true) end end })
@@ -40432,7 +40449,6 @@ do
                     setrv("Combat.Ragebot.VoidSpam.Enabled", getLuaxValue("Luax_RageBot_VoidSpam", false) == true)
                     setrv("Misc.GunMods.NoSpread", getLuaxValue("Rivals_GunMods_NoSpread", false) == true)
                     setrv("Misc.GunMods.FullAuto", getLuaxValue("Rivals_GunMods_FullAuto", false) == true)
-                    setrv("Misc.Underground.Enabled", getLuaxValue("Rivals_Underground_Enabled", false) == true)
                 end
                 if rb then
                     pcall(rb.EnableAimbot, getLuaxValue("Luax_Aimbot_Enabled", getLuaxValue("Luax_Wallbang_Aimbot", false)) == true)
@@ -40505,39 +40521,55 @@ do
         end
 
         -- Re-apply any config that loaded before the asynchronous Lua X UI existed.
-        pcall(function()
-            local saved = getgenv().__DevKageLastLoadedControlValues or getgenv().__DevKagePendingControlValues
-            if type(saved) == "table" then
-                getgenv().__DevKageApplySavedControlValues(saved, true)
-            end
-        end)
-        pcall(function()
-            if getgenv().__DevKageSyncLuaxCombatFromControls then
-                getgenv().__DevKageSyncLuaxCombatFromControls()
-            end
-        end)
+        -- Do several passes because both the UI and RIVALS runtime can initialize
+        -- on different frames during auto-execute.
+        if getgenv().__DevKageSetLuaxCategory then
+            getgenv().__DevKageSetLuaxCategory("Combat")
+        end
+        local function restoreLuaxConfigSnapshot()
+            local saved = getgenv().__DevKageLastLoadedControlValues
+                or getgenv().__DevKagePendingControlValues
+            if type(saved) ~= "table" then saved = {} end
 
-        -- No visual folders are used in Lua X anymore. Keep both categories
-        -- expanded so every section remains immediately visible.
-        setLuaxCategory("Combat")
+            -- The config wrapper mirrors flagged controls into __DevKageConfig.
+            -- Use those values when an older config has no controlValues block.
+            local live = getgenv().__DevKageConfig
+            if type(live) == "table" then
+                for flag, value in pairs(live) do
+                    if saved[flag] == nil
+                        and (library.ConfigRegistry and library.ConfigRegistry[flag]) then
+                        saved[flag] = value
+                    end
+                end
+            end
 
-        -- Auto-execute/config loading can race the asynchronous Lua X UI build.
-        -- Re-apply the latest snapshot once the key combat controls exist.
+            local apply = getgenv().__DevKageApplySavedControlValues
+            if type(apply) == "function" then
+                pcall(apply, saved, true)
+            end
+            local sync = getgenv().__DevKageSyncLuaxCombatFromControls
+            if type(sync) == "function" then
+                pcall(sync)
+            end
+        end
+
+        pcall(restoreLuaxConfigSnapshot)
+
         task.spawn(function()
-            for _ = 1, 80 do
+            local delays = {0.15, 0.35, 0.75, 1.5, 3, 5, 8}
+            for _, delayTime in ipairs(delays) do
+                task.wait(delayTime)
+                restoreLuaxConfigSnapshot()
+            end
+        end)
+
+        task.spawn(function()
+            for _ = 1, 120 do
                 local hasSilent = library.ConfigRegistry and library.ConfigRegistry["Luax_SilentAim_Enabled"]
                 local hasAimbot = library.ConfigRegistry and library.ConfigRegistry["Luax_Aimbot_Enabled"]
                 local hasRage = library.ConfigRegistry and library.ConfigRegistry["Luax_RageBot_Enabled"]
                 if hasSilent and hasAimbot and hasRage then
-                    local saved = getgenv().__DevKageLastLoadedControlValues or getgenv().__DevKagePendingControlValues
-                    local apply = getgenv().__DevKageApplySavedControlValues
-                    if type(saved) == "table" and type(apply) == "function" then
-                        pcall(apply, saved, true)
-                    end
-                    local sync = getgenv().__DevKageSyncLuaxCombatFromControls
-                    if type(sync) == "function" then
-                        pcall(sync)
-                    end
+                    restoreLuaxConfigSnapshot()
                     break
                 end
                 task.wait(0.25)
