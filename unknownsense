@@ -1293,6 +1293,27 @@ function library:CreateWindow(Properties)
             applySearch("")
         end)
 
+        -- Cursor Glow Options
+        local CursorGlowOptions = {
+            {Name = "Soft", Color = Color3.fromRGB(255, 255, 255), Size = 12, Transparency = 0.5},
+            {Name = "Neon Blue", Color = Color3.fromRGB(0, 170, 255), Size = 15, Transparency = 0.3},
+            {Name = "Toxic Green", Color = Color3.fromRGB(0, 255, 127), Size = 15, Transparency = 0.3},
+            {Name = "Blood Red", Color = Color3.fromRGB(255, 0, 0), Size = 15, Transparency = 0.3},
+            {Name = "Golden", Color = Color3.fromRGB(255, 215, 0), Size = 18, Transparency = 0.2},
+        }
+        local selectedGlow = 1
+
+        local function applyCursorGlow(index)
+            local glow = CursorGlowOptions[index]
+            if not glow then return end
+            -- Logic to apply glow to the actual cursor object
+            if getgenv().__DevKageCursorGlow then
+                getgenv().__DevKageCursorGlow.Color = glow.Color
+                getgenv().__DevKageCursorGlow.Size = glow.Size
+                getgenv().__DevKageCursorGlow.Transparency = glow.Transparency
+            end
+        end
+
         local function externalCursorAlive()
             local env = (type(getgenv) == "function" and getgenv()) or _G
             local bridge = env.__DevKageCursorBridgeV1
@@ -17171,7 +17192,10 @@ runtimeEnv.__DevKageAvatarMods = (function()
         feather.CastShadow = false
         feather.Massless = true
         feather.Anchored = false
-        feather.CFrame = parentBone.CFrame * localCFrame
+        -- FIX: Offset the wing CFrame to move them further back and away from the center
+        -- This prevents the "wings in the middle of me when looking down" issue.
+        local wingOffset = CFrame.new(0, 0, 0.15 * modSize())
+        feather.CFrame = parentBone.CFrame * localCFrame * wingOffset
         feather.Parent = state.model
         remember(feather)
 
@@ -18090,7 +18114,7 @@ getgenv().__DevKageWindow = library.Window
 -- FIX: Correct Tab Order
 -- Spoofer: 1, AntiAim: 2, LuaX: 3, ESP (Visuals): 4
 local spooferPage = library.Window:CreatePage({ Icon = "rbxassetid://8547236654", Glyph = "R", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 1 })
-local antiAimPage = library.Window:CreatePage({ Icon = "rbxassetid://123456789", Glyph = "◉", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 2 })
+                local antiAimPage = library.Window:CreatePage({ Icon = "rbxassetid://123456789", Glyph = "◉", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 2 })
 local luaxPage = library.Window:CreatePage({ Icon = "rbxassetid://97832472593469", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 3 })
 local visualsPage = library.Window:CreatePage({ Icon = "rbxassetid://8547254518", Glyph = "V", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 4 })
 getgenv().__luaxTabIcon = "rbxassetid://97832472593469"
