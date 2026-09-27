@@ -37005,16 +37005,16 @@ do
             local LT = {} -- Lua X toggle registry (used by Load Preset / Kill Every)
 
         local WB = luaxPage:CreateSection({ Name = "Wallbang", Side = "Left", Size = 210 })
-        LT["DevWallbang"] = WB:CreateToggle({ Name = "Wallbang (shoot through walls)", State = false, Callback = function(v)
+        LT["DevWallbang"] = WB:CreateToggle({ Name = "Wallbang (shoot through walls)", State = false, Flag = "Luax_Wallbang_DevWallbang", Callback = function(v)
             local wb = getgenv().__devWallbang
             if wb then if v then wb.Start() else wb.Stop() end end
         end })
-        LT["LuaxRageBot"] = WB:CreateToggle({ Name = "Rage Bot", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb then rb.Enable(v) end end })
-        WB:CreateToggle({ Name = "Silent Aim", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb then if rb.EnableSilentAim then rb.EnableSilentAim(v) else if rb.SilentAim then rb.SilentAim.enabled = v end end end end })
-        WB:CreateToggle({ Name = "Aimbot", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb then if rb.EnableAimbot then rb.EnableAimbot(v) else if rb.Aimbot then rb.Aimbot.enabled = v end end end end })
-        WB:CreateToggle({ Name = "Auto Shoot", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb then if rb.SetSetting then rb.SetSetting("silent.autoShoot", v) end if rb.SilentAim then rb.SilentAim.autoShoot = v end end end })
-        WB:CreateToggle({ Name = "ESP (names, through walls)", State = false, Callback = function(v) local e = getgenv().__luaxESP; if e then e.SetActive(v) end end })
-        WB:CreateToggle({ Name = "Visibility Check (off = shoot through walls)", State = true, Callback = function(v) local rb = getgenv().__ragebot; if rb then if rb.SilentAim then rb.SilentAim.ignoreWalls = not v end if rb.Aimbot then rb.Aimbot.ignoreWalls = not v end end end })
+        LT["LuaxRageBot"] = WB:CreateToggle({ Name = "Rage Bot", State = false, Flag = "Luax_Wallbang_LuaxRageBot", Callback = function(v) local rb = getgenv().__ragebot; if rb then rb.Enable(v) end end })
+        WB:CreateToggle({ Name = "Silent Aim", State = false, Flag = "Luax_Wallbang_Silent_Aim", Callback = function(v) local rb = getgenv().__ragebot; if rb then if rb.EnableSilentAim then rb.EnableSilentAim(v) else if rb.SilentAim then rb.SilentAim.enabled = v end end end end })
+        WB:CreateToggle({ Name = "Aimbot", State = false, Flag = "Luax_Wallbang_Aimbot", Callback = function(v) local rb = getgenv().__ragebot; if rb then if rb.EnableAimbot then rb.EnableAimbot(v) else if rb.Aimbot then rb.Aimbot.enabled = v end end end end })
+        WB:CreateToggle({ Name = "Auto Shoot", State = false, Flag = "Luax_Wallbang_Auto_Shoot", Callback = function(v) local rb = getgenv().__ragebot; if rb then if rb.SetSetting then rb.SetSetting("silent.autoShoot", v) end if rb.SilentAim then rb.SilentAim.autoShoot = v end end end })
+        WB:CreateToggle({ Name = "ESP (names, through walls)", State = false, Flag = "Luax_Wallbang_ESP", Callback = function(v) local e = getgenv().__luaxESP; if e then e.SetActive(v) end end })
+        WB:CreateToggle({ Name = "Visibility Check (off = shoot through walls)", State = true, Flag = "Luax_Wallbang_Visibility_Check", Callback = function(v) local rb = getgenv().__ragebot; if rb then if rb.SilentAim then rb.SilentAim.ignoreWalls = not v end if rb.Aimbot then rb.Aimbot.ignoreWalls = not v end end end })
 
         -- DevKage's own CreateFolder/AddSection is broken (AddSection would reparent
         -- the whole column). Build folders and reparent each section's Root ourselves.
