@@ -18114,7 +18114,7 @@ getgenv().__DevKageWindow = library.Window
 -- FIX: Correct Tab Order
 -- Spoofer: 1, AntiAim: 2, LuaX: 3, ESP (Visuals): 4
 local spooferPage = library.Window:CreatePage({ Icon = "rbxassetid://8547236654", Glyph = "R", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 1 })
-                local antiAimPage = library.Window:CreatePage({ Icon = "rbxassetid://123456789", Glyph = "◉", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 2 })
+                local antiAimPage = library.Window:CreatePage({ Icon = "rbxassetid://113229312578847", Glyph = "◉", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 2 })
 local luaxPage = library.Window:CreatePage({ Icon = "rbxassetid://97832472593469", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 3 })
 local visualsPage = library.Window:CreatePage({ Icon = "rbxassetid://8547254518", Glyph = "V", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 4 })
 getgenv().__luaxTabIcon = "rbxassetid://97832472593469"
