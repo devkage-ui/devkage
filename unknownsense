@@ -18152,97 +18152,17 @@ getgenv().__DevKageWindow = library.Window
 -- Spoofer: 1, AntiAim: 2, LuaX: 3, ESP (Visuals): 4
 local spooferPage = library.Window:CreatePage({ Icon = "rbxassetid://8547236654", Glyph = "R", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 1 })
 
--- Anti-Aim icon: the asset ID is 113229312578847, while the image/texture
--- content ID is 121886618627230. ImageLabel.Image should use the image/texture
--- content so the actual artwork renders instead of falling back to the glyph.
-local ANTI_AIM_ASSET_ID = "rbxassetid://113229312578847"
-local ANTI_AIM_TEXTURE_ID = "rbxassetid://121886618627230"
+-- Anti-Aim uses the original logo only.
+-- Do not layer the newer texture/decal over it; the library's native
+-- tab-rainbow loop owns ImageColor3 so this icon participates in rainbow mode.
+local ANTI_AIM_ICON = "rbxassetid://113229312578847"
 local antiAimPage = library.Window:CreatePage({
-    Icon = ANTI_AIM_TEXTURE_ID,
+    Icon = ANTI_AIM_ICON,
     Glyph = "",
     Size = UDim2.new(0, 36, 0, 36),
     LayoutOrder = 2
 })
-getgenv().__DevKageAntiAimTabIcon = ANTI_AIM_TEXTURE_ID
-getgenv().__DevKageAntiAimTabAssetId = ANTI_AIM_ASSET_ID
-getgenv().__DevKageAntiAimTabTextureId = ANTI_AIM_TEXTURE_ID
-
--- Keep the page object tied to its real tab image and repeatedly apply the
--- texture content to the second tab. This also repairs the icon after theme
--- refreshes/re-renders that may replace or reset tab children.
-task.defer(function()
-    local function applyAntiAimIcon()
-        local targetPage = antiAimPage
-        local targetTab = targetPage and targetPage.Tab
-        if not targetTab then
-            local win = getgenv().__DEVKAGE_RUNTIME_WINDOW
-            local holder = win and win:FindFirstChild("TabsHolder")
-            if holder then
-                local tabs = holder:GetChildren()
-                table.sort(tabs, function(a, b)
-                    return (a.LayoutOrder or 0) < (b.LayoutOrder or 0)
-                end)
-                targetTab = tabs[2]
-            end
-        end
-        if not targetTab then return end
-
-        local found = false
-        for _, obj in ipairs(targetTab:GetDescendants()) do
-            if obj:IsA("ImageLabel") then
-                found = true
-                pcall(function()
-                    obj.Image = ANTI_AIM_TEXTURE_ID
-                    obj.ImageTransparency = 0
-                    obj.ImageColor3 = Color3.fromRGB(255, 255, 255)
-                    obj.Visible = true
-                    obj.BackgroundTransparency = 1
-                    obj.ScaleType = Enum.ScaleType.Fit
-                end)
-            elseif obj:IsA("TextLabel") then
-                pcall(function()
-                    if obj.Text == "" or obj.Text == "◉" then obj.Visible = false end
-                end)
-            end
-        end
-
-        -- Prefer the page's actual ImageLabel reference when the CreatePage
-        -- implementation exposes it.
-        pcall(function()
-            if targetPage.TabImage then
-                targetPage.TabImage.Image = ANTI_AIM_TEXTURE_ID
-                targetPage.TabImage.ImageTransparency = 0
-                targetPage.TabImage.ImageColor3 = Color3.fromRGB(255, 255, 255)
-                targetPage.TabImage.Visible = true
-                targetPage.TabImage.ScaleType = Enum.ScaleType.Fit
-                found = true
-            end
-        end)
-
-        if not found then
-            local icon = Instance.new("ImageLabel")
-            icon.Name = "AntiAimLogo"
-            icon.BackgroundTransparency = 1
-            icon.BorderSizePixel = 0
-            icon.AnchorPoint = Vector2.new(0.5, 0.5)
-            icon.Position = UDim2.new(0.5, 0, 0.5, 0)
-            icon.Size = UDim2.new(0, 36, 0, 36)
-            icon.ZIndex = 20
-            icon.Image = ANTI_AIM_TEXTURE_ID
-            icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
-            icon.ImageTransparency = 0
-            icon.ScaleType = Enum.ScaleType.Fit
-            icon.Parent = targetTab
-        end
-    end
-
-    -- Run once immediately, then retry through the first few UI frames.
-    applyAntiAimIcon()
-    for _ = 1, 10 do
-        task.wait(0.15)
-        applyAntiAimIcon()
-    end
-end)
+getgenv().__DevKageAntiAimTabIcon = ANTI_AIM_ICON
 
 local luaxPage = library.Window:CreatePage({ Icon = "rbxassetid://97832472593469", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 3 })
 local visualsPage = library.Window:CreatePage({ Icon = "rbxassetid://8547254518", Glyph = "V", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 4 })
@@ -36812,6 +36732,395 @@ local function unbindLoops()
     clearAimbotLock()
 end
 
+
+-- ============================================================================
+-- 16.5 RIVALS SILENT-AIM / RAGEBOT REPLACEMENT
+--      Ported from the supplied RIVALS source. This replaces only the silent
+--      and rage firing paths; the existing Lua X aimbot/FOV implementation
+--      remains intact.
+--      Device spoofer code is intentionally not included.
+-- ============================================================================
+do
+    local __RivalsCombat = {}
+    local __RivalsShootData = nil
+    local __RivalsWrappedFighters = {}
+    local __RivalsOriginalCameraMethods = {}
+    local __RivalsLastRageShot = 0
+
+    config.target.range = tonumber(config.target.range) or 150
+    config.target.interval = tonumber(config.target.interval) or 0.2
+    config.target.hitpart = config.target.hitpart or "Head"
+    config.target.originShiftEnabled = config.target.originShiftEnabled ~= false
+    config.target.originShiftRange = tonumber(config.target.originShiftRange) or 14
+    config.target.voidSpamEnabled = config.target.voidSpamEnabled == true
+    config.target.voidX = tonumber(config.target.voidX) or 0
+    config.target.voidY = tonumber(config.target.voidY) or 1000
+    config.target.voidZ = tonumber(config.target.voidZ) or 0
+
+    silentAim.fovRadius = tonumber(silentAim.fovRadius) or 300
+    silentAim.hitChance = tonumber(silentAim.hitChance) or 100
+    silentAim.hitPart = silentAim.hitPart or "Head"
+
+    local function rivalsEnemy(plr)
+        if not plr or plr == player then return false end
+        if isteammate and isteammate(plr) then return false end
+        return true
+    end
+
+    local function rivalsRayHit(destination, character, origin)
+        if not destination or not origin then return nil end
+        local direction = destination - origin
+        if direction.Magnitude <= 0.001 then return nil end
+
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        local ignore = {}
+        if player.Character then table.insert(ignore, player.Character) end
+        params.FilterDescendantsInstances = ignore
+
+        local ok, result = pcall(function()
+            return workspace:Raycast(origin, direction, params)
+        end)
+        if not ok then return nil end
+
+        if not result then return nil end
+        if character and result.Instance and result.Instance:IsDescendantOf(character) then
+            return result
+        end
+        return result
+    end
+
+    local function rivalsVisible(destination, character, origin)
+        local result = rivalsRayHit(destination, character, origin)
+        return result ~= nil
+            and result.Instance ~= nil
+            and character ~= nil
+            and result.Instance:IsDescendantOf(character)
+    end
+
+    local function rivalsPart(character, name)
+        return hitpartfromname(character, name or "Head")
+    end
+
+    local function rivalsSilentTarget()
+        local cam = workspace.CurrentCamera or camera
+        if not cam then return nil, nil end
+
+        local center = silentAim.followMuzzle and silentfovcenter() or screenCenter(cam)
+        local best, bestDist = nil, math.huge
+        local origin = cam.CFrame.Position
+        local mode = silentAim.visibility or "visible"
+
+        for _, plr in ipairs(players:GetPlayers()) do
+            if rivalsEnemy(plr) and plr.Character then
+                local char = plr.Character
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                local root = char:FindFirstChild("HumanoidRootPart")
+                local part = rivalsPart(char, silentAim.hitPart)
+                if hum and hum.Health > 0 and root and part then
+                    local screen, onScreen = worldToScreen(part.Position, cam)
+                    local visible = rivalsVisible(part.Position, char, origin)
+
+                    local allowVisibility = true
+                    if mode == "visible" then
+                        allowVisibility = visible
+                    elseif mode == "hidden" then
+                        allowVisibility = not visible
+                    end
+
+                    if allowVisibility then
+                        if not onScreen and mode ~= "hidden" then
+                            allowVisibility = false
+                        end
+                        if allowVisibility then
+                            local dx = screen.X - center.X
+                            local dy = screen.Y - center.Y
+                            local dist = math.sqrt(dx * dx + dy * dy)
+                            if dist <= silentAim.fovRadius and dist < bestDist then
+                                best = char
+                                bestDist = dist
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        return best, best and rivalsPart(best, silentAim.hitPart) or nil
+    end
+
+    local function rivalsCameraData(destination, origin, hitPart)
+        local coordinateFrame = CFrame.lookAt(origin, destination)
+        local hitOffset = CFrame.new(0, 0.6, 0)
+
+        return {
+            [utf8.char(0)] = Utility:EncodeCFrame(coordinateFrame),
+            [utf8.char(1)] = Utility:EncodeCFrame(coordinateFrame),
+            [utf8.char(2)] = hitPart,
+            [utf8.char(3)] = Utility:EncodeCFrame(hitOffset),
+        }
+    end
+
+    local function rivalsWrapCameraData(fighter)
+        if not fighter or type(fighter.GetCameraData) ~= "function" then return false end
+        if __RivalsWrappedFighters[fighter] then return true end
+
+        local original = fighter.GetCameraData
+        __RivalsOriginalCameraMethods[fighter] = original
+
+        local wrapper = function(self, ...)
+            local shot = __RivalsShootData
+            if shot and self == fighter then
+                return rivalsCameraData(
+                    shot.Destination,
+                    shot.Origin,
+                    shot.HitPart
+                )
+            end
+            return original(self, ...)
+        end
+
+        local ok = pcall(function()
+            fighter.GetCameraData = wrapper
+        end)
+
+        if ok then
+            __RivalsWrappedFighters[fighter] = true
+            return true
+        end
+
+        __RivalsOriginalCameraMethods[fighter] = nil
+        return false
+    end
+
+    local function rivalsRestoreCameraData()
+        for fighter, original in pairs(__RivalsOriginalCameraMethods) do
+            if fighter and original then
+                pcall(function()
+                    fighter.GetCameraData = original
+                end)
+            end
+        end
+        table.clear(__RivalsWrappedFighters)
+        table.clear(__RivalsOriginalCameraMethods)
+    end
+
+    local function rivalsWeaponShoot(destination, character, origin, hitPart)
+        local fighterController = modules.fighter
+        local fighter = fighterController and fighterController.LocalFighter
+        if not fighter or not fighter.Entity then return false end
+
+        local item = fighter.EquippedItem
+        if not item then return false end
+
+        local objectId
+        pcall(function() objectId = item:Get("ObjectID") end)
+        if not objectId then return false end
+
+        rivalsWrapCameraData(fighter)
+
+        __RivalsShootData = {
+            Destination = destination,
+            Character = character,
+            Origin = origin,
+            HitPart = hitPart,
+        }
+
+        local ok = pcall(function()
+            fighter:Input("StartShooting")
+        end)
+
+        __RivalsShootData = nil
+        return ok
+    end
+
+    local function rivalsOriginShift(destination, character, base)
+        if not config.target.originShiftEnabled then
+            return base
+        end
+
+        local range = math.max(1, tonumber(config.target.originShiftRange) or 14)
+        local scanPoints = {
+            Vector3.new(0, -1, 0),
+            Vector3.new(0, 1, 0),
+            Vector3.new(-1, 0, 0),
+            Vector3.new(1, 0, 0),
+            Vector3.new(0, 0, -1),
+            Vector3.new(0, 0, 1),
+        }
+
+        for _, point in ipairs(scanPoints) do
+            local origin = base + (point * range)
+            if rivalsVisible(destination, character, origin) then
+                return origin
+            end
+        end
+
+        return base
+    end
+
+    local function rivalsRageTarget(origin, range, hitPartName)
+        local bestCharacter, bestPosition, bestHitPart, bestOrigin
+        local closestDistance = tonumber(range) or 150
+        local bestHealth = math.huge
+
+        for _, plr in ipairs(players:GetPlayers()) do
+            if rivalsEnemy(plr) and plr.Character then
+                local char = plr.Character
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                local root = char:FindFirstChild("HumanoidRootPart")
+                local hitPart = rivalsPart(char, hitPartName)
+
+                if hum and hum.Health > 0 and root and hitPart then
+                    local destination = hitPart.Position + Vector3.new(0, 0.7, 0)
+                    local shotOrigin = rivalsOriginShift(destination, char, origin)
+                    local result = rivalsRayHit(destination, char, shotOrigin)
+
+                    if result and result.Instance and result.Instance:IsDescendantOf(char) then
+                        local distance = (destination - shotOrigin).Magnitude
+                        if distance < closestDistance and hum.Health < bestHealth then
+                            closestDistance = distance
+                            bestHealth = hum.Health
+                            bestCharacter = char
+                            bestPosition = result.Position
+                            bestHitPart = result.Instance
+                            bestOrigin = shotOrigin
+                        end
+                    end
+                end
+            end
+        end
+
+        return bestCharacter, bestPosition, bestHitPart, bestOrigin
+    end
+
+    local function rivalsVoidPulse(root)
+        if not root or not config.target.voidSpamEnabled then return end
+
+        local oldCF = root.CFrame
+        local voidCF = CFrame.new(
+            tonumber(config.target.voidX) or 0,
+            tonumber(config.target.voidY) or 1000,
+            tonumber(config.target.voidZ) or 0
+        )
+
+        pcall(function()
+            root.CFrame = voidCF
+            RunService.PreRender:Wait()
+            if root and root.Parent then
+                root.CFrame = oldCF
+            end
+        end)
+    end
+
+    local function rivalsSilentFire()
+        if not silentAim.enabled then return end
+        if not shouldHitTarget() then return end
+
+        local target, hitPart = rivalsSilentTarget()
+        if not target or not hitPart then return end
+
+        local char = player.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+
+        local origin = silentAim.followMuzzle and (muzzlepos() or root.Position) or root.Position
+        local destination = hitPart.Position
+
+        rivalsWeaponShoot(destination, target, origin, hitPart)
+        curtarget = target
+    end
+
+    local function rivalsRageStep()
+        if not config.target.rageMasterOn then return end
+
+        local now = tick()
+        local interval = math.max(0.001, tonumber(config.target.interval) or 0.2)
+        if now - __RivalsLastRageShot < interval then return end
+        __RivalsLastRageShot = now
+
+        local char = player.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+
+        pcall(function() rivalsVoidPulse(root) end)
+
+        local character, position, hitPart, origin = rivalsRageTarget(
+            root.Position,
+            tonumber(config.target.range) or 150,
+            config.target.hitpart or "Head"
+        )
+
+        if not character or not position or not hitPart or not origin then
+            return
+        end
+
+        rivalsWeaponShoot(position, character, origin, hitPart)
+        config.target.character = character
+        config.target.lastchar = character
+        config.target.lastplayer = players:GetPlayerFromCharacter(character)
+        config.target.enabled = true
+        config.target.settled = true
+    end
+
+    -- Rebind the existing Lua X loop names to the supplied RIVALS paths.
+    firesilent = rivalsSilentFire
+    autoshoot = rivalsRageStep
+
+    -- Keep the established API, but have its master toggle drive the RIVALS rage state.
+    local __OldEnable = Ragebot and Ragebot.Enable
+    local __OldStop = Ragebot and Ragebot.Stop
+
+    -- These are assigned below after the public API table is constructed.
+    __RivalsCombat.WrapAPI = function(RageAPI)
+        RageAPI.Enable = function(on)
+            config.target.rageMasterOn = on == true
+            config.target.auto = on == true
+            config.target.manualkey = false
+
+            if config.target.rageMasterOn then
+                local target = nearest()
+                if target then
+                    settarget(target)
+                    config.target.enabled = true
+                end
+            else
+                cleartarget()
+            end
+            return config.target.rageMasterOn
+        end
+
+        RageAPI.EnableSilentAim = function(on)
+            silentAim.enabled = on == true
+            if not silentAim.enabled then
+                curtarget = nil
+            end
+            return silentAim.enabled
+        end
+
+        local oldSetSetting = RageAPI.SetSetting
+        RageAPI.SetSetting = function(key, value)
+            if key == "target.range" then config.target.range = tonumber(value) or config.target.range; return true end
+            if key == "target.interval" then config.target.interval = tonumber(value) or config.target.interval; return true end
+            if key == "target.hitpart" then config.target.hitpart = tostring(value or "Head"); return true end
+            if key == "target.originShiftEnabled" then config.target.originShiftEnabled = value == true; return true end
+            if key == "target.originShiftRange" then config.target.originShiftRange = tonumber(value) or config.target.originShiftRange; return true end
+            if key == "target.voidSpamEnabled" then config.target.voidSpamEnabled = value == true; return true end
+            if key == "target.voidX" then config.target.voidX = tonumber(value) or 0; return true end
+            if key == "target.voidY" then config.target.voidY = tonumber(value) or 1000; return true end
+            if key == "target.voidZ" then config.target.voidZ = tonumber(value) or 0; return true end
+            return oldSetSetting(key, value)
+        end
+    end
+
+    library.CleanupCallbacks[#library.CleanupCallbacks + 1] = function()
+        __RivalsShootData = nil
+        rivalsRestoreCameraData()
+    end
+
+    getgenv().__DevKageRivalsCombat = __RivalsCombat
+end
+
 -- ============================================================================
 -- 17. PUBLIC API
 -- ============================================================================
@@ -36925,6 +37234,10 @@ Ragebot.SetSetting = function(key, value)
         end
     end
     return false
+end
+
+if getgenv().__DevKageRivalsCombat and getgenv().__DevKageRivalsCombat.WrapAPI then
+    getgenv().__DevKageRivalsCombat.WrapAPI(Ragebot)
 end
 
 -- Lifecycle
@@ -37069,6 +37382,102 @@ do
         WB:CreateToggle({ Name = "Auto Shoot", State = false, Flag = "Luax_Wallbang_Auto_Shoot", Callback = function(v) local rb = getgenv().__ragebot; if rb then if rb.SetSetting then rb.SetSetting("silent.autoShoot", v) end if rb.SilentAim then rb.SilentAim.autoShoot = v end end end })
         WB:CreateToggle({ Name = "ESP (names, through walls)", State = false, Flag = "Luax_Wallbang_ESP", Callback = function(v) local e = getgenv().__luaxESP; if e then e.SetActive(v) end end })
         WB:CreateToggle({ Name = "Visibility Check (off = shoot through walls)", State = true, Flag = "Luax_Wallbang_Visibility_Check", Callback = function(v) local rb = getgenv().__ragebot; if rb then if rb.SilentAim then rb.SilentAim.ignoreWalls = not v end if rb.Aimbot then rb.Aimbot.ignoreWalls = not v end end end })
+
+        -- RIVALS Rage Bot controls. These feed the replacement RIVALS combat adapter
+        -- below while preserving the existing Lua X UI/config system.
+        do
+            local RG = luaxPage:CreateSection({ Name = "Rage Bot Settings", Side = "Right", Size = 300 })
+            RG:CreateSlider({
+                Name = "Rage Range",
+                State = 150,
+                Min = 25, Max = 1000, Decimals = 0, Suffix = " studs",
+                Flag = "Luax_Rage_Range",
+                Callback = function(v)
+                    local rb = getgenv().__ragebot
+                    if rb and rb.SetSetting then rb.SetSetting("target.range", v) end
+                end
+            })
+            RG:CreateSlider({
+                Name = "Rage Interval",
+                State = 0.2,
+                Min = 0.01, Max = 1, Decimals = 2, Suffix = " s",
+                Flag = "Luax_Rage_Interval",
+                Callback = function(v)
+                    local rb = getgenv().__ragebot
+                    if rb and rb.SetSetting then rb.SetSetting("target.interval", v) end
+                end
+            })
+            RG:CreateDropdown({
+                Name = "Rage Hit Part",
+                Options = { "Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso" },
+                State = 1,
+                Flag = "Luax_Rage_HitPart",
+                Callback = function(i)
+                    local options = { "Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso" }
+                    local rb = getgenv().__ragebot
+                    if rb and rb.SetSetting then rb.SetSetting("target.hitpart", options[i] or "Head") end
+                end
+            })
+            RG:CreateToggle({
+                Name = "Origin Shift",
+                State = true,
+                Flag = "Luax_Rage_OriginShift",
+                Callback = function(v)
+                    local rb = getgenv().__ragebot
+                    if rb and rb.SetSetting then rb.SetSetting("target.originShiftEnabled", v) end
+                end
+            })
+            RG:CreateSlider({
+                Name = "Origin Shift Range",
+                State = 14,
+                Min = 1, Max = 50, Decimals = 0, Suffix = " studs",
+                Flag = "Luax_Rage_OriginShiftRange",
+                Callback = function(v)
+                    local rb = getgenv().__ragebot
+                    if rb and rb.SetSetting then rb.SetSetting("target.originShiftRange", v) end
+                end
+            })
+            RG:CreateToggle({
+                Name = "Void Spam",
+                State = false,
+                Flag = "Luax_Rage_VoidSpam",
+                Callback = function(v)
+                    local rb = getgenv().__ragebot
+                    if rb and rb.SetSetting then rb.SetSetting("target.voidSpamEnabled", v) end
+                end
+            })
+            RG:CreateSlider({
+                Name = "Void X",
+                State = 0,
+                Min = -10000, Max = 10000, Decimals = 0,
+                Flag = "Luax_Rage_VoidX",
+                Callback = function(v)
+                    local rb = getgenv().__ragebot
+                    if rb and rb.SetSetting then rb.SetSetting("target.voidX", v) end
+                end
+            })
+            RG:CreateSlider({
+                Name = "Void Y",
+                State = 1000,
+                Min = -10000, Max = 10000, Decimals = 0,
+                Flag = "Luax_Rage_VoidY",
+                Callback = function(v)
+                    local rb = getgenv().__ragebot
+                    if rb and rb.SetSetting then rb.SetSetting("target.voidY", v) end
+                end
+            })
+            RG:CreateSlider({
+                Name = "Void Z",
+                State = 0,
+                Min = -10000, Max = 10000, Decimals = 0,
+                Flag = "Luax_Rage_VoidZ",
+                Callback = function(v)
+                    local rb = getgenv().__ragebot
+                    if rb and rb.SetSetting then rb.SetSetting("target.voidZ", v) end
+                end
+            })
+        end
+
 
         -- The Wallbang controls use explicit flags before luaxSection() is created;
         -- mark them as Lua X state bridges for config-load callback replay.
@@ -38077,18 +38486,27 @@ task.spawn(function()
             end
 
             if antiAimTab then
-                local img = antiAimTab:FindFirstChildOfClass("ImageLabel")
-                if img then
-                    if img.Image ~= ICON then img.Image = ICON end
-                    if not img.Visible then img.Visible = true end
-                    if img.Size ~= UDim2.new(0, 36, 0, 36) then
-                        img.Size = UDim2.new(0, 36, 0, 36)
+                -- Keep exactly one visible ImageLabel for the Anti-Aim icon.
+                local firstImage
+                for _, child in ipairs(antiAimTab:GetChildren()) do
+                    if child:IsA("ImageLabel") then
+                        if not firstImage then
+                            firstImage = child
+                        else
+                            pcall(function() child:Destroy() end)
+                        end
                     end
+                end
 
-                    -- The main rainbow loop owns ImageColor3 while enabled.
-                    -- Otherwise keep the normal top-bar color.
+                if firstImage then
+                    firstImage.Image = ICON
+                    firstImage.Visible = true
+                    firstImage.ImageTransparency = 0
+                    firstImage.Size = UDim2.new(0, 36, 0, 36)
+
+                    -- Let the library's rainbow loop control ImageColor3.
                     if not (library and library.Theme and library.Theme.TabRainbowEnabled) then
-                        img.ImageColor3 = (library and library.Theme and library.Theme.TopBar)
+                        firstImage.ImageColor3 = (library and library.Theme and library.Theme.TopBar)
                             or Color3.fromRGB(255, 255, 255)
                     end
                 end
