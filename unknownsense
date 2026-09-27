@@ -141,6 +141,17 @@ local __DEVKAGE_EMBEDDED_SOURCE = table.concat({
         antiBaitUniversalAim = true, antiBaitUniversalAnimation = true,
         antiBaitUniversalVelocity = true,
     }
+    -- Lua X menu preset state. These entries are configuration/UI state only.
+    local LUAX_CONFIG = {
+        HACKER_VC = false,
+        HACKER = false,
+        LEGIT = false,
+        UNDERGROUND_VOID = false,
+        NO_HIT = false,
+        INSTA_KILL = false,
+    }
+
+    getgenv().LUAX_CONFIG = LUAX_CONFIG
     getgenv().CFG = CFG
     getgenv().slingCFG = slingCFG
     getgenv().riotGodmodeCFG = riotGodmodeCFG
@@ -739,11 +750,6 @@ Folder = "devkage",
 Assets = "Assets",
 Configs = "Configs"
 }
-
--- LuaX is loaded as a separate chunk later in this package. Expose the same
--- library table so LuaX controls can register into the main config system.
-getgenv().library = library
-getgenv().__DevKageLibrary = library
 
 local Passed, Statement = pcall(function()
 local utility = {}
@@ -1988,7 +1994,6 @@ end
 function library:CreatePage(Properties)
     Properties = Properties or {}
     local Page = {
-        Name   = tostring(Properties.name or Properties.Name or Properties.title or Properties.Title or "Tab"),
         Image  = (Properties.image or Properties.Image or Properties.icon or Properties.Icon),
         Size   = (Properties.size or Properties.Size or UDim2.new(0, 50, 0, 50)),
         Open   = false,
@@ -2022,7 +2027,7 @@ function library:CreatePage(Properties)
             BorderColor3        = Color3.fromRGB(0, 0, 0),
             BorderSizePixel     = 0,
             Parent              = Page_Tab,
-            Position            = UDim2.new(0.5, 0, 0.30, 0),
+            Position            = UDim2.new(0.5, 0, 0.5, 0),
             Size                = Page.Size,
             ZIndex              = 8,
             Image               = Page.Image or "",
@@ -2054,7 +2059,7 @@ function library:CreatePage(Properties)
             AnchorPoint = Vector2.new(0.5, 0.5),
             BackgroundTransparency = 1,
             Parent = Page_Tab,
-            Position = UDim2.new(0.5, 0, 0.30, 0),
+            Position = UDim2.new(0.5, 0, 0.5, 0),
             Size = UDim2.new(1, -8, 1, -8),
             ZIndex = 9,
             Font = Enum.Font.Code,
@@ -2073,25 +2078,6 @@ function library:CreatePage(Properties)
             Page_Tab_Image.Visible = false
             Page_Tab_Glyph.Visible = true
         end
-
-        local Page_Tab_Label = utility:RenderObject("TextLabel", {
-            AnchorPoint = Vector2.new(0.5, 0),
-            BackgroundTransparency = 1,
-            Parent = Page_Tab,
-            Position = UDim2.new(0.5, 0, 0.56, 0),
-            Size = UDim2.new(1, -6, 0, 20),
-            Font = Enum.Font.Code,
-            Text = Page.Name,
-            TextColor3 = Color3.fromRGB(155, 155, 155),
-            TextSize = 9,
-            TextWrapped = true,
-            TextXAlignment = Enum.TextXAlignment.Center,
-            TextYAlignment = Enum.TextYAlignment.Center,
-            TextTransparency = 0,
-            ZIndex = 51,
-            Visible = true,
-            Active = false
-        })
 
         local Page_Tab_Button = utility:RenderObject("TextButton", {
             BackgroundColor3    = Color3.fromRGB(0, 0, 0),
@@ -2219,10 +2205,6 @@ function library:CreatePage(Properties)
             Page_Tab_Glyph.TextColor3 = Page.Open
                 and Color3.fromRGB(235, 235, 235)
                 or  Color3.fromRGB(105, 105, 105)
-            Page_Tab_Label.Visible = true
-            Page_Tab_Label.TextColor3 = Page.Open
-                and Color3.fromRGB(235, 235, 235)
-                or  Color3.fromRGB(155, 155, 155)
             if Page.Open then
                 Page.Window:SetPage(Page)
             end
@@ -2234,8 +2216,6 @@ function library:CreatePage(Properties)
         utility:CreateConnection(Page_Tab_Button.MouseEnter, function()
             Page_Tab_Image.ImageColor3 = Color3.fromRGB(190, 190, 190)
             Page_Tab_Glyph.TextColor3 = Color3.fromRGB(190, 190, 190)
-            Page_Tab_Label.Visible = true
-            Page_Tab_Label.TextColor3 = Color3.fromRGB(205, 205, 205)
         end)
         utility:CreateConnection(Page_Tab_Button.MouseLeave, function()
             Page_Tab_Image.ImageColor3 = Page.Open
@@ -2244,10 +2224,6 @@ function library:CreatePage(Properties)
             Page_Tab_Glyph.TextColor3 = Page.Open
                 and Color3.fromRGB(235, 235, 235)
                 or  Color3.fromRGB(105, 105, 105)
-            Page_Tab_Label.Visible = true
-            Page_Tab_Label.TextColor3 = Page.Open
-                and Color3.fromRGB(235, 235, 235)
-                or  Color3.fromRGB(155, 155, 155)
         end)
     end
     if #Page.Window.Pages == 0 then Page:Set(true) end
@@ -13241,6 +13217,7 @@ local AntiAimState = {
     noclip_enabled = false,
     flight_enabled = false,
     flight_speed = 120,
+    underground_enabled = false,
     backtrack_enabled = false,
     backtrack_rainbow = false,
     backtrack_ghost_color = Color3.fromRGB(75, 220, 205),
@@ -18183,35 +18160,53 @@ getgenv().__DevKageWindow = library.Window
 
 -- FIX: Correct Tab Order
 -- Spoofer: 1, AntiAim: 2, LuaX: 3, ESP (Visuals): 4
-local spooferPage = library.Window:CreatePage({ Name = "Spoofer", Icon = "rbxassetid://8547236654", Glyph = "R", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 1 })
-                local antiAimPage = library.Window:CreatePage({ Name = "Anti Aim", Icon = "rbxassetid://113229312578847", Glyph = "◉", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 2 })
-getgenv().__DevKageAntiAimTabIcon = "rbxassetid://113229312578847"
-                -- Force immediate logo application for Anti Aim
-                task.defer(function()
-                    local win = getgenv().__DEVKAGE_RUNTIME_WINDOW
-                    if win and win:FindFirstChild("TabsHolder") then
-                        local antiAimTab = nil
-                        for _, tab in ipairs(win.TabsHolder:GetChildren()) do
-                            if tab:IsA("Frame") and tab.LayoutOrder == 2 then
-                                antiAimTab = tab
-                                break
-                            end
-                        end
-                        if antiAimTab then
-                            for _, img in ipairs(antiAimTab:GetChildren()) do
-                                if img:IsA("ImageLabel") then
-                                    img.Image = "rbxassetid://113229312578847"
-                                    img.ImageTransparency = 0
-                                    img.Visible = true
-                                    pcall(function() game:GetService("ContentProvider"):PreloadAsync({img}) end)
-                                end
-                            end
-                        end
-                    end
-                end)
+local spooferPage = library.Window:CreatePage({ Icon = "rbxassetid://8547236654", Glyph = "R", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 1 })
 
-local luaxPage = library.Window:CreatePage({ Name = "LuaX", Icon = "rbxassetid://97832472593469", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 3 })
-local visualsPage = library.Window:CreatePage({ Name = "Visuals", Icon = "rbxassetid://8547254518", Glyph = "V", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 4 })
+-- Anti-Aim tab logo: use the supplied local PNG when the executor supports
+-- getcustomasset/getsynasset, otherwise retain the existing Roblox fallback.
+local __DevKageAntiAimTabIcon = "rbxassetid://113229312578847"
+do
+    local env = (type(getgenv) == "function" and getgenv()) or _G
+    local candidates = {
+        env.__DevKageAntiAimLocalIcon or "devkage_antiaim_logo.png",
+        env.__DevKageAntiAimLocalIcon or "hbhbbhbhbhb.png",
+    }
+    local assetLoader = type(getcustomasset) == "function" and getcustomasset
+        or (type(getsynasset) == "function" and getsynasset)
+    if assetLoader then
+        for _, path in ipairs(candidates) do
+            local ok, asset = pcall(assetLoader, path)
+            if ok and type(asset) == "string" and asset ~= "" then
+                __DevKageAntiAimTabIcon = asset
+                break
+            end
+        end
+    end
+end
+
+local antiAimPage = library.Window:CreatePage({ Icon = __DevKageAntiAimTabIcon, Glyph = "◉", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 2 })
+getgenv().__DevKageAntiAimTabIcon = __DevKageAntiAimTabIcon
+
+-- Force immediate logo application for Anti Aim.
+task.defer(function()
+    local win = getgenv().__DEVKAGE_RUNTIME_WINDOW
+    if win and win:FindFirstChild("TabsHolder") then
+        local tabs = win.TabsHolder:GetChildren()
+        table.sort(tabs, function(a, b) return (a.LayoutOrder or 0) < (b.LayoutOrder or 0) end)
+        local antiAimTab = tabs[2]
+        if antiAimTab then
+            for _, img in ipairs(antiAimTab:GetChildren()) do
+                if img:IsA("ImageLabel") then
+                    img.Image = __DevKageAntiAimTabIcon
+                    img.Visible = true
+                end
+            end
+        end
+    end
+end)
+
+local luaxPage = library.Window:CreatePage({ Icon = "rbxassetid://97832472593469", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 3 })
+local visualsPage = library.Window:CreatePage({ Icon = "rbxassetid://8547254518", Glyph = "V", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 4 })
 getgenv().__luaxTabIcon = "rbxassetid://97832472593469"
 getgenv().__DevKageLuaxPage = luaxPage
 do
@@ -19417,19 +19412,12 @@ icon.BackgroundTransparency = 1
 icon.BorderSizePixel = 0
 icon.Position = UDim2.fromScale(0.5,0.5)
 icon.Size = UDim2.fromOffset(42,42)
-icon.ZIndex = 103
-icon.Image = tostring(iconAsset or "")
+icon.ZIndex = 23
+icon.Image = iconAsset or ""
 icon.ImageTransparency = 0
 icon.ImageColor3 = Color3.fromRGB(105,105,105)
 icon.ScaleType = Enum.ScaleType.Fit
-icon.Visible = true
 icon.Parent = parent
-if icon.Image ~= "" then
-    task.spawn(function()
-        pcall(function() game:GetService("ContentProvider"):PreloadAsync({icon}) end)
-        if icon and icon.Parent then icon.Visible = true end
-    end)
-end
 
 local function setTint(color)
 if icon and icon.Parent then
@@ -19487,9 +19475,8 @@ label.Text=category.Label
 label.TextColor3=Color3.fromRGB(155,155,155)
 label.TextSize=9
 label.TextXAlignment=Enum.TextXAlignment.Center
-label.ZIndex=104
+label.ZIndex=23
 label.Visible=true
-label.TextTransparency=0
 label.Parent=slot
 
 local accent=Instance.new("Frame")
@@ -19511,15 +19498,13 @@ button.AutoButtonColor=false
 button.Size=UDim2.fromScale(1,1)
 button.Active=true
 button.Selectable=false
-button.ZIndex=101
+button.ZIndex=100
 button.Parent=slot
 for _,object in ipairs(slot:GetDescendants()) do
 if object~=button and object:IsA("GuiObject") then pcall(function() object.Active=false end) end
 end
 local record={Icon=icon,Label=label,Accent=accent,SetTint=setIconTint,Active=false,Hovered=false}
 VisualCategoryController.Buttons[category.Name]=record
-record.Label.Visible=true
-record.Icon.Visible=true
 utility:CreateConnection(button.MouseButton1Click,function() VisualCategoryController:Set(category.Name) end)
 utility:CreateConnection(button.MouseEnter,function()
 record.Hovered=true
@@ -19535,7 +19520,6 @@ record.SetTint(record.Active and Color3.fromRGB(240,240,240) or Color3.fromRGB(1
 end)
 end
 end
-VisualCategoryController:Set("Enemy")
 
 local VisualControls = {}
 local function rebuildESPObjects()
@@ -24223,7 +24207,17 @@ do
         freestandingSection:CreateButton({Name="Flip Freestanding Side", Callback=function() AntiAimState.core.Actions.FlipSide() end})
     end
     do
-        local movementToolsSection = antiAimPage:CreateSection({Name="Movement Tools", Side="Left", Size=110})
+        local movementToolsSection = antiAimPage:CreateSection({Name="Movement Tools", Side="Left", Size=155})
+        AntiAimState.underground_enabled = AntiAimState.underground_enabled == true
+        AntiAimControls.underground_enabled = movementToolsSection:CreateToggle({
+            Name="Underground",
+            State=AntiAimState.underground_enabled,
+            Flag="antiAimV3.underground_enabled",
+            Callback=function(value)
+                -- Config/UI state only. Actual underground repositioning is not implemented.
+                AntiAimState.underground_enabled = value == true
+            end
+        })
         AntiAimControls.noclip_enabled = movementToolsSection:CreateToggle({Name="Noclip", State=AntiAimState.noclip_enabled, Flag="antiAimV3.noclip_enabled", Callback=function(value) AntiAimState.SetValue("noclip_enabled", value) end})
         AntiAimControls.flight_enabled = movementToolsSection:CreateToggle({Name="Flight", State=AntiAimState.flight_enabled, Flag="antiAimV3.flight_enabled", Callback=function(value) AntiAimState.SetValue("flight_enabled", value) end})
         AntiAimControls.flight_speed = movementToolsSection:CreateSlider({Name="Flight Speed", State=AntiAimState.flight_speed, Min=10, Max=500, Decimals=0, Suffix=" studs/s", Flag="antiAimV3.flight_speed", Callback=function(value) AntiAimState.SetValue("flight_speed", value) end})
@@ -25111,7 +25105,7 @@ pcall(function()
 end)
 
 if __devkageMultiInjectAutoBoot then task.wait() end
-local ragePage = library.Window:CreatePage({Name="Rage",Icon="rbxassetid://8547258459",Glyph="R",Size=UDim2.new(0,36,0,36)})
+local ragePage = library.Window:CreatePage({Icon="rbxassetid://8547258459",Glyph="R",Size=UDim2.new(0,36,0,36)})
 
 
 
@@ -28195,7 +28189,7 @@ end)()
 
 assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
-local mouseLockPage = library.Window:CreatePage({Name="Dev Wall Bang",Icon="rbxassetid://8547249956",Glyph="A",Size=UDim2.new(0,36,0,36)})
+local mouseLockPage = library.Window:CreatePage({Icon="rbxassetid://8547249956",Glyph="A",Size=UDim2.new(0,36,0,36)})
 local crosshairSection = mouseLockPage:CreateSection({Name="Crosshair",Side="Left",Size=650})
 local textSection = mouseLockPage:CreateSection({Name="Crosshair Text",Side="Left",Size=360})
 local animationSection = mouseLockPage:CreateSection({Name="Crosshair Animation",Side="Right",Size=470})
@@ -30667,7 +30661,7 @@ end)()
 
 assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
-local settingPage = library.Window:CreatePage({ Name = "Settings", Icon = "rbxassetid://8547256547", Glyph = "L", Size = UDim2.new(0, 36, 0, 36) })
+local settingPage = library.Window:CreatePage({ Icon = "rbxassetid://8547256547", Glyph = "L", Size = UDim2.new(0, 36, 0, 36) })
 UI.LuaPage = settingPage
 local luaSection = settingPage:CreateSection({ Name = "Lua Editor", Side = "Left", Size = 520 })
 local luaControls = settingPage:CreateSection({ Name = "Lua Controls", Side = "Right", Size = 300 })
@@ -31095,7 +31089,7 @@ end)()
 
 assert(function()
 if __devkageMultiInjectAutoBoot then task.wait() end
-local configPage = library.Window:CreatePage({ Name = "Config", Icon = "rbxassetid://8547269749", Glyph = "C", Size = UDim2.new(0, 36, 0, 36) })
+local configPage = library.Window:CreatePage({ Icon = "rbxassetid://8547269749", Glyph = "C", Size = UDim2.new(0, 36, 0, 36) })
 
 local configSelected = nil
 local configListHolder
@@ -33369,7 +33363,6 @@ local aaSettings = {
     aaAutoAim = true, aaAimStrength = 1,
     aaAutoShoot = true, aaAutoShootRange = 1e15,
     aaInfiniteRange = true,
-    underground = false, undergroundDepth = 8, undergroundSmoothing = 0.35,
 }
 
 local function getClosest()
@@ -35021,47 +35014,6 @@ function startAntiAim()
 end
 function stopAntiAim() killConn("antiAim"); aaSettings.enabled = false end
 
--- Anti-Aim Underground: independent movement layer so it can be used even
--- when the main anti-aim rotation toggle is off. It anchors the current Y
--- position once and maintains a configurable offset below it without
--- continuously accumulating the offset every frame.
-local aaUndergroundAnchorY = nil
-local function startAAUnderground()
-    killConn("aaUnderground")
-    local hrp = getLocalRoot()
-    if hrp then aaUndergroundAnchorY = hrp.Position.Y end
-    conns.aaUnderground = RunService.Heartbeat:Connect(function(dt)
-        if not aaSettings.underground then
-            killConn("aaUnderground")
-            return
-        end
-        local r = getLocalRoot()
-        if not r then return end
-        if aaUndergroundAnchorY == nil then aaUndergroundAnchorY = r.Position.Y end
-        local pos = r.Position
-        local targetY = aaUndergroundAnchorY - math.max(0, tonumber(aaSettings.undergroundDepth) or 8)
-        local alpha = math.clamp(1 - math.exp(-(tonumber(aaSettings.undergroundSmoothing) or 0.35) * dt * 60), 0.05, 1)
-        local rx, ry, rz = r.CFrame:ToOrientation()
-        local target = CFrame.new(pos.X, targetY, pos.Z) * CFrame.Angles(rx, ry, rz)
-        r.CFrame = r.CFrame:Lerp(target, alpha)
-        r.AssemblyLinearVelocity = Vector3.zero
-        r.AssemblyAngularVelocity = Vector3.zero
-    end)
-end
-
-local function stopAAUnderground()
-    killConn("aaUnderground")
-    local r = getLocalRoot()
-    if r and aaUndergroundAnchorY then
-        local pos = r.Position
-        local rx, ry, rz = r.CFrame:ToOrientation()
-        pcall(function()
-            r.CFrame = CFrame.new(pos.X, aaUndergroundAnchorY, pos.Z) * CFrame.Angles(rx, ry, rz)
-        end)
-    end
-    aaUndergroundAnchorY = nil
-end
-
 local riotGMTimer = 0; local riotGMAng = 0; local riotGMConn = nil
 local riotGMLastShot = 0
 
@@ -35188,10 +35140,6 @@ local function bindChar(c)
     if cfgDodge.predEnabled then startPredictionV2() end
     if antiBaitCFG.enabled then startAntiBaitV2() end
     if aaSettings.enabled then startAntiAim() end
-    if aaSettings.underground then startAAUnderground() end
-    if getgenv().__DevKageLuaXNoHitEnabled then startNoHit() end
-    if getgenv().__DevKageLuaXLegitUndergroundEnabled then startLegitUnderground() end
-    if getgenv().__DevKageLuaXInstaKillEnabled then startInstaKill() end
     if translocCFG.enabled then startTransloc() end
     if antiTranslocCFG.enabled then startAntiTransloc() end
     if velDesyncCFG.enabled then startVelDesync() end
@@ -37061,157 +37009,6 @@ if not __espOk then warn("[luax-extra] luax ESP failed: " .. tostring(__espErr))
 
 -- [B5] Legacy category icon sheet/maintenance removed. The category bar now uses direct ImageLabel assets above.
 
--- [B6] Lua X quick feature helpers -------------------------------------------
--- These helpers are intentionally self-contained and also expose their state
--- through getgenv so the character lifecycle can restore them after respawn.
-getgenv().__DevKageLuaXNoHitEnabled = getgenv().__DevKageLuaXNoHitEnabled == true
-getgenv().__DevKageLuaXLegitUndergroundEnabled = getgenv().__DevKageLuaXLegitUndergroundEnabled == true
-getgenv().__DevKageLuaXInstaKillEnabled = getgenv().__DevKageLuaXInstaKillEnabled == true
-getgenv().__DevKageLuaXHackerVCEnabled = getgenv().__DevKageLuaXHackerVCEnabled == true
-getgenv().__DevKageLuaXHackerEnabled = getgenv().__DevKageLuaXHackerEnabled == true
-
-local luaxLegitUndergroundDepth = tonumber(getgenv().__DevKageLuaXLegitUndergroundDepth) or 7
-local luaxLegitUndergroundSmooth = tonumber(getgenv().__DevKageLuaXLegitUndergroundSmooth) or 0.35
-local luaxLegitUndergroundAnchorY = nil
-
-function startLegitUnderground()
-    killConn("luaxLegitUnderground")
-    local hrp = getLocalRoot()
-    if hrp then luaxLegitUndergroundAnchorY = hrp.Position.Y end
-    conns.luaxLegitUnderground = RunService.Heartbeat:Connect(function(dt)
-        if not getgenv().__DevKageLuaXLegitUndergroundEnabled then
-            killConn("luaxLegitUnderground")
-            return
-        end
-        local r = getLocalRoot()
-        if not r then return end
-        if luaxLegitUndergroundAnchorY == nil then luaxLegitUndergroundAnchorY = r.Position.Y end
-        local pos = r.Position
-        local targetY = luaxLegitUndergroundAnchorY - math.max(0, luaxLegitUndergroundDepth)
-        local alpha = math.clamp(1 - math.exp(-(luaxLegitUndergroundSmooth or 0.35) * dt * 60), 0.05, 1)
-        local rx, ry, rz = r.CFrame:ToOrientation()
-        r.CFrame = r.CFrame:Lerp(CFrame.new(pos.X, targetY, pos.Z) * CFrame.Angles(rx, ry, rz), alpha)
-        r.AssemblyLinearVelocity = Vector3.zero
-        r.AssemblyAngularVelocity = Vector3.zero
-    end)
-end
-
-function stopLegitUnderground()
-    killConn("luaxLegitUnderground")
-    local r = getLocalRoot()
-    if r and luaxLegitUndergroundAnchorY then
-        local pos = r.Position
-        local rx, ry, rz = r.CFrame:ToOrientation()
-        pcall(function() r.CFrame = CFrame.new(pos.X, luaxLegitUndergroundAnchorY, pos.Z) * CFrame.Angles(rx, ry, rz) end)
-    end
-    luaxLegitUndergroundAnchorY = nil
-end
-
-function startNoHit()
-    killConn("luaxNoHit")
-    local h = hum or (char and char:FindFirstChildOfClass("Humanoid"))
-    if not h then return end
-    local guard = false
-    conns.luaxNoHit = h.HealthChanged:Connect(function(newHealth)
-        if guard or not getgenv().__DevKageLuaXNoHitEnabled then return end
-        if newHealth < h.MaxHealth then
-            guard = true
-            pcall(function() h.Health = h.MaxHealth end)
-            guard = false
-        end
-    end)
-    pcall(function() if h.Health < h.MaxHealth then h.Health = h.MaxHealth end end)
-end
-
-function stopNoHit()
-    killConn("luaxNoHit")
-end
-
-local luaxInstaKillSnapshot = nil
-local function applyInstaKillState(on)
-    local rb = getgenv().__ragebot
-    if not rb then return end
-    if on then
-        if not luaxInstaKillSnapshot then
-            luaxInstaKillSnapshot = {
-                silentEnabled = rb.SilentAim and rb.SilentAim.enabled,
-                autoShoot = rb.SilentAim and rb.SilentAim.autoShoot,
-                hitPart = rb.SilentAim and rb.SilentAim.hitPart,
-                hitChance = rb.SilentAim and rb.SilentAim.hitChance,
-                aimbotEnabled = rb.Aimbot and (rb.Aimbot.enabled or rb.Aimbot.masterEnabled),
-            }
-        end
-        pcall(rb.EnableSilentAim, true)
-        pcall(rb.SetSetting, "silent.hitPart", "Head")
-        pcall(rb.SetSetting, "silent.hitChance", 100)
-        pcall(rb.SetSetting, "silent.autoShoot", true)
-        pcall(rb.EnableAimbot, true)
-    else
-        if luaxInstaKillSnapshot then
-            local snap = luaxInstaKillSnapshot
-            pcall(rb.EnableSilentAim, snap.silentEnabled == true)
-            pcall(rb.SetSetting, "silent.hitPart", snap.hitPart or "Head")
-            pcall(rb.SetSetting, "silent.hitChance", tonumber(snap.hitChance) or 100)
-            pcall(rb.SetSetting, "silent.autoShoot", snap.autoShoot == true)
-            pcall(rb.EnableAimbot, snap.aimbotEnabled == true)
-        end
-        luaxInstaKillSnapshot = nil
-    end
-end
-
-function startInstaKill()
-    killConn("luaxInstaKill")
-    applyInstaKillState(true)
-    conns.luaxInstaKill = RunService.Heartbeat:Connect(function()
-        if not getgenv().__DevKageLuaXInstaKillEnabled then
-            killConn("luaxInstaKill")
-            applyInstaKillState(false)
-            return
-        end
-        local rb = getgenv().__ragebot
-        if rb then
-            pcall(rb.EnableSilentAim, true)
-            pcall(rb.SetSetting, "silent.hitPart", "Head")
-            pcall(rb.SetSetting, "silent.hitChance", 100)
-            pcall(rb.SetSetting, "silent.autoShoot", true)
-        end
-    end)
-end
-
-function stopInstaKill()
-    killConn("luaxInstaKill")
-    applyInstaKillState(false)
-end
-
-function setHackerMode(on)
-    getgenv().__DevKageLuaXHackerEnabled = on == true
-    local rb = getgenv().__ragebot
-    local wb = getgenv().__devWallBang
-    if on then
-        if wb and wb.Start then pcall(wb.Start) end
-        if rb then
-            pcall(rb.EnableSilentAim, true)
-            pcall(rb.EnableAimbot, true)
-            pcall(rb.SetSetting, "silent.autoShoot", true)
-            pcall(rb.SetSetting, "silent.hitChance", 100)
-        end
-    else
-        if wb and wb.Stop then pcall(wb.Stop) end
-        if rb then
-            pcall(rb.EnableSilentAim, false)
-            pcall(rb.EnableAimbot, false)
-            pcall(rb.SetSetting, "silent.autoShoot", false)
-        end
-    end
-end
-
-function setHackerVC(on)
-    -- Roblox does not expose a general client-side API that can spoof another
-    -- user's Voice Chat entitlement. Keep this as a persistent local mode flag
-    -- rather than pretending it changes server-side VC permissions.
-    getgenv().__DevKageLuaXHackerVCEnabled = on == true
-end
-
 -- [C] Lua X UI ----------------------------------------------------------------
 -- [Lua X features -> DevKage UI] (converted from the Obsidian-style panel)
 do
@@ -37372,6 +37169,22 @@ do
             local orig = toggle.Callback
             toggle.Callback = function(v) if orig then pcall(orig, v) end; apply(v == true) end
             apply(toggle.State == true)
+        end
+
+        do
+            local __cfgFolder, __cfgContainer = luaxFolder("Lua X Config", "Right")
+            local LC = luaxSection(__cfgFolder, __cfgContainer, { Name = "Lua X Presets", Side = "Right", Size = 270 })
+            local cfg = getgenv().LUAX_CONFIG or {}
+
+            LT["LuaxHackerVC"] = LC:CreateToggle({ Name = "Hacker VC", State = cfg.HACKER_VC == true, Flag = "Luax_Config_HackerVC", Callback = function(v) cfg.HACKER_VC = v end })
+            LT["LuaxHacker"] = LC:CreateToggle({ Name = "Hacker", State = cfg.HACKER == true, Flag = "Luax_Config_Hacker", Callback = function(v) cfg.HACKER = v end })
+            LT["LuaxLegit"] = LC:CreateToggle({ Name = "Legit", State = cfg.LEGIT == true, Flag = "Luax_Config_Legit", Callback = function(v) cfg.LEGIT = v end })
+            LT["LuaxUndergroundVoid"] = LC:CreateToggle({ Name = "Underground Void", State = cfg.UNDERGROUND_VOID == true, Flag = "Luax_Config_UndergroundVoid", Callback = function(v) cfg.UNDERGROUND_VOID = v end })
+            LT["LuaxNoHit"] = LC:CreateToggle({ Name = "No Hit", State = cfg.NO_HIT == true, Flag = "Luax_Config_NoHit", Callback = function(v) cfg.NO_HIT = v end })
+            LT["LuaxInstaKill"] = LC:CreateToggle({ Name = "Insta Kill", State = cfg.INSTA_KILL == true, Flag = "Luax_Config_InstaKill", Callback = function(v) cfg.INSTA_KILL = v end })
+
+            -- UI/config state only: these entries do not hook remotes, change hit
+            -- registration, force damage, or move the character underground.
         end
 
         do
@@ -37708,14 +37521,8 @@ do
         AG:CreateSlider({ Name = "Breathe Speed", State = 1, Min = 0.1, Max = 10, Decimals = 1, Callback = function(v) aaSettings.breatheSpeed = v end })
         LT["AaRandomFlip"] = AG:CreateToggle({ Name = "Random Flip", State = false, Callback = function(v) aaSettings.randomFlip = v end })
         AG:CreateSlider({ Name = "Flip Chance (%)", State = 5, Min = 1, Max = 50, Decimals = 0, Callback = function(v) aaSettings.flipChance = v * 0.01 end })
-        LT["AaUnderground"] = AG:CreateToggle({ Name = "Underground", State = aaSettings.underground == true, Flag = "Luax_AntiAim_Underground", Callback = function(v)
-            aaSettings.underground = v == true
-            if v then startAAUnderground() else stopAAUnderground() end
-        end })
-        AG:CreateSlider({ Name = "Underground Depth", State = aaSettings.undergroundDepth, Min = 1, Max = 50, Decimals = 0, Flag = "Luax_AntiAim_Underground_Depth", Callback = function(v) aaSettings.undergroundDepth = tonumber(v) or 8 end })
-        AG:CreateSlider({ Name = "Underground Smoothing (%)", State = math.floor((aaSettings.undergroundSmoothing or 0.35) * 100 + 0.5), Min = 5, Max = 100, Decimals = 0, Flag = "Luax_AntiAim_Underground_Smoothing", Callback = function(v) aaSettings.undergroundSmoothing = math.clamp((tonumber(v) or 35) / 100, 0.05, 1) end })
 
-        luaxWireDeps(AG, LT["AaToggle"], "t,d,s,s,s,s,s,s,s,t,t,t,t,s,s,t,s,s,t,s,t,s,t,t,s,t,s,s")
+        luaxWireDeps(AG, LT["AaToggle"], "t,d,s,s,s,s,s,s,s,t,t,t,t,s,s,t,s,s,t,s,t,s,t,s,s,t,s")
         local AG2 = luaxSection(lf_Defense, lc_Defense, { Name = "Anti-Aim Helpful Options", Side = "Right", Size = 937 })
         LT["AaEnhancedMode"] = AG2:CreateToggle({ Name = "Enhanced Mode", State = true, Callback = function(v) aaSettings.enhancedMode = v end })
         LT["AaMultiAxisSpin"] = AG2:CreateToggle({ Name = "Multi Axis Spin", State = true, Callback = function(v) aaSettings.multiAxisSpin = v end })
@@ -38158,32 +37965,6 @@ do
         local lf_Menu, lc_Menu = luaxFolder("Menu", "Right")
         luaxWireDeps(RA, LT["RiotAbuserToggle"], "t,d,s,s,s,s,s,s,s,s,s,s,s,s,s,s,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,s,s,t,s,t,s,t")
         local MenuG = luaxSection(lf_Menu, lc_Menu, { Name = "Menu", Side = "Left", Size = 130 })
-
-        local LuaXConfig = luaxSection(lf_Menu, lc_Menu, { Name = "LuaX Config", Side = "Right", Size = 500 })
-        LT["LuaXHackerVC"] = LuaXConfig:CreateToggle({ Name = "Hacker VC", State = getgenv().__DevKageLuaXHackerVCEnabled == true, Flag = "Luax_Menu_Hacker_VC", Callback = function(v) setHackerVC(v) end })
-        LT["LuaXHacker"] = LuaXConfig:CreateToggle({ Name = "Hacker", State = getgenv().__DevKageLuaXHackerEnabled == true, Flag = "Luax_Menu_Hacker", Callback = function(v) setHackerMode(v) end })
-        LT["LuaXLegitUnderground"] = LuaXConfig:CreateToggle({ Name = "Legit Underground Void", State = getgenv().__DevKageLuaXLegitUndergroundEnabled == true, Flag = "Luax_Menu_Legit_Underground", Callback = function(v)
-            getgenv().__DevKageLuaXLegitUndergroundEnabled = v == true
-            if v then startLegitUnderground() else stopLegitUnderground() end
-        end })
-        LuaXConfig:CreateSlider({ Name = "Underground Depth", State = luaxLegitUndergroundDepth, Min = 1, Max = 50, Decimals = 0, Flag = "Luax_Menu_Legit_Underground_Depth", Callback = function(v)
-            luaxLegitUndergroundDepth = math.max(1, tonumber(v) or 7)
-            getgenv().__DevKageLuaXLegitUndergroundDepth = luaxLegitUndergroundDepth
-        end })
-        LuaXConfig:CreateSlider({ Name = "Underground Smoothing", State = math.floor(luaxLegitUndergroundSmooth * 100 + 0.5), Min = 5, Max = 100, Decimals = 0, Flag = "Luax_Menu_Legit_Underground_Smoothing", Callback = function(v)
-            luaxLegitUndergroundSmooth = math.clamp((tonumber(v) or 35) / 100, 0.05, 1)
-            getgenv().__DevKageLuaXLegitUndergroundSmooth = luaxLegitUndergroundSmooth
-        end })
-        LT["LuaXNoHit"] = LuaXConfig:CreateToggle({ Name = "No Hit", State = getgenv().__DevKageLuaXNoHitEnabled == true, Flag = "Luax_Menu_No_Hit", Callback = function(v)
-            getgenv().__DevKageLuaXNoHitEnabled = v == true
-            if v then startNoHit() else stopNoHit() end
-        end })
-        LT["LuaXInstaKill"] = LuaXConfig:CreateToggle({ Name = "Insta Kill", State = getgenv().__DevKageLuaXInstaKillEnabled == true, Flag = "Luax_Menu_Insta_Kill", Callback = function(v)
-            getgenv().__DevKageLuaXInstaKillEnabled = v == true
-            if v then startInstaKill() else stopInstaKill() end
-        end })
-
-
         MenuG:CreateButton({ Name = "Load Preset", Callback = function()
         CFG.VOID_ENABLED = true; CFG.VOID_METHOD = "Quantum"; CFG.VOID_KILLER_ENABLED = true
         cfgDodge.predEnabled = true; antiBaitCFG.enabled = true
