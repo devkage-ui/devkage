@@ -1124,12 +1124,27 @@ function utility:RegisterControl(Content, Properties)
     local Flag = utility:GetProperty(Properties, {"flag", "Flag", "id", "Id", "idx", "Idx"}, nil)
     Content.Flag = Flag
     if Flag ~= nil and tostring(Flag) ~= "" then
-        library.Controls[tostring(Flag)] = Content
-    end
-    -- Register for config saving
-    if Flag then
+        local flagName = tostring(Flag)
+        library.Controls[flagName] = Content
         library.ConfigRegistry = library.ConfigRegistry or {}
-        library.ConfigRegistry[tostring(Flag)] = Content
+        library.ConfigRegistry[flagName] = Content
+
+        -- Keep the in-memory DevKage config synchronized whenever a flagged
+        -- control changes. This covers native controls and Lua X controls alike.
+        if type(Content.Set) == "function" and not Content.__DevKagePersistWrapped then
+            local originalSet = Content.Set
+            Content.__DevKagePersistWrapped = true
+            Content.Set = function(self, state, ...)
+                local result = originalSet(self, state, ...)
+                local env = (type(getgenv) == "function" and getgenv()) or _G
+                local cfg = type(env.__DevKageConfig) == "table" and env.__DevKageConfig or nil
+                if cfg and type(self.Get) == "function" then
+                    local ok, value = pcall(self.Get, self)
+                    if ok and value ~= nil then cfg[flagName] = value end
+                end
+                return result
+            end
+        end
     end
     return Content
 end
@@ -14856,39 +14871,50 @@ end
 
 getgenv().__DevKageSerialiseControlValues = function()
 local output = {}
-for flag, control in pairs(library.Controls or {}) do
-local flagName = tostring(flag or "")
-if flagName ~= ""
-and not flagName:match("^script%.")
-and flagName ~= "visuals.devkage_cursor_enabled"
-and flagName ~= "visuals.devkage_cursor_control_mode"
-and control
-and type(control.Get) == "function" then
-
-local ok, value = pcall(control.Get, control)
-if ok then
-local valueType = typeof(value)
-if valueType == "Color3" then
-local alpha = nil
-if type(control.GetAlpha) == "function" then
-local alphaOk, alphaValue = pcall(control.GetAlpha, control)
-if alphaOk then alpha = tonumber(alphaValue) end
+local seen = {}
+local function collect(registry)
+    if type(registry) ~= "table" then return end
+    for flag, control in pairs(registry) do
+        local flagName = tostring(flag or "")
+        if seen[flagName] then continue end
+        if flagName ~= ""
+        and not flagName:match("^script%.")
+        and flagName ~= "visuals.devkage_cursor_enabled"
+        and flagName ~= "visuals.devkage_cursor_control_mode"
+        and control
+        and type(control.Get) == "function" then
+            local ok, value = pcall(control.Get, control)
+            if ok then
+                local valueType = typeof(value)
+                if valueType == "Color3" then
+                    local alpha = nil
+                    if type(control.GetAlpha) == "function" then
+                        local alphaOk, alphaValue = pcall(control.GetAlpha, control)
+                        if alphaOk then alpha = tonumber(alphaValue) end
+                    end
+                    output[flagName] = {
+                        __devkage_control_type = "Color3",
+                        r = math.floor(value.R * 255 + 0.5),
+                        g = math.floor(value.G * 255 + 0.5),
+                        b = math.floor(value.B * 255 + 0.5),
+                        alpha = alpha
+                    }
+                elseif type(value) == "boolean"
+                or type(value) == "number"
+                or type(value) == "string"
+                then
+                    output[flagName] = value
+                end
+                seen[flagName] = true
+            end
+        end
+    end
 end
-output[flagName] = {
-__devkage_control_type = "Color3",
-r = math.floor(value.R * 255 + 0.5),
-g = math.floor(value.G * 255 + 0.5),
-b = math.floor(value.B * 255 + 0.5),
-alpha = alpha
-}
-elseif type(value) == "boolean"
-or type(value) == "number"
-or type(value) == "string" then
-output[flagName] = value
-end
-end
-end
-end
+-- ConfigRegistry contains the Lua X controls registered by the folder bridge;
+-- Controls contains the native library flags. Collect both so every Lua X
+-- setting (including Aimbot settings without an explicit native Flag) persists.
+collect(library.ConfigRegistry)
+collect(library.Controls)
 return output
 end
 
@@ -14899,7 +14925,7 @@ local previousAntiAimSync = AntiAimState.core.Syncing
 AntiAimState.core.Syncing = true
 for flag, savedValue in pairs(savedValues) do
 local flagName = tostring(flag or "")
-local control = library.Controls and library.Controls[flagName]
+local control = (library.Controls and library.Controls[flagName]) or (library.ConfigRegistry and library.ConfigRegistry[flagName])
 if control
 and type(control.Set) == "function"
 and not flagName:match("^script%.")
@@ -14938,6 +14964,7 @@ lighting = serialiseRuntimeState(AdvancedLighting),
 theme = serialiseRuntimeState(library.Theme),
 keybinds = (library.KeybindManager and library.KeybindManager.Serialize) and library.KeybindManager:Serialize() or {},
 controlValues = getgenv().__DevKageSerialiseControlValues(),
+luaxControls = getgenv().__DevKageSerialiseControlValues(),
 victim       = cfg.victim,
 helper       = cfg.helper,
 level        = cfg.level,
@@ -15141,10 +15168,13 @@ if type(data.keybinds) == "table" then
         library.KeybindManager:Apply(data.keybinds)
     end
 end
-if type(data.controlValues) == "table" and getgenv then
-
-
-    getgenv().__DevKagePendingControlValues = data.controlValues
+local loadedControlValues = type(data.controlValues) == "table" and data.controlValues or (type(data.luaxControls) == "table" and data.luaxControls or nil)
+if not loadedControlValues and type(data.profile) == "table" and type(data.profile.__DevKageControlValues) == "table" then
+    loadedControlValues = data.profile.__DevKageControlValues
+end
+if loadedControlValues and getgenv then
+    getgenv().__DevKagePendingControlValues = loadedControlValues
+    getgenv().__DevKageLastLoadedControlValues = loadedControlValues
 end
 
 if type(data.ua_weapon_loadout)=="table" then UA.ImportWeaponLoadout(data.ua_weapon_loadout) end
@@ -31648,7 +31678,14 @@ AntiAimState.SyncControls()
 
 
 
-getgenv().__DevKageApplySavedControlValues(data.controlValues)
+local __loadedControls = type(data.controlValues) == "table" and data.controlValues
+    or (type(data.luaxControls) == "table" and data.luaxControls)
+    or (type(data.profile) == "table" and type(data.profile.__DevKageControlValues) == "table" and data.profile.__DevKageControlValues)
+if type(__loadedControls) == "table" then
+    getgenv().__DevKagePendingControlValues = __loadedControls
+    getgenv().__DevKageLastLoadedControlValues = __loadedControls
+    pcall(getgenv().__DevKageApplySavedControlValues, __loadedControls, true)
+end
 
 -- Passive startup now delays heavy activation instead of mutating the loaded
 -- configuration. This keeps manual and automatic config loads identical.
@@ -32454,6 +32491,11 @@ name = tostring(name or ""):gsub("[^%w_%-]", "")
 if name == "" then name=configSelected or "" end
 if name == "" then return false,"Enter a config name" end
 syncLiveConfig()
+pcall(function()
+    if type(getgenv().__DevKageSerialiseControlValues) == "function" then
+        getgenv().__DevKageConfig.__DevKageControlValues = getgenv().__DevKageSerialiseControlValues()
+    end
+end)
 local saved,err=save_config_file(name, getgenv().__DevKageConfig)
 if not saved then return false,err end
 configSelected = name
@@ -32474,6 +32516,7 @@ configSelected=target
 configNameBox:Set(target)
 local applied, applyError = pcall(applyLoadedConfig, dataOrError)
 if applied and applyError ~= false then
+pcall(function() if getgenv().__DevKageSyncLuaxCombatFromControls then getgenv().__DevKageSyncLuaxCombatFromControls() end end)
 rebuildConfigList()
 library:Notify({Message="Loaded config: "..target,Duration=3})
 else
@@ -35699,11 +35742,18 @@ aimbot = aimbot or {
     showFov = false,
     targetPart = "Head",
     fovRadius = 500,
+    range = 1500,
     smoothness = 2,
     aimCurve = "Linear",
     followMuzzle = false,
+    visibility = "visible",
+    predictionEnabled = true,
+    predictionMultiplier = 1.0,
     lockedTarget = nil,
     smoothCF = nil,
+    targetVelocity = Vector3.new(0, 0, 0),
+    lastTargetPosition = nil,
+    lastTargetSample = 0,
 }
 
 silentFOVCfg = silentFOVCfg or {
@@ -36270,6 +36320,9 @@ end
 local function clearAimbotLock()
     aimbot.lockedTarget = nil
     aimbot.smoothCF = nil
+    aimbot.lastTargetPosition = nil
+    aimbot.lastTargetSample = 0
+    aimbot.targetVelocity = Vector3.new(0, 0, 0)
 end
 
 local function getAimbotScreenPoint()
@@ -36280,30 +36333,77 @@ local function getAimbotScreenPoint()
     return Vector2.new(loc.X, loc.Y)
 end
 
-local function closesttocursor()
-    local best, bestDist = nil, aimbot.fovRadius
-    local mp = getAimbotScreenPoint()
-    if not mp then
-        return nil
-    end
+local function aimbotTargetVisible(part)
+    if not part or not part.Parent then return false end
+    local mode = tostring(aimbot.visibility or "visible")
+    if mode == "both" then return true end
+
     local cam = workspace.CurrentCamera or Camera
+    if not cam then return true end
+
+    local origin = cam.CFrame.Position
+    if aimbot.followMuzzle then
+        origin = muzzlepos() or origin
+    end
+
+    local direction = part.Position - origin
+    if direction.Magnitude <= 0.001 then return true end
+
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    local ignore = {}
+    if LocalPlayer.Character then ignore[#ignore + 1] = LocalPlayer.Character end
+    params.FilterDescendantsInstances = ignore
+
+    local hit = workspace:Raycast(origin, direction, params)
+    local visible = (not hit)
+        or hit.Instance == part
+        or (part.Parent and hit.Instance and hit.Instance:IsDescendantOf(part.Parent))
+
+    return mode == "hidden" and not visible or mode == "visible" and visible
+end
+
+local function closesttocursor()
+    local best, bestScreenDist, bestWorldDist = nil, math.huge, math.huge
+    local mp = getAimbotScreenPoint()
+    if not mp then return nil end
+
+    local cam = workspace.CurrentCamera or Camera
+    if not cam then return nil end
+    local maxRange = math.max(tonumber(aimbot.range) or 1500, 1)
+
     for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and p.Character then
-            local part = p.Character:FindFirstChild(aimbot.targetPart)
+        if p ~= LocalPlayer and p.Character and valid(p.Character) then
+            local part = hitpartfromname(p.Character, aimbot.targetPart or "Head")
+                or p.Character:FindFirstChild("Head")
+                or p.Character:FindFirstChild("HumanoidRootPart")
+
             if part and part:IsDescendantOf(workspace) then
-                local scr, on = worldToScreen(part.Position, cam)
-                if on then
-                    local dx = scr.X - mp.X
-                    local dy = scr.Y - mp.Y
-                    local dist = math.sqrt(dx * dx + dy * dy)
-                    if dist < bestDist then
-                        bestDist = dist
-                        best = part
+                local origin = cam.CFrame.Position
+                if aimbot.followMuzzle then
+                    origin = muzzlepos() or origin
+                end
+
+                local worldDist = (part.Position - origin).Magnitude
+                if worldDist <= maxRange and aimbotTargetVisible(part) then
+                    local point = cam:WorldToViewportPoint(part.Position)
+                    local screen = Vector2.new(point.X, point.Y)
+                    local onScreen = point.Z > 0
+                    local screenDist = (screen - mp).Magnitude
+
+                    if onScreen and screenDist <= (tonumber(aimbot.fovRadius) or 500) then
+                        if screenDist < bestScreenDist
+                            or (math.abs(screenDist - bestScreenDist) <= 1 and worldDist < bestWorldDist) then
+                            best = part
+                            bestScreenDist = screenDist
+                            bestWorldDist = worldDist
+                        end
                     end
                 end
             end
         end
     end
+
     return best
 end
 
@@ -36337,7 +36437,7 @@ local function getAimbotLerpAlpha(dt)
 end
 
 local function stepAimbot(dt)
-    dt = dt or (1 / 240)
+    dt = math.clamp(tonumber(dt) or (1 / 240), 1 / 1000, 0.1)
     if not aimbot.enabled then
         clearAimbotLock()
         return
@@ -36347,42 +36447,79 @@ local function stepAimbot(dt)
     if not cam then return end
     Camera = cam
 
-    if not aimbot.lockedTarget then
-        aimbot.lockedTarget = closesttocursor()
-        aimbot.smoothCF = getUnstretchedCameraCFrame(cam)
-        if not aimbot.lockedTarget then
-            return
+    local target = aimbot.lockedTarget
+    if target then
+        local model = target.Parent
+        if not model or not valid(model) then
+            clearAimbotLock()
+            target = nil
         end
     end
 
-    if not aimbot.lockedTarget.Parent or not aimbot.lockedTarget:IsDescendantOf(workspace) then
-        clearAimbotLock()
-        return
+    if not target then
+        target = closesttocursor()
+        aimbot.lockedTarget = target
+        aimbot.smoothCF = getUnstretchedCameraCFrame(cam)
+        aimbot.lastTargetPosition = nil
+        aimbot.lastTargetSample = os.clock()
+        aimbot.targetVelocity = Vector3.new(0, 0, 0)
+        if not target then return end
     end
 
     local myChar = LocalPlayer.Character
     if not myChar then return end
-    local myHead = myChar:FindFirstChild("Head")
-    if not myHead then
+    local camController = modules.camcontrol
+    if not camController then return end
+
+    local model = target.Parent
+    local part = hitpartfromname(model, aimbot.targetPart or "Head")
+        or model:FindFirstChild("Head")
+        or model:FindFirstChild("HumanoidRootPart")
+    if not part then
         clearAimbotLock()
         return
     end
-    local camController = modules.camcontrol
-    if not camController then return end
+
+    local origin = cam.CFrame.Position
+    if aimbot.followMuzzle then origin = muzzlepos() or origin end
+    local worldDistance = (part.Position - origin).Magnitude
+    local point = cam:WorldToViewportPoint(part.Position)
+    local mousePoint = getAimbotScreenPoint()
+    local screenDistance = mousePoint and (Vector2.new(point.X, point.Y) - mousePoint).Magnitude or math.huge
+    if worldDistance > (tonumber(aimbot.range) or 1500)
+        or point.Z <= 0
+        or screenDistance > (tonumber(aimbot.fovRadius) or 500) * 1.35
+        or not aimbotTargetVisible(part) then
+        clearAimbotLock()
+        return
+    end
+
+    local now = os.clock()
+    if aimbot.lastTargetPosition and (now - (aimbot.lastTargetSample or now)) > 0.002 then
+        local sampleDt = math.clamp(now - aimbot.lastTargetSample, 0.002, 0.1)
+        local instantVelocity = (part.Position - aimbot.lastTargetPosition) / sampleDt
+        aimbot.targetVelocity = aimbot.targetVelocity:Lerp(instantVelocity, 0.45)
+    end
+    aimbot.lastTargetPosition = part.Position
+    aimbot.lastTargetSample = now
+
+    local aimPosition = part.Position
+    if aimbot.predictionEnabled then
+        local lead = math.clamp(((worldDistance / 3000) + 0.03) * (tonumber(aimbot.predictionMultiplier) or 1), 0, 0.35)
+        aimPosition = aimPosition + aimbot.targetVelocity * lead
+    end
 
     if not aimbot.smoothCF then
         aimbot.smoothCF = getUnstretchedCameraCFrame(cam)
     end
 
-    local lookCF = CFrame.lookAt(cam.CFrame.Position, aimbot.lockedTarget.Position)
+    local lookCF = CFrame.lookAt(cam.CFrame.Position, aimPosition)
     local alpha = getAimbotLerpAlpha(dt)
     aimbot.smoothCF = aimbot.smoothCF:Lerp(lookCF, alpha)
 
-    if camController and camController.MimicRotation then
-        pcall(function()
-            camController:MimicRotation(aimbot.smoothCF)
-        end)
-    end
+    pcall(function()
+        camController:MimicRotation(aimbot.smoothCF)
+    end)
 end
 
 local function updaimbot()
@@ -36908,9 +37045,10 @@ Ragebot.EnableSilentAim = function(on)
 end
 
 Ragebot.EnableAimbot = function(on)
-    aimbot.masterEnabled = on and true or false
-    aimbot.enabled = on and true or false
-    if not aimbot.enabled then clearAimbotLock() end
+    on = on == true
+    aimbot.masterEnabled = on
+    aimbot.enabled = on
+    if not on then clearAimbotLock() end
     updaimbot()
 end
 
@@ -37696,31 +37834,35 @@ local Entities = { }; do
     local Cache = { };
 
     function Entities : GetClosest( FighterObject, Range, Part )
-        local Closest, ClosestDistance = nil, Range;
+        local Closest, ClosestDistance = nil, tonumber(Range) or math.huge;
+        local cam = Workspace.CurrentCamera or CurrentCamera;
+        if not cam then return nil end
 
         for _, Character in self : GetPlayers( ) do
-            local HitPart = Character : FindFirstChild( Part or "Head" );
+            local HitPart = Character : FindFirstChild( Part or "Head" )
+                or Character : FindFirstChild("Head")
+                or Character : FindFirstChild("HumanoidRootPart");
+            local Humanoid = Character : FindFirstChildOfClass("Humanoid");
 
-            if ( not HitPart ) then
+            if ( not HitPart ) or ( not Humanoid ) or Humanoid.Health <= 0 then
+                continue;
+            end
+            if Character : FindFirstChildOfClass("ForceField") then
                 continue;
             end
 
-            local Position = HitPart.Position;
-
             if ( Settings.Combat.VisibilityCheck ~= false ) then
-                if ( not World : HitScan( Position, FighterObject, Character, CurrentCamera.CFrame.Position ) ) then
+                if ( not World : HitScan( HitPart.Position, FighterObject, Character, cam.CFrame.Position ) ) then
                     continue;
                 end
             end
 
-            local ScreenPosition, OnScreen = CurrentCamera : WorldToViewportPoint( Position );
-
+            local ScreenPosition, OnScreen = cam : WorldToViewportPoint( HitPart.Position );
             if ( not OnScreen ) then
                 continue;
             end
 
             local Distance = ( Center - Vector2New( ScreenPosition.X, ScreenPosition.Y ) ).Magnitude;
-
             if ( Distance <= ClosestDistance ) then
                 Closest, ClosestDistance = HitPart, Distance;
             end
@@ -37952,71 +38094,76 @@ local Ragebot = { }; do
     local Stamp = 0;
 
     function Ragebot : GetTarget( Origin, Range, OriginData )
-        local ClosestDistance = Range;
+        Range = math.max(tonumber(Range) or 150, 1);
 
+        local ClosestDistance = Range;
         local BestCharacter = nil;
         local BestPosition = nil;
-
         local BestHitPart = nil;
         local BestOrigin = nil;
-
-        local BestHealth = 9e9;
+        local BestHealth = math.huge;
 
         for _, Character in Entities : GetPlayers( ) do
             local RagePartName = Settings.Combat.Ragebot.Part or "Head";
-            local Head = Character : FindFirstChild( RagePartName ) or Character : FindFirstChild( "Head" );
+            local Head = Character : FindFirstChild( RagePartName )
+                or Character : FindFirstChild( "Head" )
+                or Character : FindFirstChild( "HumanoidRootPart" );
 
             if ( not Head ) then
                 continue;
             end
 
             local Humanoid = Character : FindFirstChildOfClass( "Humanoid" );
-
-            if ( not Humanoid ) then
+            if ( not Humanoid ) or Humanoid.Health <= 0 then
                 continue;
             end
 
+            local Root = Character : FindFirstChild( "HumanoidRootPart" );
+            if ( not Root ) then
+                continue;
+            end
+
+            local CandidateOrigin = Origin;
             local Destination = Head.Position + Vector3New( 0, .7, 0 );
 
             if ( OriginData and OriginData.Enabled ) then
-                Origin = Scan : GetOrigin( Destination, Character, OriginData.Range, Origin );
-
-                --[[
-                local NewOrigin = self.PreviousOrigin;
-
-                if ( Tick - Stamp ) > 1 then
-                    NewOrigin = Scan : GetOrigin( Destination, Character, OriginData.Range, Origin ); Stamp = Tick;
-                end
-
-                Origin = NewOrigin;
-                ]]
+                CandidateOrigin = Scan : GetOrigin(
+                    Destination,
+                    Character,
+                    tonumber(OriginData.Range) or 14,
+                    Origin
+                );
             end
 
-            local Normalized = ( Destination - Origin ).Unit;
-            local Direction = Normalized * Range;
+            if not CandidateOrigin then
+                CandidateOrigin = Origin;
+            end
 
-            local Result = World : HitScan( Destination, ClientFighter, Character, Origin );
+            local Offset = Destination - CandidateOrigin;
+            local Distance = Offset.Magnitude;
+            if Distance <= 0.001 or Distance > Range then
+                continue;
+            end
 
+            local Result = World : HitScan( Destination, ClientFighter, Character, CandidateOrigin );
             if ( not Result ) then
                 continue;
             end
 
-            local Distance = Normalized.Magnitude;
-
-            if ( Distance < ClosestDistance ) and ( Humanoid.Health < BestHealth ) then
+            if ( Distance < ClosestDistance )
+                or ( math.abs(Distance - ClosestDistance) <= 0.05 and Humanoid.Health < BestHealth ) then
                 BestPosition = Result.Position;
-                BestHitPart = Result.Instance;
+                BestHitPart = Result.Instance or Head;
                 BestHealth = Humanoid.Health;
-
                 ClosestDistance = Distance;
-
                 BestCharacter = Character;
-                BestOrigin = Origin;
+                BestOrigin = CandidateOrigin;
             end
         end
 
         return BestCharacter, BestPosition, BestHitPart, BestOrigin;
     end
+
 
     function Ragebot : Stepper( )
         return; -- DevKage bridge calls the source target/weapon path once per interval.
@@ -38202,9 +38349,9 @@ local Misc = { }; do
         
         self : SlideMultiplier( CurrentTab );
         self : ThirdPerson( CurrentTab );
-        if CurrentTab.Underground and CurrentTab.Underground.Enabled then
-            self : Underground( CurrentTab );
-        end
+        -- Underground is driven by the bridge-level tick so there is only one
+        -- teleport/restore cycle active at a time.
+        -- (The original source implementation remains available for reference.)
 
         self : NoClip( CurrentTab );
         self : Fly( CurrentTab );
@@ -38655,24 +38802,47 @@ do
         if not cfg or not cfg.Enabled then return end
 
         local rootPart, character = Controller : RootPart( )
-        if not rootPart or not character then return end
+        if not rootPart or not character or not rootPart.Parent then return end
 
+        -- Reuse the supplied RIVALS lay animation when available, but do not
+        -- depend on Humanoid:LoadAnimation being present on every client.
         local humanoid = character : FindFirstChildOfClass("Humanoid")
-        if not humanoid then return end
-
-        if not AnimationTrack then
-            AnimationTrack = humanoid : LoadAnimation( LayAnimation )
+        if humanoid then
+            local animator = humanoid:FindFirstChildOfClass("Animator")
+            if not animator then
+                pcall(function()
+                    animator = Instance.new("Animator")
+                    animator.Parent = humanoid
+                end)
+            end
+            if animator and not AnimationTrack then
+                pcall(function() AnimationTrack = animator:LoadAnimation(LayAnimation) end)
+            end
+            if AnimationTrack then
+                pcall(function()
+                    AnimationTrack.TimePosition = 1.48
+                    AnimationTrack:Play(0, 1, 0)
+                end)
+            end
         end
 
-        AnimationTrack.TimePosition = 1.48
-        AnimationTrack : Play( 0, 1, 0 )
-
         local oldCFrame = rootPart.CFrame
-        rootPart.CFrame = oldCFrame + Vector3New( 0, -6, 0 )
-
-        RunService.PreRender : Wait( )
-        if rootPart.Parent then
-            rootPart.CFrame = oldCFrame
+        rootPart.CFrame = oldCFrame + Vector3New(0, -6, 0)
+        local restored = false
+        local function restore()
+            if restored then return end
+            restored = true
+            if rootPart and rootPart.Parent then rootPart.CFrame = oldCFrame end
+        end
+        local connection
+        pcall(function()
+            connection = RunService.PreRender:Connect(function()
+                if connection then connection:Disconnect() end
+                restore()
+            end)
+        end)
+        if not connection then
+            task.defer(restore)
         end
     end
     api.RageTick = function()
@@ -38857,27 +39027,187 @@ do
             getgenv().__luaxTabIcon = "rbxassetid://97832472593469"
             local LT = {} -- Lua X toggle registry (used by Load Preset / Kill Every)
 
-        -- Exactly one Wallbang control on this tab. Rage Bot and Silent Aim are replaced by the RIVALS implementations below; all other first-file Lua X controls remain here.
-        local WB = luaxPage:CreateSection({ Name = "Wallbang", Side = "Left", Size = 205 })
+        -- ====================================================================
+        -- Lua X categories
+        -- Combat = RIVALS integrations / utility features.
+        -- Rage   = the original Lua X feature set and its presets.
+        -- No collapsible folder wrappers are used; sections stay open.
+        -- ====================================================================
+        local luaxCategorySections = { Combat = {}, Rage = {} }
+        local luaxCategoryActive = "Combat"
+
+        local function makeLuaxColumn(side)
+            local frame = utility:RenderObject("ScrollingFrame", {
+                BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+                BackgroundTransparency = 1,
+                BorderColor3        = Color3.fromRGB(0, 0, 0),
+                BorderSizePixel     = 0,
+                Parent              = luaxPage.Page,
+                Position            = side == "Left" and UDim2.new(0, 0, 0, 36) or UDim2.new(0.5, 10, 0, 36),
+                Size                = side == "Left" and UDim2.new(0.5, -10, 1, -36) or UDim2.new(0.5, -10, 1, -36),
+                CanvasSize          = UDim2.new(0, 0, 0, 0),
+                AutomaticCanvasSize  = Enum.AutomaticSize.Y,
+                ScrollBarThickness   = 0,
+                ScrollingEnabled     = true,
+                ClipsDescendants     = true,
+                Visible              = false,
+                ZIndex               = 1,
+            })
+            utility:RenderObject("UIListLayout", {
+                Padding             = UDim.new(0, 8),
+                Parent              = frame,
+                FillDirection       = "Vertical",
+                HorizontalAlignment = "Left",
+                VerticalAlignment   = "Top",
+            })
+            utility:RenderObject("UIPadding", {
+                Parent = frame,
+                PaddingTop = UDim.new(0, 9),
+                PaddingBottom = UDim.new(0, 10),
+            })
+            return frame
+        end
+
+        local luaxCategoryContainers = {
+            Combat = {
+                Left = luaxPage.Left,
+                Right = luaxPage.Right,
+            },
+            Rage = {
+                Left = makeLuaxColumn("Left"),
+                Right = makeLuaxColumn("Right"),
+            },
+        }
+        luaxPage.Left.Position = UDim2.new(0, 0, 0, 36)
+        luaxPage.Left.Size = UDim2.new(0.5, -10, 1, -36)
+        luaxPage.Right.Position = UDim2.new(0.5, 10, 0, 36)
+        luaxPage.Right.Size = UDim2.new(0.5, -10, 1, -36)
+
+        local categoryBar = utility:RenderObject("Frame", {
+            BackgroundColor3 = Color3.fromRGB(23, 23, 23),
+            BackgroundTransparency = 0,
+            BorderColor3 = Color3.fromRGB(12, 12, 12),
+            BorderSizePixel = 1,
+            Parent = luaxPage.Page,
+            Position = UDim2.new(0, 0, 0, 0),
+            Size = UDim2.new(1, 0, 0, 28),
+            ZIndex = 20,
+        })
+        utility:RenderObject("UIListLayout", {
+            Padding = UDim.new(0, 4),
+            FillDirection = "Horizontal",
+            HorizontalAlignment = "Left",
+            VerticalAlignment = "Center",
+            Parent = categoryBar,
+        })
+        utility:RenderObject("UIPadding", {
+            Parent = categoryBar,
+            PaddingLeft = UDim.new(0, 5),
+            PaddingRight = UDim.new(0, 5),
+            PaddingTop = UDim.new(0, 3),
+            PaddingBottom = UDim.new(0, 3),
+        })
+
+        local categoryButtons = {}
+        local function paintCategoryButton(name)
+            for category, button in pairs(categoryButtons) do
+                if button then
+                    button.BackgroundColor3 = category == name and Color3.fromRGB(48, 48, 48) or Color3.fromRGB(28, 28, 28)
+                    button.TextColor3 = category == name and Color3.fromRGB(235, 235, 235) or Color3.fromRGB(155, 155, 155)
+                end
+            end
+        end
+
+        local function setLuaxCategory(name)
+            name = (name == "Rage") and "Rage" or "Combat"
+            luaxCategoryActive = name
+            for category, pair in pairs(luaxCategoryContainers) do
+                local visible = category == name
+                if pair.Left then pair.Left.Visible = visible end
+                if pair.Right then pair.Right.Visible = visible end
+            end
+            for category, sections in pairs(luaxCategorySections) do
+                for _, section in ipairs(sections) do
+                    if section and section.Root then
+                        section.Root.Visible = category == name
+                    end
+                end
+            end
+            paintCategoryButton(name)
+        end
+
+        for _, name in ipairs({"Combat", "Rage"}) do
+            local button = Instance.new("TextButton")
+            button.Name = "LuaXCategory_" .. name
+            button.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+            button.BorderColor3 = Color3.fromRGB(55, 55, 55)
+            button.BorderSizePixel = 1
+            button.Size = UDim2.new(0, 92, 1, 0)
+            button.AutoButtonColor = false
+            button.Font = Enum.Font.Code
+            button.Text = string.upper(name)
+            button.TextSize = 11
+            button.TextColor3 = Color3.fromRGB(155, 155, 155)
+            button.Parent = categoryBar
+            button.ZIndex = 21
+            categoryButtons[name] = button
+            utility:CreateConnection(button.MouseButton1Click, function()
+                setLuaxCategory(name)
+            end)
+        end
+
+        local function registerLuaxSection(section, category)
+            category = category == "Combat" and "Combat" or "Rage"
+            if not section then return end
+            section.__DevKageLuaxCategory = category
+            luaxCategorySections[category][#luaxCategorySections[category] + 1] = section
+            if section.Root then section.Root.Visible = category == luaxCategoryActive end
+        end
+
+        -- Original Lua X features live on Rage.
+        local WB = luaxPage:CreateSection({
+            Name = "Lua X Core",
+            Side = "Left",
+            Size = 205,
+            FolderContainer = luaxCategoryContainers.Rage.Left
+        })
+        registerLuaxSection(WB, "Rage")
+
         LT["DevWallbang"] = WB:CreateToggle({ Name = "Wallbang (shoot through walls)", State = false, Flag = "Luax_Wallbang_DevWallbang", Callback = function(v)
             local wb = getgenv().__devWallbang
             if wb then if v then wb.Start() else wb.Stop() end end
         end })
         LT["LuaxSilentTop"] = WB:CreateToggle({ Name = "Silent Aim", State = false, Flag = "Luax_Wallbang_Silent_Aim", Callback = function(v)
+            local apply = getgenv().__DevKageApplySavedControlValues
+            if type(apply) == "function" then
+                pcall(apply, { Luax_SilentAim_Enabled = v == true }, false)
+            end
             local rv = getgenv().__DevKageRivals
             if rv then rv.Set("Combat.SilentAim.Enabled", v == true) end
         end })
         LT["LuaxRageTop"] = WB:CreateToggle({ Name = "Rage Bot", State = false, Flag = "Luax_Wallbang_Rage_Bot", Callback = function(v)
+            local apply = getgenv().__DevKageApplySavedControlValues
+            if type(apply) == "function" then
+                pcall(apply, { Luax_RageBot_Enabled = v == true }, false)
+            end
             local rv = getgenv().__DevKageRivals
             if rv then rv.Set("Combat.Ragebot.Enabled", v == true) end
         end })
         LT["LuaxTopAimbot"] = WB:CreateToggle({ Name = "Aimbot", State = false, Flag = "Luax_Wallbang_Aimbot", Callback = function(v)
+            local apply = getgenv().__DevKageApplySavedControlValues
+            if type(apply) == "function" then
+                pcall(apply, { Luax_Aimbot_Enabled = v == true }, false)
+            end
             local rb = getgenv().__ragebot
             if rb then
                 if rb.EnableAimbot then rb.EnableAimbot(v) elseif rb.Aimbot then rb.Aimbot.enabled = v end
             end
         end })
         LT["LuaxAutoShoot"] = WB:CreateToggle({ Name = "Auto Shoot", State = false, Flag = "Luax_Wallbang_Auto_Shoot", Callback = function(v)
+            local apply = getgenv().__DevKageApplySavedControlValues
+            if type(apply) == "function" then
+                pcall(apply, { Luax_SilentAim_AutoShoot = v == true }, false)
+            end
             local rv = getgenv().__DevKageRivals
             if rv then rv.Set("Combat.AutoShoot.Enabled", v == true) end
             local rb = getgenv().__ragebot
@@ -38892,74 +39222,69 @@ do
             if rv then rv.Set("Combat.VisibilityCheck", v == true) end
             local rb = getgenv().__ragebot
             if rb then
-                if rb.SilentAim then rb.SilentAim.ignoreWalls = not v end
-                if rb.Aimbot then rb.Aimbot.ignoreWalls = not v end
+                if rb.SilentAim then
+                    rb.SilentAim.ignoreWalls = not v
+                end
+                if rb.Aimbot then
+                    rb.Aimbot.ignoreWalls = not v
+                end
+                if rb.SetSetting then
+                    pcall(rb.SetSetting, "silent.visibility", v and "visible" or "both")
+                    pcall(rb.SetSetting, "aimbot.visibility", v and "visible" or "both")
+                end
             end
         end })
 
-        -- DevKage's own CreateFolder/AddSection is broken (AddSection would reparent
-        -- the whole column). Build folders and reparent each section's Root ourselves.
+        -- Compatibility shim for existing call sites. It creates no UI folder.
         local luaxFolderRefs = {}
         local function luaxFolder(name, side)
-            local folder = luaxPage:CreateFolder({ Name = name, Side = side })
-            local ref = {
-                folder = folder,
-                holder = folder.Holder,
-                header = folder.Header,
-                container = folder.Container,
-                arrow = folder.Arrow,
+            local category = (tostring(name):sub(1, 6) == "RIVALS") and "Combat" or "Rage"
+            local container = luaxCategoryContainers[category][side]
+            local fakeFolder = {
+                Name = name,
+                Open = true,
+                Container = container,
+                Category = category,
+                SetOpen = function() end,
             }
-            luaxFolderRefs[#luaxFolderRefs + 1] = ref
-            pcall(function() folder:SetOpen(false) end)
-            return folder, folder.Container
+            luaxFolderRefs[#luaxFolderRefs + 1] = { folder = fakeFolder, container = container, category = category }
+            return fakeFolder, container
         end
         local function luaxSection(folder, container, props)
-            -- Create sections directly inside their folder. This removes the old
-            -- create-then-reparent race that could make controls disappear.
             local flag = "Luax_" .. props.Name:gsub(" ", "_")
             local sectionProps = {}
-            for k, v in pairs(props) do
-                sectionProps[k] = v
-            end
+            for k, v in pairs(props) do sectionProps[k] = v end
             sectionProps.FolderContainer = container
             local sec = luaxPage:CreateSection(sectionProps)
+            local category = (folder and folder.Category) or props.Category or "Rage"
+            registerLuaxSection(sec, category)
 
-            local originalCreateToggle = sec.CreateToggle
-            sec.CreateToggle = function(self, p)
-                local item = originalCreateToggle(self, p)
-                if p.Name then
-                    local itemFlag = flag .. "_" .. p.Name:gsub(" ", "_")
-                    if library and library.ConfigRegistry then
-                        library.ConfigRegistry[itemFlag] = item
-                    end
-                end
+            local function registerLuaxControl(item, controlName)
+                if not item or not controlName then return item end
+                local itemFlag = (item.Flag and tostring(item.Flag) ~= "" and tostring(item.Flag))
+                    or (flag .. "_" .. tostring(controlName):gsub(" ", "_"))
+                if library then utility:RegisterControl(item, { Flag = itemFlag }) end
                 return item
             end
 
-            local originalCreateSlider = sec.CreateSlider
-            sec.CreateSlider = function(self, p)
-                local item = originalCreateSlider(self, p)
-                if p.Name then
-                    local itemFlag = flag .. "_" .. p.Name:gsub(" ", "_")
-                    if library and library.ConfigRegistry then
-                        library.ConfigRegistry[itemFlag] = item
-                    end
+            local function wrapCreator(methodName)
+                local original = sec[methodName]
+                if type(original) ~= "function" then return end
+                sec[methodName] = function(self, p)
+                    local item = original(self, p)
+                    return registerLuaxControl(item, p and p.Name)
                 end
-                return item
             end
-
-            local originalCreateDropdown = sec.CreateDropdown
-            sec.CreateDropdown = function(self, p)
-                local item = originalCreateDropdown(self, p)
-                if p.Name then
-                    local itemFlag = flag .. "_" .. p.Name:gsub(" ", "_")
-                    if library and library.ConfigRegistry then
-                        library.ConfigRegistry[itemFlag] = item
-                    end
-                end
-                return item
+            for _, methodName in ipairs({
+                "CreateToggle",
+                "CreateSlider",
+                "CreateDropdown",
+                "CreateKeybind",
+                "CreateColorpicker",
+                "CreateInput",
+            }) do
+                wrapCreator(methodName)
             end
-
             return sec
         end
 
@@ -39038,16 +39363,19 @@ do
         do
             local __af, __ac = luaxFolder("Aimbot", "Left")
             local AB = luaxSection(__af, __ac, { Name = "Aimbot Settings", Side = "Left", Size = 360 })
-            LT["LuaxAimbot"] = AB:CreateToggle({ Name = "Aimbot", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb then if rb.EnableAimbot then rb.EnableAimbot(v) elseif rb.Aimbot then rb.Aimbot.enabled = v end end end })
-            AB:CreateSlider({ Name = "Aimbot Sensitivity", State = 2, Min = 0.1, Max = 10, Decimals = 1, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("aimbot.smoothness", v) end end })
-            AB:CreateSlider({ Name = "Aimbot FOV Radius", State = 500, Min = 10, Max = 1000, Decimals = 0, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("aimbot.fovRadius", v) end end })
-            AB:CreateDropdown({ Name = "Aim Curve", Options = { "Linear", "Expo", "EaseIn", "EaseOut", "EaseInOut", "Cubic", "Instant" }, State = 1, Callback = function(i) local rb = getgenv().__ragebot; local o = { "Linear", "Expo", "EaseIn", "EaseOut", "EaseInOut", "Cubic", "Instant" }; if rb and rb.SetSetting then rb.SetSetting("aimbot.aimCurve", o[i]) end end })
-            AB:CreateDropdown({ Name = "Aimbot Hit Part", Options = { "Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso" }, State = 1, Callback = function(i) local rb = getgenv().__ragebot; local o = { "Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso" }; if rb and rb.SetSetting then rb.SetSetting("aimbot.targetPart", o[i]) end end })
-            AB:CreateDropdown({ Name = "Targeting", Options = { "Visible", "Not Visible", "Both" }, State = 1, Callback = function(i) local rb = getgenv().__ragebot; local m = ({ "Visible", "Not Visible", "Both" })[i] or "Visible"; local mm = (m == "Both") and "both" or ((m == "Not Visible") and "hidden" or "visible"); if rb then if rb.SetSetting then rb.SetSetting("aimbot.visibility", mm) end if rb.Aimbot then rb.Aimbot.visibility = mm; rb.Aimbot.ignoreWalls = (mm ~= "visible") end end end })
-            AB:CreateToggle({ Name = "Follow Muzzle", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("aimbot.followMuzzle", v) end end })
-            AB:CreateSlider({ Name = "Aimbot FOV Thickness", State = 2, Min = 1, Max = 8, Decimals = 0, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("aimbotFOV.OutlineThickness", v) end end })
-            AB:CreateToggle({ Name = "Aimbot FOV Filled", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("aimbotFOV.FilledEnabled", v) end end })
-            AB:CreateToggle({ Name = "Show Aimbot FOV", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.ShowAimbotFOV then rb.ShowAimbotFOV(v) end end })
+            LT["LuaxAimbot"] = AB:CreateToggle({ Name = "Aimbot", Flag = "Luax_Aimbot_Enabled", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb then if rb.EnableAimbot then rb.EnableAimbot(v) elseif rb.Aimbot then rb.Aimbot.enabled = v end end end })
+            AB:CreateSlider({ Name = "Aimbot Sensitivity", Flag = "Luax_Aimbot_Aimbot_Sensitivity", State = 2, Min = 0.1, Max = 10, Decimals = 1, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("aimbot.smoothness", v) end end })
+            AB:CreateSlider({ Name = "Aimbot FOV Radius", Flag = "Luax_Aimbot_Aimbot_FOV_Radius", State = 500, Min = 10, Max = 1000, Decimals = 0, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("aimbot.fovRadius", v) end end })
+            AB:CreateSlider({ Name = "Aimbot Range", Flag = "Luax_Aimbot_Range", State = 1500, Min = 50, Max = 3000, Decimals = 0, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("aimbot.range", v) end end })
+            AB:CreateToggle({ Name = "Prediction", Flag = "Luax_Aimbot_Prediction", State = true, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("aimbot.predictionEnabled", v == true) end end })
+            AB:CreateSlider({ Name = "Prediction Strength", Flag = "Luax_Aimbot_Prediction_Multiplier", State = 1, Min = 0, Max = 3, Decimals = 2, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("aimbot.predictionMultiplier", v) end end })
+            AB:CreateDropdown({ Name = "Aim Curve", Flag = "Luax_Aimbot_Aim_Curve", Options = { "Linear", "Expo", "EaseIn", "EaseOut", "EaseInOut", "Cubic", "Instant" }, State = 1, Callback = function(i) local rb = getgenv().__ragebot; local o = { "Linear", "Expo", "EaseIn", "EaseOut", "EaseInOut", "Cubic", "Instant" }; if rb and rb.SetSetting then rb.SetSetting("aimbot.aimCurve", o[i]) end end })
+            AB:CreateDropdown({ Name = "Aimbot Hit Part", Flag = "Luax_Aimbot_Aimbot_Hit_Part", Options = { "Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso" }, State = 1, Callback = function(i) local rb = getgenv().__ragebot; local o = { "Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso" }; if rb and rb.SetSetting then rb.SetSetting("aimbot.targetPart", o[i]) end end })
+            AB:CreateDropdown({ Name = "Targeting", Flag = "Luax_Aimbot_Targeting", Options = { "Visible", "Not Visible", "Both" }, State = 1, Callback = function(i) local rb = getgenv().__ragebot; local m = ({ "Visible", "Not Visible", "Both" })[i] or "Visible"; local mm = (m == "Both") and "both" or ((m == "Not Visible") and "hidden" or "visible"); if rb then if rb.SetSetting then rb.SetSetting("aimbot.visibility", mm) end if rb.Aimbot then rb.Aimbot.visibility = mm; rb.Aimbot.ignoreWalls = (mm ~= "visible") end end end })
+            AB:CreateToggle({ Name = "Follow Muzzle", Flag = "Luax_Aimbot_Follow_Muzzle", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("aimbot.followMuzzle", v) end end })
+            AB:CreateSlider({ Name = "Aimbot FOV Thickness", Flag = "Luax_Aimbot_FOV_Thickness", State = 2, Min = 1, Max = 8, Decimals = 0, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("aimbotFOV.OutlineThickness", v) end end })
+            AB:CreateToggle({ Name = "Aimbot FOV Filled", Flag = "Luax_Aimbot_FOV_Filled", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.SetSetting then rb.SetSetting("aimbotFOV.FilledEnabled", v) end end })
+            AB:CreateToggle({ Name = "Show Aimbot FOV", Flag = "Luax_Aimbot_Show_FOV", State = false, Callback = function(v) local rb = getgenv().__ragebot; if rb and rb.ShowAimbotFOV then rb.ShowAimbotFOV(v) end end })
         end
         do
             local __mf, __mc = luaxFolder("RIVALS Misc", "Right")
@@ -39078,6 +39406,42 @@ do
 
             local UD = luaxSection(__mf, __mc, { Name = "RIVALS Underground", Side = "Left", Size = 100 })
             UD:CreateToggle({ Name = "Underground", State = false, Flag = "Rivals_Underground_Enabled", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Misc.Underground.Enabled", v == true) end end })
+
+            local GE = luaxSection(__mf, __mc, { Name = "Get All Gear", Side = "Left", Size = 135 })
+            local function devkageGetAllGear()
+                local player = game:GetService("Players").LocalPlayer
+                if not player then return 0 end
+                local backpack = player:FindFirstChildOfClass("Backpack") or player:FindFirstChild("Backpack")
+                if not backpack then return 0 end
+                local replicated = game:GetService("ReplicatedStorage")
+                local moved, foldersScanned = 0, 0
+                local function scanGearContainer(container)
+                    if not container or not container:IsA("Folder") then return end
+                    foldersScanned += 1
+                    for _, child in ipairs(container:GetChildren()) do
+                        if child:IsA("Tool") then
+                            local ok = pcall(function() child.Parent = backpack end)
+                            if ok and child.Parent == backpack then moved += 1 end
+                        end
+                    end
+                end
+                local direct = replicated:FindFirstChild("Gear")
+                scanGearContainer(direct)
+                -- Also handle common nested/renamed gear containers without
+                -- assuming a particular game hierarchy.
+                for _, obj in ipairs(replicated:GetDescendants()) do
+                    if obj:IsA("Folder") and obj.Name:lower():find("gear", 1, true) then
+                        if obj ~= direct then scanGearContainer(obj) end
+                    end
+                end
+                if library and library.Notify then
+                    library:Notify({Message="Get All Gear: moved "..tostring(moved).." tool(s)",Duration=3})
+                end
+                return moved
+            end
+            GE:CreateButton({ Name = "Get All Gear", Callback = devkageGetAllGear })
+            GE:CreateLabel({ Text = "Scans ReplicatedStorage gear folders and moves available Tools." })
+            getgenv().__DevKageGetAllGear = devkageGetAllGear
 
             local AN = luaxSection(__mf, __mc, { Name = "RIVALS Anti-Aim", Side = "Right", Size = 230 })
             AN:CreateToggle({ Name = "Anti-Aim", State = false, Flag = "Rivals_AntiAim_Enabled", Callback = function(v) local rv=getgenv().__DevKageRivals; if rv then rv.Set("Misc.AntiAim.Enabled", v == true) end end })
@@ -40028,114 +40392,157 @@ do
                 end
             end
 
-            local selectionLabel = utility:RenderObject("TextLabel", {
-                BackgroundTransparency = 1,
-                Parent = pc,
-                Size = UDim2.new(1, 0, 0, 20),
-                ZIndex = 4,
-                Font = "Code",
-                Text = "Select a preset, then click Load Preset",
-                TextColor3 = Color3.fromRGB(175, 175, 175),
-                TextSize = 10,
-                TextXAlignment = "Left",
-            })
-
-            local function makePresetChoice(name, index)
-                local choice = utility:RenderObject("TextButton", {
-                    BackgroundColor3 = Color3.fromRGB(30, 30, 30),
-                    BackgroundTransparency = 0,
-                    BorderColor3 = Color3.fromRGB(12, 12, 12),
-                    BorderSizePixel = 1,
-                    Parent = pc,
-                    Size = UDim2.new(1, 0, 0, 42),
-                    ZIndex = 4,
-                    AutoButtonColor = false,
-                    Font = "Code",
-                    Text = "  " .. name .. "\n  " .. presetDescriptions[name],
-                    TextColor3 = Color3.fromRGB(205, 205, 205),
-                    TextSize = 9,
-                    TextXAlignment = "Left",
-                })
-                utility:CreateConnection(choice.MouseButton1Click, function()
-                    presetIndex = index
-                    for _, item in ipairs(pc:GetChildren()) do
-                        if item:IsA("TextButton") and item:GetAttribute("DevKageLuaXPreset") then
-                            item.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-                            item.TextColor3 = Color3.fromRGB(205, 205, 205)
-                        end
-                    end
-                    choice.BackgroundColor3 = Color3.fromRGB(48, 48, 48)
-                    choice.TextColor3 = Color3.fromRGB(255, 255, 255)
-                    selectionLabel.Text = "Selected: " .. name .. "  •  " .. presetDescriptions[name]
-                end)
-                choice:SetAttribute("DevKageLuaXPreset", true)
-                if index == presetIndex then
-                    choice.BackgroundColor3 = Color3.fromRGB(48, 48, 48)
-                    choice.TextColor3 = Color3.fromRGB(255, 255, 255)
+            local function getLuaxValue(flag, fallback)
+                local control = (library.Controls and library.Controls[flag]) or (library.ConfigRegistry and library.ConfigRegistry[flag])
+                if control and type(control.Get) == "function" then
+                    local ok, value = pcall(control.Get, control)
+                    if ok and value ~= nil then return value end
                 end
-                return choice
+                return fallback
+            end
+            local function luaxOptionValue(flag, options, fallback)
+                local idx = getLuaxValue(flag, 1)
+                if type(idx) == "string" and table.find(options, idx) then return idx end
+                return options[math.clamp(tonumber(idx) or 1, 1, #options)] or fallback
+            end
+
+            local function syncLuaxCombatFromControls()
+                local rv = getgenv().__DevKageRivals
+                local rb = getgenv().__ragebot
+                local function setrv(path, value) if rv then pcall(rv.Set, path, value) end end
+                if rv then
+                    setrv("Combat.Triggerbot.Enabled", getLuaxValue("Rivals_Triggerbot_Enabled", false) == true)
+                    setrv("Combat.Triggerbot.Range", tonumber(getLuaxValue("Rivals_Triggerbot_Range", 100)) or 100)
+                    setrv("Combat.Triggerbot.Part", luaxOptionValue("Rivals_Triggerbot_Part", {"Head","HumanoidRootPart","Torso","UpperTorso","LowerTorso"}, "Head"))
+                    setrv("Combat.SilentAim.Enabled", getLuaxValue("Luax_SilentAim_Enabled", getLuaxValue("Luax_Wallbang_Silent_Aim", false)) == true)
+                    setrv("Combat.SilentAim.Range", tonumber(getLuaxValue("Luax_SilentAim_TargetRange", 300)) or 300)
+                    setrv("Combat.SilentAim.HitChance", tonumber(getLuaxValue("Luax_SilentAim_HitChance", 100)) or 100)
+                    setrv("Combat.SilentAim.FOVRadius", tonumber(getLuaxValue("Luax_SilentAim_FOVRadius", 100)) or 100)
+                    setrv("Combat.SilentAim.Part", luaxOptionValue("Luax_SilentAim_HitPart", {"Head","HumanoidRootPart","Torso","UpperTorso","LowerTorso","Closest","Random"}, "Head"))
+                    local tm = luaxOptionValue("Luax_SilentAim_Targeting", {"Visible","Not Visible","Both"}, "Visible")
+                    setrv("Combat.SilentAim.Visibility", tm == "Both" and "both" or (tm == "Not Visible" and "hidden" or "visible"))
+                    setrv("Combat.SilentAim.FollowMuzzle", getLuaxValue("Luax_SilentAim_FollowMuzzle", false) == true)
+                    setrv("Combat.AutoShoot.Enabled", getLuaxValue("Luax_SilentAim_AutoShoot", false) == true)
+                    setrv("Combat.Ragebot.Enabled", getLuaxValue("Luax_RageBot_Enabled", getLuaxValue("Luax_Wallbang_Rage_Bot", false)) == true)
+                    setrv("Combat.Ragebot.Range", tonumber(getLuaxValue("Luax_RageBot_Range", 150)) or 150)
+                    setrv("Combat.Ragebot.Interval", tonumber(getLuaxValue("Luax_RageBot_Interval", 0.2)) or 0.2)
+                    setrv("Combat.Ragebot.Part", luaxOptionValue("Luax_RageBot_HitPart", {"Head","HumanoidRootPart","Torso","UpperTorso","LowerTorso"}, "Head"))
+                    setrv("Combat.Ragebot.OriginShift.Enabled", getLuaxValue("Luax_RageBot_OriginShift", true) == true)
+                    setrv("Combat.Ragebot.OriginShift.Range", tonumber(getLuaxValue("Luax_RageBot_OriginShiftRange", 14)) or 14)
+                    setrv("Combat.Ragebot.VoidSpam.Enabled", getLuaxValue("Luax_RageBot_VoidSpam", false) == true)
+                    setrv("Misc.GunMods.NoSpread", getLuaxValue("Rivals_GunMods_NoSpread", false) == true)
+                    setrv("Misc.GunMods.FullAuto", getLuaxValue("Rivals_GunMods_FullAuto", false) == true)
+                    setrv("Misc.Underground.Enabled", getLuaxValue("Rivals_Underground_Enabled", false) == true)
+                end
+                if rb then
+                    pcall(rb.EnableAimbot, getLuaxValue("Luax_Aimbot_Enabled", getLuaxValue("Luax_Wallbang_Aimbot", false)) == true)
+                    pcall(rb.SetSetting, "aimbot.smoothness", tonumber(getLuaxValue("Luax_Aimbot_Aimbot_Sensitivity", 2)) or 2)
+                    pcall(rb.SetSetting, "aimbot.fovRadius", tonumber(getLuaxValue("Luax_Aimbot_Aimbot_FOV_Radius", 500)) or 500)
+                    pcall(rb.SetSetting, "aimbot.range", tonumber(getLuaxValue("Luax_Aimbot_Range", 1500)) or 1500)
+                    pcall(rb.SetSetting, "aimbot.predictionEnabled", getLuaxValue("Luax_Aimbot_Prediction", true) == true)
+                    pcall(rb.SetSetting, "aimbot.predictionMultiplier", tonumber(getLuaxValue("Luax_Aimbot_Prediction_Multiplier", 1)) or 1)
+                    pcall(rb.SetSetting, "aimbot.aimCurve", luaxOptionValue("Luax_Aimbot_Aim_Curve", {"Linear","Expo","EaseIn","EaseOut","EaseInOut","Cubic","Instant"}, "Linear"))
+                    pcall(rb.SetSetting, "aimbot.targetPart", luaxOptionValue("Luax_Aimbot_Aimbot_Hit_Part", {"Head","HumanoidRootPart","Torso","UpperTorso","LowerTorso"}, "Head"))
+                    local am = luaxOptionValue("Luax_Aimbot_Targeting", {"Visible","Not Visible","Both"}, "Visible")
+                    pcall(rb.SetSetting, "aimbot.visibility", am == "Both" and "both" or (am == "Not Visible" and "hidden" or "visible"))
+                    pcall(rb.SetSetting, "aimbot.followMuzzle", getLuaxValue("Luax_Aimbot_Follow_Muzzle", false) == true)
+                    pcall(rb.SetSetting, "silent.hitChance", tonumber(getLuaxValue("Luax_SilentAim_HitChance", 100)) or 100)
+                    pcall(rb.SetSetting, "silent.fovRadius", tonumber(getLuaxValue("Luax_SilentAim_FOVRadius", 100)) or 100)
+                end
+            end
+            getgenv().__DevKageSyncLuaxCombatFromControls = syncLuaxCombatFromControls
+
+            local presetSection = luaxSection(pf, pc, { Name = "Preset Configurations", Side = "Right", Size = 300 })
+            local selectionLabel = presetSection:CreateLabel({ Text = "Selected: " .. presetNames[1] .. "  •  click a preset, then Load Preset" })
+
+            local presetControls = {}
+            local selectedPreset = 1
+            local function selectPreset(index)
+                selectedPreset = math.clamp(index, 1, #presetNames)
+                for i, control in ipairs(presetControls) do
+                    if control and control.Set then pcall(function() control:Set(i == selectedPreset, true) end) end
+                end
+                selectionLabel.Text = "Selected: " .. presetNames[selectedPreset] .. "  •  click Load Preset"
             end
 
             for index, name in ipairs(presetNames) do
-                makePresetChoice(name, index)
+                local button = presetSection:CreateToggle({
+                    Name = name,
+                    State = (index == selectedPreset),
+                    Flag = "Luax_Preset_Choice_" .. tostring(index),
+                    Callback = function(value)
+                        if value == true then
+                            selectPreset(index)
+                        elseif index == selectedPreset then
+                            -- A selected preset behaves like a radio option.
+                            pcall(function() presetControls[index]:Set(true, true) end)
+                        end
+                    end
+                })
+                presetControls[index] = button
             end
 
-            local loadButton = utility:RenderObject("TextButton", {
-                BackgroundColor3 = Color3.fromRGB(175, 205, 75),
-                BackgroundTransparency = 0,
-                BorderColor3 = Color3.fromRGB(12, 12, 12),
-                BorderSizePixel = 1,
-                Parent = pc,
-                Size = UDim2.new(1, 0, 0, 30),
-                ZIndex = 4,
-                AutoButtonColor = false,
-                Font = "Code",
-                Text = "LOAD PRESET",
-                TextColor3 = Color3.fromRGB(15, 15, 15),
-                TextSize = 10,
-            })
-            utility:CreateConnection(loadButton.MouseButton1Click, function()
-                applyLuaxPreset(presetNames[presetIndex] or presetNames[1])
-                selectionLabel.Text = "Loaded: " .. (presetNames[presetIndex] or presetNames[1])
-            end)
-
-            local resetButton = utility:RenderObject("TextButton", {
-                BackgroundColor3 = Color3.fromRGB(26, 26, 26),
-                BackgroundTransparency = 0,
-                BorderColor3 = Color3.fromRGB(12, 12, 12),
-                BorderSizePixel = 1,
-                Parent = pc,
-                Size = UDim2.new(1, 0, 0, 26),
-                ZIndex = 4,
-                AutoButtonColor = false,
-                Font = "Code",
-                Text = "Reset Lua X Defaults",
-                TextColor3 = Color3.fromRGB(175, 175, 175),
-                TextSize = 9,
-            })
-            utility:CreateConnection(resetButton.MouseButton1Click, function()
+            presetSection:CreateButton({ Name = "LOAD PRESET", Callback = function()
+                local name = presetNames[selectedPreset] or presetNames[1]
+                applyLuaxPreset(name)
+                selectionLabel.Text = "Loaded: " .. name
+            end })
+            presetSection:CreateButton({ Name = "Reset Lua X Defaults", Callback = function()
                 restoreLuaxBaseline()
                 selectionLabel.Text = "Selected: Defaults restored"
                 if library and library.Notify then
                     library:Notify({ Message = "Lua X defaults restored", Duration = 2.5 })
                 end
-            end)
+            end })
+            presetSection:CreateLabel({ Text = "Presets modify only Lua X / RIVALS controls." })
 
             getgenv().__DevKageLuaxPresets = {
                 Apply = applyLuaxPreset,
                 Names = presetNames,
                 Definitions = presetDefinitions,
-                GetSelected = function() return presetNames[presetIndex] or presetNames[1] end,
+                GetSelected = function() return presetNames[selectedPreset] or presetNames[1] end,
             }
         end
 
-        -- Every folder was created closed; make one final close pass before the
-        -- UI settles so a config/auto-execute path cannot leave them expanded.
-        for _, f in ipairs(luaxFolderRefs) do
-            if f.folder then
-                pcall(function() f.folder:SetOpen(false) end)
+        -- Re-apply any config that loaded before the asynchronous Lua X UI existed.
+        pcall(function()
+            local saved = getgenv().__DevKageLastLoadedControlValues or getgenv().__DevKagePendingControlValues
+            if type(saved) == "table" then
+                getgenv().__DevKageApplySavedControlValues(saved, true)
             end
-        end
+        end)
+        pcall(function()
+            if getgenv().__DevKageSyncLuaxCombatFromControls then
+                getgenv().__DevKageSyncLuaxCombatFromControls()
+            end
+        end)
+
+        -- No visual folders are used in Lua X anymore. Keep both categories
+        -- expanded so every section remains immediately visible.
+        setLuaxCategory("Combat")
+
+        -- Auto-execute/config loading can race the asynchronous Lua X UI build.
+        -- Re-apply the latest snapshot once the key combat controls exist.
+        task.spawn(function()
+            for _ = 1, 80 do
+                local hasSilent = library.ConfigRegistry and library.ConfigRegistry["Luax_SilentAim_Enabled"]
+                local hasAimbot = library.ConfigRegistry and library.ConfigRegistry["Luax_Aimbot_Enabled"]
+                local hasRage = library.ConfigRegistry and library.ConfigRegistry["Luax_RageBot_Enabled"]
+                if hasSilent and hasAimbot and hasRage then
+                    local saved = getgenv().__DevKageLastLoadedControlValues or getgenv().__DevKagePendingControlValues
+                    local apply = getgenv().__DevKageApplySavedControlValues
+                    if type(saved) == "table" and type(apply) == "function" then
+                        pcall(apply, saved, true)
+                    end
+                    local sync = getgenv().__DevKageSyncLuaxCombatFromControls
+                    if type(sync) == "function" then
+                        pcall(sync)
+                    end
+                    break
+                end
+                task.wait(0.25)
+            end
+        end)
     end
     end)
 end
