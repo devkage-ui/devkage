@@ -39900,7 +39900,6 @@ do
         -- Anti-Aim page or any non-Lua-X configuration.
         do
             local pf, pc = luaxFolder("Lua X Presets", "Right")
-            local PS = luaxSection(pf, pc, { Name = "Preset Profiles", Side = "Right", Size = 270 })
 
             local presetNames = { "Hacker vs. Hacker", "Legit", "Underground", "Un Hitable" }
             local presetIndex = 1
@@ -40023,29 +40022,115 @@ do
                 end
             end
 
-            local selector = PS:CreateDropdown({
-                Name = "Preset",
-                Options = presetNames,
-                State = presetIndex,
-                Flag = "Luax_Preset_Selector",
-                Callback = function(index) presetIndex = math.clamp(tonumber(index) or 1, 1, #presetNames) end
+            -- Render the preset controls directly in the folder container.
+            -- Using a normal Section here caused the preset folder to depend on
+            -- the section/page reparent path and could leave the folder looking blank.
+            local presetPanel = utility:RenderObject("Frame", {
+                BackgroundColor3 = Color3.fromRGB(23, 23, 23),
+                BackgroundTransparency = 0,
+                BorderColor3 = Color3.fromRGB(12, 12, 12),
+                BorderSizePixel = 1,
+                Parent = pc,
+                Size = UDim2.new(1, 0, 0, 186),
+                ZIndex = 3
             })
-            PS:CreateButton({ Name = "Apply Selected Preset", Callback = function()
-                applyLuaxPreset(presetNames[presetIndex] or presetNames[1])
-            end })
-            PS:CreateButton({ Name = "Reset Lua X Defaults", Callback = function()
+
+            utility:RenderObject("TextLabel", {
+                BackgroundTransparency = 1,
+                Parent = presetPanel,
+                Position = UDim2.new(0, 10, 0, 8),
+                Size = UDim2.new(1, -20, 0, 20),
+                ZIndex = 4,
+                Font = "Code",
+                Text = "Lua X Config Presets",
+                TextColor3 = Color3.fromRGB(205, 205, 205),
+                TextSize = 11,
+                TextXAlignment = "Left"
+            })
+
+            local presetHint = utility:RenderObject("TextLabel", {
+                BackgroundTransparency = 1,
+                Parent = presetPanel,
+                Position = UDim2.new(0, 10, 0, 27),
+                Size = UDim2.new(1, -20, 0, 18),
+                ZIndex = 4,
+                Font = "Code",
+                Text = "Click a preset to apply only Lua X settings",
+                TextColor3 = Color3.fromRGB(145, 145, 145),
+                TextSize = 9,
+                TextXAlignment = "Left"
+            })
+
+            local presetStatus = utility:RenderObject("TextLabel", {
+                BackgroundTransparency = 1,
+                Parent = presetPanel,
+                Position = UDim2.new(0, 10, 1, -23),
+                Size = UDim2.new(1, -20, 0, 15),
+                ZIndex = 4,
+                Font = "Code",
+                Text = "Selected: " .. presetNames[1],
+                TextColor3 = Color3.fromRGB(165, 165, 165),
+                TextSize = 9,
+                TextXAlignment = "Left"
+            })
+
+            local function makePresetButton(name, order)
+                local button = utility:RenderObject("TextButton", {
+                    BackgroundColor3 = Color3.fromRGB(30, 30, 30),
+                    BackgroundTransparency = 0,
+                    BorderColor3 = Color3.fromRGB(12, 12, 12),
+                    BorderSizePixel = 1,
+                    Parent = presetPanel,
+                    Position = UDim2.new(0, 10, 0, 49 + ((order - 1) * 30)),
+                    Size = UDim2.new(1, -20, 0, 26),
+                    ZIndex = 4,
+                    AutoButtonColor = false,
+                    Font = "Code",
+                    Text = name,
+                    TextColor3 = Color3.fromRGB(205, 205, 205),
+                    TextSize = 10
+                })
+                utility:CreateConnection(button.MouseEnter, function()
+                    button.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+                end)
+                utility:CreateConnection(button.MouseLeave, function()
+                    button.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+                end)
+                utility:CreateConnection(button.MouseButton1Click, function()
+                    presetIndex = order
+                    presetStatus.Text = "Selected: " .. name
+                    applyLuaxPreset(name)
+                end)
+                return button
+            end
+
+            for index, name in ipairs(presetNames) do
+                makePresetButton(name, index)
+            end
+
+            local resetButton = utility:RenderObject("TextButton", {
+                BackgroundColor3 = Color3.fromRGB(26, 26, 26),
+                BackgroundTransparency = 0,
+                BorderColor3 = Color3.fromRGB(12, 12, 12),
+                BorderSizePixel = 1,
+                Parent = presetPanel,
+                Position = UDim2.new(0.5, -70, 1, -46),
+                Size = UDim2.new(0, 140, 0, 20),
+                ZIndex = 4,
+                AutoButtonColor = false,
+                Font = "Code",
+                Text = "Reset Lua X Defaults",
+                TextColor3 = Color3.fromRGB(175, 175, 175),
+                TextSize = 9
+            })
+            utility:CreateConnection(resetButton.MouseButton1Click, function()
                 restoreLuaxBaseline()
+                presetStatus.Text = "Selected: Defaults restored"
                 if library and library.Notify then
                     library:Notify({ Message = "Lua X defaults restored", Duration = 2.5 })
                 end
-            end })
-            PS:CreateButton({ Name = "Hacker vs. Hacker", Callback = function() applyLuaxPreset("Hacker vs. Hacker") end })
-            PS:CreateButton({ Name = "Legit", Callback = function() applyLuaxPreset("Legit") end })
-            PS:CreateButton({ Name = "Underground", Callback = function() applyLuaxPreset("Underground") end })
-            PS:CreateButton({ Name = "Un Hitable", Callback = function() applyLuaxPreset("Un Hitable") end })
-            PS:CreateLabel({ Text = "Presets only modify Lua X / RIVALS controls on this tab." })
+            end)
 
-            -- Expose the preset runner for diagnostics without touching non-Lua-X state.
             getgenv().__DevKageLuaxPresets = {
                 Apply = applyLuaxPreset,
                 Names = presetNames,
