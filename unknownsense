@@ -18115,6 +18115,24 @@ getgenv().__DevKageWindow = library.Window
 -- Spoofer: 1, AntiAim: 2, LuaX: 3, ESP (Visuals): 4
 local spooferPage = library.Window:CreatePage({ Icon = "rbxassetid://8547236654", Glyph = "R", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 1 })
                 local antiAimPage = library.Window:CreatePage({ Icon = "rbxassetid://113229312578847", Glyph = "◉", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 2 })
+                -- Force immediate logo application for Anti Aim
+                task.defer(function()
+                    local win = getgenv().__DEVKAGE_RUNTIME_WINDOW
+                    if win and win:FindFirstChild("TabsHolder") then
+                        local tabs = win.TabsHolder:GetChildren()
+                        table.sort(tabs, function(a, b) return (a.LayoutOrder or 0) < (b.LayoutOrder or 0) end)
+                        local antiAimTab = tabs[2]
+                        if antiAimTab then
+                            for _, img in ipairs(antiAimTab:GetChildren()) do
+                                if img:IsA("ImageLabel") then
+                                    img.Image = "rbxassetid://113229312578847"
+                                    img.Visible = true
+                                end
+                            end
+                        end
+                    end
+                end)
+
 local luaxPage = library.Window:CreatePage({ Icon = "rbxassetid://97832472593469", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 3 })
 local visualsPage = library.Window:CreatePage({ Icon = "rbxassetid://8547254518", Glyph = "V", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 4 })
 getgenv().__luaxTabIcon = "rbxassetid://97832472593469"
