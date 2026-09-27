@@ -39894,19 +39894,24 @@ do
         end)
     end })
         -- -----------------------------------------------------------------------
+        -- -----------------------------------------------------------------------
         -- Lua X Config Presets
-        -- These presets intentionally operate ONLY on controls registered by the
-        -- Lua X tab (Luax_* and RIVALS_* flags). They do not touch the standalone
-        -- Anti-Aim page or any non-Lua-X configuration.
+        -- Visible selection list + one explicit Load Preset button.
+        -- Selecting a preset does NOT apply it until Load Preset is clicked.
         do
             local pf, pc = luaxFolder("Lua X Presets", "Right")
 
             local presetNames = { "Hacker vs. Hacker", "Legit", "Underground", "Un Hitable" }
+            local presetDescriptions = {
+                ["Hacker vs. Hacker"] = "Combat-heavy Lua X setup",
+                ["Legit"] = "Aimbot / assist focused Lua X setup",
+                ["Underground"] = "Underground + movement Lua X setup",
+                ["Un Hitable"] = "Evasion / desync Lua X setup",
+            }
             local presetIndex = 1
 
             local presetDefinitions = {
                 ["Hacker vs. Hacker"] = {
-                    -- Main Luax combat controls
                     ["Luax_Wallbang_DevWallbang"] = true,
                     ["Luax_Wallbang_Silent_Aim"] = true,
                     ["Luax_Wallbang_Rage_Bot"] = true,
@@ -39918,7 +39923,6 @@ do
                     ["Rivals_GunMods_FullAuto"] = true,
                     ["Rivals_AntiAim_Enabled"] = true,
                     ["Rivals_Underground_Enabled"] = false,
-                    -- Luax tuning kept explicit so the profile is reproducible.
                     ["Luax_SilentAim_HitChance"] = 100,
                     ["Luax_SilentAim_FOVRadius"] = 100,
                     ["Luax_RageBot_Range"] = 150,
@@ -39987,20 +39991,22 @@ do
                 },
             }
 
+            -- Snapshot only controls that belong to the Lua X tab.
             local baseline = {}
             for flag, control in pairs(library.ConfigRegistry or {}) do
-                local s = tostring(flag)
-                if (s:sub(1, 5) == "Luax_" or s:sub(1, 7) == "Rivals_") and type(control.Get) == "function" and not s:find("Luax_Preset", 1, true) then
+                local sflag = tostring(flag)
+                if (sflag:sub(1, 5) == "Luax_" or sflag:sub(1, 7) == "Rivals_")
+                    and not sflag:find("Luax_Preset", 1, true)
+                    and type(control.Get) == "function" then
                     local ok, value = pcall(function() return control:Get() end)
-                    if ok and value ~= nil then baseline[flag] = value end
+                    if ok and value ~= nil then baseline[sflag] = value end
                 end
             end
 
             local function setLuaxControl(flag, value)
                 local control = library.ConfigRegistry and library.ConfigRegistry[flag]
                 if not control or type(control.Set) ~= "function" then return false end
-                local ok = pcall(function() control:Set(value) end)
-                return ok
+                return pcall(function() control:Set(value) end)
             end
 
             local function restoreLuaxBaseline()
@@ -40010,122 +40016,106 @@ do
             end
 
             local function applyLuaxPreset(name)
-                -- First restore all Lua X/RIVALS Lua X-tab controls to their original
-                -- defaults, then apply only this preset's explicit Lua X flags.
                 restoreLuaxBaseline()
-                local definition = presetDefinitions[name] or {}
-                for flag, value in pairs(definition) do
-                    setLuaxControl(flag, value)
+                local definition = presetDefinitions[name]
+                if definition then
+                    for flag, value in pairs(definition) do
+                        setLuaxControl(flag, value)
+                    end
                 end
                 if library and library.Notify then
-                    library:Notify({ Message = "Lua X preset applied • " .. tostring(name), Duration = 2.5 })
+                    library:Notify({ Message = "Lua X preset loaded • " .. tostring(name), Duration = 2.5 })
                 end
             end
 
-            -- Render the preset controls directly in the folder container.
-            -- Using a normal Section here caused the preset folder to depend on
-            -- the section/page reparent path and could leave the folder looking blank.
-            local presetPanel = utility:RenderObject("Frame", {
-                BackgroundColor3 = Color3.fromRGB(23, 23, 23),
-                BackgroundTransparency = 0,
-                BorderColor3 = Color3.fromRGB(12, 12, 12),
-                BorderSizePixel = 1,
+            local selectionLabel = utility:RenderObject("TextLabel", {
+                BackgroundTransparency = 1,
                 Parent = pc,
-                Size = UDim2.new(1, 0, 0, 186),
-                ZIndex = 3
-            })
-
-            utility:RenderObject("TextLabel", {
-                BackgroundTransparency = 1,
-                Parent = presetPanel,
-                Position = UDim2.new(0, 10, 0, 8),
-                Size = UDim2.new(1, -20, 0, 20),
+                Size = UDim2.new(1, 0, 0, 20),
                 ZIndex = 4,
                 Font = "Code",
-                Text = "Lua X Config Presets",
-                TextColor3 = Color3.fromRGB(205, 205, 205),
-                TextSize = 11,
-                TextXAlignment = "Left"
+                Text = "Select a preset, then click Load Preset",
+                TextColor3 = Color3.fromRGB(175, 175, 175),
+                TextSize = 10,
+                TextXAlignment = "Left",
             })
 
-            local presetHint = utility:RenderObject("TextLabel", {
-                BackgroundTransparency = 1,
-                Parent = presetPanel,
-                Position = UDim2.new(0, 10, 0, 27),
-                Size = UDim2.new(1, -20, 0, 18),
-                ZIndex = 4,
-                Font = "Code",
-                Text = "Click a preset to apply only Lua X settings",
-                TextColor3 = Color3.fromRGB(145, 145, 145),
-                TextSize = 9,
-                TextXAlignment = "Left"
-            })
-
-            local presetStatus = utility:RenderObject("TextLabel", {
-                BackgroundTransparency = 1,
-                Parent = presetPanel,
-                Position = UDim2.new(0, 10, 1, -23),
-                Size = UDim2.new(1, -20, 0, 15),
-                ZIndex = 4,
-                Font = "Code",
-                Text = "Selected: " .. presetNames[1],
-                TextColor3 = Color3.fromRGB(165, 165, 165),
-                TextSize = 9,
-                TextXAlignment = "Left"
-            })
-
-            local function makePresetButton(name, order)
-                local button = utility:RenderObject("TextButton", {
+            local function makePresetChoice(name, index)
+                local choice = utility:RenderObject("TextButton", {
                     BackgroundColor3 = Color3.fromRGB(30, 30, 30),
                     BackgroundTransparency = 0,
                     BorderColor3 = Color3.fromRGB(12, 12, 12),
                     BorderSizePixel = 1,
-                    Parent = presetPanel,
-                    Position = UDim2.new(0, 10, 0, 49 + ((order - 1) * 30)),
-                    Size = UDim2.new(1, -20, 0, 26),
+                    Parent = pc,
+                    Size = UDim2.new(1, 0, 0, 42),
                     ZIndex = 4,
                     AutoButtonColor = false,
                     Font = "Code",
-                    Text = name,
+                    Text = "  " .. name .. "\n  " .. presetDescriptions[name],
                     TextColor3 = Color3.fromRGB(205, 205, 205),
-                    TextSize = 10
+                    TextSize = 9,
+                    TextXAlignment = "Left",
                 })
-                utility:CreateConnection(button.MouseEnter, function()
-                    button.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+                utility:CreateConnection(choice.MouseButton1Click, function()
+                    presetIndex = index
+                    for _, item in ipairs(pc:GetChildren()) do
+                        if item:IsA("TextButton") and item:GetAttribute("DevKageLuaXPreset") then
+                            item.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+                            item.TextColor3 = Color3.fromRGB(205, 205, 205)
+                        end
+                    end
+                    choice.BackgroundColor3 = Color3.fromRGB(48, 48, 48)
+                    choice.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    selectionLabel.Text = "Selected: " .. name .. "  •  " .. presetDescriptions[name]
                 end)
-                utility:CreateConnection(button.MouseLeave, function()
-                    button.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-                end)
-                utility:CreateConnection(button.MouseButton1Click, function()
-                    presetIndex = order
-                    presetStatus.Text = "Selected: " .. name
-                    applyLuaxPreset(name)
-                end)
-                return button
+                choice:SetAttribute("DevKageLuaXPreset", true)
+                if index == presetIndex then
+                    choice.BackgroundColor3 = Color3.fromRGB(48, 48, 48)
+                    choice.TextColor3 = Color3.fromRGB(255, 255, 255)
+                end
+                return choice
             end
 
             for index, name in ipairs(presetNames) do
-                makePresetButton(name, index)
+                makePresetChoice(name, index)
             end
+
+            local loadButton = utility:RenderObject("TextButton", {
+                BackgroundColor3 = Color3.fromRGB(175, 205, 75),
+                BackgroundTransparency = 0,
+                BorderColor3 = Color3.fromRGB(12, 12, 12),
+                BorderSizePixel = 1,
+                Parent = pc,
+                Size = UDim2.new(1, 0, 0, 30),
+                ZIndex = 4,
+                AutoButtonColor = false,
+                Font = "Code",
+                Text = "LOAD PRESET",
+                TextColor3 = Color3.fromRGB(15, 15, 15),
+                TextSize = 10,
+            })
+            utility:CreateConnection(loadButton.MouseButton1Click, function()
+                applyLuaxPreset(presetNames[presetIndex] or presetNames[1])
+                selectionLabel.Text = "Loaded: " .. (presetNames[presetIndex] or presetNames[1])
+            end)
 
             local resetButton = utility:RenderObject("TextButton", {
                 BackgroundColor3 = Color3.fromRGB(26, 26, 26),
                 BackgroundTransparency = 0,
                 BorderColor3 = Color3.fromRGB(12, 12, 12),
                 BorderSizePixel = 1,
-                Parent = presetPanel,
-                Position = UDim2.new(0.5, -70, 1, -46),
-                Size = UDim2.new(0, 140, 0, 20),
+                Parent = pc,
+                Size = UDim2.new(1, 0, 0, 26),
                 ZIndex = 4,
                 AutoButtonColor = false,
                 Font = "Code",
                 Text = "Reset Lua X Defaults",
                 TextColor3 = Color3.fromRGB(175, 175, 175),
-                TextSize = 9
+                TextSize = 9,
             })
             utility:CreateConnection(resetButton.MouseButton1Click, function()
                 restoreLuaxBaseline()
-                presetStatus.Text = "Selected: Defaults restored"
+                selectionLabel.Text = "Selected: Defaults restored"
                 if library and library.Notify then
                     library:Notify({ Message = "Lua X defaults restored", Duration = 2.5 })
                 end
@@ -40135,6 +40125,7 @@ do
                 Apply = applyLuaxPreset,
                 Names = presetNames,
                 Definitions = presetDefinitions,
+                GetSelected = function() return presetNames[presetIndex] or presetNames[1] end,
             }
         end
 
