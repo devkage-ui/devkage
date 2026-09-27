@@ -36692,6 +36692,12 @@ Ragebot.SetSetting = function(key, value)
         end
         if type(target) == "table" then
             target[field] = value
+            -- SYNC TO GLOBAL CONFIG FOR PERSISTENCE
+            local globalCfg = getgenv().__DevKageConfig or {}
+            if not globalCfg[group] then globalCfg[group] = {} end
+            globalCfg[group][field] = value
+            getgenv().__DevKageConfig = globalCfg
+
             -- keep derived visuals in sync
             if group == "silentFOV" then
                 if field == "OutlineThickness"    then silentFOVStroke.Thickness = value end
@@ -36993,14 +36999,51 @@ do
         end
         local lf_Void, lc_Void = luaxFolder("Void", "Left")
         local VG = luaxSection(lf_Void, lc_Void, { Name = "Void Control", Side = "Left", Size = 329 })
-        LT["VoidToggle"] = VG:CreateToggle({ Name = "Enable Void", State = false, Callback = function(v) CFG.VOID_ENABLED = v; if v then startVoid() else stopVoid() end end })
+        LT["VoidToggle"] = VG:CreateToggle({ Name = "Enable Void", State = false, Callback = function(v)
+            CFG.VOID_ENABLED = v
+            local globalCfg = getgenv().__DevKageConfig or {}
+            globalCfg.VOID_ENABLED = v
+            getgenv().__DevKageConfig = globalCfg
+            if v then startVoid() else stopVoid() end
+        end })
         local VoidMethodOpts = {"Drift","Chaos","Loop","Spiral","Quantum","TP Everywhere","OrbitTarget"}
-        VG:CreateDropdown({ Name = "Method", Options = VoidMethodOpts, State = table.find(VoidMethodOpts, "Quantum") or 1, Callback = function(idx) CFG.VOID_METHOD = (VoidMethodOpts[idx] or "Quantum") end })
-        VG:CreateSlider({ Name = "Speed (B/s)", State = 1, Min = 1, Max = 1e15, Decimals = 0, Callback = function(v) CFG.SPEED = v * 1e9 end })
-        VG:CreateSlider({ Name = "Chaos (%)", State = 98, Min = 1, Max = 100, Decimals = 0, Callback = function(v) CFG.CHAOS = v * 0.01 end })
-        VG:CreateSlider({ Name = "Base X", State = 0, Min = -1e15, Max = 1e15, Decimals = 0, Callback = function(v) CFG.BASE_X = v end })
-        VG:CreateSlider({ Name = "Base Y", State = 0, Min = -1e15, Max = 1e15, Decimals = 0, Callback = function(v) CFG.BASE_Y = v end })
-        VG:CreateSlider({ Name = "Base Z", State = 0, Min = -1e15, Max = 1e15, Decimals = 0, Callback = function(v) CFG.BASE_Z = v end })
+        VG:CreateDropdown({ Name = "Method", Options = VoidMethodOpts, State = table.find(VoidMethodOpts, "Quantum") or 1, Callback = function(idx)
+            local val = VoidMethodOpts[idx] or "Quantum"
+            CFG.VOID_METHOD = val
+            local globalCfg = getgenv().__DevKageConfig or {}
+            globalCfg.VOID_METHOD = val
+            getgenv().__DevKageConfig = globalCfg
+        end })
+        VG:CreateSlider({ Name = "Speed (B/s)", State = 1, Min = 1, Max = 1e15, Decimals = 0, Callback = function(v)
+            CFG.SPEED = v * 1e9
+            local globalCfg = getgenv().__DevKageConfig or {}
+            globalCfg.VOID_SPEED = v * 1e9
+            getgenv().__DevKageConfig = globalCfg
+        end })
+        VG:CreateSlider({ Name = "Chaos (%)", State = 98, Min = 1, Max = 100, Decimals = 0, Callback = function(v)
+            CFG.CHAOS = v * 0.01
+            local globalCfg = getgenv().__DevKageConfig or {}
+            globalCfg.VOID_CHAOS = v * 0.01
+            getgenv().__DevKageConfig = globalCfg
+        end })
+        VG:CreateSlider({ Name = "Base X", State = 0, Min = -1e15, Max = 1e15, Decimals = 0, Callback = function(v)
+            CFG.BASE_X = v
+            local globalCfg = getgenv().__DevKageConfig or {}
+            globalCfg.VOID_BASE_X = v
+            getgenv().__DevKageConfig = globalCfg
+        end })
+        VG:CreateSlider({ Name = "Base Y", State = 0, Min = -1e15, Max = 1e15, Decimals = 0, Callback = function(v)
+            CFG.BASE_Y = v
+            local globalCfg = getgenv().__DevKageConfig or {}
+            globalCfg.VOID_BASE_Y = v
+            getgenv().__DevKageConfig = globalCfg
+        end })
+        VG:CreateSlider({ Name = "Base Z", State = 0, Min = -1e15, Max = 1e15, Decimals = 0, Callback = function(v)
+            CFG.BASE_Z = v
+            local globalCfg = getgenv().__DevKageConfig or {}
+            globalCfg.VOID_BASE_Z = v
+            getgenv().__DevKageConfig = globalCfg
+        end })
         VG:CreateSlider({ Name = "Y Min", State = -1e15, Min = -1e15, Max = 1e15, Decimals = 0, Callback = function(v) CFG.VOID_Y_MIN = v end })
         VG:CreateSlider({ Name = "Y Max", State = 1e15, Min = -1e15, Max = 1e15, Decimals = 0, Callback = function(v) CFG.VOID_Y_MAX = v end })
         VG:CreateSlider({ Name = "Radius (B)", State = 200, Min = 1, Max = 1e15, Decimals = 0, Callback = function(v) CFG.RADIUS = v * 1e9 end })
