@@ -19366,51 +19366,151 @@ local categories={
 
 
 local function createCategoryVectorIcon(parent,kind)
-    local root=Instance.new("Frame")
-    root.Name="Category"..tostring(kind).."Icon"
-    root.AnchorPoint=Vector2.new(0.5,0.5)
-    root.BackgroundTransparency=1
-    root.BorderSizePixel=0
-    root.Position=UDim2.fromScale(0.5,0.5)
-    root.Size=UDim2.fromOffset(42,42)
-    root.ZIndex=23
-    root.Parent=parent
+local root=Instance.new("Frame")
+root.Name="Category"..tostring(kind).."Icon"
+root.AnchorPoint=Vector2.new(0.5,0.5)
+root.BackgroundTransparency=1
+root.BorderSizePixel=0
+root.Position=UDim2.fromScale(0.5,0.5)
+root.Size=UDim2.fromOffset(42,42)
+root.ZIndex=23
+root.Parent=parent
 
-    local iconId = ""
-    if kind == "Enemy" then
-        iconId = "rbxassetid://137809772602732"
-    elseif kind == "Models" then
-        iconId = "rbxassetid://107841272047741"
-    elseif kind == "World" then
-        iconId = "rbxassetid://97764003100696"
-    elseif kind == "Client" then
-        iconId = "rbxassetid://80273344980947"
-    end
-
-    local imageLabel = Instance.new("ImageLabel")
-    imageLabel.Name = "CategoryIcon"
-    imageLabel.AnchorPoint = Vector2.new(0.5, 0.5)
-    imageLabel.BackgroundTransparency = 1
-    imageLabel.Position = UDim2.fromScale(0.5, 0.5)
-    imageLabel.Size = UDim2.fromOffset(32, 32)
-    imageLabel.Image = iconId
-    imageLabel.ZIndex = 24
-    imageLabel.Parent = root
-
-    local tintTargets = {
-        {Object = imageLabel, Property = "ImageColor3"}
-    }
-
-    local function setTint(color)
-        for _, entry in ipairs(tintTargets) do
-            pcall(function() entry.Object[entry.Property] = color end)
-        end
-    end
-
-    setTint(Color3.fromRGB(105,105,105))
-    return root, setTint
+local tintTargets={}
+local function tint(object,property)
+tintTargets[#tintTargets+1]={Object=object,Property=property or "BackgroundColor3"}
+return object
+end
+local function roundedFrame(name,position,size,radius,filled,thickness)
+local frame=Instance.new("Frame")
+frame.Name=name
+frame.BackgroundColor3=Color3.fromRGB(105,105,105)
+frame.BackgroundTransparency=filled==false and 1 or 0
+frame.BorderSizePixel=0
+frame.Position=position
+frame.Size=size
+frame.ZIndex=24
+frame.Parent=root
+local corner=Instance.new("UICorner")
+corner.CornerRadius=UDim.new(radius or 1,0)
+corner.Parent=frame
+if filled==false then
+local stroke=Instance.new("UIStroke")
+stroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
+stroke.Color=Color3.fromRGB(105,105,105)
+stroke.Thickness=thickness or 2.5
+stroke.LineJoinMode=Enum.LineJoinMode.Round
+stroke.Parent=frame
+tint(stroke,"Color")
+else
+tint(frame,"BackgroundColor3")
+end
+return frame
+end
+local function line(name,position,size,rotation,parentObject)
+local frame=Instance.new("Frame")
+frame.Name=name
+frame.A]==================],
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  [==================[nchorPoint=Vector2.new(0.5,0.5)
+frame.BackgroundColor3=Color3.fromRGB(105,105,105)
+frame.BorderSizePixel=0
+frame.Position=position
+frame.Rotation=rotation or 0
+frame.Size=size
+frame.ZIndex=27
+frame.Parent=parentObject or root
+local corner=Instance.new("UICorner")
+corner.CornerRadius=UDim.new(1,0)
+corner.Parent=frame
+tint(frame,"BackgroundColor3")
+return frame
 end
 
+if kind=="Enemy" or kind=="Models" then
+roundedFrame("Head",UDim2.fromOffset(6,2),UDim2.fromOffset(15,15),1,true)
+local shoulders=roundedFrame("Shoulders",UDim2.fromOffset(2,19),UDim2.fromOffset(25,17),0.42,true)
+local cutout=Instance.new("Frame")
+cutout.Name="NeckCutout"
+cutout.AnchorPoint=Vector2.new(0.5,0)
+cutout.BackgroundColor3=inner.BackgroundColor3
+cutout.BorderSizePixel=0
+cutout.Position=UDim2.new(0.5,0,0,-1)
+cutout.Size=UDim2.fromOffset(8,5)
+cutout.ZIndex=25
+cutout.Parent=shoulders
+local badge=roundedFrame("Badge",UDim2.fromOffset(25,23),UDim2.fromOffset(14,14),1,false,2.2)
+if kind=="Enemy" then
+line("BlockedSlash",UDim2.fromScale(0.5,0.5),UDim2.fromOffset(10,2.2),45,badge)
+else
+line("PlusHorizontal",UDim2.fromScale(0.5,0.5),UDim2.fromOffset(9,2.2),0,badge)
+line("PlusVertical",UDim2.fromScale(0.5,0.5),UDim2.fromOffset(9,2.2),90,badge)
+end
+elseif kind=="World" then
+local globe=roundedFrame("Globe",UDim2.fromOffset(5,5),UDim2.fromOffset(32,32),1,false,2.5)
+line("Equator",UDim2.fromScale(0.5,0.5),UDim2.new(1,-3,0,2),0,globe)
+local meridian=Instance.new("Frame")
+meridian.Name="Meridian"
+meridian.AnchorPoint=Vector2.new(0.5,0.5)
+meridian.BackgroundTransparency=1
+meridian.Position=UDim2.fromScale(0.5,0.5)
+meridian.Size=UDim2.new(0.44,0,1,-2)
+meridian.ZIndex=25
+meridian.Parent=globe
+local meridianCorner=Instance.new("UICorner")
+meridianCorner.CornerRadius=UDim.new(1,0)
+meridianCorner.Parent=meridian
+local meridianStroke=Instance.new("UIStroke")
+meridianStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
+meridianStroke.Color=Color3.fromRGB(105,105,105)
+meridianStroke.Thickness=2
+meridianStroke.Parent=meridian
+tint(meridianStroke,"Color")
+line("LatitudeTop",UDim2.new(0.5,0,0.30,0),UDim2.new(0.84,0,0,1.5),0,globe)
+line("LatitudeBottom",UDim2.new(0.5,0,0.70,0),UDim2.new(0.84,0,0,1.5),0,globe)
+elseif kind=="Client" then
+local eye=Instance.new("Frame")
+eye.Name="EyeOutline"
+eye.AnchorPoint=Vector2.new(0.5,0.5)
+eye.BackgroundTransparency=1
+eye.BorderSizePixel=0
+eye.Position=UDim2.fromScale(0.5,0.5)
+eye.Rotation=45
+eye.Size=UDim2.fromOffset(25,25)
+eye.ZIndex=24
+eye.Parent=root
+local eyeCorner=Instance.new("UICorner")
+eyeCorner.CornerRadius=UDim.new(0.34,0)
+eyeCorner.Parent=eye
+local eyeStroke=Instance.new("UIStroke")
+eyeStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
+eyeStroke.Color=Color3.fromRGB(105,105,105)
+eyeStroke.Thickness=2.5
+eyeStroke.LineJoinMode=Enum.LineJoinMode.Round
+eyeStroke.Parent=eye
+tint(eyeStroke,"Color")
+local pupil=roundedFrame("Pupil",UDim2.fromOffset(14,14),UDim2.fromOffset(14,14),1,true)
+pupil.ZIndex=26
+local shine=roundedFrame("PupilShine",UDim2.fromOffset(17,16),UDim2.fromOffset(4,4),1,true)
+shine.BackgroundColor3=inner.BackgroundColor3
+for index=#tintTargets,1,-1 do
+if tintTargets[index].Object==shine then table.remove(tintTargets,index) end
+end
+end
+
+local function setTint(color)
+for index=#tintTargets,1,-1 do
+local entry=tintTargets[index]
+local object=entry.Object
+if not object or not object.Parent then
+table.remove(tintTargets,index)
+else
+pcall(function() object[entry.Property]=color end)
+end
+end
+end
+setTint(Color3.fromRGB(105,105,105))
+return root,setTint
+end
 function VisualCategoryController:Set(name)
 if not self.Buttons[name] then name="Enemy" end
 self.Current=name
@@ -37016,21 +37116,20 @@ local __icOk, __icErr = pcall(function()
         local r = ICON_RECTS[index]
         return { Image = sheet, ImageRectOffset = Vector2.new(r[1], r[2]), ImageRectSize = Vector2.new(r[3], r[4]) }
     end
-    -- Update ESP Category Icons to the new IDs provided
-    local NEW_ESP_ICONS = {
-        "rbxassetid://137809772602732",
-        "rbxassetid://107841272047741",
-        "rbxassetid://97764003100696",
-        "rbxassetid://80273344980947"
-    }
 
-    function registry.Apply(imageLabel, index)  -- apply fixed asset ID to an ImageLabel
+    function registry.Apply(imageLabel, index)  -- apply the user's 4-icon sheet via getcustomasset; never blank a working icon
         if not imageLabel then return end
-        local assetId = NEW_ESP_ICONS[index] or NEW_ESP_ICONS[1]
-        imageLabel.Image = assetId
-        imageLabel.ImageRectOffset = Vector2.new(0, 0)
-        imageLabel.ImageRectSize = Vector2.new(0, 0)
-        imageLabel.ScaleType = Enum.ScaleType.Fit
+        local spec = registry.Get(index)
+        if not spec or not spec.Image or spec.Image == "" then
+            -- No local sheet available (executor lacks getcustomasset): leave whatever icon
+            -- is already there intact instead of overwriting it with a broken/private asset.
+            imageLabel.Visible = true
+            return
+        end
+        imageLabel.Image = spec.Image
+        imageLabel.ImageRectOffset = spec.ImageRectOffset
+        imageLabel.ImageRectSize = spec.ImageRectSize
+        imageLabel.ScaleType = Enum.ScaleType.Stretch
         imageLabel.Visible = true
         imageLabel.ZIndex = 100
     end
@@ -39030,7 +39129,7 @@ do
         rageSection:CreateToggle({ Name = "Snap Back To Edge", State = true, Flag = "Luax_Void_RegionSnapEdge", Callback = function(v) CFG.VOID_REGION_SNAP_EDGE = v end })
 
         luaxWireDeps(VG1c, LT["VoidDurationEnabled"], "t,s,t,s,s,t,t,t,t,s,s,s,s,s,s,t,s,t,t")
-        local VG2 = rageSection(lf_Void, lc_Void, { Name = "TP Everywhere", Side = "Right", Size = 459 })
+        local VG2 = luaxSection(lf_Void, lc_Void, { Name = "TP Everywhere", Side = "Right", Size = 459 })
         LT["TpRandToggle"] = VG2:CreateToggle({ Name = "Randomize Studs", State = true, Flag = "Luax_TP_Rand_Enabled", Callback = function(v) CFG.TP_RAND_ENABLED = v end })
         VG2:CreateSlider({ Name = "Random Min Studs", State = -1e15, Min = -1e15, Max = 0, Decimals = 0, Flag = "Luax_TP_Rand_Min", Callback = function(v) CFG.TP_RAND_MIN = v end })
         VG2:CreateSlider({ Name = "Random Max Studs", State = 1e15, Min = 0, Max = 1e15, Decimals = 0, Flag = "Luax_TP_Rand_Max", Callback = function(v) CFG.TP_RAND_MAX = v end })
@@ -39047,7 +39146,7 @@ do
         VG2:CreateSlider({ Name = "Edge Weight (%)", State = 35, Min = 0, Max = 100, Decimals = 0, Flag = "Luax_TP_Edge_Weight", Callback = function(v) CFG.TP_EDGE_WEIGHT = v * 0.01 end })
         VG2:CreateSlider({ Name = "Screen Jitter (%)", State = 12, Min = 0, Max = 100, Decimals = 0, Flag = "Luax_TP_Screen_Jitter", Callback = function(v) CFG.TP_SCREEN_JITTER = v * 0.01 end })
 
-        local VG3 = rageSection(lf_Void, lc_Void, { Name = "Smart Evasion V2", Side = "Left", Size = 342 })
+        local VG3 = luaxSection(lf_Void, lc_Void, { Name = "Smart Evasion V2", Side = "Left", Size = 342 })
         LT["SmartEvasionToggle"] = VG3:CreateToggle({ Name = "Enable Smart Evasion V2", State = false, Flag = "Luax_Smart_Evasion_Enabled", Callback = function(v) CFG.SMART_EVASION = v end })
         VG3:CreateSlider({ Name = "Detection Range", State = 80, Min = 10, Max = 500, Decimals = 0, Flag = "Luax_Evasion_Range", Callback = function(v) CFG.EVASION_RANGE = v end })
         VG3:CreateSlider({ Name = "Threat Distance", State = 40, Min = 5, Max = 300, Decimals = 0, Flag = "Luax_Evasion_Threat_Dist", Callback = function(v) CFG.EVASION_THREAT_DIST = v end })
@@ -39061,7 +39160,7 @@ do
         LT["EvasionInfiniteRange"] = VG3:CreateToggle({ Name = "Infinite Range Evasion", State = true, Flag = "Luax_Evasion_Inf_Range", Callback = function(v) CFG.SMART_EVASION_INF = v end })
 
         luaxWireDeps(VG3, LT["SmartEvasionToggle"], "t,s,s,s,s,t,t,t,t,t,t")
-        local VK = rageSection(lf_Void, lc_Void, { Name = "Void Killer", Side = "Right", Size = 369 })
+        local VK = luaxSection(lf_Void, lc_Void, { Name = "Void Killer", Side = "Right", Size = 369 })
         LT["VoidKillerToggle"] = VK:CreateToggle({ Name = "Enable Void Killer", State = true, Flag = "Luax_VoidKiller_Enabled", Callback = function(v) CFG.VOID_KILLER_ENABLED = v end })
         LT["VoidKillerDesync"] = VK:CreateToggle({ Name = "Desync Target", State = true, Flag = "Luax_VoidKiller_Desync", Callback = function(v) CFG.VOID_KILLER_DESYNC = v end })
         LT["VoidKillerForceHitbox"] = VK:CreateToggle({ Name = "Force Hitbox Expand", State = true, Flag = "Luax_VoidKiller_ForceHitbox", Callback = function(v) CFG.VOID_KILLER_FORCE_HITBOX = v end })
@@ -39077,7 +39176,7 @@ do
 
         local lf_Orbit, lc_Orbit = luaxFolder("Orbit", "Right")
         luaxWireDeps(VK, LT["VoidKillerToggle"], "t,t,t,t,t,t,t,t,t,s,s,s")
-        local OG = rageSection(lf_Void, lc_Void, { Name = "Orbit", Side = "Left", Size = 463 })
+        local OG = luaxSection(lf_Void, lc_Void, { Name = "Orbit", Side = "Left", Size = 463 })
         LT["OrbitToggle"] = OG:CreateToggle({ Name = "Enable Orbit", State = false, Flag = "Luax_Orbit_Enabled", Callback = function(v) cfg.orbitEnabled = v; if v then startOrbit() else stopOrbit() end end })
         local OrbitModeOpts = {"Circle","Figure 8","Ellipse","Spiral In","Spiral Out","Bounce","Lemniscate","Infinity","RandomOrbit"}
         OG:CreateDropdown({ Name = "Mode", Options = OrbitModeOpts, State = table.find(OrbitModeOpts, "Circle") or 1, Flag = "Luax_Orbit_Mode", Callback = function(idx) cfg.orbitMode = (OrbitModeOpts[idx] or "Circle"); orbitCurrentRadius = cfg.orbitDist end })
@@ -39097,7 +39196,7 @@ do
         OG:CreateSlider({ Name = "Max Rand Radius", State = 20, Min = 1, Max = 50, Decimals = 0, Flag = "Luax_Orbit_RandMax", Callback = function(v) cfg.orbitRandMax = v end })
 
         luaxWireDeps(OG, LT["OrbitToggle"], "t,d,d,d,s,s,s,s,s,s,t,t,s,s")
-        local OG2 = rageSection(lf_Void, lc_Void, { Name = "Helpful Options", Side = "Right", Size = 1252 })
+        local OG2 = luaxSection(lf_Void, lc_Void, { Name = "Helpful Options", Side = "Right", Size = 1252 })
         LT["OrbitFace"] = OG2:CreateToggle({ Name = "Face Target", State = true, Flag = "Luax_Orbit_Face", Callback = function(v) cfg.orbitFace = v end })
         LT["OrbitPredict"] = OG2:CreateToggle({ Name = "Predict Target Movement", State = true, Flag = "Luax_Orbit_Predict", Callback = function(v) cfg.orbitPredict = v end })
         OG2:CreateSlider({ Name = "Prediction Strength (%)", State = 20, Min = 0, Max = 100, Decimals = 0, Flag = "Luax_Orbit_PredStr", Callback = function(v) cfg.orbitPredStr = v / 100 end })
@@ -39143,7 +39242,7 @@ do
         OG2:CreateSlider({ Name = "Hitbox Size", State = 500, Min = 10, Max = 5000, Decimals = 0, Flag = "Luax_Orbit_HitboxSize", Callback = function(v) cfg.orbitHitboxSize = v end })
 
         local lf_Prediction, lc_Prediction = luaxFolder("Prediction", "Left")
-        local PG = rageSection(lf_Prediction, lc_Prediction, { Name = "Prediction V2", Side = "Left", Size = 1194 })
+        local PG = luaxSection(lf_Prediction, lc_Prediction, { Name = "Prediction V2", Side = "Left", Size = 1194 })
         LT["PredToggle"] = PG:CreateToggle({ Name = "Enable Prediction V2", State = false, Flag = "Luax_Pred_Enabled", Callback = function(v) cfgDodge.predEnabled = v; if v then startPredictionV2() else stopPredictionV2() end end })
         PG:CreateSlider({ Name = "Danger Radius", State = 120, Min = 5, Max = 5000, Decimals = 0, Flag = "Luax_Pred_DangerRadius", Callback = function(v) cfgDodge.predRadius = v end })
         PG:CreateSlider({ Name = "Dodge Distance", State = 80, Min = 5, Max = 500, Decimals = 0, Flag = "Luax_Pred_DodgeDist", Callback = function(v) cfgDodge.predDodgeDist = v end })
@@ -39187,7 +39286,7 @@ do
         LT["PredIgnoreCollide"] = PG:CreateToggle({ Name = "Ignore Collisions", State = true, Flag = "Luax_Pred_IgnoreCollide", Callback = function(v) cfgDodge.predIgnoreCollide = v end })
 
         luaxWireDeps(PG, LT["PredToggle"], "t,s,s,s,s,s,s,s,s,s,s,t,t,t,t,t,t,t,s,t,t,t,t,t,s,t,t,t,t,t,t,t,t,s,t,s,s,t,s,t,t")
-        local PG2 = rageSection(lf_Prediction, lc_Prediction, { Name = "Anti Bait V2", Side = "Right", Size = 1405 })
+        local PG2 = luaxSection(lf_Prediction, lc_Prediction, { Name = "Anti Bait V2", Side = "Right", Size = 1405 })
         LT["AntiBaitToggle"] = PG2:CreateToggle({ Name = "Enable Anti Bait V2", State = false, Flag = "Luax_AntiBait_Enabled", Callback = function(v) antiBaitCFG.enabled = v; if v then startAntiBaitV2() else stopAntiBait() end end })
         local AntiBaitDodgeModeOpts = {"Perpendicular","Away","Random"}
         PG2:CreateDropdown({ Name = "Dodge Mode", Options = AntiBaitDodgeModeOpts, State = table.find(AntiBaitDodgeModeOpts, "Perpendicular") or 1, Flag = "Luax_AntiBait_Mode", Callback = function(idx) antiBaitCFG.dodgeMode = (AntiBaitDodgeModeOpts[idx] or "Perpendicular") end })
@@ -39240,7 +39339,7 @@ do
 
         local lf_Defense, lc_Defense = luaxFolder("Defense", "Right")
         luaxWireDeps(PG2, LT["AntiBaitToggle"], "t,d,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,s,s,t,s,t,t,t,s,t,s,t,t,t,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s")
-        local AG = rageSection(lf_Defense, lc_Defense, { Name = "Anti-Aim", Side = "Left", Size = 813 })
+        local AG = luaxSection(lf_Defense, lc_Defense, { Name = "Anti-Aim", Side = "Left", Size = 813 })
         LT["AaToggle"] = AG:CreateToggle({ Name = "Enable Anti-Aim", State = false, Flag = "Luax_AA_Enabled", Callback = function(v) aaSettings.enabled = v; if v then startAntiAim() else stopAntiAim() end end })
         local AaModeOpts = {"Spin","Jitter","Static","Up","Down","Side","RandomSpin","Custom"}
         AG:CreateDropdown({ Name = "Mode", Options = AaModeOpts, State = table.find(AaModeOpts, "RandomSpin") or 1, Flag = "Luax_AA_Mode", Callback = function(idx) aaSettings.mode = (AaModeOpts[idx] or "RandomSpin") end })
@@ -39271,7 +39370,7 @@ do
         AG:CreateSlider({ Name = "Flip Chance (%)", State = 5, Min = 1, Max = 50, Decimals = 0, Flag = "Luax_AA_FlipChance", Callback = function(v) aaSettings.flipChance = v * 0.01 end })
 
         luaxWireDeps(AG, LT["AaToggle"], "t,d,s,s,s,s,s,s,s,t,t,t,t,s,s,t,s,s,t,s,t,s,t,s,s,t,s")
-        local AG2 = rageSection(lf_Defense, lc_Defense, { Name = "Anti-Aim Helpful Options", Side = "Right", Size = 937 })
+        local AG2 = luaxSection(lf_Defense, lc_Defense, { Name = "Anti-Aim Helpful Options", Side = "Right", Size = 937 })
         LT["AaEnhancedMode"] = AG2:CreateToggle({ Name = "Enhanced Mode", State = true, Flag = "Luax_AA_EnhancedMode", Callback = function(v) aaSettings.enhancedMode = v end })
         LT["AaMultiAxisSpin"] = AG2:CreateToggle({ Name = "Multi Axis Spin", State = true, Flag = "Luax_AA_MultiAxisSpin", Callback = function(v) aaSettings.multiAxisSpin = v end })
         LT["AaMultiAxisX"] = AG2:CreateToggle({ Name = "Multi Axis X", State = true, Flag = "Luax_AA_MultiAxisX", Callback = function(v) aaSettings.multiAxisX = v end })
@@ -39305,7 +39404,7 @@ do
         AG2:CreateSlider({ Name = "Auto Shoot Range", State = 1e15, Min = 1, Max = 1e15, Decimals = 0, Flag = "Luax_AA_AutoShootRange", Callback = function(v) aaSettings.aaAutoShootRange = v end })
         LT["AaInfiniteRange"] = AG2:CreateToggle({ Name = "Infinite Range", State = true, Flag = "Luax_AA_InfRange", Callback = function(v) aaSettings.aaInfiniteRange = v end })
 
-        local AG3 = rageSection(lf_Defense, lc_Defense, { Name = "Range Extender", Side = "Left", Size = 484 })
+        local AG3 = luaxSection(lf_Defense, lc_Defense, { Name = "Range Extender", Side = "Left", Size = 484 })
         LT["RangeExtToggle"] = AG3:CreateToggle({ Name = "Enable Range Extender", State = false, Flag = "Luax_RangeExt_Enabled", Callback = function(v) if v then startRangeExt() else stopRangeExt() end end })
         AG3:CreateSlider({ Name = "Range (studs)", State = 5e12, Min = 100, Max = 5e12, Decimals = 0, Flag = "Luax_RangeExt_Range", Callback = function(v) rangeExtCFG.range = v end })
         AG3:CreateSlider({ Name = "Hitbox Size", State = 500, Min = 1, Max = 5000, Decimals = 0, Flag = "Luax_RangeExt_HitboxSize", Callback = function(v) rangeExtCFG.hitboxSize = v end })
@@ -39324,7 +39423,7 @@ do
         AG3:CreateSlider({ Name = "Max Enemies To Expand", State = 50, Min = 1, Max = 50, Decimals = 0, Flag = "Luax_RangeExt_MaxEnemies", Callback = function(v) rangeExtCFG.maxEnemies = v end })
 
         luaxWireDeps(AG3, LT["RangeExtToggle"], "t,s,s,s,t,t,t,t,s,t,t,t,t,t,s,s")
-        local AG4 = rageSection(lf_Defense, lc_Defense, { Name = "Range Extender Helpful Options", Side = "Right", Size = 821 })
+        local AG4 = luaxSection(lf_Defense, lc_Defense, { Name = "Range Extender Helpful Options", Side = "Right", Size = 821 })
         LT["RangeExtRivalsMode"] = AG4:CreateToggle({ Name = "Rivals Mode", State = true, Flag = "Luax_RangeExt_RivalsMode", Callback = function(v) rangeExtCFG.rivalsMode = v end })
         LT["RangeExtSelf"] = AG4:CreateToggle({ Name = "Include Self", State = true, Flag = "Luax_RangeExt_Self", Callback = function(v) rangeExtCFG.includeSelf = v end })
         AG4:CreateSlider({ Name = "Avatar Scale", State = 50, Min = 1, Max = 500, Decimals = 0, Flag = "Luax_RangeExt_AvatarScale", Callback = function(v) rangeExtCFG.rivalsAvatarScale = v end })
@@ -39354,7 +39453,7 @@ do
         LT["RangeExtInfiniteRange"] = AG4:CreateToggle({ Name = "Infinite Range", State = true, Flag = "Luax_RangeExt_InfRange", Callback = function(v) rangeExtCFG.rangeExtInfiniteRange = v end })
         LT["RangeExtRestore"] = AG4:CreateToggle({ Name = "Restore On Disable", State = true, Flag = "Luax_RangeExt_Restore", Callback = function(v) rangeExtCFG.restoreOnDisable = v end })
 
-        local AG5 = rageSection(lf_Defense, lc_Defense, { Name = "Anti Translocation", Side = "Left", Size = 385 })
+        local AG5 = luaxSection(lf_Defense, lc_Defense, { Name = "Anti Translocation", Side = "Left", Size = 385 })
         LT["AntiTranslocToggle"] = AG5:CreateToggle({ Name = "Enable Anti Translocation", State = false, Flag = "Luax_AntiTransloc_Enabled", Callback = function(v) antiTranslocCFG.enabled = v; if v then startAntiTransloc() else stopAntiTransloc() end end })
         local AntiTranslocModeOpts = {"Evade","Freeze","Predict"}
         AG5:CreateDropdown({ Name = "Mode", Options = AntiTranslocModeOpts, State = table.find(AntiTranslocModeOpts, "Evade") or 1, Flag = "Luax_AntiTransloc_Mode", Callback = function(idx) antiTranslocCFG.mode = (AntiTranslocModeOpts[idx] or "Evade") end })
@@ -39370,7 +39469,7 @@ do
         AG5:CreateSlider({ Name = "Counter TP Offset", State = 50, Min = 5, Max = 200, Decimals = 0, Flag = "Luax_AntiTransloc_CounterTpOff", Callback = function(v) antiTranslocCFG.counterTpOffset = v end })
 
         luaxWireDeps(AG5, LT["AntiTranslocToggle"], "t,d,s,s,s,s,s,s,s,t,t,s")
-        local AG6 = rageSection(lf_Defense, lc_Defense, { Name = "Anti Translocation Helpful Options", Side = "Right", Size = 852 })
+        local AG6 = luaxSection(lf_Defense, lc_Defense, { Name = "Anti Translocation Helpful Options", Side = "Right", Size = 852 })
         LT["ATAutoEvadeAll"] = AG6:CreateToggle({ Name = "Auto Evade All", State = false, Flag = "Luax_AT_AutoEvadeAll", Callback = function(v) antiTranslocCFG.autoEvadeAll = v end })
         AG6:CreateSlider({ Name = "Evade All Radius", State = 200, Min = 10, Max = 1000, Decimals = 0, Flag = "Luax_AT_EvadeAllRadius", Callback = function(v) antiTranslocCFG.evadeAllRadius = v end })
         LT["ATShieldMode"] = AG6:CreateToggle({ Name = "Shield Mode", State = false, Flag = "Luax_AT_ShieldMode", Callback = function(v) antiTranslocCFG.shieldMode = v end })
@@ -39401,7 +39500,7 @@ do
         AG6:CreateSlider({ Name = "Auto Shoot Range", State = 1e15, Min = 1, Max = 1e15, Decimals = 0, Flag = "Luax_AT_AutoShootRange", Callback = function(v) antiTranslocCFG.atAutoShootRange = v end })
         LT["ATInfiniteRange"] = AG6:CreateToggle({ Name = "Infinite Range", State = true, Flag = "Luax_AT_InfRange", Callback = function(v) antiTranslocCFG.atInfiniteRange = v end })
 
-        local AG7 = rageSection(lf_Defense, lc_Defense, { Name = "Velocity Desync", Side = "Left", Size = 574 })
+        local AG7 = luaxSection(lf_Defense, lc_Defense, { Name = "Velocity Desync", Side = "Left", Size = 574 })
         LT["VelDesyncToggle"] = AG7:CreateToggle({ Name = "Enable Velocity Desync", State = false, Flag = "Luax_VelDesync_Enabled", Callback = function(v) velDesyncCFG.enabled = v; if v then startVelDesync() else stopVelDesync() end end })
         AG7:CreateSlider({ Name = "Intensity (%)", State = 50, Min = 1, Max = 100, Decimals = 0, Flag = "Luax_VelDesync_Intensity", Callback = function(v) velDesyncCFG.intensity = v end })
         AG7:CreateSlider({ Name = "Base Angle (deg)", State = 90, Min = 0, Max = 360, Decimals = 0, Flag = "Luax_VelDesync_BaseAngle", Callback = function(v) velDesyncCFG.angle = v end })
@@ -39423,7 +39522,7 @@ do
         AG7:CreateSlider({ Name = "Oscillate Amp", State = 30, Min = 0, Max = 180, Decimals = 0, Flag = "Luax_VelDesync_OscAmp", Callback = function(v) velDesyncCFG.oscillateAmp = v end })
 
         luaxWireDeps(AG7, LT["VelDesyncToggle"], "t,s,s,s,s,t,t,s,s,t,s,t,s,s,t,s,t,s,s")
-        local AG8 = rageSection(lf_Defense, lc_Defense, { Name = "Velocity Desync Helpful Options", Side = "Right", Size = 795 })
+        local AG8 = luaxSection(lf_Defense, lc_Defense, { Name = "Velocity Desync Helpful Options", Side = "Right", Size = 795 })
         LT["VDNoiseVel"] = AG8:CreateToggle({ Name = "Noise Velocity", State = true, Flag = "Luax_VelDesync_NoiseVel", Callback = function(v) velDesyncCFG.noiseVel = v end })
         AG8:CreateSlider({ Name = "Noise Scale", State = 1, Min = 0.1, Max = 10, Decimals = 1, Flag = "Luax_VelDesync_NoiseScale", Callback = function(v) velDesyncCFG.noiseScale = v end })
         LT["VDBurstDesync"] = AG8:CreateToggle({ Name = "Burst Desync", State = true, Flag = "Luax_VelDesync_BurstDesync", Callback = function(v) velDesyncCFG.burstDesync = v end })
@@ -39452,7 +39551,7 @@ do
         AG8:CreateSlider({ Name = "Auto Shoot Range", State = 1e15, Min = 1, Max = 1e15, Decimals = 0, Flag = "Luax_VelDesync_AutoShootRange", Callback = function(v) velDesyncCFG.vdAutoShootRange = v end })
         LT["VDInfiniteRange"] = AG8:CreateToggle({ Name = "Infinite Range", State = true, Flag = "Luax_VelDesync_InfRange", Callback = function(v) velDesyncCFG.vdInfiniteRange = v end })
 
-        local TL = rageSection(lf_Translocation, lc_Translocation, { Name = "Translocation", Side = "Left", Size = 413 })
+        local TL = luaxSection(lf_Translocation, lc_Translocation, { Name = "Translocation", Side = "Left", Size = 413 })
         LT["TranslocToggle"] = TL:CreateToggle({ Name = "Enable Translocation", State = false, Flag = "Luax_Transloc_Enabled", Callback = function(v) translocCFG.enabled = v; if v then startTransloc() else stopTransloc() end end })
         local TranslocModeOpts = {"Ahead","Behind","Perpendicular","Above","Below","AboveBelow","MirrorX","MirrorZ","Diagonal","ScreenEdge","Orbit","ZoneEscape"}
         TL:CreateDropdown({ Name = "Offset Mode", Options = TranslocModeOpts, State = table.find(TranslocModeOpts, "Ahead") or 1, Flag = "Luax_Transloc_Mode", Callback = function(idx) translocCFG.offsetMode = (TranslocModeOpts[idx] or "Ahead") end })
@@ -39469,7 +39568,7 @@ do
         LT["TranslocRivalsMode"] = TL:CreateToggle({ Name = "Rivals Mode", State = true, Flag = "Luax_Transloc_RivalsMode", Callback = function(v) translocCFG.rivalsMode = v end })
 
         luaxWireDeps(TL, LT["TranslocToggle"], "t,d,s,s,s,s,t,s,s,t,s,s,t")
-        local TL2 = rageSection(lf_Translocation, lc_Translocation, { Name = "Helpful Options", Side = "Right", Size = 1619 })
+        local TL2 = luaxSection(lf_Translocation, lc_Translocation, { Name = "Helpful Options", Side = "Right", Size = 1619 })
         LT["TranslocFakeVel"] = TL2:CreateToggle({ Name = "Fake Velocity", State = true, Flag = "Luax_Transloc_FakeVel", Callback = function(v) translocCFG.fakeVel = v end })
         LT["TranslocSnapBack"] = TL2:CreateToggle({ Name = "Snap Back", State = true, Flag = "Luax_Transloc_SnapBack", Callback = function(v) translocCFG.snapBack = v end })
         LT["TranslocJitter"] = TL2:CreateToggle({ Name = "Position Jitter", State = true, Flag = "Luax_Transloc_Jitter", Callback = function(v) translocCFG.jitter = v end })
@@ -39526,82 +39625,8 @@ do
         LT["TranslocAutoShoot"] = TL2:CreateToggle({ Name = "Auto Shoot", State = true, Flag = "Luax_Transloc_AutoShoot", Callback = function(v) translocCFG.translocAutoShoot = v end })
         TL2:CreateSlider({ Name = "Auto Shoot Range", State = 1e15, Min = 1, Max = 1e15, Decimals = 0, Flag = "Luax_Transloc_AutoShootRange", Callback = function(v) translocCFG.translocAutoShootRange = v end })
         LT["TranslocInfiniteRange"] = TL2:CreateToggle({ Name = "Infinite Range", State = true, Flag = "Luax_Transloc_InfRange", Callback = function(v) translocCFG.translocInfiniteRange = v end })
-Translocation, { Name = "Translocation", Side = "Left", Size = 413 })
-        LT["TranslocToggle"] = TL:CreateToggle({ Name = "Enable Translocation", State = false, Callback = function(v) translocCFG.enabled = v; if v then startTransloc() else stopTransloc() end end })
-        local TranslocModeOpts = {"Ahead","Behind","Perpendicular","Above","Below","AboveBelow","MirrorX","MirrorZ","Diagonal","ScreenEdge","Orbit","ZoneEscape"}
-        TL:CreateDropdown({ Name = "Offset Mode", Options = TranslocModeOpts, State = table.find(TranslocModeOpts, "Ahead") or 1, Callback = function(idx) translocCFG.offsetMode = (TranslocModeOpts[idx] or "Ahead") end })
-        TL:CreateSlider({ Name = "Frequency (Hz)", State = 512, Min = 1, Max = 10000, Decimals = 0, Callback = function(v) translocCFG.frequency = v end })
-        TL:CreateSlider({ Name = "Offset Distance", State = 1e15, Min = 1, Max = 1e15, Decimals = 0, Callback = function(v) translocCFG.offsetDist = v end })
-        TL:CreateSlider({ Name = "Y Offset", State = 0, Min = -1e15, Max = 1e15, Decimals = 0, Callback = function(v) translocCFG.offsetY = v end })
-        TL:CreateSlider({ Name = "Fake Layers", State = 10, Min = 1, Max = 50, Decimals = 0, Callback = function(v) translocCFG.layers = v end })
-        LT["TranslocRandFreq"] = TL:CreateToggle({ Name = "Random Frequency", State = false, Callback = function(v) translocCFG.randomFrequency = v end })
-        TL:CreateSlider({ Name = "Freq Min", State = 50, Min = 1, Max = 10000, Decimals = 0, Callback = function(v) translocCFG.freqMin = v end })
-        TL:CreateSlider({ Name = "Freq Max", State = 500, Min = 1, Max = 10000, Decimals = 0, Callback = function(v) translocCFG.freqMax = v end })
-        LT["TranslocBurst"] = TL:CreateToggle({ Name = "Burst Mode", State = false, Callback = function(v) translocCFG.burstMode = v end })
-        TL:CreateSlider({ Name = "Burst Count", State = 10, Min = 2, Max = 50, Decimals = 0, Callback = function(v) translocCFG.burstCount = v end })
-        TL:CreateSlider({ Name = "Burst Interval (ms)", State = 1, Min = 1, Max = 100, Decimals = 0, Callback = function(v) translocCFG.burstInterval = v * 0.001 end })
-        LT["TranslocRivalsMode"] = TL:CreateToggle({ Name = "Rivals Mode", State = true, Callback = function(v) translocCFG.rivalsMode = v end })
 
-        luaxWireDeps(TL, LT["TranslocToggle"], "t,d,s,s,s,s,t,s,s,t,s,s,t")
-        local TL2 = luaxSection(nil, nil, { Name = "Helpful Options", Side = "Right", Size = 1619 })
-        LT["TranslocFakeVel"] = TL2:CreateToggle({ Name = "Fake Velocity", State = true, Callback = function(v) translocCFG.fakeVel = v end })
-        LT["TranslocSnapBack"] = TL2:CreateToggle({ Name = "Snap Back", State = true, Callback = function(v) translocCFG.snapBack = v end })
-        LT["TranslocJitter"] = TL2:CreateToggle({ Name = "Position Jitter", State = true, Callback = function(v) translocCFG.jitter = v end })
-        TL2:CreateSlider({ Name = "Fake Vel Magnitude", State = 1e15, Min = 1, Max = 1e15, Decimals = 0, Callback = function(v) translocCFG.fakeVelMag = v end })
-        TL2:CreateSlider({ Name = "Jitter Amplitude", State = 1e14, Min = 1, Max = 1e15, Decimals = 0, Callback = function(v) translocCFG.jitterAmp = v end })
-        LT["TranslocSpinFake"] = TL2:CreateToggle({ Name = "Spin Fake Position", State = false, Callback = function(v) translocCFG.spinFake = v end })
-        TL2:CreateSlider({ Name = "Spin Speed (deg/s)", State = 720, Min = 10, Max = 3600, Decimals = 0, Callback = function(v) translocCFG.spinFakeSpeed = v end })
-        LT["TranslocMirrorX"] = TL2:CreateToggle({ Name = "Mirror X", State = false, Callback = function(v) translocCFG.mirrorX = v end })
-        LT["TranslocMirrorZ"] = TL2:CreateToggle({ Name = "Mirror Z", State = false, Callback = function(v) translocCFG.mirrorZ = v end })
-        LT["TranslocCascade"] = TL2:CreateToggle({ Name = "Cascade Offset", State = false, Callback = function(v) translocCFG.cascadeOffset = v end })
-        TL2:CreateSlider({ Name = "Cascade Step", State = 1e11, Min = 1, Max = 1e15, Decimals = 0, Callback = function(v) translocCFG.cascadeStep = v end })
-        LT["TranslocWave"] = TL2:CreateToggle({ Name = "Wave Pattern", State = false, Callback = function(v) translocCFG.wavePattern = v end })
-        TL2:CreateSlider({ Name = "Wave Frequency", State = 2, Min = 0.1, Max = 20, Decimals = 1, Callback = function(v) translocCFG.waveFreq = v end })
-        TL2:CreateSlider({ Name = "Wave Amplitude", State = 1e11, Min = 1, Max = 1e15, Decimals = 0, Callback = function(v) translocCFG.waveAmp = v end })
-        LT["TranslocPulse"] = TL2:CreateToggle({ Name = "Pulse Movement", State = false, Callback = function(v) translocCFG.pulse = v end })
-        TL2:CreateSlider({ Name = "Pulse Amplitude", State = 1e11, Min = 1, Max = 1e15, Decimals = 0, Callback = function(v) translocCFG.pulseAmp = v end })
-        TL2:CreateSlider({ Name = "Pulse Speed", State = 1, Min = 0.1, Max = 20, Decimals = 1, Callback = function(v) translocCFG.pulseSpeed = v end })
-        LT["TranslocPingPong"] = TL2:CreateToggle({ Name = "Ping Pong", State = false, Callback = function(v) translocCFG.pingPong = v end })
-        TL2:CreateSlider({ Name = "Ping Pong Dist", State = 1e12, Min = 1, Max = 1e15, Decimals = 0, Callback = function(v) translocCFG.pingPongDist = v end })
-        LT["TranslocDiagonal"] = TL2:CreateToggle({ Name = "Diagonal", State = false, Callback = function(v) translocCFG.diagonal = v end })
-        TL2:CreateSlider({ Name = "Diagonal Angle", State = 45, Min = 0, Max = 360, Decimals = 0, Callback = function(v) translocCFG.diagonalAngle = v end })
-        LT["TranslocAltVert"] = TL2:CreateToggle({ Name = "Alternating Vertical", State = false, Callback = function(v) translocCFG.alternatingVertical = v end })
-        TL2:CreateSlider({ Name = "Alt Vert Amplitude", State = 1e11, Min = 1, Max = 1e15, Decimals = 0, Callback = function(v) translocCFG.altVertAmp = v end })
-        LT["TranslocScreenEdge"] = TL2:CreateToggle({ Name = "Screen Edge", State = false, Callback = function(v) translocCFG.screenEdge = v end })
-        LT["TranslocOrbitFake"] = TL2:CreateToggle({ Name = "Orbit Fake", State = false, Callback = function(v) translocCFG.orbitFake = v end })
-        TL2:CreateSlider({ Name = "Orbit Speed (deg/s)", State = 90, Min = 1, Max = 720, Decimals = 0, Callback = function(v) translocCFG.orbitSpeed = v end })
-        TL2:CreateSlider({ Name = "Orbit Radius", State = 1e11, Min = 1, Max = 1e15, Decimals = 0, Callback = function(v) translocCFG.orbitRadius = v end })
-        LT["TranslocZoneEscape"] = TL2:CreateToggle({ Name = "Zone Escape", State = false, Callback = function(v) translocCFG.zoneEscape = v end })
-        TL2:CreateSlider({ Name = "Zone Radius", State = 200, Min = 20, Max = 2000, Decimals = 0, Callback = function(v) translocCFG.zoneEscapeRadius = v end })
-        LT["TranslocAutoDodge"] = TL2:CreateToggle({ Name = "Auto Dodge Nearby", State = false, Callback = function(v) translocCFG.autoDodge = v end })
-        TL2:CreateSlider({ Name = "Auto Dodge Radius", State = 60, Min = 10, Max = 500, Decimals = 0, Callback = function(v) translocCFG.autoDodgeRadius = v end })
-        LT["TranslocPreRender"] = TL2:CreateToggle({ Name = "PreRender Snapback", State = true, Callback = function(v) translocCFG.usePreRenderCommit = v end })
-        LT["TranslocNetOwner"] = TL2:CreateToggle({ Name = "Network Owner Fix", State = true, Callback = function(v) translocCFG.networkOwnerFix = v end })
-        LT["TranslocNoClip"] = TL2:CreateToggle({ Name = "No Clip", State = true, Callback = function(v) translocCFG.translocNoClip = v end })
-        LT["TranslocAntiFling"] = TL2:CreateToggle({ Name = "Anti-Fling Protection", State = true, Callback = function(v) translocCFG.translocAntiFling = v end })
-        LT["TranslocVelZero"] = TL2:CreateToggle({ Name = "Zero Velocity", State = true, Callback = function(v) translocCFG.translocVelZero = v end })
-        LT["TranslocMassless"] = TL2:CreateToggle({ Name = "Massless Character", State = true, Callback = function(v) translocCFG.translocMassless = v end })
-        LT["TranslocPhaseThrough"] = TL2:CreateToggle({ Name = "Phase Through Walls", State = true, Callback = function(v) translocCFG.translocPhaseThrough = v end })
-        LT["TranslocIgnoreCollide"] = TL2:CreateToggle({ Name = "Ignore Collisions", State = true, Callback = function(v) translocCFG.translocIgnoreCollide = v end })
-        LT["TranslocGhostMode"] = TL2:CreateToggle({ Name = "Ghost Mode", State = false, Callback = function(v) translocCFG.translocGhostMode = v end })
-        LT["TranslocRivalsFakeVel"] = TL2:CreateToggle({ Name = "Rivals Fake Vel", State = true, Callback = function(v) translocCFG.rivalsFakeVel = v end })
-        TL2:CreateSlider({ Name = "Rivals Fake Vel Mag", State = 1e15, Min = 1, Max = 1e15, Decimals = 0, Callback = function(v) translocCFG.rivalsFakeVelMag = v end })
-        LT["TranslocRivalsSnapBack"] = TL2:CreateToggle({ Name = "Rivals Snap Back", State = true, Callback = function(v) translocCFG.rivalsSnapBack = v end })
-        LT["TranslocRivalsNetOwner"] = TL2:CreateToggle({ Name = "Rivals Net Owner", State = true, Callback = function(v) translocCFG.rivalsNetworkOwner = v end })
-        LT["TranslocBypassAnticheat"] = TL2:CreateToggle({ Name = "Bypass Anticheat", State = true, Callback = function(v) translocCFG.translocBypassAnticheat = v end })
-        LT["TranslocAntiKick"] = TL2:CreateToggle({ Name = "Anti Kick", State = true, Callback = function(v) translocCFG.translocAntiKick = v end })
-        LT["TranslocFastTp"] = TL2:CreateToggle({ Name = "Fast TP", State = true, Callback = function(v) translocCFG.translocFastTp = v end })
-        TL2:CreateSlider({ Name = "Fast TP Count", State = 20, Min = 1, Max = 100, Decimals = 0, Callback = function(v) translocCFG.translocFastTpCount = v end })
-        TL2:CreateSlider({ Name = "Fast TP Interval (s)", State = 0.001, Min = 0.001, Max = 0.1, Decimals = 3, Callback = function(v) translocCFG.translocFastTpInterval = v end })
-        LT["TranslocStickToTarget"] = TL2:CreateToggle({ Name = "Stick to Target", State = true, Callback = function(v) translocCFG.translocStickToTarget = v end })
-        TL2:CreateSlider({ Name = "Stick Offset", State = 2, Min = 0, Max = 20, Decimals = 1, Callback = function(v) translocCFG.translocStickOffset = v end })
-        LT["TranslocAutoAim"] = TL2:CreateToggle({ Name = "Auto Aim at Target", State = true, Callback = function(v) translocCFG.translocAutoAim = v end })
-        TL2:CreateSlider({ Name = "Aim Strength", State = 1, Min = 0.1, Max = 3, Decimals = 1, Callback = function(v) translocCFG.translocAimStrength = v end })
-        LT["TranslocAutoShoot"] = TL2:CreateToggle({ Name = "Auto Shoot", State = true, Callback = function(v) translocCFG.translocAutoShoot = v end })
-        TL2:CreateSlider({ Name = "Auto Shoot Range", State = 1e15, Min = 1, Max = 1e15, Decimals = 0, Callback = function(v) translocCFG.translocAutoShootRange = v end })
-        LT["TranslocInfiniteRange"] = TL2:CreateToggle({ Name = "Infinite Range", State = true, Callback = function(v) translocCFG.translocInfiniteRange = v end })
-
-        local SBL = rageSection(lf_Sling, lc_Sling, { Name = "Sling Bypass V2", Side = "Left", Size = 1731 })
+        local SBL = luaxSection(lf_Sling, lc_Sling, { Name = "Sling Bypass V2", Side = "Left", Size = 1731 })
         LT["SlingToggle"] = SBL:CreateToggle({ Name = "Enable Sling Bypass V2", State = false, Flag = "Luax_Sling_Enabled", Callback = function(v) slingCFG.enabled = v; if v then startSlingBypassV2() else stopSlingBypassV2() end end })
         local SlingModeOpts = {"Follow","Stalk","Hover","FastTp","TargetStick","OrbitTarget","RandomAroundTarget"}
         SBL:CreateDropdown({ Name = "Mode", Options = SlingModeOpts, State = table.find(SlingModeOpts, "Follow") or 1, Flag = "Luax_Sling_Mode", Callback = function(idx) slingCFG.mode = (SlingModeOpts[idx] or "Follow") end })
@@ -39665,7 +39690,7 @@ Translocation, { Name = "Translocation", Side = "Left", Size = 413 })
         SBL:CreateSlider({ Name = "Rush Cooldown (ms)", State = 10, Min = 1, Max = 200, Decimals = 0, Flag = "Luax_Sling_RushCD", Callback = function(v) slingCFG.rushCooldown = v * 0.001 end })
 
         luaxWireDeps(SBL, LT["SlingToggle"], "t,d,d,t,s,s,t,t,t,t,t,t,s,t,t,t,t,s,s,t,t,t,t,t,t,t,t,t,t,t,s,s,s,s,s,s,s,t,s,s,s,s,t,s,s,s,t,s,s,s,t,s,t,t,s")
-        local SBR = rageSection(lf_Sling, lc_Sling, { Name = "Helpful Options", Side = "Right", Size = 850 })
+        local SBR = luaxSection(lf_Sling, lc_Sling, { Name = "Helpful Options", Side = "Right", Size = 850 })
         LT["SlingRivalsMode"] = SBR:CreateToggle({ Name = "Rivals Mode", State = true, Flag = "Luax_Sling_RivalsMode", Callback = function(v) slingCFG.rivalsMode = v end })
         LT["SlingRivalsInfiniteRange"] = SBR:CreateToggle({ Name = "Rivals Infinite Range", State = true, Flag = "Luax_Sling_RivalsInfRange", Callback = function(v) slingCFG.rivalsInfiniteRange = v end })
         SBR:CreateSlider({ Name = "Rivals Range", State = 1e15, Min = 100, Max = 1e15, Decimals = 0, Flag = "Luax_Sling_RivalsRange", Callback = function(v) slingCFG.rivalsRange = v end })
@@ -39695,101 +39720,9 @@ Translocation, { Name = "Translocation", Side = "Left", Size = 413 })
         LT["SlingStickToTarget"] = SBR:CreateToggle({ Name = "Stick to Target", State = true, Flag = "Luax_Sling_StickTarget", Callback = function(v) slingCFG.slingStickToTarget = v end })
         SBR:CreateSlider({ Name = "Stick Offset", State = 2, Min = 0, Max = 20, Decimals = 1, Flag = "Luax_Sling_StickOff", Callback = function(v) slingCFG.slingStickOffset = v end })
         LT["SlingInfiniteRange"] = SBR:CreateToggle({ Name = "Infinite Range", State = true, Flag = "Luax_Sling_InfRange", Callback = function(v) slingCFG.slingInfiniteRange = v end })
-FastTp","TargetStick","OrbitTarget","RandomAroundTarget"}
-        SBL:CreateDropdown({ Name = "Mode", Options = SlingModeOpts, State = table.find(SlingModeOpts, "Follow") or 1, Callback = function(idx) slingCFG.mode = (SlingModeOpts[idx] or "Follow") end })
-        local SlingTargetModeOpts = {"Closest","Random","Weakest","Strongest"}
-        SBL:CreateDropdown({ Name = "Target", Options = SlingTargetModeOpts, State = table.find(SlingTargetModeOpts, "Closest") or 1, Callback = function(idx) slingCFG.targetMode = (SlingTargetModeOpts[idx] or "Closest") end })
-        LT["SlingNoTpMode"] = SBL:CreateToggle({ Name = "No TP Mode (Anti-Patch)", State = true, Callback = function(v) slingCFG.noTpMode = v end })
-        SBL:CreateSlider({ Name = "No TP Range", State = 1e15, Min = 100, Max = 1e15, Decimals = 0, Callback = function(v) slingCFG.noTpRange = v end })
-        SBL:CreateSlider({ Name = "No TP Hitbox Size", State = 2000, Min = 10, Max = 10000, Decimals = 0, Callback = function(v) slingCFG.noTpHitboxSize = v end })
-        LT["SlingNoTpAutoShoot"] = SBL:CreateToggle({ Name = "No TP Auto Shoot", State = true, Callback = function(v) slingCFG.noTpAutoShoot = v end })
-        LT["SlingNoTpAimAssist"] = SBL:CreateToggle({ Name = "No TP Aim Assist", State = true, Callback = function(v) slingCFG.noTpAimAssist = v end })
-        LT["SlingNoTpNetworkOwner"] = SBL:CreateToggle({ Name = "No TP Network Owner", State = true, Callback = function(v) slingCFG.noTpNetworkOwner = v end })
-        LT["SlingNoTpSilentAim"] = SBL:CreateToggle({ Name = "No TP Silent Aim", State = true, Callback = function(v) slingCFG.noTpSilentAim = v end })
-        LT["SlingNoTpOriginSpoof"] = SBL:CreateToggle({ Name = "No TP Origin Spoof", State = true, Callback = function(v) slingCFG.noTpOriginSpoof = v end })
-        LT["SlingNoTpRaycastPatch"] = SBL:CreateToggle({ Name = "No TP Raycast Patch", State = true, Callback = function(v) slingCFG.noTpRaycastPatch = v end })
-        SBL:CreateSlider({ Name = "No TP Weapon Range", State = 1e15, Min = 100, Max = 1e15, Decimals = 0, Callback = function(v) slingCFG.noTpWeaponRange = v end })
-        LT["SlingNoTpPingComp"] = SBL:CreateToggle({ Name = "No TP Ping Comp", State = true, Callback = function(v) slingCFG.noTpPingComp = v end })
-        LT["SlingNoTpTargetLock"] = SBL:CreateToggle({ Name = "No TP Target Lock", State = true, Callback = function(v) slingCFG.noTpTargetLock = v end })
-        LT["SlingNoTpShotRedirect"] = SBL:CreateToggle({ Name = "No TP Shot Redirect", State = true, Callback = function(v) slingCFG.noTpShotRedirect = v end })
-        LT["SlingNoTpLookVector"] = SBL:CreateToggle({ Name = "No TP Look Vector", State = true, Callback = function(v) slingCFG.noTpLookVector = v end })
-        SBL:CreateSlider({ Name = "No TP Spread", State = 0, Min = 0, Max = 1, Decimals = 2, Callback = function(v) slingCFG.noTpSpread = v end })
-        SBL:CreateSlider({ Name = "No TP Recoil", State = 0, Min = 0, Max = 1, Decimals = 2, Callback = function(v) slingCFG.noTpRecoil = v end })
-        LT["SlingNoTpVelocityComp"] = SBL:CreateToggle({ Name = "No TP Velocity Comp", State = true, Callback = function(v) slingCFG.noTpVelocityComp = v end })
-        LT["SlingNoTpGravityComp"] = SBL:CreateToggle({ Name = "No TP Gravity Comp", State = true, Callback = function(v) slingCFG.noTpGravityComp = v end })
-        LT["SlingNoTpInfiniteRange"] = SBL:CreateToggle({ Name = "No TP Infinite Range", State = true, Callback = function(v) slingCFG.noTpInfiniteRange = v end })
-        LT["SlingNoTpInstantHit"] = SBL:CreateToggle({ Name = "No TP Instant Hit", State = true, Callback = function(v) slingCFG.noTpInstantHit = v end })
-        LT["SlingNoTpHitscanOverride"] = SBL:CreateToggle({ Name = "No TP Hitscan Override", State = true, Callback = function(v) slingCFG.noTpHitscanOverride = v end })
-        LT["SlingNoTpWallBang"] = SBL:CreateToggle({ Name = "No TP Wall Bang", State = true, Callback = function(v) slingCFG.noTpWallBang = v end })
-        LT["SlingNoTpProjectileFollow"] = SBL:CreateToggle({ Name = "No TP Projectile Follow", State = true, Callback = function(v) slingCFG.noTpProjectileFollow = v end })
-        LT["SlingNoTpSpoofSelf"] = SBL:CreateToggle({ Name = "No TP Spoof Self", State = true, Callback = function(v) slingCFG.noTpSpoofSelf = v end })
-        LT["SlingHideAvatar"] = SBL:CreateToggle({ Name = "Hide Avatar", State = true, Callback = function(v) slingCFG.hideAvatar = v end })
-        LT["SlingAutoShoot"] = SBL:CreateToggle({ Name = "Auto Shoot", State = true, Callback = function(v) slingCFG.autoShoot = v end })
-        LT["SlingUseTargetVel"] = SBL:CreateToggle({ Name = "Use Target Velocity", State = true, Callback = function(v) slingCFG.useTargetVel = v end })
-        SBL:CreateSlider({ Name = "Stick Height", State = 2, Min = 0, Max = 20, Decimals = 1, Callback = function(v) slingCFG.stickHeight = v end })
-        SBL:CreateSlider({ Name = "Attack Range", State = 1e15, Min = 1, Max = 1e15, Decimals = 0, Callback = function(v) slingCFG.attackRange = v end })
-        SBL:CreateSlider({ Name = "Shot Cooldown (s)", State = 0.01, Min = 0.01, Max = 1, Decimals = 2, Callback = function(v) slingCFG.shotCooldown = v end })
-        SBL:CreateSlider({ Name = "Orbit Radius", State = 5, Min = 1, Max = 50, Decimals = 0, Callback = function(v) slingCFG.orbitRadius = v end })
-        SBL:CreateSlider({ Name = "Orbit Speed", State = 200, Min = 1, Max = 1000, Decimals = 0, Callback = function(v) slingCFG.orbitSpeed = v end })
-        SBL:CreateSlider({ Name = "Orbit Height", State = 0, Min = -20, Max = 20, Decimals = 0, Callback = function(v) slingCFG.orbitHeight = v end })
-        SBL:CreateSlider({ Name = "Random Around Radius", State = 8, Min = 1, Max = 100, Decimals = 0, Callback = function(v) slingCFG.randomRadius = v end })
-        LT["SlingFollowPredict"] = SBL:CreateToggle({ Name = "Predict Target", State = true, Callback = function(v) slingCFG.followPredict = v end })
-        SBL:CreateSlider({ Name = "Follow Lead (x0.01s)", State = 15, Min = 1, Max = 100, Decimals = 0, Callback = function(v) slingCFG.followLead = v * 0.01 end })
-        SBL:CreateSlider({ Name = "Follow Smoothing", State = 50, Min = 1, Max = 100, Decimals = 0, Callback = function(v) slingCFG.followLerp = v / 100 end })
-        SBL:CreateSlider({ Name = "Follow Distance", State = 2, Min = 0, Max = 30, Decimals = 1, Callback = function(v) slingCFG.followDistance = v end })
-        SBL:CreateSlider({ Name = "Follow Height", State = 2, Min = -10, Max = 20, Decimals = 1, Callback = function(v) slingCFG.followHeight = v end })
-        LT["SlingStalkBehind"] = SBL:CreateToggle({ Name = "Stalk Behind", State = true, Callback = function(v) slingCFG.stalkBehind = v end })
-        SBL:CreateSlider({ Name = "Stalk Distance", State = 6, Min = 1, Max = 30, Decimals = 1, Callback = function(v) slingCFG.stalkDistance = v end })
-        SBL:CreateSlider({ Name = "Stalk Height", State = 3, Min = -10, Max = 20, Decimals = 1, Callback = function(v) slingCFG.stalkHeight = v end })
-        SBL:CreateSlider({ Name = "Hover Height", State = 8, Min = 0, Max = 50, Decimals = 1, Callback = function(v) slingCFG.hoverHeight = v end })
-        LT["SlingHoverBob"] = SBL:CreateToggle({ Name = "Hover Bob", State = true, Callback = function(v) slingCFG.hoverBob = v end })
-        SBL:CreateSlider({ Name = "Hover Bob Amplitude", State = 1, Min = 0, Max = 10, Decimals = 1, Callback = function(v) slingCFG.hoverBobAmp = v end })
-        SBL:CreateSlider({ Name = "Hover Bob Speed", State = 2, Min = 0.1, Max = 20, Decimals = 1, Callback = function(v) slingCFG.hoverBobSpeed = v end })
-        SBL:CreateSlider({ Name = "Hide Transparency", State = 1, Min = 0, Max = 1, Decimals = 2, Callback = function(v) slingCFG.hideTransparency = v end })
-        LT["SlingHideAccessories"] = SBL:CreateToggle({ Name = "Hide Accessories", State = true, Callback = function(v) slingCFG.hideAccessories = v end })
-        SBL:CreateSlider({ Name = "TP Interval (s)", State = 0.005, Min = 0.001, Max = 0.1, Decimals = 3, Callback = function(v) slingCFG.fastTpSpeed = v end })
-        SBL:CreateSlider({ Name = "Position Offset", State = 1.5, Min = 0, Max = 10, Decimals = 1, Callback = function(v) slingCFG.fastTpOffset = v end })
-        SBL:CreateSlider({ Name = "Jitter Amount", State = 1, Min = 0, Max = 10, Decimals = 1, Callback = function(v) slingCFG.fastTpJitter = v end })
-        LT["SlingFastTpMulti"] = SBL:CreateToggle({ Name = "Multi TP per Frame", State = true, Callback = function(v) slingCFG.fastTpMulti = v end })
-        SBL:CreateSlider({ Name = "Multi TP Count", State = 5, Min = 1, Max = 20, Decimals = 0, Callback = function(v) slingCFG.fastTpCount = v end })
-        LT["SlingFastTpPen"] = SBL:CreateToggle({ Name = "Penetrate (Snap Back)", State = true, Callback = function(v) slingCFG.fastTpPenetrate = v end })
-        LT["SlingFastTpRandAng"] = SBL:CreateToggle({ Name = "Random Angle Offset", State = true, Callback = function(v) slingCFG.fastTpRandAng = v end })
-        SBL:CreateSlider({ Name = "Rush Cooldown (ms)", State = 10, Min = 1, Max = 200, Decimals = 0, Callback = function(v) slingCFG.rushCooldown = v * 0.001 end })
-
-        luaxWireDeps(SBL, LT["SlingToggle"], "t,d,d,t,s,s,t,t,t,t,t,t,s,t,t,t,t,s,s,t,t,t,t,t,t,t,t,t,t,t,s,s,s,s,s,s,s,t,s,s,s,s,t,s,s,s,t,s,s,s,t,s,s,s,t,s,t,t,s")
-        local SBR = luaxSection(nil, nil, { Name = "Helpful Options", Side = "Right", Size = 850 })
-        LT["SlingRivalsMode"] = SBR:CreateToggle({ Name = "Rivals Mode", State = true, Callback = function(v) slingCFG.rivalsMode = v end })
-        LT["SlingRivalsInfiniteRange"] = SBR:CreateToggle({ Name = "Rivals Infinite Range", State = true, Callback = function(v) slingCFG.rivalsInfiniteRange = v end })
-        SBR:CreateSlider({ Name = "Rivals Range", State = 1e15, Min = 100, Max = 1e15, Decimals = 0, Callback = function(v) slingCFG.rivalsRange = v end })
-        LT["SlingRivalsAutoShoot"] = SBR:CreateToggle({ Name = "Rivals Auto Shoot", State = true, Callback = function(v) slingCFG.rivalsAutoShoot = v end })
-        LT["SlingRivalsHitboxExpand"] = SBR:CreateToggle({ Name = "Rivals Hitbox Expand", State = true, Callback = function(v) slingCFG.rivalsHitboxExpand = v end })
-        SBR:CreateSlider({ Name = "Rivals Hitbox Size", State = 500, Min = 10, Max = 5000, Decimals = 0, Callback = function(v) slingCFG.rivalsHitboxSize = v end })
-        LT["SlingRivalsNetworkOwner"] = SBR:CreateToggle({ Name = "Rivals Network Owner", State = true, Callback = function(v) slingCFG.rivalsNetworkOwner = v end })
-        LT["SlingRivalsFastTp"] = SBR:CreateToggle({ Name = "Rivals Fast TP", State = true, Callback = function(v) slingCFG.rivalsFastTp = v end })
-        SBR:CreateSlider({ Name = "Rivals Fast TP Count", State = 20, Min = 1, Max = 100, Decimals = 0, Callback = function(v) slingCFG.rivalsFastTpCount = v end })
-        SBR:CreateSlider({ Name = "Rivals Fast TP Interval (s)", State = 0.001, Min = 0.001, Max = 0.1, Decimals = 3, Callback = function(v) slingCFG.rivalsFastTpInterval = v end })
-        LT["SlingRivalsPositionLock"] = SBR:CreateToggle({ Name = "Rivals Position Lock", State = true, Callback = function(v) slingCFG.rivalsPositionLock = v end })
-        LT["SlingNoClip"] = SBR:CreateToggle({ Name = "No Clip", State = true, Callback = function(v) slingCFG.slingNoClip = v end })
-        LT["SlingMassless"] = SBR:CreateToggle({ Name = "Massless Character", State = true, Callback = function(v) slingCFG.slingMassless = v end })
-        LT["SlingAntiFling"] = SBR:CreateToggle({ Name = "Anti-Fling Protection", State = true, Callback = function(v) slingCFG.slingAntiFling = v end })
-        LT["SlingVelZero"] = SBR:CreateToggle({ Name = "Zero Velocity", State = true, Callback = function(v) slingCFG.slingVelZero = v end })
-        LT["SlingPhaseThrough"] = SBR:CreateToggle({ Name = "Phase Through Walls", State = true, Callback = function(v) slingCFG.slingPhaseThrough = v end })
-        LT["SlingIgnoreCollide"] = SBR:CreateToggle({ Name = "Ignore Collisions", State = true, Callback = function(v) slingCFG.slingIgnoreCollide = v end })
-        LT["SlingAutoAim"] = SBR:CreateToggle({ Name = "Auto Aim at Target", State = true, Callback = function(v) slingCFG.slingAutoAim = v end })
-        SBR:CreateSlider({ Name = "Aim Strength", State = 1, Min = 0.1, Max = 3, Decimals = 1, Callback = function(v) slingCFG.slingAimStrength = v end })
-        LT["SlingAutoShootAccurate"] = SBR:CreateToggle({ Name = "Accurate Auto Shoot", State = true, Callback = function(v) slingCFG.slingAutoShootAccurate = v end })
-        LT["SlingTargetLock"] = SBR:CreateToggle({ Name = "Target Lock", State = true, Callback = function(v) slingCFG.slingTargetLock = v end })
-        LT["SlingAntiKick"] = SBR:CreateToggle({ Name = "Anti Kick", State = true, Callback = function(v) slingCFG.slingAntiKick = v end })
-        LT["SlingBypassAnticheat"] = SBR:CreateToggle({ Name = "Bypass Anticheat", State = true, Callback = function(v) slingCFG.slingBypassAnticheat = v end })
-        LT["SlingFastTp"] = SBR:CreateToggle({ Name = "Fast TP", State = true, Callback = function(v) slingCFG.slingFastTp = v end })
-        SBR:CreateSlider({ Name = "Fast TP Count", State = 20, Min = 1, Max = 100, Decimals = 0, Callback = function(v) slingCFG.slingFastTpCount = v end })
-        SBR:CreateSlider({ Name = "Fast TP Interval (s)", State = 0.001, Min = 0.001, Max = 0.1, Decimals = 3, Callback = function(v) slingCFG.slingFastTpInterval = v end })
-        LT["SlingStickToTarget"] = SBR:CreateToggle({ Name = "Stick to Target", State = true, Callback = function(v) slingCFG.slingStickToTarget = v end })
-        SBR:CreateSlider({ Name = "Stick Offset", State = 2, Min = 0, Max = 20, Decimals = 1, Callback = function(v) slingCFG.slingStickOffset = v end })
-        LT["SlingInfiniteRange"] = SBR:CreateToggle({ Name = "Infinite Range", State = true, Callback = function(v) slingCFG.slingInfiniteRange = v end })
 
         local lf_Riot, lc_Riot = luaxFolder("Riot", "Left")
-        local RG = rageSection(lf_Riot, lc_Riot, { Name = "Riot Godmode", Side = "Left", Size = 1121 })
+        local RG = luaxSection(lf_Riot, lc_Riot, { Name = "Riot Godmode", Side = "Left", Size = 1121 })
         LT["RiotGodmodeToggle"] = RG:CreateToggle({ Name = "Enable Riot Godmode", State = false, Flag = "Luax_RiotGM_Enabled", Callback = function(v) riotGodmodeCFG.enabled = v; if v then startRiotGodmode() else stopRiotGodmode() end end })
         RG:CreateSlider({ Name = "Teleport Delay (s)", State = 0.03, Min = 0.01, Max = 0.5, Decimals = 2, Flag = "Luax_RiotGM_TpDelay", Callback = function(v) riotGodmodeCFG.speed = v end })
         RG:CreateSlider({ Name = "Min Jump Range", State = 10, Min = 1, Max = 100, Decimals = 0, Flag = "Luax_RiotGM_MinJump", Callback = function(v) riotGodmodeCFG.minJump = v end })
@@ -39829,41 +39762,9 @@ FastTp","TargetStick","OrbitTarget","RandomAroundTarget"}
         LT["RGAutoAim"] = RG:CreateToggle({ Name = "Auto Aim at Target", State = true, Flag = "Luax_RiotGM_AutoAim", Callback = function(v) riotGodmodeCFG.rgAutoAim = v end })
         RG:CreateSlider({ Name = "Aim Strength", State = 1, Min = 0.1, Max = 3, Decimals = 1, Flag = "Luax_RiotGM_AimStr", Callback = function(v) riotGodmodeCFG.rgAimStrength = v end })
         LT["RGInfiniteRange"] = RG:CreateToggle({ Name = "Infinite Range", State = true, Flag = "Luax_RiotGM_InfRange", Callback = function(v) riotGodmodeCFG.rgInfiniteRange = v end })
- (deg/s)", State = 180, Min = 0, Max = 720, Decimals = 0, Callback = function(v) riotGodmodeCFG.spinSpeed = v end })
-        local RGSpinAxisOpts = {"X","Y","Z"}
-        RG:CreateDropdown({ Name = "Spin Axis", Options = RGSpinAxisOpts, State = table.find(RGSpinAxisOpts, "Y") or 1, Callback = function(idx) riotGodmodeCFG.spinAxis = (RGSpinAxisOpts[idx] or "Y") end })
-        LT["RGRandAxis"] = RG:CreateToggle({ Name = "Random Spin Axis", State = false, Callback = function(v) riotGodmodeCFG.randomAxis = v end })
-        LT["RGAvoidBullet"] = RG:CreateToggle({ Name = "Avoid Bullets", State = true, Callback = function(v) riotGodmodeCFG.avoidBullets = v end })
-        LT["RGGroundSnap"] = RG:CreateToggle({ Name = "Ground Snap", State = false, Callback = function(v) riotGodmodeCFG.groundSnap = v end })
-        LT["RGMultiTp"] = RG:CreateToggle({ Name = "Multi TP", State = false, Callback = function(v) riotGodmodeCFG.multiTp = v end })
-        RG:CreateSlider({ Name = "Multi TP Count", State = 3, Min = 2, Max = 10, Decimals = 0, Callback = function(v) riotGodmodeCFG.multiTpCount = v end })
-        RG:CreateSlider({ Name = "Multi TP Delay (ms)", State = 10, Min = 1, Max = 100, Decimals = 0, Callback = function(v) riotGodmodeCFG.multiTpDelay = v * 0.001 end })
-        LT["RGPhaseMode"] = RG:CreateToggle({ Name = "Phase Mode", State = false, Callback = function(v) riotGodmodeCFG.phaseMode = v end })
-        RG:CreateSlider({ Name = "Phase Interval (ms)", State = 20, Min = 5, Max = 100, Decimals = 0, Callback = function(v) riotGodmodeCFG.phaseInterval = v * 0.001 end })
-        LT["RGAutoShoot"] = RG:CreateToggle({ Name = "Auto Shoot", State = true, Callback = function(v) riotGodmodeCFG.autoShoot = v end })
-        RG:CreateSlider({ Name = "Attack Range", State = 1e15, Min = 1, Max = 1e15, Decimals = 0, Callback = function(v) riotGodmodeCFG.attackRange = v end })
-        RG:CreateSlider({ Name = "Shoot Cooldown (s)", State = 0.01, Min = 0.01, Max = 1, Decimals = 2, Callback = function(v) riotGodmodeCFG.shootCooldown = v end })
-        LT["RGNoClip"] = RG:CreateToggle({ Name = "No Clip", State = true, Callback = function(v) riotGodmodeCFG.rgNoClip = v end })
-        LT["RGMassless"] = RG:CreateToggle({ Name = "Massless Character", State = true, Callback = function(v) riotGodmodeCFG.rgMassless = v end })
-        LT["RGAntiFling"] = RG:CreateToggle({ Name = "Anti-Fling Protection", State = true, Callback = function(v) riotGodmodeCFG.rgAntiFling = v end })
-        LT["RGVelZero"] = RG:CreateToggle({ Name = "Zero Velocity", State = true, Callback = function(v) riotGodmodeCFG.rgVelZero = v end })
-        LT["RGNetworkOwn"] = RG:CreateToggle({ Name = "Network Owner Fix", State = true, Callback = function(v) riotGodmodeCFG.rgNetworkOwn = v end })
-        LT["RGPhaseThrough"] = RG:CreateToggle({ Name = "Phase Through Walls", State = true, Callback = function(v) riotGodmodeCFG.rgPhaseThrough = v end })
-        LT["RGIgnoreCollide"] = RG:CreateToggle({ Name = "Ignore Collisions", State = true, Callback = function(v) riotGodmodeCFG.rgIgnoreCollide = v end })
-        LT["RGAutoShootAccurate"] = RG:CreateToggle({ Name = "Accurate Auto Shoot", State = true, Callback = function(v) riotGodmodeCFG.rgAutoShootAccurate = v end })
-        LT["RGBypassAnticheat"] = RG:CreateToggle({ Name = "Bypass Anticheat", State = true, Callback = function(v) riotGodmodeCFG.rgBypassAnticheat = v end })
-        LT["RGAntiKick"] = RG:CreateToggle({ Name = "Anti Kick", State = true, Callback = function(v) riotGodmodeCFG.rgAntiKick = v end })
-        LT["RGFastTp"] = RG:CreateToggle({ Name = "Fast TP", State = true, Callback = function(v) riotGodmodeCFG.rgFastTp = v end })
-        RG:CreateSlider({ Name = "Fast TP Count", State = 20, Min = 1, Max = 100, Decimals = 0, Callback = function(v) riotGodmodeCFG.rgFastTpCount = v end })
-        RG:CreateSlider({ Name = "Fast TP Interval (s)", State = 0.001, Min = 0.001, Max = 0.1, Decimals = 3, Callback = function(v) riotGodmodeCFG.rgFastTpInterval = v end })
-        LT["RGStickToTarget"] = RG:CreateToggle({ Name = "Stick to Target", State = true, Callback = function(v) riotGodmodeCFG.rgStickToTarget = v end })
-        RG:CreateSlider({ Name = "Stick Offset", State = 2, Min = 0, Max = 20, Decimals = 1, Callback = function(v) riotGodmodeCFG.rgStickOffset = v end })
-        LT["RGAutoAim"] = RG:CreateToggle({ Name = "Auto Aim at Target", State = true, Callback = function(v) riotGodmodeCFG.rgAutoAim = v end })
-        RG:CreateSlider({ Name = "Aim Strength", State = 1, Min = 0.1, Max = 3, Decimals = 1, Callback = function(v) riotGodmodeCFG.rgAimStrength = v end })
-        LT["RGInfiniteRange"] = RG:CreateToggle({ Name = "Infinite Range", State = true, Callback = function(v) riotGodmodeCFG.rgInfiniteRange = v end })
 
         luaxWireDeps(RG, LT["RiotGodmodeToggle"], "t,s,s,s,s,s,s,s,d,t,t,t,t,s,s,t,s,t,s,s,t,t,t,t,t,t,t,t,t,t,t,s,s,t,s,t,s,t")
-        local RA = rageSection(lf_Riot, lc_Riot, { Name = "Riot Abuser", Side = "Right", Size = 1179 })
+        local RA = luaxSection(lf_Riot, lc_Riot, { Name = "Riot Abuser", Side = "Right", Size = 1179 })
         LT["RiotAbuserToggle"] = RA:CreateToggle({ Name = "Enable Riot Abuser", State = false, Flag = "Luax_RiotAbuser_Enabled", Callback = function(v) riotAbuserCFG.enabled = v; if v then startRiotAbuser() else stopRiotAbuser() end end })
         local RAModeOpts = {"Stick","Bounce","Orbit","Phase"}
         RA:CreateDropdown({ Name = "Mode", Options = RAModeOpts, State = table.find(RAModeOpts, "Stick") or 1, Flag = "Luax_RiotAbuser_Mode", Callback = function(idx) riotAbuserCFG.mode = (RAModeOpts[idx] or "Stick") end })
