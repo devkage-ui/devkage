@@ -19366,150 +19366,49 @@ local categories={
 
 
 local function createCategoryVectorIcon(parent,kind)
-local root=Instance.new("Frame")
-root.Name="Category"..tostring(kind).."Icon"
-root.AnchorPoint=Vector2.new(0.5,0.5)
-root.BackgroundTransparency=1
-root.BorderSizePixel=0
-root.Position=UDim2.fromScale(0.5,0.5)
-root.Size=UDim2.fromOffset(42,42)
-root.ZIndex=23
-root.Parent=parent
+    local root=Instance.new("Frame")
+    root.Name="Category"..tostring(kind).."Icon"
+    root.AnchorPoint=Vector2.new(0.5,0.5)
+    root.BackgroundTransparency=1
+    root.BorderSizePixel=0
+    root.Position=UDim2.fromScale(0.5,0.5)
+    root.Size=UDim2.fromOffset(42,42)
+    root.ZIndex=23
+    root.Parent=parent
 
-local tintTargets={}
-local function tint(object,property)
-tintTargets[#tintTargets+1]={Object=object,Property=property or "BackgroundColor3"}
-return object
-end
-local function roundedFrame(name,position,size,radius,filled,thickness)
-local frame=Instance.new("Frame")
-frame.Name=name
-frame.BackgroundColor3=Color3.fromRGB(105,105,105)
-frame.BackgroundTransparency=filled==false and 1 or 0
-frame.BorderSizePixel=0
-frame.Position=position
-frame.Size=size
-frame.ZIndex=24
-frame.Parent=root
-local corner=Instance.new("UICorner")
-corner.CornerRadius=UDim.new(radius or 1,0)
-corner.Parent=frame
-if filled==false then
-local stroke=Instance.new("UIStroke")
-stroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
-stroke.Color=Color3.fromRGB(105,105,105)
-stroke.Thickness=thickness or 2.5
-stroke.LineJoinMode=Enum.LineJoinMode.Round
-stroke.Parent=frame
-tint(stroke,"Color")
-else
-tint(frame,"BackgroundColor3")
-end
-return frame
-end
-local function line(name,position,size,rotation,parentObject)
-local frame=Instance.new("Frame")
-frame.Name=name
-frame.A]==================],
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  [==================[nchorPoint=Vector2.new(0.5,0.5)
-frame.BackgroundColor3=Color3.fromRGB(105,105,105)
-frame.BorderSizePixel=0
-frame.Position=position
-frame.Rotation=rotation or 0
-frame.Size=size
-frame.ZIndex=27
-frame.Parent=parentObject or root
-local corner=Instance.new("UICorner")
-corner.CornerRadius=UDim.new(1,0)
-corner.Parent=frame
-tint(frame,"BackgroundColor3")
-return frame
-end
+    local iconId = ""
+    if kind == "Enemy" then
+        iconId = "rbxassetid://137809772602732"
+    elseif kind == "Models" then
+        iconId = "rbxassetid://107841272047741"
+    elseif kind == "World" then
+        iconId = "rbxassetid://97764003100696"
+    elseif kind == "Client" then
+        iconId = "rbxassetid://80273344980947"
+    end
 
-if kind=="Enemy" or kind=="Models" then
-roundedFrame("Head",UDim2.fromOffset(6,2),UDim2.fromOffset(15,15),1,true)
-local shoulders=roundedFrame("Shoulders",UDim2.fromOffset(2,19),UDim2.fromOffset(25,17),0.42,true)
-local cutout=Instance.new("Frame")
-cutout.Name="NeckCutout"
-cutout.AnchorPoint=Vector2.new(0.5,0)
-cutout.BackgroundColor3=inner.BackgroundColor3
-cutout.BorderSizePixel=0
-cutout.Position=UDim2.new(0.5,0,0,-1)
-cutout.Size=UDim2.fromOffset(8,5)
-cutout.ZIndex=25
-cutout.Parent=shoulders
-local badge=roundedFrame("Badge",UDim2.fromOffset(25,23),UDim2.fromOffset(14,14),1,false,2.2)
-if kind=="Enemy" then
-line("BlockedSlash",UDim2.fromScale(0.5,0.5),UDim2.fromOffset(10,2.2),45,badge)
-else
-line("PlusHorizontal",UDim2.fromScale(0.5,0.5),UDim2.fromOffset(9,2.2),0,badge)
-line("PlusVertical",UDim2.fromScale(0.5,0.5),UDim2.fromOffset(9,2.2),90,badge)
-end
-elseif kind=="World" then
-local globe=roundedFrame("Globe",UDim2.fromOffset(5,5),UDim2.fromOffset(32,32),1,false,2.5)
-line("Equator",UDim2.fromScale(0.5,0.5),UDim2.new(1,-3,0,2),0,globe)
-local meridian=Instance.new("Frame")
-meridian.Name="Meridian"
-meridian.AnchorPoint=Vector2.new(0.5,0.5)
-meridian.BackgroundTransparency=1
-meridian.Position=UDim2.fromScale(0.5,0.5)
-meridian.Size=UDim2.new(0.44,0,1,-2)
-meridian.ZIndex=25
-meridian.Parent=globe
-local meridianCorner=Instance.new("UICorner")
-meridianCorner.CornerRadius=UDim.new(1,0)
-meridianCorner.Parent=meridian
-local meridianStroke=Instance.new("UIStroke")
-meridianStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
-meridianStroke.Color=Color3.fromRGB(105,105,105)
-meridianStroke.Thickness=2
-meridianStroke.Parent=meridian
-tint(meridianStroke,"Color")
-line("LatitudeTop",UDim2.new(0.5,0,0.30,0),UDim2.new(0.84,0,0,1.5),0,globe)
-line("LatitudeBottom",UDim2.new(0.5,0,0.70,0),UDim2.new(0.84,0,0,1.5),0,globe)
-elseif kind=="Client" then
-local eye=Instance.new("Frame")
-eye.Name="EyeOutline"
-eye.AnchorPoint=Vector2.new(0.5,0.5)
-eye.BackgroundTransparency=1
-eye.BorderSizePixel=0
-eye.Position=UDim2.fromScale(0.5,0.5)
-eye.Rotation=45
-eye.Size=UDim2.fromOffset(25,25)
-eye.ZIndex=24
-eye.Parent=root
-local eyeCorner=Instance.new("UICorner")
-eyeCorner.CornerRadius=UDim.new(0.34,0)
-eyeCorner.Parent=eye
-local eyeStroke=Instance.new("UIStroke")
-eyeStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
-eyeStroke.Color=Color3.fromRGB(105,105,105)
-eyeStroke.Thickness=2.5
-eyeStroke.LineJoinMode=Enum.LineJoinMode.Round
-eyeStroke.Parent=eye
-tint(eyeStroke,"Color")
-local pupil=roundedFrame("Pupil",UDim2.fromOffset(14,14),UDim2.fromOffset(14,14),1,true)
-pupil.ZIndex=26
-local shine=roundedFrame("PupilShine",UDim2.fromOffset(17,16),UDim2.fromOffset(4,4),1,true)
-shine.BackgroundColor3=inner.BackgroundColor3
-for index=#tintTargets,1,-1 do
-if tintTargets[index].Object==shine then table.remove(tintTargets,index) end
-end
-end
+    local imageLabel = Instance.new("ImageLabel")
+    imageLabel.Name = "CategoryIcon"
+    imageLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+    imageLabel.BackgroundTransparency = 1
+    imageLabel.Position = UDim2.fromScale(0.5, 0.5)
+    imageLabel.Size = UDim2.fromOffset(32, 32)
+    imageLabel.Image = iconId
+    imageLabel.ZIndex = 24
+    imageLabel.Parent = root
 
-local function setTint(color)
-for index=#tintTargets,1,-1 do
-local entry=tintTargets[index]
-local object=entry.Object
-if not object or not object.Parent then
-table.remove(tintTargets,index)
-else
-pcall(function() object[entry.Property]=color end)
-end
-end
-end
-setTint(Color3.fromRGB(105,105,105))
-return root,setTint
+    local tintTargets = {
+        {Object = imageLabel, Property = "ImageColor3"}
+    }
+
+    local function setTint(color)
+        for _, entry in ipairs(tintTargets) do
+            pcall(function() entry.Object[entry.Property] = color end)
+        end
+    end
+
+    setTint(Color3.fromRGB(105,105,105))
+    return root, setTint
 end
 
 function VisualCategoryController:Set(name)
@@ -38904,28 +38803,20 @@ do
         -- DevKage's own CreateFolder/AddSection is broken (AddSection would reparent
         -- the whole column). Build folders and reparent each section's Root ourselves.
         local luaxFolderRefs = {}
+        -- luaxFolder is now deprecated in favor of direct sectioning in Combat/Rage.
+        -- Keeping the function signature to avoid breaking legacy calls if any exist,
+        -- but it no longer creates a folder.
         local function luaxFolder(name, side)
-            local folder = luaxPage:CreateFolder({ Name = name, Side = side })
-            local ref = {
-                folder = folder,
-                holder = folder.Holder,
-                header = folder.Header,
-                container = folder.Container,
-                arrow = folder.Arrow,
-            }
-            luaxFolderRefs[#luaxFolderRefs + 1] = ref
-            pcall(function() folder:SetOpen(false) end)
-            return folder, folder.Container
+            return nil, nil
         end
         local function luaxSection(folder, container, props)
-            -- Create sections directly inside their folder. This removes the old
-            -- create-then-reparent race that could make controls disappear.
+            -- Create sections directly inside the provided container (combatSection or rageSection)
             local flag = "Luax_" .. props.Name:gsub(" ", "_")
             local sectionProps = {}
             for k, v in pairs(props) do
                 sectionProps[k] = v
             end
-            sectionProps.FolderContainer = container
+            -- We no longer use FolderContainer as we are flattening the UI
             local sec = luaxPage:CreateSection(sectionProps)
 
             local originalCreateToggle = sec.CreateToggle
@@ -39651,7 +39542,7 @@ Translocation, { Name = "Translocation", Side = "Left", Size = 413 })
         LT["TranslocRivalsMode"] = TL:CreateToggle({ Name = "Rivals Mode", State = true, Callback = function(v) translocCFG.rivalsMode = v end })
 
         luaxWireDeps(TL, LT["TranslocToggle"], "t,d,s,s,s,s,t,s,s,t,s,s,t")
-        local TL2 = luaxSection(lf_Translocation, lc_Translocation, { Name = "Helpful Options", Side = "Right", Size = 1619 })
+        local TL2 = luaxSection(nil, nil, { Name = "Helpful Options", Side = "Right", Size = 1619 })
         LT["TranslocFakeVel"] = TL2:CreateToggle({ Name = "Fake Velocity", State = true, Callback = function(v) translocCFG.fakeVel = v end })
         LT["TranslocSnapBack"] = TL2:CreateToggle({ Name = "Snap Back", State = true, Callback = function(v) translocCFG.snapBack = v end })
         LT["TranslocJitter"] = TL2:CreateToggle({ Name = "Position Jitter", State = true, Callback = function(v) translocCFG.jitter = v end })
@@ -39865,7 +39756,7 @@ FastTp","TargetStick","OrbitTarget","RandomAroundTarget"}
         SBL:CreateSlider({ Name = "Rush Cooldown (ms)", State = 10, Min = 1, Max = 200, Decimals = 0, Callback = function(v) slingCFG.rushCooldown = v * 0.001 end })
 
         luaxWireDeps(SBL, LT["SlingToggle"], "t,d,d,t,s,s,t,t,t,t,t,t,s,t,t,t,t,s,s,t,t,t,t,t,t,t,t,t,t,t,s,s,s,s,s,s,s,t,s,s,s,s,t,s,s,s,t,s,s,s,t,s,s,s,t,s,t,t,s")
-        local SBR = luaxSection(lf_Sling, lc_Sling, { Name = "Helpful Options", Side = "Right", Size = 850 })
+        local SBR = luaxSection(nil, nil, { Name = "Helpful Options", Side = "Right", Size = 850 })
         LT["SlingRivalsMode"] = SBR:CreateToggle({ Name = "Rivals Mode", State = true, Callback = function(v) slingCFG.rivalsMode = v end })
         LT["SlingRivalsInfiniteRange"] = SBR:CreateToggle({ Name = "Rivals Infinite Range", State = true, Callback = function(v) slingCFG.rivalsInfiniteRange = v end })
         SBR:CreateSlider({ Name = "Rivals Range", State = 1e15, Min = 100, Max = 1e15, Decimals = 0, Callback = function(v) slingCFG.rivalsRange = v end })
@@ -40016,7 +39907,7 @@ FastTp","TargetStick","OrbitTarget","RandomAroundTarget"}
 
         local lf_Menu, lc_Menu = luaxFolder("Menu", "Right")
         luaxWireDeps(RA, LT["RiotAbuserToggle"], "t,d,s,s,s,s,s,s,s,s,s,s,s,s,s,s,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,s,s,t,s,t,s,t")
-        local MenuG = luaxSection(lf_Menu, lc_Menu, { Name = "Menu", Side = "Left", Size = 130 })
+        local MenuG = luaxSection(nil, nil, { Name = "Menu", Side = "Left", Size = 130 })
         MenuG:CreateButton({ Name = "Load Preset", Callback = function()
         CFG.VOID_ENABLED = true; CFG.VOID_METHOD = "Quantum"; CFG.VOID_KILLER_ENABLED = true
         cfgDodge.predEnabled = true; antiBaitCFG.enabled = true
