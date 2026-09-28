@@ -38816,7 +38816,8 @@ do
             for k, v in pairs(props) do
                 sectionProps[k] = v
             end
-            -- We no longer use FolderContainer as we are flattening the UI
+            -- Explicitly assign the side to ensure it appears in the correct column
+            sectionProps.Side = (props.Side == "Right") and "Right" or "Left"
             local sec = luaxPage:CreateSection(sectionProps)
 
             local originalCreateToggle = sec.CreateToggle
