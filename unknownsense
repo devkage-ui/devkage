@@ -18538,6 +18538,7 @@ local rainbowAuraAlphaSlider = rainbowAuraSection:CreateSlider({
 Name = "Transparency",
 State = math.floor((tonumber(getgenv().__DevKageConfig.rainbowAuraAlpha) or 0.35)*100+0.5),
 Min=0, Max=100, Decimals=0, Suffix="%",
+Flag = "rainbowAuraAlpha",
 Callback = function(v)
 local alpha = math.clamp(v/100,0,1)
 getgenv().__DevKageConfig.rainbowAuraAlpha = alpha
@@ -40075,17 +40076,20 @@ FastTp","TargetStick","OrbitTarget","RandomAroundTarget"}
         do
             local pf, pc = luaxFolder("Lua X Presets", "Right")
 
-            local presetNames = { "Hacker vs. Hacker", "Legit", "Underground", "Un Hitable" }
+            local presetNames = { "hacker vs hacker", "underground", "anti hit", "legit", "void", "safe", "orbit" }
             local presetDescriptions = {
-                ["Hacker vs. Hacker"] = "Combat-heavy Lua X setup",
-                ["Legit"] = "Aimbot / assist focused Lua X setup",
-                ["Underground"] = "Underground + movement Lua X setup",
-                ["Un Hitable"] = "Evasion / desync Lua X setup",
+                ["hacker vs hacker"] = "Maximized combat and rage power",
+                ["underground"] = "Underground and movement utility",
+                ["anti hit"] = "Defensive and evasion focus",
+                ["legit"] = "Subtle assistance and safe settings",
+                ["void"] = "Void-based combat and movement",
+                ["safe"] = "Maximum safety and invisibility",
+                ["orbit"] = "Orbit-style targeting and movement",
             }
             local presetIndex = 1
 
             local presetDefinitions = {
-                ["Hacker vs. Hacker"] = {
+                ["hacker vs hacker"] = {
                     ["Luax_Wallbang_DevWallbang"] = true,
                     ["Luax_Wallbang_Silent_Aim"] = true,
                     ["Luax_Wallbang_Rage_Bot"] = true,
@@ -40105,7 +40109,7 @@ FastTp","TargetStick","OrbitTarget","RandomAroundTarget"}
                     ["Luax_RageBot_OriginShiftRange"] = 14,
                     ["Luax_RageBot_VoidSpam"] = false,
                 },
-                ["Legit"] = {
+                ["legit"] = {
                     ["Luax_Wallbang_DevWallbang"] = false,
                     ["Luax_Wallbang_Silent_Aim"] = false,
                     ["Luax_Wallbang_Rage_Bot"] = false,
@@ -40125,7 +40129,7 @@ FastTp","TargetStick","OrbitTarget","RandomAroundTarget"}
                     ["Luax_RageBot_OriginShiftRange"] = 14,
                     ["Luax_RageBot_VoidSpam"] = false,
                 },
-                ["Underground"] = {
+                ["underground"] = {
                     ["Luax_Wallbang_DevWallbang"] = false,
                     ["Luax_Wallbang_Silent_Aim"] = false,
                     ["Luax_Wallbang_Rage_Bot"] = false,
@@ -40143,7 +40147,7 @@ FastTp","TargetStick","OrbitTarget","RandomAroundTarget"}
                     ["Luax_Translocation_Enable_Translocation"] = false,
                     ["Luax_Anti_Translocation_Enable_Anti_Translocation"] = false,
                 },
-                ["Un Hitable"] = {
+                ["anti hit"] = {
                     ["Luax_Wallbang_DevWallbang"] = false,
                     ["Luax_Wallbang_Silent_Aim"] = false,
                     ["Luax_Wallbang_Rage_Bot"] = false,
@@ -40153,7 +40157,7 @@ FastTp","TargetStick","OrbitTarget","RandomAroundTarget"}
                     ["Rivals_AimAssist_Enabled"] = false,
                     ["Rivals_GunMods_NoSpread"] = false,
                     ["Rivals_GunMods_FullAuto"] = false,
-                    ["Rivals_AntiAim_Enabled"] = false,
+                    ["Rivals_AntiAim_Enabled"] = true,
                     ["Rivals_Underground_Enabled"] = true,
                     ["Rivals_Player_NoClip"] = true,
                     ["Luax_Void_Helpers_Enable_Smart_Evasion_V2"] = true,
@@ -40162,6 +40166,28 @@ FastTp","TargetStick","OrbitTarget","RandomAroundTarget"}
                     ["Luax_Velocity_Desync_Helpers_Enable_Velocity_Desync"] = false,
                     ["Luax_Translocation_Enable_Translocation"] = false,
                     ["Luax_Sling_Bypass_V2_Enable_Sling_Bypass_V2"] = false,
+                },
+                ["void"] = {
+                    ["Luax_Wallbang_DevWallbang"] = true,
+                    ["Luax_Wallbang_Rage_Bot"] = true,
+                    ["Luax_RageBot_VoidSpam"] = true,
+                    ["Luax_RageBot_VoidX"] = 0,
+                    ["Luax_RageBot_VoidY"] = 1000,
+                    ["Luax_RageBot_VoidZ"] = 0,
+                    ["Rivals_GunMods_NoSpread"] = true,
+                },
+                ["safe"] = {
+                    ["Luax_Wallbang_Aimbot"] = true,
+                    ["Luax_Aimbot_Sensitivity"] = 1.0,
+                    ["Luax_Aimbot_FOVRadius"] = 150,
+                    ["Rivals_AimAssist_Enabled"] = true,
+                    ["Rivals_AimAssist_Smoothness"] = 5.0,
+                },
+                ["orbit"] = {
+                    ["Luax_Wallbang_Silent_Aim"] = true,
+                    ["Luax_SilentAim_FOVRadius"] = 200,
+                    ["Luax_SilentAim_HitChance"] = 80,
+                    ["Rivals_AntiAim_SpinBot"] = true,
                 },
             }
 
