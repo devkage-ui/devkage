@@ -18155,13 +18155,15 @@ Key = Enum.KeyCode.RightShift,
 Enabled = not (getgenv().__DEVKAGE_AUTO_STARTED == true and _script_boot_settings.SilentLoad == true)
 })
 getgenv().__DevKageWindow = library.Window
+getgenv().__DevKageLibrary = library
+getgenv().__DevKageUtility = utility
 
 -- FIX: Correct Tab Order
 -- Spoofer: 1, AntiAim: 2, LuaX: 3, ESP (Visuals): 4
 local spooferPage = library.Window:CreatePage({ Icon = "rbxassetid://8547236654", Glyph = "R", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 1 })
-                local antiAimPage = library.Window:CreatePage({ Icon = "rbxassetid://121886618627230", Glyph = "", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 2 })
+                local antiAimPage = library.Window:CreatePage({ Icon = "rbxassetid://121886618627230", Glyph = "", Size = UDim2.new(0, 48, 0, 48), LayoutOrder = 2 })
 
-local luaxPage = library.Window:CreatePage({ Icon = "rbxassetid://97832472593469", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 3 })
+local luaxPage = library.Window:CreatePage({ Icon = "rbxassetid://97832472593469", Size = UDim2.new(0, 48, 0, 48), LayoutOrder = 3 })
 local visualsPage = library.Window:CreatePage({ Icon = "rbxassetid://8547254518", Glyph = "V", Size = UDim2.new(0, 36, 0, 36), LayoutOrder = 4 })
 getgenv().__luaxTabIcon = "rbxassetid://97832472593469"
 getgenv().__DevKageLuaxPage = luaxPage
@@ -38856,6 +38858,11 @@ do
             getgenv().__luaxTabIcon = "rbxassetid://97832472593469"
             local LT = {} -- Lua X toggle registry (used by Load Preset / Kill Every)
 
+            -- Reach DevKage's UI library + utility (they are chunk-local to DevKage,
+            -- not globals). Exposed via getgenv() so Lua X controls and presets work.
+            local library = getgenv().__DevKageLibrary or library
+            local utility = getgenv().__DevKageUtility or utility
+
         -- Luax Tab Categories
         local combatSection = luaxPage:CreateSection({ Name = "Combat", Side = "Left", Size = 205 })
         local rageSection = luaxPage:CreateSection({ Name = "Rage", Side = "Right", Size = 205 })
@@ -38917,6 +38924,9 @@ do
             end
             -- Explicitly assign the side to ensure it appears in the correct column
             sectionProps.Side = (props.Side == "Right") and "Right" or "Left"
+            -- Keep every Lua X feature section a bounded, scrollable box like the
+            -- Combat section, but a bit larger (450px) instead of one huge list.
+            sectionProps.Size = math.min(tonumber(sectionProps.Size) or 150, 450)
             local sec = luaxPage:CreateSection(sectionProps)
 
             local originalCreateToggle = sec.CreateToggle
@@ -39867,17 +39877,15 @@ do
         -- Visible selection list + one explicit Load Preset button.
         -- Selecting a preset does NOT apply it until Load Preset is clicked.
         do
-            local pf, pc = luaxFolder("Lua X Presets", "Right")
+            local presetSection = luaxSection(nil, nil, { Name = "Lua X Presets", Side = "Right", Size = 460 })
+        local pc = presetSection.Holder
 
-            local presetNames = { "hacker vs hacker", "underground", "anti hit", "legit", "void", "safe", "orbit" }
+            local presetNames = { "hacker vs hacker", "underground", "safe orbit", "legit" }
             local presetDescriptions = {
                 ["hacker vs hacker"] = "Maximized combat and rage power",
                 ["underground"] = "Underground and movement utility",
-                ["anti hit"] = "Defensive and evasion focus",
+                ["safe orbit"] = "Safe orbit-style silent aim and aimbot",
                 ["legit"] = "Subtle assistance and safe settings",
-                ["void"] = "Void-based combat and movement",
-                ["safe"] = "Maximum safety and invisibility",
-                ["orbit"] = "Orbit-style targeting and movement",
             }
             local presetIndex = 1
 
@@ -39902,26 +39910,6 @@ do
                     ["Luax_RageBot_OriginShiftRange"] = 14,
                     ["Luax_RageBot_VoidSpam"] = false,
                 },
-                ["legit"] = {
-                    ["Luax_Wallbang_DevWallbang"] = false,
-                    ["Luax_Wallbang_Silent_Aim"] = false,
-                    ["Luax_Wallbang_Rage_Bot"] = false,
-                    ["Luax_Wallbang_Auto_Shoot"] = false,
-                    ["Luax_Wallbang_Aimbot"] = true,
-                    ["Rivals_Triggerbot_Enabled"] = false,
-                    ["Rivals_AimAssist_Enabled"] = true,
-                    ["Rivals_GunMods_NoSpread"] = false,
-                    ["Rivals_GunMods_FullAuto"] = false,
-                    ["Rivals_AntiAim_Enabled"] = false,
-                    ["Rivals_Underground_Enabled"] = false,
-                    ["Luax_SilentAim_HitChance"] = 45,
-                    ["Luax_SilentAim_FOVRadius"] = 100,
-                    ["Luax_RageBot_Range"] = 150,
-                    ["Luax_RageBot_Interval"] = 0.2,
-                    ["Luax_RageBot_OriginShift"] = false,
-                    ["Luax_RageBot_OriginShiftRange"] = 14,
-                    ["Luax_RageBot_VoidSpam"] = false,
-                },
                 ["underground"] = {
                     ["Luax_Wallbang_DevWallbang"] = false,
                     ["Luax_Wallbang_Silent_Aim"] = false,
@@ -39935,52 +39923,43 @@ do
                     ["Rivals_AntiAim_Enabled"] = false,
                     ["Rivals_Underground_Enabled"] = true,
                     ["Rivals_Player_NoClip"] = true,
-                    ["Luax_Void_Helpers_Enable_Smart_Evasion_V2"] = false,
-                    ["Luax_Velocity_Desync_Enable_Velocity_Desync"] = false,
-                    ["Luax_Translocation_Enable_Translocation"] = false,
-                    ["Luax_Anti_Translocation_Enable_Anti_Translocation"] = false,
                 },
-                ["anti hit"] = {
+                ["safe orbit"] = {
+                    ["Luax_Wallbang_DevWallbang"] = false,
+                    ["Luax_Wallbang_Silent_Aim"] = true,
+                    ["Luax_Wallbang_Rage_Bot"] = false,
+                    ["Luax_Wallbang_Auto_Shoot"] = false,
+                    ["Luax_Wallbang_Aimbot"] = true,
+                    ["Rivals_Triggerbot_Enabled"] = false,
+                    ["Rivals_AimAssist_Enabled"] = true,
+                    ["Rivals_AimAssist_Smoothness"] = 4.0,
+                    ["Rivals_GunMods_NoSpread"] = false,
+                    ["Rivals_GunMods_FullAuto"] = false,
+                    ["Rivals_AntiAim_Enabled"] = true,
+                    ["Rivals_AntiAim_SpinBot"] = true,
+                    ["Rivals_Underground_Enabled"] = false,
+                    ["Luax_SilentAim_HitChance"] = 70,
+                    ["Luax_SilentAim_FOVRadius"] = 160,
+                    ["Luax_Aimbot_Sensitivity"] = 1.5,
+                    ["Luax_Aimbot_FOVRadius"] = 200,
+                },
+                ["legit"] = {
                     ["Luax_Wallbang_DevWallbang"] = false,
                     ["Luax_Wallbang_Silent_Aim"] = false,
                     ["Luax_Wallbang_Rage_Bot"] = false,
                     ["Luax_Wallbang_Auto_Shoot"] = false,
-                    ["Luax_Wallbang_Aimbot"] = false,
+                    ["Luax_Wallbang_Aimbot"] = true,
                     ["Rivals_Triggerbot_Enabled"] = false,
-                    ["Rivals_AimAssist_Enabled"] = false,
+                    ["Rivals_AimAssist_Enabled"] = true,
+                    ["Rivals_AimAssist_Smoothness"] = 2.0,
                     ["Rivals_GunMods_NoSpread"] = false,
                     ["Rivals_GunMods_FullAuto"] = false,
-                    ["Rivals_AntiAim_Enabled"] = true,
-                    ["Rivals_Underground_Enabled"] = true,
-                    ["Rivals_Player_NoClip"] = true,
-                    ["Luax_Void_Helpers_Enable_Smart_Evasion_V2"] = true,
-                    ["Luax_Anti_Translocation_Enable_Anti_Translocation"] = true,
-                    ["Luax_Velocity_Desync_Enable_Velocity_Desync"] = true,
-                    ["Luax_Velocity_Desync_Helpers_Enable_Velocity_Desync"] = false,
-                    ["Luax_Translocation_Enable_Translocation"] = false,
-                    ["Luax_Sling_Bypass_V2_Enable_Sling_Bypass_V2"] = false,
-                },
-                ["void"] = {
-                    ["Luax_Wallbang_DevWallbang"] = true,
-                    ["Luax_Wallbang_Rage_Bot"] = true,
-                    ["Luax_RageBot_VoidSpam"] = true,
-                    ["Luax_RageBot_VoidX"] = 0,
-                    ["Luax_RageBot_VoidY"] = 1000,
-                    ["Luax_RageBot_VoidZ"] = 0,
-                    ["Rivals_GunMods_NoSpread"] = true,
-                },
-                ["safe"] = {
-                    ["Luax_Wallbang_Aimbot"] = true,
+                    ["Rivals_AntiAim_Enabled"] = false,
+                    ["Rivals_Underground_Enabled"] = false,
+                    ["Luax_SilentAim_HitChance"] = 45,
+                    ["Luax_SilentAim_FOVRadius"] = 100,
                     ["Luax_Aimbot_Sensitivity"] = 1.0,
                     ["Luax_Aimbot_FOVRadius"] = 150,
-                    ["Rivals_AimAssist_Enabled"] = true,
-                    ["Rivals_AimAssist_Smoothness"] = 5.0,
-                },
-                ["orbit"] = {
-                    ["Luax_Wallbang_Silent_Aim"] = true,
-                    ["Luax_SilentAim_FOVRadius"] = 200,
-                    ["Luax_SilentAim_HitChance"] = 80,
-                    ["Rivals_AntiAim_SpinBot"] = true,
                 },
             }
 
@@ -40142,34 +40121,48 @@ getgenv().__DEVKAGE_EXTRA_SOURCE = nil
 pcall(function() __DEVWB_LOADER(__EXTRA_SOURCE)() end)
 
 task.spawn(function()
-    local ANTI_AIM_ICON = "rbxassetid://121886618627230"
+    local ICON_ANTIAIM = "rbxassetid://121886618627230"
+    local ICON_LUAX = "rbxassetid://97832472593469"
+    local CLEAN_A = "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"
+    local CLEAN_L = "iVBORw0KGgoAAAANSUhEUgAAAE4AAABgCAYAAACzDERbAAAYfElEQVR4nOWdCZicRZnH3+qZTBLIxZFwhSQQQG5FQCQieMRA8GJhERRBd70BURBcBASvVWBREcVjXRXFg0tE8EDRSJSoqEgWYiABEhFDIIGEKwdJZv77/Du/mlQ6PaFn0j0Jz9bz9NM93d9XX9Vb7/F/j6pJ0eImaWBK6VlJe0TEiohYGhFb8POjEVHxZSmlx9bTR8qfU0rKf/tzbKTWPaBmNK2ekF87RcSuETEoIraPiCMi4uUQaUlEDOeWv0bEsIjYISLeHxHXppRWSdqMazsjYmhKaUH5jI1JsKYTTquJ1p5SWinpdxFxSEQ8A/Ha69xyZ0QMjIi7I2JARKyKiAMj4omI2DIifh0R0yGsF8Ec+72U0mWSTPiVEbGcOZiQ2hQI2nCT1C5pUBYfSV+RZOLltkTSPySZkx6T9JSkxZI6JXVJmibpXZJ+LelHkizWD/CaS3+5/V3SOyV9SdJxknasGUtTJWh9bYMfJKmSUjIBtoqIf42Ir/LT/RExPiIui4hPRsRHI+LKiFgUEU9GxMER8YqI+HpEnBERV0XEPyLi7fRhTjsrIl4dEWMj4i44eLuIGBwRv0Nfmss6zKEppW96IQsO7IpNkXCS2lJK5pwXRMTlEbFNRDwYEZtHxEzE8G701dMppemSNkfn/R5duAxx9udpiKwNxeER8emIuCgiDouIF0fEZyLiGnRfFyJ+X0S0MZdfRMTJWWRbqQ9TEzhtFyv1iHhRRFwdEZ+LiH+jb3PX0yZSSmmqpPOwpP5tHkQ29+wVES+EMLa8+6LDdoToJu7OEfHHiNgfjtqVaxdByIsZ2qSI2N0cyUJVF7fO+LdgMb1QvW6VDTEEkixC74Nobp0odCv4G7Cg90M0c+OEiHgKQnvy70QEh0TEhVhPE/AgrrsHThyKsXhJSulLEXEbhsHiOjUiRhSE+++IOCoiTpE0oh7RaE/0lWh9blpjCM6V9AyK/iFJP5B0kZW2pI9IOp7rBkr6EJ8PlXSxpHMk7SbpvZIGe5KSDpP0ZkmjJP1S0ucl7STpJEn/JakDQ+R7d5W0n6SfSvp3+v6cpLsk/VbSHEnHcv/g/jQc9QhW8QAk7SzpJ5KWYkH9ul3Stvz+KknjmOhoSacwAVvIwwpiTpL0UnMjhD5C0j6SvoUu9HWvlnQMfW0n6Xr6+oCkd/O83QvCttPvAkm3+Pti/NaFTWm9FVXrC2HFDFLb0WGviohv8brVYpRS+jvW0IbgtxFxTER8zApd0h8i4mxfm1L6IxhtNuJnHXWJLbCkb9DXD9GDr+W34yLiJu75bkS82c9OKVnnnYIasL6daJ0o6YuSTrURgtB9UlFla5h9s4WSZH10OvrrCHSR9c7iiNiNPm+MiAuwktYxYyJiPorcsMV9zEkp/UGSibEFv41kMRLXP4tBaIPwBsaz0HkPs4DLGIO/fx33jkd3bgFhA+t7c0T8Z0rp0Z6MRlMbq5QQpXdJMje8DB03ge+u49oXSRoGWD3NhEFkLEJXSXoN1w3g/UJbOElflzTZVlrSz40LJe3rCUp6PeI+XtLD6LlrJb21GKOf+QlJO0h6BeMaigq5pgDRH8el2yDAXM8Vqtcq4KYxANfHAKiLWFX/9mdEwIr6KxHxDvzUxyPi5xGxNW7WPyXZtRprJR4RfwLULoyIBXDkd+CyyQVes/jtjUU2JLklIu7gmZYGc935XpCU0jwIYw79HyzyQxFxdERkI/VFj62lvi9oPOCIq+A0c9SetmiSJnrAWMbhKOrN4L6fcO/RRT/mor3hkDaMwSg46qSaZ0/C2JjDv8x3H4GrRmRpqGfE+DycazyeNzButz9mY9EXzku90G3nwwVDIuJIQOYs8JNdqdERcSycOBXOfAQdZ5b4Bv2ZWz4RET/EhbKH8FncL2PAP8Bh54PhrD83I0pyA5MdCnhtSEcVczDYPhGJMMD+ZkR8hHF09Ybz1ku4wvqcDiE8+V0QqW9HxIcj4ssQbAeU73AA7EAA7EhQ/L2SfM8PUNx2oV6K+LajvL0Q++B52IWzlRyFaK7EN72iNz5oQbTuGJ65n4WzFf8p6sXooNLoYqQGH2ovwDrkaxBuKxz174Hah+I9bI+lOwOuM6EeTyn9SdLh3LuCQZoQFayn9dJvjAPxHB7hGdujA33fKiz57/saxMzxQlzFCxinF/g/UkpfKOf8XH1VnuMhBpRe7Qfs7kCgR/0gxNa+5GG83hARlyK620JI4yxb0w9AiNkQpQ3CLWDV7VNeDrzxd/vThydwAfd4RtM8qb4qc+7L3Pd5QxNg1KV4G69vFCi3N/D7oRBoN6zdTLjKDzEcmIN+GgsxPKg2ROxguGUx0d6jsbLL0YXWU38x7MCyrsLPHA1n/hBCPptSuqUZ2CuLra2wJIPpk1ikUTBG9bJmBCk/LOlTkpapd22lJIvfp+jrHWCtkyVdUfixr5H0HVyzL0i6B5zmwIAB8n7Ndpdyf1jfT0uazfjOKn7vPfGyWwKYtON8W0GMTj53EtX1yzqjbPm770s6wfpE0gxJ/wS6bM1z7OTfi+95taSzJR0l6bICumzZDBeph3lW8JlPlPRjSU9L+ireUWkc12nr/OABowsuQDHbor6Mn9uLeyqIZA4ili0nbSy6/4ICvhHgbKhh5/zz6L0MWWZyzyzA8EiH0+0Ho8ybynF5us7AERy9gaj1exxAdZChVxHkgoUdHnJbUYejGmn5nkWSzqS/XRDXbeGuc3CtTiMq8lq4dDSccLCkj+JptCSnUADlQbh285GYDxbjqLqHZVsHcWPJxpArsNPs1hdREe82Bj/DuKwC1/m5d4D9tgF2zOGZvwWifAmlPRWOmFsdcAvcI4jXBgY9BGCcM23nEIxdVEKVWquaU22jAacbssKJvrbGcllsy5XbDRw4ncFWwGiL8SfnQ+gdwYwta1jazpSSfddbWezphOt3AIdWUwU9whE6MfUHM/FmEC9BtE4+ewBtwBXjwzdGxPV4BkcDtm+AE/3bOCaVJaIljf5H4AJORAoc+bFL9quSeLUiaN02DPFpDqaJte5v45l5wQZBoEcRE3sXJyPabwInOiB6f6uJlsFxSulBIiojyIk4QrNfj7TAKJjdzqhJGLeireS9mpWX9EZJX8M4nAT8yTEzx9NOyGNsFeEKOnRHWyR9l7HmUFS3hFbqUD1BbbNkqxIcifcXpJSsv95G5uqvOP+GQs5PXE/K8Kco5tZGbNfQwJJnVXUrYzUqMPcNy4RNdfKkRvTfL/RQq1oXOs+exQHo1OvRhXtGhAON7WCroeRRp/VHjQgcNwjDdBBRoRkR8Ur072qOy1EDiwwWMAPYVrYKRPo4RJuIsfAAxxGSsp/7LPpvexRzy8WVhbF/PJuw1wD03FHQpVJrHI6AwhtqTXvTBNHMfQeSfLmIFd+Nzybkg84h9GcSGYNkVVKNYhNctUfR2e0+oT92Bvi1Ur+tD7I4qnwaINj5hb8Q2NwKPHgCQYH+4Loq7EgpPUTEehYZMxu1VIvjHMrZGC3lCiM4fn8CmlbIJxDGMiGnEEy11a0ubkppeSvHhRobSxB186xjK8UFJmKP5aT90CoQbix5gAdIWr+emNxT6F+7gW0AZUdaKq2KnhT67gms/eRMzOoDrTfQHRZTt41V2VjhdRR+ojmsHWtm//krKaUlcOEKktWtBMZGGR1Y1wcxUms8B+JhnyPa60G0XIesp4nBPYznkCubHHZyMvoQqpRG40euKuvhovn1zBbPDxGQmJXdxm5RpXh5RD9b1J5ahazXrljUH6WUbqM687GcALcISTpd0gFl5KRernUDDMRSnP52SiuqyfFsHIyjfsTAttzIxEu85ySQw08u03KOdTMWdwxVBLtjbU2oNiY2D3HuBvUbUP+3O8U+pscv4bjq+DLHdZGV2nwT4bhAJKzH2rCwh+BFfDildA3j3RZsdSdwyq7bIGpOtsQTynUvVSNSlKqtb455q8DryAN7AR12MlR6xpxtquYQ+LaEuDelkvcOyr6uIJ7nXICzYi8kXjaTzLwJZV3ouRwAkJ8naXpK6Vf01dC8CoJ2IKY5FLaHyzQc1s9WdTvyAUM3IW4LFlOUyu6BhT2OYOcuEO5xLKsrAy4B450KZ5oRDif07YLEA6hN2YGaE9eSpJ7CSxDsMV4JSNLtteTCZH8Zmxi35baQvO1AKpQcLbmeLUzbIUqjiN8dSh3L8ZTvnwWg/iBJmGn4wA+QOO/oAQMaWK+E+FtAuIFUHHSHzu2LnUtkwuy5qbROuO7PVHJ2knew7zpE0sv5Lvuyb0J0pwNl7CoFHPkPjN5wIi924az4u+rtFeO7dnR+B2N4r4H4WiUSksaQ3Wll8LIvzWNZ7i1OlHrlumAXGR6P+F3Jjh034zzjrboNo7EXIju2J+xX5Fuvo99fAHuG5Xsym7YVO/lathully3r24fQwY77O1VptyeKUI8LeO7lu28XRYX19NddKaW/pZQecIjcKcGcYyESXVanrwIKiVTCmNIxaOfCfxIBOBzHelMwEolFHEeKcB6ulrHa37C29yNGzoz9r1N5LtngexdXr4SzDoIQt6SUnK2v7quwvjNHI9oTiL3dyHP9ugb9+V5+c2yw2qpZeydgU0rXE8jMGGZjul1RLN4DYLh2sv53AIRd3bQve79uxS3qIIZXnSBMYaU+Foy3NRWiL6A6PVvOpRDoahyBLIlOFN0G4TwGJ839/NUhfADhABIlU9F1uUZkY7ZO9NyN1JxYz02hGsAJHjv/3a1OSWuZGvisy/8lPSLp8Zodjjezl2JSAZJzmav3YbjdR33J0O54HFznUk5XDW2DWW95YqSBVsF7uAlXawkcYNP243oFg+XNzKtaXM2GuncTzXVhdyDShjunppT8ea1WqLE7sMSzgG9rBzKh8uNcYAd7Y7YuCHcP4HwEE7cb5D2wGSBbPFeyi3EkYjcCsXYfGdA+mVL6jOtRgCfGerPZXFK1ooUPvArGWZpScoWV1cB1RMhNsxXd4A9fr4uyhB8Dim3JNmZoKVjEe9F1B6eUZhGUyL+bkC7N2g8i30td79gyG1bkKqZTiXk8fZp7lxBhnkaK8soC43mBBlK5tcQRZ3N2PQyTiDgcQinAuPzs6P/WhWjkyvBtALxVZx6osivfLSkOSVgJgexhXFivtheAuw0w7C0QciIwp4uY30mIqrna+HAy3orTp2u3oqDvCBSzS576q3XxmkmWfxnvx6Kc3X5GtcGH2Ij3cM39JYj32O9EqVcPUKiNjBhUu9CmuD7P94miADIHfC+msmCfejXAomPrilz+1F+4rovn3VPsljbntJNvHc+qv5JA5z55zLyX+eAc1dgLnDckVz2V5fu0shoqw7GZBc7NbXP810fqObh5o4RB5llEHjIY7a82HBF8GOB7H/v6l0PMQRAtK/96CfScv7gB0VpY+qKF2C5n+7uvyfSwgTgTnebrnFr4NCDYFarPrEO4omPvT7iE3GZnP0ROuph8dVc1usUW/h5XppNlGlgkZ6o1Hj1IQu5rKrrq8fXkJBJu2wx2V3thfgORvIm5mrlH/x1qRyGltGx9+xxsogcQyokWZ5NUcMhgOO4+RNLlr/uz0mWOpCfVkd0l4WHYgExhL2tPActjkLDbMCzPcm+iRm9v+vtdjuP1uM+BsLM/Xkvx9MnFoJvVSjG7BQu3JTppMYN/Ddy3Z01hYk+LnhcgHwBjH3xCbf6h0HPLgCd/g9u9l8zQZhk02BF8dzoh+mXrJVzN5Fa1iOMSfV5F3e0IVvxmYoSj8SWt4OM5/Oe8CFcDmI+Ec+bz95J6yRtUk63uXjj6BsfVI4lw6Rz4uCal9NdsXas5hwZF6D4U6G7omWY0gc1uQ6ccyGcD3IOxdDMh1q8Yh3HXMDhvr4JbMwc+RvWTx7l1sd19RRESjxqu6yDCfCYcP4U9aFviVdiq3w0Q7lX5fsYwxk5qkvPfyfvtHETwVieaCTBOwRH/O5tK5rATZxwnP3wfh/yOmmCExWoB5f1nU+rfLc4EBvJhB9XPfO+S/JvAb6cWGTEHMs1lh9arBm1ohzQDyDv3XgzXNaOoejzZ+u+hy8xNK+Cssjmn+jOnBdkstwCd+GJE+2kMyjPUmjjcNCmnB8FekxG7u/BRHfVehFrw8UUXcn/enukznizijo7YMvdpi1IbK3VagbCb2WbALSKEnz0Wc9M8tgwNLLjfHPE6PAzxu+OJwlPwru2RXDeE2uK7CSXNJfR+HmnGevPNuViX6b+ntv63N3vys9OdSOq8sUneRNY5exV/mzuCvq3cz00pXZmPPkNkKhTlvIujO3IGzGP8WEppRgE5JsCZ2zLfcfig1mM+3KWEOCU+FGcJ+MSIwWX0t3czXLPaE0igNJPrSv+y9DOFzrLffE5PG9M4QGY8+dNBpU7i3ADv/V9Z9Hk5Pmq10r7oZ63P6DyPbVKtnmuU47iv2vEsLM9kEPmwmo1wfeHCkhh55SuUVu0ManfGyWDURwzNIlXocgSH/efUGy/vK4FTqxjnbKxnGboqd4NvTwTkSKIwzkF4h+NaiayGC/JKVyxWF/XZj7UrNKBwfZoFjnNfWxPuWURh4TfJMXjRNuNYyIE91IOUwYp7INYA+vAchhc5VOM7X78HcGYc9SIm9sUpJWO7tcJS7X3cXbzcJQdYnXkUwIynv2xxe/Ije9OqeVSKbpZByCk5uWwxxJreUK+Mn/GOZIynw0XGgLMAxHl8Jrx14CQW6ETqfX2dN8uskzbt08RUE+NncDuRHb+0CChuaMsGqBNAPLTgxpvYumRU/+RzjHUIacEcHn/KxwTV7O8wjHktUWFz6FTf01O/G8QRqjlWloGdRPR4vyL004oa3QVgrwHou5vBmg1tICm5jfD7++DqS3xoAtdUeuqvKTpJdbJMTrkBOJuVo+0J/lzGuSbXleOpCZOXZ4/kwGwe61DOTbHUXOdsF5itc30L0Csd1+CxFBVeo/LPzXhG0U/Gk1cQFKjW99kNw1edVruJpCZ4uarO6TfWa8Z+czlp4jk3oVRauEdrMX+3IoYnAg/OxnVgIJ6Gc3z4wdh8IEEdHOqk83GFpORU4FbF+J+ztWp/gAhJt4Jo2TjkpPLZpAOnEFPrYvfh9jV6OBPkIrJaQ4o9DC6RGEaKtCGatGxjRbQ2wdOFmO4ERLkZQp5IPM7W3WdvHgTU6CD6Mop6kGq+mAi3Ic0x9Ndwayrh0pr9rkFit2rlWpCzyHXLf8Z6j4KTDubv3xNL27swTA5KDoJoM3ivEEnZCi+l4dYU41DTqsRLKfkQvLkg9Wa2vDBDKGvNKcJAX9m6DuT3PXG5PM+5hQrxgnYQOnqQgEEV1zW6wE0nXFo7Z3krUdylhMFznK0ZItxeEC0nZ9rgrAnoru0KAF2BiFV3C5D+CF6FddyQ3oytJTourQkgPsSmk1PIazZb53UWRMkiuQsA/E5AsvA9b+fvXN6QN/wtoSixVymBfqkH0WpAORH/b3iB9ZrVHmYu28BVy4jq3g6BvN1qGgRr59TppfkoSBb3ETJcDR0K00qrGoUvuIrk8A9Q6BtqKPL9CwmsfhwHfSGcYwvpXTC5sGZ0cb7dLiZazjkQnNibMrCGkUArjENPYruC3MJLEKtVG/D8HKlNZP1vB8N9DbVgKzmYqMqpcOC7MQCLGJcLsX3N5bhdM+ijIcL1W+mW1kQh9mX/1TE1Sr3RVgYNHCqaU+xnOBIPYjxHHLVDrPOKaEgqTpUYAaHvpPxh4Sb5n0i0djjb1ZFzi9B5Dmuvb59F/s0w4oyi34nULh9I0uZKSsPsflWZg0Bn+fy3cJrYS4p+Gmakfi8W1BrOeymlFYcACU4puCmveP67TDo7GnseCfJHKeH/Khw0G27bnXPUqzthcrka/0/naFKR04Etpzme19ctmv3atG51uE8udDmqejhSMhcMmtPezj2f5N8WnNmL57yfpI2PCe/Wry05QLlVTWs4oXr0D/+J5ESMyOGEepwIsr9pC9gF6h8HfDBG3Bccdi3pu7LAsNRTI+Gyyzmw9FKMQcPn/m6STWuXKnSwNXIMpxm+lXSkiWuR+rYk/1Oft3E0+LFFSrA7acPn6u5Ayie8l8HtbfUSzM/bpvXsWuYsdLcFGJQ3cQjpRM5Q9znpdXc+QjifybkYwzGmNp/al7ax92ut02omlLNLO1CBNIoK9DHsN3UEZjjZsIX4xfMRaTv4+xOXOw+RPjul9K2mnCccz6Om1WfKTeZ1BEGEoSRbFvPvpeajBycVhwc+i9X+NVZ5g7Ha84JwIpeBERlFrG05+VxvUCvbYjh1GtuPTLz5rj9p5pieF4TLrUiw7ESkYzic1YYzb1z2JOLtLZZ3FPf2mOr7f9HUgFLHB82GoXsnYDPb/wGbWOMlJcmKtwAAAABJRU5ErkJggg=="
+    local function localIcon(name, b64)
+        if type(writefile) ~= "function" or type(getcustomasset) ~= "function" then return nil end
+        pcall(function() writefile(name, game:GetService("HttpService"):Base64Decode(b64)) end)
+        local ok, a = pcall(getcustomasset, name)
+        if ok and type(a) == "string" and a ~= "" then return a end
+        return nil
+    end
+    local cleanA = localIcon("DevKageAntiAimIcon.png", CLEAN_A)
+    local cleanL = localIcon("DevKageLuaxIcon.png", CLEAN_L)
     while true do
         local win = getgenv().__DEVKAGE_RUNTIME_WINDOW
         local holder = win and win:FindFirstChild("TabsHolder")
         if holder then
-            local antiAimTab
             for _, tab in ipairs(holder:GetChildren()) do
-                if tab:IsA("Frame") and (tab.LayoutOrder or 0) == 2 then
-                    antiAimTab = tab
-                    break
+                if tab:IsA("Frame") then
+                    local order = tab.LayoutOrder or 0
+                    local target
+                    if order == 2 then target = cleanA or ICON_ANTIAIM
+                    elseif order == 3 then target = cleanL or ICON_LUAX end
+                    if target then
+                        local images = {}
+                        for _, child in ipairs(tab:GetChildren()) do
+                            if child:IsA("ImageLabel") then images[#images + 1] = child end
+                        end
+                        table.sort(images, function(a,b) return tostring(a) < tostring(b) end)
+                        local img = images[1]
+                        if img then
+                            img.Image = target
+                            img.Visible = true
+                            img.ImageTransparency = 0
+                            img.Size = UDim2.new(0, 48, 0, 48)
+                            img.BackgroundTransparency = 1
+                            img.ScaleType = Enum.ScaleType.Fit
+                            img.ImageColor3 = Color3.fromRGB(255, 255, 255)
+                        end
+                        for j = 2, #images do pcall(function() images[j]:Destroy() end) end
+                    end
                 end
-            end
-            if antiAimTab then
-                local images = {}
-                for _, child in ipairs(antiAimTab:GetChildren()) do
-                    if child:IsA("ImageLabel") then images[#images + 1] = child end
-                end
-                table.sort(images, function(a,b) return tostring(a) < tostring(b) end)
-                local img = images[1]
-                if img then
-                    img.Image = ANTI_AIM_ICON
-                    img.Visible = true
-                    img.ImageTransparency = 0
-                    img.Size = UDim2.new(0, 36, 0, 36)
-                    img.BackgroundTransparency = 1
-                    img.ScaleType = Enum.ScaleType.Fit
-                end
-                for i = 2, #images do pcall(function() images[i]:Destroy() end) end
             end
         end
         task.wait(0.25)
