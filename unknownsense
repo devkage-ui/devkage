@@ -38863,6 +38863,117 @@ do
             local library = getgenv().__DevKageLibrary or library
             local utility = getgenv().__DevKageUtility or utility
 
+            -- ===== Lua X categories (Combat / Rage) - mirrors the ESP tab category bar =====
+            local presetSection
+            local LuaXCategoryController = { Current = "Combat", Buttons = {}, Sections = {} }
+            do
+                local categoryHeight = 46
+                luaxPage.Left.Position  = UDim2.new(0, 0, 0, categoryHeight + 4)
+                luaxPage.Left.Size      = UDim2.new(0.5, -10, 1, -categoryHeight - 4)
+                luaxPage.Right.Position = UDim2.new(0.5, 10, 0, categoryHeight + 4)
+                luaxPage.Right.Size     = UDim2.new(0.5, -10, 1, -categoryHeight - 4)
+
+                local bar = Instance.new("Frame")
+                bar.Name = "LuaXCategoryBar"
+                bar.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+                bar.BorderColor3 = Color3.fromRGB(12, 12, 12)
+                bar.BorderSizePixel = 1
+                bar.Position = UDim2.new(0, 0, 0, 2)
+                bar.Size = UDim2.new(1, 0, 0, categoryHeight)
+                bar.ZIndex = 20
+                bar.Parent = luaxPage.Page
+
+                local barInner = Instance.new("Frame")
+                barInner.BackgroundColor3 = Color3.fromRGB(23, 23, 23)
+                barInner.BorderSizePixel = 0
+                barInner.Position = UDim2.new(0, 1, 0, 1)
+                barInner.Size = UDim2.new(1, -2, 1, -2)
+                barInner.ZIndex = 21
+                barInner.Parent = bar
+
+                local categories = {
+                    { Name = "Combat", Label = "Combat" },
+                    { Name = "Rage",   Label = "Rage" },
+                }
+
+                function LuaXCategoryController:Set(name)
+                    if not self.Buttons[name] then name = "Combat" end
+                    self.Current = name
+                    local wanted = {}
+                    for _, section in ipairs(self.Sections[name] or {}) do wanted[section] = true end
+                    for _, list in pairs(self.Sections) do
+                        for _, section in ipairs(list) do
+                            if section and section.Root then section.Root.Visible = wanted[section] == true end
+                        end
+                    end
+                    for category, data in pairs(self.Buttons) do
+                        local active = category == name
+                        data.Active = active
+                        if data.Label then
+                            data.Label.TextColor3 = active and Color3.fromRGB(240, 240, 240) or Color3.fromRGB(128, 128, 128)
+                        end
+                        if data.Accent then data.Accent.Visible = active end
+                    end
+                    luaxPage.Left.CanvasPosition = Vector2.new(0, 0)
+                    luaxPage.Right.CanvasPosition = Vector2.new(0, 0)
+                end
+
+                local accentColor = (library and library.Theme and library.Theme.Toggle) or Color3.fromRGB(175, 205, 75)
+                for index, category in ipairs(categories) do
+                    local slot = Instance.new("Frame")
+                    slot.BackgroundTransparency = 1
+                    slot.BorderSizePixel = 0
+                    slot.Position = UDim2.new((index - 1) / #categories, 0, 0, 0)
+                    slot.Size = UDim2.new(1 / #categories, 0, 1, 0)
+                    slot.ZIndex = 22
+                    slot.Parent = barInner
+
+                    local label = Instance.new("TextLabel")
+                    label.BackgroundTransparency = 1
+                    label.Size = UDim2.fromScale(1, 1)
+                    label.Font = Enum.Font.Code
+                    label.RichText = true
+                    label.Text = "<b>" .. category.Label .. "</b>"
+                    label.TextColor3 = Color3.fromRGB(128, 128, 128)
+                    label.TextSize = 16
+                    label.TextXAlignment = Enum.TextXAlignment.Center
+                    label.TextYAlignment = Enum.TextYAlignment.Center
+                    label.ZIndex = 23
+                    label.Parent = slot
+
+                    local accent = Instance.new("Frame")
+                    accent.AnchorPoint = Vector2.new(0.5, 1)
+                    accent.BackgroundColor3 = accentColor
+                    accent.BorderSizePixel = 0
+                    accent.Position = UDim2.new(0.5, 0, 1, -2)
+                    accent.Size = UDim2.new(0.6, 0, 0, 2)
+                    accent.Visible = false
+                    accent.ZIndex = 24
+                    accent.Parent = slot
+
+                    local button = Instance.new("TextButton")
+                    button.BackgroundTransparency = 1
+                    button.BorderSizePixel = 0
+                    button.Text = ""
+                    button.AutoButtonColor = false
+                    button.Size = UDim2.fromScale(1, 1)
+                    button.ZIndex = 100
+                    button.Active = true
+                    button.Selectable = false
+                    button.Parent = slot
+
+                    local record = { Label = label, Accent = accent, Active = false }
+                    LuaXCategoryController.Buttons[category.Name] = record
+                    button.MouseButton1Click:Connect(function() LuaXCategoryController:Set(category.Name) end)
+                    button.MouseEnter:Connect(function()
+                        if not record.Active then label.TextColor3 = Color3.fromRGB(200, 200, 200) end
+                    end)
+                    button.MouseLeave:Connect(function()
+                        if not record.Active then label.TextColor3 = Color3.fromRGB(128, 128, 128) end
+                    end)
+                end
+            end
+
         -- Luax Tab Categories
         local combatSection = luaxPage:CreateSection({ Name = "Combat", Side = "Left", Size = 205 })
         local rageSection = luaxPage:CreateSection({ Name = "Rage", Side = "Right", Size = 205 })
@@ -38926,7 +39037,7 @@ do
             sectionProps.Side = (props.Side == "Right") and "Right" or "Left"
             -- Keep every Lua X feature section a bounded, scrollable box like the
             -- Combat section, but a bit larger (450px) instead of one huge list.
-            sectionProps.Size = math.min(tonumber(sectionProps.Size) or 150, 450)
+            sectionProps.Size = math.min(tonumber(sectionProps.Size) or 150, 360)
             local sec = luaxPage:CreateSection(sectionProps)
 
             local originalCreateToggle = sec.CreateToggle
@@ -39877,7 +39988,7 @@ do
         -- Visible selection list + one explicit Load Preset button.
         -- Selecting a preset does NOT apply it until Load Preset is clicked.
         do
-            local presetSection = luaxSection(nil, nil, { Name = "Lua X Presets", Side = "Right", Size = 460 })
+            presetSection = luaxSection(nil, nil, { Name = "Lua X Presets", Side = "Right", Size = 460 })
         local pc = presetSection.Holder
 
             local presetNames = { "hacker vs hacker", "underground", "safe orbit", "legit" }
@@ -39909,6 +40020,11 @@ do
                     ["Luax_RageBot_OriginShift"] = true,
                     ["Luax_RageBot_OriginShiftRange"] = 14,
                     ["Luax_RageBot_VoidSpam"] = false,
+                    ["Luax_Void_Enabled"] = true,
+                    ["Luax_VoidKiller_Enabled"] = true,
+                    ["Luax_AA_Enabled"] = true,
+                    ["Luax_RangeExt_Enabled"] = true,
+                    ["Luax_AntiBait_Enabled"] = true,
                 },
                 ["underground"] = {
                     ["Luax_Wallbang_DevWallbang"] = false,
@@ -39923,6 +40039,8 @@ do
                     ["Rivals_AntiAim_Enabled"] = false,
                     ["Rivals_Underground_Enabled"] = true,
                     ["Rivals_Player_NoClip"] = true,
+                    ["Luax_Smart_Evasion_Enabled"] = true,
+                    ["Luax_AntiTransloc_Enabled"] = true,
                 },
                 ["safe orbit"] = {
                     ["Luax_Wallbang_DevWallbang"] = false,
@@ -39942,6 +40060,9 @@ do
                     ["Luax_SilentAim_FOVRadius"] = 160,
                     ["Luax_Aimbot_Sensitivity"] = 1.5,
                     ["Luax_Aimbot_FOVRadius"] = 200,
+                    ["Luax_Orbit_Enabled"] = true,
+                    ["Luax_AntiBait_Enabled"] = true,
+                    ["Luax_AA_Enabled"] = true,
                 },
                 ["legit"] = {
                     ["Luax_Wallbang_DevWallbang"] = false,
@@ -40100,6 +40221,13 @@ do
                 GetSelected = function() return presetNames[presetIndex] or presetNames[1] end,
             }
         end
+
+        -- Group Lua X sections under the two category tabs (Combat / Rage).
+        LuaXCategoryController.Sections = {
+            Combat = { combatSection, rageSection },
+            Rage = { VG2, VG3, VK, OG, OG2, PG, PG2, AG, AG2, AG3, AG4, AG5, AG6, AG7, AG8, TL, TL2, SBL, SBR, RG, RA, MenuG, presetSection },
+        }
+        LuaXCategoryController:Set("Combat")
 
         -- Every folder was created closed; make one final close pass before the
         -- UI settles so a config/auto-execute path cannot leave them expanded.
