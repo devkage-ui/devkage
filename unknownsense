@@ -38975,8 +38975,8 @@ do
             end
 
         -- Luax Tab Categories
-        local combatSection = luaxPage:CreateSection({ Name = "Combat", Side = "Left", Size = 205 })
-        local rageSection = luaxPage:CreateSection({ Name = "Rage", Side = "Right", Size = 205 })
+        local combatSection = luaxPage:CreateSection({ Name = "Combat", Side = "Left", Size = 320 })
+        local rageSection = luaxPage:CreateSection({ Name = "Rage", Side = "Right", Size = 320 })
 
         -- Exactly one Wallbang control on this tab.
         LT["DevWallbang"] = combatSection:CreateToggle({ Name = "Wallbang (shoot through walls)", State = false, Flag = "Luax_Wallbang_DevWallbang", Callback = function(v)
@@ -39037,7 +39037,7 @@ do
             sectionProps.Side = (props.Side == "Right") and "Right" or "Left"
             -- Keep every Lua X feature section a bounded, scrollable box like the
             -- Combat section, but a bit larger (450px) instead of one huge list.
-            sectionProps.Size = math.min(tonumber(sectionProps.Size) or 150, 360)
+            sectionProps.Size = math.min(tonumber(sectionProps.Size) or 150, 460)
             local sec = luaxPage:CreateSection(sectionProps)
 
             local originalCreateToggle = sec.CreateToggle
@@ -39094,10 +39094,12 @@ do
                 for _, h in ipairs(deps) do h.Visible = on end
                 local total = 0
                 for _, c in ipairs(kids) do if c.Visible then total = total + c.Size.Y.Offset end end
-                if section.Root then section.Root.Size = UDim2.new(1, 0, 0, 28 + total) end
-                local par = section.Root and section.Root.Parent
-                if par and par.Parent and par.Parent:IsA("Frame") then
-                    par.Parent.Size = UDim2.new(1, 0, 0, 20 + par.AbsoluteSize.Y)
+                -- Section contents are direct children of the page columns now that folders
+                -- are gone, so never resize a section's grandparent (that used to be the
+                -- folder holder and would resize the page itself, pushing it off the UI).
+                -- Keep each section a bounded, scrollable box instead of growing without limit.
+                if section.Root then
+                    section.Root.Size = UDim2.new(1, 0, 0, math.min(28 + total, 460))
                 end
             end
             local orig = toggle.Callback
@@ -40227,7 +40229,7 @@ do
             Combat = { combatSection, rageSection },
             Rage = { VG2, VG3, VK, OG, OG2, PG, PG2, AG, AG2, AG3, AG4, AG5, AG6, AG7, AG8, TL, TL2, SBL, SBR, RG, RA, MenuG, presetSection },
         }
-        LuaXCategoryController:Set("Combat")
+        LuaXCategoryController:Set("Rage")
 
         -- Every folder was created closed; make one final close pass before the
         -- UI settles so a config/auto-execute path cannot leave them expanded.
