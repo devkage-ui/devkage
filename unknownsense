@@ -25193,6 +25193,7 @@ end)
 
 if __devkageMultiInjectAutoBoot then task.wait() end
 local ragePage = library.Window:CreatePage({Icon="rbxassetid://8547258459",Glyph="R",Size=UDim2.new(0,36,0,36)})
+getgenv().__DevKageRagePage = ragePage
 
 
 
@@ -40222,6 +40223,128 @@ do
                 Definitions = presetDefinitions,
                 GetSelected = function() return presetNames[presetIndex] or presetNames[1] end,
             }
+        end
+
+        -- ===== [D] Plants vs Brainrots - Get All / Specific Gear (knife tab) =====
+        do
+            local ragePage = getgenv().__DevKageRagePage
+            if ragePage then
+                local gearSection = ragePage:CreateSection({ Name = "PvB Gear", Side = "Left", Size = 560 })
+                local gearOptions = {}
+                local gearMap = {}
+                local gearDrop, gearStatus, gearSearch
+
+                local function findGearFolder()
+                    local rs = game:GetService("ReplicatedStorage")
+                    local f = rs:FindFirstChild("Gear")
+                    if f and f:IsA("Folder") then return f end
+                    f = rs:FindFirstChild("Gears")
+                    if f and f:IsA("Folder") then return f end
+                    for _, d in ipairs(rs:GetDescendants()) do
+                        if d:IsA("Folder") and d.Name:lower() == "gear" then return d end
+                    end
+                    return nil
+                end
+
+                local function collectTools(folder)
+                    local tools = {}
+                    for _, d in ipairs(folder:GetDescendants()) do
+                        if d:IsA("Tool") then tools[#tools + 1] = d end
+                    end
+                    return tools
+                end
+
+                local function giveTool(tool, equip)
+                    local clone = tool:Clone()
+                    clone.Parent = LocalPlayer.Backpack
+                    if equip then
+                        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+                        if hum then pcall(function() hum:EquipTool(clone) end) end
+                    end
+                    return clone
+                end
+
+                local function rebuildGearOptions(filter)
+                    for i = #gearOptions, 1, -1 do gearOptions[i] = nil end
+                    local names = {}
+                    for name in pairs(gearMap) do names[#names + 1] = name end
+                    table.sort(names)
+                    local f = tostring(filter or ""):lower()
+                    for _, name in ipairs(names) do
+                        if f == "" or name:lower():find(f, 1, true) then
+                            gearOptions[#gearOptions + 1] = name
+                        end
+                    end
+                    if gearDrop then gearDrop:Set(1, true) end
+                end
+
+                local function rescanGear()
+                    local folder = findGearFolder()
+                    if not folder then
+                        gearStatus:SetText("Gear folder not found - are you in Plants vs Brainrots?")
+                        return 0
+                    end
+                    gearMap = {}
+                    local tools = collectTools(folder)
+                    for _, tool in ipairs(tools) do
+                        gearMap[tool.Name] = tool
+                    end
+                    rebuildGearOptions(gearSearch and gearSearch:Get() or "")
+                    gearStatus:SetText("Found " .. #tools .. " gear items in " .. folder:GetFullName():match("[^.]+$"))
+                    return #tools
+                end
+
+                gearSection:CreateLabel({ Text = "Pick gear from ReplicatedStorage.Gear" })
+                gearSearch = gearSection:CreateInput({ Name = "Search Gear", Placeholder = "type to filter (e.g. swap drive)" })
+                gearSearch.Callback = function(value) rebuildGearOptions(value) end
+
+                gearDrop = gearSection:CreateDropdown({ Name = "Gear", Options = gearOptions, State = 1 })
+
+                gearSection:CreateButton({ Name = "Give Selected (equip)", Callback = function()
+                    local name = gearDrop:GetValue()
+                    local tool = gearMap[name]
+                    if not tool or not tool.Parent then
+                        gearStatus:SetText("Gear not found - press Refresh Gear List")
+                        return
+                    end
+                    local ok, err = pcall(function() giveTool(tool, true) end)
+                    gearStatus:SetText(ok and ("Gave + equipped: " .. name) or ("Give failed: " .. tostring(err)))
+                end })
+
+                gearSection:CreateButton({ Name = "Equip From Backpack", Callback = function()
+                    local name = gearDrop:GetValue()
+                    local tool = LocalPlayer.Backpack:FindFirstChild(name)
+                    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+                    if tool and hum then
+                        pcall(function() hum:EquipTool(tool) end)
+                        gearStatus:SetText("Equipped: " .. name)
+                    else
+                        gearStatus:SetText("Not in backpack: " .. name)
+                    end
+                end })
+
+                gearSection:CreateButton({ Name = "Give All Gear", Callback = function()
+                    local folder = findGearFolder()
+                    if not folder then
+                        gearStatus:SetText("Gear folder not found - are you in Plants vs Brainrots?")
+                        return
+                    end
+                    local tools = collectTools(folder)
+                    local given = 0
+                    for _, tool in ipairs(tools) do
+                        local ok = pcall(function() giveTool(tool, false) end)
+                        if ok then given = given + 1 end
+                    end
+                    gearStatus:SetText("Gave " .. given .. "/" .. #tools .. " gear items")
+                end })
+
+                gearSection:CreateButton({ Name = "Refresh Gear List", Callback = function()
+                    rescanGear()
+                end })
+
+                gearStatus = gearSection:CreateLabel({ Text = "Gear: press Refresh to scan" })
+                rescanGear()
+            end
         end
 
         -- Group Lua X sections under the two category tabs (Combat / Rage).
